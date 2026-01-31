@@ -71,16 +71,18 @@ pub enum Position {
     Right,
     /// 中央
     Center,
-    /// 偏左
+    /// 近左
     NearLeft,
-    /// 偏右
+    /// 近右
     NearRight,
-    /// 偏中
+    /// 近中
     NearMiddle,
     /// 远左
     FarLeft,
     /// 远右
     FarRight,
+    /// 远中
+    FarMiddle,
 }
 
 impl Position {
@@ -95,6 +97,7 @@ impl Position {
             "nearmiddle" => Some(Self::NearMiddle),
             "farleft" => Some(Self::FarLeft),
             "farright" => Some(Self::FarRight),
+            "farmiddle" => Some(Self::FarMiddle),
             _ => None,
         }
     }
