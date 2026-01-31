@@ -133,9 +133,12 @@ show <img src="path/to/sprite.png" /> as alias at position with transition
 | `left` | 左侧 |
 | `right` | 右侧 |
 | `center` / `middle` | 中央 |
-| `nearleft` | 偏左 |
-| `nearright` | 偏右 |
-| `nearmiddle` | 偏中 |
+| `nearleft` | 近左 |
+| `nearright` | 近右 |
+| `nearmiddle` | 近中 |
+| `farleft` | 远左 |
+| `farright` | 远右 |
+| `farmiddle` | 远中 |
 
 示例：
 ```markdown
