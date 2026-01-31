@@ -231,6 +231,7 @@ PresentChoices
 - `docs/script_language_showcase.md` 展示了引擎脚本语言的实际使用示例（人工编写）
 - `docs/script_syntax_spec.md` 定义了脚本语言的正式语法规范
 - `ROADMAP.md` 定义了具体的开发执行计划
+- `target/doc/bevy` bevy 0.18.0离线文档
 
 ---
 

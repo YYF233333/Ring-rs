@@ -1,9 +1,7 @@
 //! 命令执行系统
 
 use bevy::prelude::*;
-
 use vn_runtime::Command;
-
 use crate::components::*;
 use crate::resources::*;
 
@@ -16,7 +14,7 @@ pub fn execute_commands_system(
     background_query: Query<Entity, With<Background>>,
     character_query: Query<(Entity, &Character)>,
 ) {
-    // 先收集命令，避免借用问题
+    // 收集命令
     let cmds: Vec<_> = command_reader.read().cloned().collect();
     
     for VNCommand(cmd) in cmds {
@@ -36,20 +34,20 @@ pub fn execute_commands_system(
 
                 // 加载新背景
                 let path_owned = path.clone();
-                let texture: Handle<Image> = asset_server.load(path_owned);
-                commands.spawn((
-                    Sprite::from_image(texture),
-                    Transform::from_xyz(0.0, 0.0, -10.0),
-                    Background,
-                ));
+                let texture = asset_server.load(path_owned);
+                commands
+                    .spawn((
+                        Sprite::from_image(texture),
+                        Transform::from_xyz(0.0, 0.0, -10.0),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        InheritedVisibility::default(),
+                        ViewVisibility::default(),
+                        Background,
+                    ));
             }
 
-            Command::ShowCharacter {
-                path,
-                alias,
-                position,
-                ..
-            } => {
+            Command::ShowCharacter { path, alias, position, .. } => {
                 // 检查是否已存在同别名的角色
                 let existing = character_query
                     .iter()
@@ -65,15 +63,20 @@ pub fn execute_commands_system(
 
                 // 加载角色立绘
                 let path_owned = path.clone();
-                let texture: Handle<Image> = asset_server.load(path_owned);
-                commands.spawn((
-                    Sprite::from_image(texture),
-                    Transform::from_xyz(x, 0.0, 0.0),
-                    Character {
-                        alias: alias.clone(),
-                        position: position.clone(),
-                    },
-                ));
+                let texture = asset_server.load(path_owned);
+                commands
+                    .spawn((
+                        Sprite::from_image(texture),
+                        Transform::from_xyz(x, 0.0, 0.0),
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        InheritedVisibility::default(),
+                        ViewVisibility::default(),
+                        Character {
+                            alias: alias.clone(),
+                            position: position.clone(),
+                        },
+                    ));
             }
 
             Command::HideCharacter { alias, .. } => {
@@ -97,17 +100,7 @@ pub fn execute_commands_system(
                     .collect();
             }
 
-            Command::PlayBgm { .. } => {
-                // TODO: 实现音频播放
-            }
-
-            Command::StopBgm { .. } => {
-                // TODO: 实现音频停止
-            }
-
-            _ => {
-                // 其他命令暂不处理
-            }
+            _ => {} // 其他命令暂不处理
         }
     }
 }
@@ -115,7 +108,6 @@ pub fn execute_commands_system(
 /// 将 Position 转换为 X 坐标
 fn position_to_x(position: &vn_runtime::command::Position) -> f32 {
     use vn_runtime::command::Position;
-
     match *position {
         Position::FarLeft => -500.0,
         Position::Left => -300.0,

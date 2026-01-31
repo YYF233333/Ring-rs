@@ -32,7 +32,7 @@ fn main() {
 /// 加载脚本系统
 fn load_script_system(mut vn_state: ResMut<VNState>) {
     // 尝试加载脚本
-    let script_path = "assets/scripts/demo.md";
+    let script_path = "host/assets/scripts/demo.md";
     
     match fs::read_to_string(script_path) {
         Ok(content) => {
