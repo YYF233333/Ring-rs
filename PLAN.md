@@ -104,9 +104,25 @@ WaitForSignal(SignalId)
 
 ### 3. Runtime 执行模型
 
-* Runtime 通过 `tick(input) -> Vec<Command>` 驱动
+* Runtime 通过 `tick(input) -> (Vec<Command>, WaitingReason)` 驱动
 * 若处于等待状态，仅处理输入
 * 若不等待，持续推进脚本直到再次阻塞
+* 返回的 `WaitingReason` 告知 Host 当前等待状态
+
+---
+
+### 4. RuntimeInput（Host → Runtime 输入模型）
+
+```text
+Click                   - 用户点击（解除 WaitForClick）
+ChoiceSelected(index)   - 用户选择了第 index 个选项（解除 WaitForChoice）
+Signal(signal_id)       - 外部信号（解除 WaitForSignal）
+```
+
+说明：
+* Host 负责采集用户输入并转换为 `RuntimeInput`
+* `WaitForTime` 由 Host 处理：Host 获取该等待状态后，等待指定时长再调用 tick
+* Runtime 不需要知道真实时间流逝，保持确定性执行
 
 ---
 
@@ -207,7 +223,9 @@ PresentChoices
 
 ## 十二、补充材料
 
-- `docs/script_language_showcase.md`展示了引擎脚本语言的格式设计，以此为参考实现脚本语言
+- `docs/script_language_showcase.md` 展示了引擎脚本语言的实际使用示例（人工编写）
+- `docs/script_syntax_spec.md` 定义了脚本语言的正式语法规范
+- `ROADMAP.md` 定义了具体的开发执行计划
 
 ---
 
