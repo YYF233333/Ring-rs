@@ -6,3 +6,5 @@ members = [
     "host",
     "host-cli",
 ]
+
+default-members = ["host"]

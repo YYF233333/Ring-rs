@@ -1,0 +1,23 @@
+//! # Host 层
+//!
+//! Visual Novel Engine 的宿主层实现，使用 macroquad 作为渲染和 IO 引擎。
+//!
+//! ## 架构说明
+//!
+//! Host 层负责：
+//! - 窗口与渲染
+//! - 资源加载
+//! - 音频播放
+//! - 输入采集
+//! - 将 Runtime 的 Command 转换为实际效果
+//!
+//! Host 层不包含脚本逻辑，只负责执行 Runtime 发出的 Command。
+
+pub mod resources;
+pub mod renderer;
+pub mod input;
+pub mod command_executor;
+pub mod state;
+
+pub use state::HostState;
+pub use resources::{ResourceManager, ResourceError};

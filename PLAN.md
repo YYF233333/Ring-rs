@@ -175,9 +175,7 @@ PresentChoices
 
 ### 宿主引擎
 
-* Bevy 0.18.0（仅作为 Host 层）
-
-> bevy处于早期开发版，API变动较快，使用https://docs.rs/bevy/0.18.0/bevy/ 访问当前版本的文档。
+* macroquad（仅作为 Host 层）
 
 ### 开发准则
 
@@ -211,27 +209,11 @@ PresentChoices
 
 ---
 
-## 十一、最终目标（MVP）
-
-一个可运行的程序，能够：
-
-1. 显示背景
-2. 显示角色立绘
-3. 显示文本
-4. 等待点击
-5. 提供简单分支选择
-
-> **✅ MVP 已于 2026-01-31 完成**
-> - 所有核心功能已实现
-> - 50 个单元测试全部通过
-> - 详见 `ROADMAP.md` 进度记录
-
-## 十二、补充材料
+## 十一、补充材料
 
 - `docs/script_language_showcase.md` 展示了引擎脚本语言的实际使用示例（人工编写）
 - `docs/script_syntax_spec.md` 定义了脚本语言的正式语法规范
 - `ROADMAP.md` 定义了具体的开发执行计划
-- `target/doc/bevy` bevy 0.18.0离线文档
 
 ---
 
