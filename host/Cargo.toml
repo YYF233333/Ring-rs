@@ -7,6 +7,8 @@ edition = "2024"
 macroquad = "0.4.14"
 vn-runtime = { version = "0.1.0", path = "../vn-runtime" }
 thiserror = "2.0.18"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 # 图像格式支持 - 添加 JPEG 支持
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

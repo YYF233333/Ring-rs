@@ -90,7 +90,8 @@ cargo run
 
 ## 脚本语法
 
-脚本采用 Markdown 格式，支持 Typora 等编辑器预览。
+脚本采用 Markdown 格式，支持 Typora 等编辑器预览。  
+**注意：脚本内所有素材路径（图片/音频）都应相对于脚本文件自身**，以保证在 Typora 中可直接预览。
 
 ### 章节标题
 
@@ -109,15 +110,27 @@ cargo run
 ### 背景切换
 
 ```markdown
-changeBG <img src="backgrounds/scene.jpg"> with dissolve
+changeBG <img src="../backgrounds/scene.jpg" /> with dissolve
 ```
 
 ### 角色显示
 
 ```markdown
-show <img src="characters/char.png"> as alias at center with dissolve
+show <img src="../characters/char.png" /> as alias at center with dissolve
 hide alias with fade
 ```
+
+### 音频
+
+```markdown
+<audio src="../bgm/Signal.mp3"></audio> loop   # BGM（循环）
+<audio src="../bgm/click.mp3"></audio>        # SFX（播放一次）
+stopBGM                                       # 停止 BGM（淡出）
+```
+
+### 立绘布局（manifest）
+
+立绘的对齐点/预处理缩放/站位预设由 `assets/manifest.json` 控制，便于不同尺寸立绘保持构图一致（无需改代码）。
 
 ### 选择分支
 
@@ -145,10 +158,13 @@ hide alias with fade
 - ✅ 角色立绘显示（支持多位置）
 - ✅ 对话系统（打字机效果）
 - ✅ 选择分支与标签跳转
+- ✅ `goto **label**` 无条件跳转
 - ✅ 章节标题显示
 - ✅ 音频系统（BGM/SFX，支持 MP3/WAV/FLAC/OGG）
+- ✅ 脚本音频语法（`<audio ...></audio>` / `loop` / `stopBGM`）
 - ✅ 鼠标与键盘输入
 - ✅ 中文字体支持
+- ✅ 立绘布局系统（`assets/manifest.json`：anchor/pre_scale/preset）
 
 ### 待实现
 

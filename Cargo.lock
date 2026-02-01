@@ -382,6 +382,8 @@ dependencies = [
  "image 0.25.9",
  "macroquad",
  "rodio",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "vn-runtime",
 ]

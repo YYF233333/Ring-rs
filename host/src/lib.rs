@@ -19,6 +19,7 @@ pub mod input;
 pub mod command_executor;
 pub mod state;
 pub mod audio;
+pub mod manifest;
 
 pub use state::HostState;
 pub use resources::{ResourceManager, ResourceError};
@@ -26,3 +27,4 @@ pub use renderer::{Renderer, RenderState, DrawMode, TransitionManager, Transitio
 pub use input::InputManager;
 pub use command_executor::{CommandExecutor, ExecuteResult, TransitionInfo, AudioCommand, CommandOutput};
 pub use audio::AudioManager;
+pub use manifest::Manifest;

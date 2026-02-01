@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use vn_runtime::command::Position;
 
 use crate::resources::ResourceManager;
+use crate::manifest::Manifest;
 
 pub mod render_state;
 mod text_renderer;
@@ -56,7 +57,7 @@ impl Renderer {
     }
 
     /// 渲染完整画面
-    pub fn render(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
+    pub fn render(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager, manifest: &Manifest) {
         // 清空屏幕
         clear_background(BLACK);
 
@@ -64,7 +65,7 @@ impl Renderer {
         self.render_background_with_transition(state, textures, resource_manager);
 
         // 2. 渲染角色
-        self.render_characters(state, textures, resource_manager);
+        self.render_characters(state, textures, resource_manager, manifest);
 
         // 3. 渲染对话框
         self.render_dialogue(state);
@@ -145,16 +146,49 @@ impl Renderer {
     }
 
     /// 渲染角色立绘
-    fn render_characters(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
+    ///
+    /// 使用 manifest 配置的 anchor + pre_scale + preset 进行布局：
+    /// 1. 从 manifest 获取立绘组的 anchor 和 pre_scale
+    /// 2. 从 manifest 获取站位预设的 x, y, scale
+    /// 3. 计算最终位置和尺寸
+    fn render_characters(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager, manifest: &Manifest) {
         // 按 z_order 排序渲染
         let mut characters: Vec<_> = state.visible_characters.values().collect();
         characters.sort_by_key(|c| c.z_order);
+
+        let screen_w = screen_width();
+        let screen_h = screen_height();
+        let base_scale = self.get_scale_factor();
 
         for character in characters {
             // 规范化路径后查找纹理
             let normalized_path = resource_manager.resolve_path(&character.texture_path);
             if let Some(texture) = textures.get(&normalized_path) {
-                let (x, y) = self.position_to_screen_coords(character.position, texture);
+                // 获取立绘组配置
+                let group_config = manifest.get_group_config(&character.texture_path);
+                
+                // 获取站位预设
+                let position_name = Self::position_to_preset_name(character.position);
+                let preset = manifest.get_preset(&position_name);
+                
+                // 计算最终缩放：基础缩放 * 预处理缩放 * 站位缩放
+                let final_scale = base_scale * group_config.pre_scale * preset.scale;
+                
+                // 计算渲染尺寸
+                let dest_w = texture.width() * final_scale;
+                let dest_h = texture.height() * final_scale;
+                
+                // 计算屏幕目标点（预设位置）
+                let target_x = screen_w * preset.x;
+                let target_y = screen_h * preset.y;
+                
+                // 计算立绘锚点在纹理中的像素位置
+                let anchor_px_x = dest_w * group_config.anchor.x;
+                let anchor_px_y = dest_h * group_config.anchor.y;
+                
+                // 最终位置：目标点 - 锚点偏移
+                let x = target_x - anchor_px_x;
+                let y = target_y - anchor_px_y;
                 
                 // 应用透明度
                 let color = Color::new(1.0, 1.0, 1.0, character.alpha);
@@ -165,11 +199,26 @@ impl Renderer {
                     y,
                     color,
                     DrawTextureParams {
-                        dest_size: Some(self.scale_character_size(texture)),
+                        dest_size: Some(vec2(dest_w, dest_h)),
                         ..Default::default()
                     },
                 );
             }
+        }
+    }
+    
+    /// 将 Position 枚举转换为预设名称
+    fn position_to_preset_name(position: Position) -> &'static str {
+        match position {
+            Position::Left => "left",
+            Position::NearLeft => "nearleft",
+            Position::FarLeft => "farleft",
+            Position::Center => "center",
+            Position::NearMiddle => "nearmiddle",
+            Position::FarMiddle => "farmiddle",
+            Position::Right => "right",
+            Position::NearRight => "nearright",
+            Position::FarRight => "farright",
         }
     }
 
@@ -208,38 +257,6 @@ impl Renderer {
     /// 获取选择框的矩形区域
     pub fn get_choice_rects(&self, choice_count: usize) -> Vec<(f32, f32, f32, f32)> {
         self.text_renderer.get_choice_rects(choice_count)
-    }
-
-    /// 将 Position 枚举转换为屏幕坐标
-    fn position_to_screen_coords(&self, position: Position, texture: &Texture2D) -> (f32, f32) {
-        let screen_w = screen_width();
-        let screen_h = screen_height();
-        let scale = self.get_scale_factor();
-        let char_w = texture.width() * scale * 0.8; // 角色缩放比例
-        let char_h = texture.height() * scale * 0.8;
-
-        // 角色底部对齐屏幕底部
-        let y = screen_h - char_h;
-
-        let x = match position {
-            Position::Left => screen_w * 0.1,
-            Position::NearLeft => screen_w * 0.2,
-            Position::FarLeft => screen_w * 0.05,
-            Position::Center => (screen_w - char_w) / 2.0,
-            Position::NearMiddle => screen_w * 0.35,
-            Position::FarMiddle => screen_w * 0.4,
-            Position::Right => screen_w * 0.9 - char_w,
-            Position::NearRight => screen_w * 0.8 - char_w,
-            Position::FarRight => screen_w * 0.95 - char_w,
-        };
-
-        (x, y)
-    }
-
-    /// 计算角色缩放后的尺寸
-    fn scale_character_size(&self, texture: &Texture2D) -> Vec2 {
-        let scale = self.get_scale_factor() * 0.8; // 角色相对于背景稍小
-        vec2(texture.width() * scale, texture.height() * scale)
     }
 
     /// 获取当前缩放因子

@@ -70,6 +70,8 @@ struct AppState {
     script_finished: bool,
     /// 当前脚本索引
     script_index: usize,
+    /// 资源清单（立绘配置等）
+    manifest: host::manifest::Manifest,
 }
 
 impl AppState {
@@ -83,6 +85,18 @@ impl AppState {
             Err(e) => {
                 eprintln!("⚠️ 音频系统初始化失败: {}", e);
                 None
+            }
+        };
+
+        // 加载资源清单（立绘配置）
+        let manifest = match host::manifest::Manifest::load("F:/Code/Ring-rs/assets/manifest.json") {
+            Ok(m) => {
+                println!("✅ 资源清单加载成功");
+                m
+            }
+            Err(e) => {
+                eprintln!("⚠️ 资源清单加载失败，使用默认配置: {}", e);
+                host::manifest::Manifest::with_defaults()
             }
         };
 
@@ -105,6 +119,7 @@ impl AppState {
             vn_runtime: None,
             script_finished: false,
             script_index: 0,
+            manifest,
         }
     }
 }
@@ -838,7 +853,7 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
 /// 渲染函数
 fn draw(app_state: &AppState) {
     // 使用渲染器渲染
-    app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager);
+    app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
 
     // 显示调试信息
     if app_state.host_state.debug_mode {
