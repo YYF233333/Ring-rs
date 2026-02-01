@@ -348,5 +348,128 @@ mod tests {
         assert!(matches!(waiting, WaitingReason::None));
         assert!(runtime.is_finished());
     }
+
+    #[test]
+    fn test_runtime_history_recording() {
+        let script = Script::new(
+            "test",
+            vec![
+                ScriptNode::Chapter { title: "第一章".to_string(), level: 1 },
+                ScriptNode::Dialogue { speaker: Some("角色".to_string()), content: "你好".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "旁白".to_string() },
+            ],
+            "",
+        );
+        let mut runtime = VNRuntime::new(script);
+
+        // 执行所有节点
+        runtime.tick(None).unwrap();
+        runtime.tick(Some(RuntimeInput::Click)).unwrap();
+        runtime.tick(Some(RuntimeInput::Click)).unwrap();
+
+        // 验证历史记录
+        let history = runtime.history();
+        assert_eq!(history.len(), 3); // ChapterMark + 2 Dialogue
+        assert_eq!(history.dialogue_count(), 2);
+    }
+
+    #[test]
+    fn test_runtime_state_restore() {
+        let script = Script::new(
+            "test",
+            vec![
+                ScriptNode::Dialogue { speaker: None, content: "1".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "2".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "3".to_string() },
+            ],
+            "",
+        );
+        let mut runtime = VNRuntime::new(script);
+
+        // 推进到第二个对话
+        runtime.tick(None).unwrap();
+        runtime.tick(Some(RuntimeInput::Click)).unwrap();
+
+        // 保存状态
+        let saved_state = runtime.state().clone();
+        let saved_history = runtime.history().clone();
+
+        // 继续推进
+        runtime.tick(Some(RuntimeInput::Click)).unwrap();
+        assert_eq!(runtime.state().position.node_index, 3);
+
+        // 恢复状态
+        runtime.restore_state(saved_state);
+        runtime.restore_history(saved_history);
+
+        assert_eq!(runtime.state().position.node_index, 2);
+        assert_eq!(runtime.history().dialogue_count(), 2);
+    }
+
+    #[test]
+    fn test_runtime_with_goto() {
+        let script = Script::new(
+            "test",
+            vec![
+                ScriptNode::Label { name: "start".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "开始".to_string() },
+                ScriptNode::Goto { target_label: "end".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "这句不应该执行".to_string() },
+                ScriptNode::Label { name: "end".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "结束".to_string() },
+            ],
+            "",
+        );
+        let mut runtime = VNRuntime::new(script);
+
+        // 第一次 tick：执行 Label（无命令）然后 Dialogue
+        let (commands1, _) = runtime.tick(None).unwrap();
+        assert_eq!(commands1.len(), 1);
+        assert!(matches!(&commands1[0], Command::ShowText { content, .. } if content == "开始"));
+
+        // 第二次 tick：执行 Goto 跳过中间对话，直接到 end
+        let (commands2, _) = runtime.tick(Some(RuntimeInput::Click)).unwrap();
+        assert_eq!(commands2.len(), 1);
+        assert!(matches!(&commands2[0], Command::ShowText { content, .. } if content == "结束"));
+
+        // 验证跳过了"这句不应该执行"
+        assert_eq!(runtime.history().dialogue_count(), 2);
+    }
+
+    #[test]
+    fn test_runtime_with_choice() {
+        use crate::script::ChoiceOption;
+        
+        let script = Script::new(
+            "test",
+            vec![
+                ScriptNode::Choice {
+                    style: None,
+                    options: vec![
+                        ChoiceOption { text: "选项A".to_string(), target_label: "a".to_string() },
+                        ChoiceOption { text: "选项B".to_string(), target_label: "b".to_string() },
+                    ],
+                },
+                ScriptNode::Label { name: "a".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "选了A".to_string() },
+                ScriptNode::Label { name: "b".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "选了B".to_string() },
+            ],
+            "",
+        );
+        let mut runtime = VNRuntime::new(script);
+
+        // 执行选择
+        let (commands, waiting) = runtime.tick(None).unwrap();
+        assert_eq!(commands.len(), 1);
+        assert!(matches!(waiting, WaitingReason::WaitForChoice { choice_count: 2 }));
+
+        // 选择第二个选项（索引1）-> 跳转到 "b"
+        let (commands2, _) = runtime.tick(Some(RuntimeInput::ChoiceSelected { index: 1 })).unwrap();
+        
+        // 应该跳转到 "b" 标签，执行 "选了B" 对话
+        assert_eq!(commands2.len(), 1);
+        assert!(matches!(&commands2[0], Command::ShowText { content, .. } if content == "选了B"));
+    }
 }
 

@@ -11,6 +11,8 @@ Ring-rs/
 │   │   ├── command.rs   # Runtime → Host 命令定义
 │   │   ├── input.rs     # Host → Runtime 输入定义
 │   │   ├── state.rs     # 运行时状态
+│   │   ├── save.rs      # 存档数据模型
+│   │   ├── history.rs   # 历史记录数据模型
 │   │   ├── script/      # 脚本解析器
 │   │   └── runtime/     # 执行引擎
 │   └── Cargo.toml
@@ -21,14 +23,20 @@ Ring-rs/
 │   │   ├── audio/       # 音频系统
 │   │   ├── input/       # 输入处理
 │   │   ├── resources/   # 资源管理
-│   │   └── command_executor/  # 命令执行器
+│   │   ├── command_executor/  # 命令执行器
+│   │   ├── save_manager/     # 存档管理
+│   │   ├── config/      # 配置管理
+│   │   └── manifest/    # 立绘布局配置
 │   └── Cargo.toml
 ├── assets/              # 游戏资源
 │   ├── backgrounds/     # 背景图片
 │   ├── characters/      # 角色立绘
 │   ├── bgm/             # 背景音乐
 │   ├── fonts/           # 字体文件
-│   └── scripts/         # 脚本文件
+│   ├── scripts/         # 脚本文件
+│   └── manifest.json    # 立绘布局配置
+├── saves/               # 存档目录（自动创建）
+├── config.json          # 运行配置文件
 └── docs/                # 文档
     ├── script_syntax_spec.md   # 脚本语法规范
     └── script_language_showcase.md
@@ -59,6 +67,8 @@ cargo run
 | **F2** | 切换到命令演示模式 |
 | **F3** | 切换到脚本模式 |
 | **F4** | 切换脚本文件 |
+| **F5** | 快速保存（脚本模式） |
+| **F9** | 快速读取 |
 | **M** | 静音/取消静音 |
 | **ESC** | 退出 |
 
@@ -132,6 +142,26 @@ stopBGM                                       # 停止 BGM（淡出）
 
 立绘的对齐点/预处理缩放/站位预设由 `assets/manifest.json` 控制，便于不同尺寸立绘保持构图一致（无需改代码）。
 
+### 存档系统
+
+- **F5**：快速保存到槽位 1
+- **F9**：快速读取槽位 1
+- 存档文件位于 `saves/slot_XXX.json`
+- 存档包含：脚本位置、角色状态、背景、BGM、历史记录
+
+### 配置文件
+
+运行配置通过 `config.json` 管理：
+
+```json
+{
+  "assets_root": "assets",
+  "saves_dir": "saves",
+  "window": { "width": 1920, "height": 1080 },
+  "audio": { "master_volume": 1.0, "bgm_volume": 0.8 }
+}
+```
+
 ### 选择分支
 
 ```markdown
@@ -165,13 +195,16 @@ stopBGM                                       # 停止 BGM（淡出）
 - ✅ 鼠标与键盘输入
 - ✅ 中文字体支持
 - ✅ 立绘布局系统（`assets/manifest.json`：anchor/pre_scale/preset）
+- ✅ 存档/读档系统（F5 保存 / F9 读取）
+- ✅ 历史记录（对话/章节/选择事件）
+- ✅ 运行配置文件（`config.json`）
 
 ### 待实现
 
 - ⏳ `rule` 遮罩过渡效果
 - ⏳ 对话框样式增强
-- ⏳ 存档/读档系统
-- ⏳ 历史对话回看
+- ⏳ 历史对话回看 UI
+- ⏳ 存档 UI 面板
 
 ## 开发文档
 

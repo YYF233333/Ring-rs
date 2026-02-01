@@ -1491,4 +1491,175 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
             panic!("Expected ShowCharacter node");
         }
     }
+
+    //=========================================================================
+    // goto 语法测试
+    //=========================================================================
+
+    /// 测试 goto 指令：基本语法
+    #[test]
+    fn test_parse_goto_basic() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", "goto **start**").unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::Goto { target_label } if target_label == "start"
+        ));
+    }
+
+    /// 测试 goto 指令：中文标签
+    #[test]
+    fn test_parse_goto_chinese_label() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", "goto **选择支1**").unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::Goto { target_label } if target_label == "选择支1"
+        ));
+    }
+
+    /// 测试 goto 指令：带空格
+    #[test]
+    fn test_parse_goto_with_spaces() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", "goto  **end_scene**").unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::Goto { target_label } if target_label == "end_scene"
+        ));
+    }
+
+    //=========================================================================
+    // audio 语法测试
+    //=========================================================================
+
+    /// 测试 audio 指令：SFX（无 loop）
+    #[test]
+    fn test_parse_audio_sfx() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", r#"<audio src="sfx/ding.mp3"></audio>"#).unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::PlayAudio { path, is_bgm } if path == "sfx/ding.mp3" && !is_bgm
+        ));
+    }
+
+    /// 测试 audio 指令：BGM（带 loop）
+    #[test]
+    fn test_parse_audio_bgm() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", r#"<audio src="bgm/Signal.mp3"></audio> loop"#).unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::PlayAudio { path, is_bgm } if path == "bgm/Signal.mp3" && *is_bgm
+        ));
+    }
+
+    /// 测试 audio 指令：相对路径
+    #[test]
+    fn test_parse_audio_relative_path() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", r#"<audio src="../bgm/music.mp3"></audio> loop"#).unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::PlayAudio { path, is_bgm } if path == "../bgm/music.mp3" && *is_bgm
+        ));
+    }
+
+    /// 测试 stopBGM 指令
+    #[test]
+    fn test_parse_stop_bgm() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", "stopBGM").unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(&script.nodes[0], ScriptNode::StopBgm));
+    }
+
+    //=========================================================================
+    // 相对路径测试
+    //=========================================================================
+
+    /// 测试 changeBG 相对路径
+    #[test]
+    fn test_parse_change_bg_relative_path() {
+        let mut parser = Parser::new();
+        let script = parser.parse(
+            "test",
+            r#"changeBG <img src="../backgrounds/bg.jpg" /> with `dissolve`"#
+        ).unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::ChangeBG { path, .. } if path == "../backgrounds/bg.jpg"
+        ));
+    }
+
+    /// 测试 show 相对路径
+    #[test]
+    fn test_parse_show_relative_path() {
+        let mut parser = Parser::new();
+        let script = parser.parse(
+            "test",
+            r#"show <img src="../characters/北风.png" /> as beifeng at center"#
+        ).unwrap();
+        assert_eq!(script.nodes.len(), 1);
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::ShowCharacter { path, alias, .. } 
+            if path == "../characters/北风.png" && alias == "beifeng"
+        ));
+    }
+
+    //=========================================================================
+    // 综合测试：包含 goto 和 audio 的完整脚本
+    //=========================================================================
+
+    #[test]
+    fn test_parse_script_with_goto_and_audio() {
+        let mut parser = Parser::new();
+        let text = r#"# 测试章节
+
+<audio src="../bgm/intro.mp3"></audio> loop
+
+**开始**
+
+角色："欢迎！"
+
+| 选项 | 跳转 |
+| --- | --- |
+| 去选项A | **选项A** |
+| 去选项B | **选项B** |
+
+**选项A**
+角色："你选了A"
+goto **结束**
+
+**选项B**
+角色："你选了B"
+goto **结束**
+
+**结束**
+stopBGM
+角色："再见！"
+"#;
+
+        let script = parser.parse("test", text).unwrap();
+        
+        // 验证关键节点
+        let has_audio = script.nodes.iter().any(|n| matches!(n, ScriptNode::PlayAudio { is_bgm: true, .. }));
+        let has_goto = script.nodes.iter().any(|n| matches!(n, ScriptNode::Goto { .. }));
+        let has_stop_bgm = script.nodes.iter().any(|n| matches!(n, ScriptNode::StopBgm));
+        let has_choice = script.nodes.iter().any(|n| matches!(n, ScriptNode::Choice { .. }));
+        
+        assert!(has_audio, "应该有 BGM 播放");
+        assert!(has_goto, "应该有 goto 指令");
+        assert!(has_stop_bgm, "应该有 stopBGM 指令");
+        assert!(has_choice, "应该有选择分支");
+    }
 }
