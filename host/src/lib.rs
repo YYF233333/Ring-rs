@@ -20,6 +20,8 @@ pub mod command_executor;
 pub mod state;
 pub mod audio;
 pub mod manifest;
+pub mod save_manager;
+pub mod config;
 
 pub use state::HostState;
 pub use resources::{ResourceManager, ResourceError};
@@ -28,3 +30,5 @@ pub use input::InputManager;
 pub use command_executor::{CommandExecutor, ExecuteResult, TransitionInfo, AudioCommand, CommandOutput};
 pub use audio::AudioManager;
 pub use manifest::Manifest;
+pub use save_manager::SaveManager;
+pub use config::{AppConfig, WindowConfig, DebugConfig, AudioConfig};

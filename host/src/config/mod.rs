@@ -1,0 +1,322 @@
+//! # Config 模块
+//!
+//! 运行时配置管理，集中管理所有配置项。
+//!
+//! ## 配置优先级
+//!
+//! 1. 命令行参数（最高）
+//! 2. 配置文件 (config.json)
+//! 3. 默认值（最低）
+
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// 应用配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppConfig {
+    /// 资源根目录
+    #[serde(default = "default_assets_root")]
+    pub assets_root: PathBuf,
+
+    /// 存档目录
+    #[serde(default = "default_saves_dir")]
+    pub saves_dir: PathBuf,
+
+    /// manifest.json 路径（相对于 assets_root）
+    #[serde(default = "default_manifest_path")]
+    pub manifest_path: String,
+
+    /// 默认字体路径（相对于 assets_root）
+    #[serde(default)]
+    pub default_font: Option<String>,
+
+    /// 窗口配置
+    #[serde(default)]
+    pub window: WindowConfig,
+
+    /// 调试配置
+    #[serde(default)]
+    pub debug: DebugConfig,
+
+    /// 音频配置
+    #[serde(default)]
+    pub audio: AudioConfig,
+}
+
+/// 窗口配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowConfig {
+    /// 窗口宽度
+    #[serde(default = "default_window_width")]
+    pub width: u32,
+
+    /// 窗口高度
+    #[serde(default = "default_window_height")]
+    pub height: u32,
+
+    /// 窗口标题
+    #[serde(default = "default_window_title")]
+    pub title: String,
+
+    /// 是否全屏
+    #[serde(default)]
+    pub fullscreen: bool,
+}
+
+/// 调试配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DebugConfig {
+    /// 是否启用调试模式
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// 是否显示 FPS
+    #[serde(default)]
+    pub show_fps: bool,
+
+    /// 是否显示调试信息
+    #[serde(default)]
+    pub show_debug_info: bool,
+}
+
+/// 音频配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioConfig {
+    /// 主音量 (0.0 - 1.0)
+    #[serde(default = "default_master_volume")]
+    pub master_volume: f32,
+
+    /// BGM 音量 (0.0 - 1.0)
+    #[serde(default = "default_bgm_volume")]
+    pub bgm_volume: f32,
+
+    /// SFX 音量 (0.0 - 1.0)
+    #[serde(default = "default_sfx_volume")]
+    pub sfx_volume: f32,
+
+    /// 是否静音
+    #[serde(default)]
+    pub muted: bool,
+}
+
+// 默认值函数
+fn default_assets_root() -> PathBuf {
+    PathBuf::from("assets")
+}
+
+fn default_saves_dir() -> PathBuf {
+    PathBuf::from("saves")
+}
+
+fn default_manifest_path() -> String {
+    "manifest.json".to_string()
+}
+
+fn default_window_width() -> u32 {
+    1920
+}
+
+fn default_window_height() -> u32 {
+    1080
+}
+
+fn default_window_title() -> String {
+    "Ring VN Engine".to_string()
+}
+
+fn default_master_volume() -> f32 {
+    1.0
+}
+
+fn default_bgm_volume() -> f32 {
+    0.8
+}
+
+fn default_sfx_volume() -> f32 {
+    1.0
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            assets_root: default_assets_root(),
+            saves_dir: default_saves_dir(),
+            manifest_path: default_manifest_path(),
+            default_font: None,
+            window: WindowConfig::default(),
+            debug: DebugConfig::default(),
+            audio: AudioConfig::default(),
+        }
+    }
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        Self {
+            width: default_window_width(),
+            height: default_window_height(),
+            title: default_window_title(),
+            fullscreen: false,
+        }
+    }
+}
+
+impl Default for DebugConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            show_fps: false,
+            show_debug_info: false,
+        }
+    }
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            master_volume: default_master_volume(),
+            bgm_volume: default_bgm_volume(),
+            sfx_volume: default_sfx_volume(),
+            muted: false,
+        }
+    }
+}
+
+impl AppConfig {
+    /// 加载配置文件
+    ///
+    /// 如果文件不存在或解析失败，返回默认配置并打印警告。
+    pub fn load(path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref();
+
+        if !path.exists() {
+            println!("⚠️ 配置文件不存在: {:?}，使用默认配置", path);
+            return Self::default();
+        }
+
+        match fs::read_to_string(path) {
+            Ok(content) => match serde_json::from_str(&content) {
+                Ok(config) => {
+                    println!("✅ 配置文件加载成功: {:?}", path);
+                    config
+                }
+                Err(e) => {
+                    eprintln!("⚠️ 配置文件解析失败: {}，使用默认配置", e);
+                    Self::default()
+                }
+            },
+            Err(e) => {
+                eprintln!("⚠️ 配置文件读取失败: {}，使用默认配置", e);
+                Self::default()
+            }
+        }
+    }
+
+    /// 保存配置到文件
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), ConfigError> {
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| ConfigError::SerializationFailed(e.to_string()))?;
+
+        fs::write(path, json).map_err(|e| ConfigError::IoError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// 获取 manifest 完整路径
+    pub fn manifest_full_path(&self) -> PathBuf {
+        self.assets_root.join(&self.manifest_path)
+    }
+
+    /// 验证配置有效性
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        // 检查资源目录存在
+        if !self.assets_root.exists() {
+            return Err(ConfigError::ValidationFailed(format!(
+                "资源目录不存在: {:?}",
+                self.assets_root
+            )));
+        }
+
+        // 检查音量范围
+        if self.audio.master_volume < 0.0 || self.audio.master_volume > 1.0 {
+            return Err(ConfigError::ValidationFailed(
+                "主音量必须在 0.0 - 1.0 之间".to_string(),
+            ));
+        }
+
+        if self.audio.bgm_volume < 0.0 || self.audio.bgm_volume > 1.0 {
+            return Err(ConfigError::ValidationFailed(
+                "BGM 音量必须在 0.0 - 1.0 之间".to_string(),
+            ));
+        }
+
+        if self.audio.sfx_volume < 0.0 || self.audio.sfx_volume > 1.0 {
+            return Err(ConfigError::ValidationFailed(
+                "SFX 音量必须在 0.0 - 1.0 之间".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// 配置错误
+#[derive(Debug, Clone)]
+pub enum ConfigError {
+    /// 序列化失败
+    SerializationFailed(String),
+    /// IO 错误
+    IoError(String),
+    /// 验证失败
+    ValidationFailed(String),
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigError::SerializationFailed(e) => write!(f, "配置序列化失败: {}", e),
+            ConfigError::IoError(e) => write!(f, "配置 IO 错误: {}", e),
+            ConfigError::ValidationFailed(e) => write!(f, "配置验证失败: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = AppConfig::default();
+        assert_eq!(config.window.width, 1920);
+        assert_eq!(config.window.height, 1080);
+        assert!(!config.debug.enabled);
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let config = AppConfig::default();
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        
+        // 反序列化
+        let loaded: AppConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.window.width, config.window.width);
+    }
+
+    #[test]
+    fn test_config_validation() {
+        let mut config = AppConfig::default();
+        
+        // 无效音量
+        config.audio.master_volume = 2.0;
+        assert!(config.validate().is_err());
+
+        // 恢复有效值
+        config.audio.master_volume = 0.5;
+        // 资源目录不存在时也会失败（默认 "assets" 可能不存在）
+        // 只检查音量验证
+    }
+}

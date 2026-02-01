@@ -15,6 +15,7 @@
 
 use crate::command::Command;
 use crate::error::RuntimeError;
+use crate::history::{History, HistoryEvent};
 use crate::input::RuntimeInput;
 use crate::runtime::executor::Executor;
 use crate::script::{Script, ScriptNode};
@@ -45,6 +46,8 @@ pub struct VNRuntime {
     state: RuntimeState,
     /// 节点执行器
     executor: Executor,
+    /// 历史记录
+    history: History,
 }
 
 impl VNRuntime {
@@ -58,6 +61,7 @@ impl VNRuntime {
         Self {
             script,
             state,
+            history: History::new(),
             executor: Executor::new(),
         }
     }
@@ -68,10 +72,12 @@ impl VNRuntime {
     ///
     /// - `script`: 脚本（必须与保存时相同）
     /// - `state`: 保存的运行时状态
-    pub fn restore(script: Script, state: RuntimeState) -> Self {
+    /// - `history`: 历史记录
+    pub fn restore(script: Script, state: RuntimeState, history: History) -> Self {
         Self {
             script,
             state,
+            history,
             executor: Executor::new(),
         }
     }
@@ -117,6 +123,11 @@ impl VNRuntime {
 
             // 执行当前节点
             let result = self.executor.execute(&node, &mut self.state, &self.script)?;
+
+            // 记录历史事件
+            for cmd in &result.commands {
+                self.record_history(cmd);
+            }
 
             commands.extend(result.commands);
 
@@ -204,6 +215,14 @@ impl VNRuntime {
         &self.state
     }
 
+    /// 恢复状态（用于读档）
+    /// 
+    /// 将 Runtime 状态恢复到指定状态。
+    /// 注意：调用方需要确保 state 中的 script_id 与当前加载的脚本匹配。
+    pub fn restore_state(&mut self, state: RuntimeState) {
+        self.state = state;
+    }
+
     /// 获取当前等待状态
     pub fn waiting(&self) -> &WaitingReason {
         &self.state.waiting
@@ -212,6 +231,42 @@ impl VNRuntime {
     /// 检查脚本是否执行完毕
     pub fn is_finished(&self) -> bool {
         self.state.position.node_index >= self.script.len() && !self.state.waiting.is_waiting()
+    }
+
+    /// 获取历史记录
+    pub fn history(&self) -> &History {
+        &self.history
+    }
+
+    /// 恢复历史记录（用于读档）
+    pub fn restore_history(&mut self, history: History) {
+        self.history = history;
+    }
+
+    /// 根据 Command 记录历史事件
+    fn record_history(&mut self, cmd: &Command) {
+        match cmd {
+            Command::ShowText { speaker, content } => {
+                self.history.push(HistoryEvent::dialogue(
+                    speaker.clone(),
+                    content.clone(),
+                ));
+            }
+            Command::ChapterMark { title, .. } => {
+                self.history.push(HistoryEvent::chapter_mark(title.clone()));
+            }
+            Command::ShowBackground { path, .. } => {
+                self.history.push(HistoryEvent::background_change(path.clone()));
+            }
+            Command::PlayBgm { path, .. } => {
+                self.history.push(HistoryEvent::bgm_change(Some(path.clone())));
+            }
+            Command::StopBgm { .. } => {
+                self.history.push(HistoryEvent::bgm_change(None));
+            }
+            // 其他命令不记录历史（角色显示/隐藏、音效等）
+            _ => {}
+        }
     }
 }
 

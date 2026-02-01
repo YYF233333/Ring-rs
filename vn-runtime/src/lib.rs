@@ -66,16 +66,20 @@
 
 pub mod command;
 pub mod error;
+pub mod history;
 pub mod input;
 pub mod runtime;
+pub mod save;
 pub mod script;
 pub mod state;
 
 // 重导出核心类型
 pub use command::{Choice, Command, Position, Transition, TransitionArg};
 pub use error::{ParseError, RuntimeError, VnError, VnResult};
+pub use history::{History, HistoryEvent};
 pub use input::{RuntimeInput, SignalId};
 pub use runtime::VNRuntime;
+pub use save::{SaveData, SaveError, SaveMetadata, SaveVersion, AudioState, RenderSnapshot, CharacterSnapshot};
 pub use script::{ChoiceOption, Parser, Script, ScriptNode};
 pub use state::{RuntimeState, ScriptPosition, VarValue, WaitingReason};
 

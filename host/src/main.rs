@@ -72,6 +72,10 @@ struct AppState {
     script_index: usize,
     /// 资源清单（立绘配置等）
     manifest: host::manifest::Manifest,
+    /// 存档管理器
+    save_manager: host::save_manager::SaveManager,
+    /// 当前存档槽位
+    current_save_slot: u32,
 }
 
 impl AppState {
@@ -100,6 +104,10 @@ impl AppState {
             }
         };
 
+        // 初始化存档管理器
+        let save_manager = host::save_manager::SaveManager::new("F:/Code/Ring-rs/saves");
+        println!("✅ 存档管理器初始化成功");
+
         Self {
             host_state: HostState::new(),
             resource_manager: ResourceManager::new("F:/Code/Ring-rs/assets"),
@@ -120,6 +128,8 @@ impl AppState {
             script_finished: false,
             script_index: 0,
             manifest,
+            save_manager,
+            current_save_slot: 1,
         }
     }
 }
@@ -406,6 +416,16 @@ fn update(app_state: &mut AppState) {
             app_state.script_finished = false;
             run_script_tick(app_state, None);
         }
+    }
+
+    // F5: 快速保存
+    if is_key_pressed(KeyCode::F5) {
+        quick_save(app_state);
+    }
+
+    // F9: 快速读取
+    if is_key_pressed(KeyCode::F9) {
+        quick_load(app_state);
     }
 
     // 更新过渡效果
@@ -750,6 +770,126 @@ fn handle_audio_command(app_state: &mut AppState) {
             }
         }
     }
+}
+
+//=============================================================================
+// 存档系统
+//=============================================================================
+
+/// 快速保存
+fn quick_save(app_state: &mut AppState) {
+    // 只在脚本模式下可以保存
+    if app_state.run_mode != RunMode::Script {
+        println!("⚠️ 只能在脚本模式下保存");
+        return;
+    }
+
+    let Some(ref runtime) = app_state.vn_runtime else {
+        println!("⚠️ 没有可保存的游戏状态");
+        return;
+    };
+
+    // 构建存档数据
+    let runtime_state = runtime.state().clone();
+    let slot = app_state.current_save_slot;
+
+    let mut save_data = vn_runtime::SaveData::new(slot, runtime_state);
+
+    // 设置章节标题（如果有）
+    if let Some(ref chapter) = app_state.render_state.chapter_mark {
+        save_data = save_data.with_chapter(&chapter.title);
+    }
+
+    // 设置音频状态
+    if let Some(ref audio) = app_state.audio_manager {
+        save_data = save_data.with_audio(vn_runtime::AudioState {
+            current_bgm: audio.current_bgm_path().map(|s| s.to_string()),
+            bgm_looping: true, // 假设 BGM 总是循环
+        });
+    }
+
+    // 设置渲染快照
+    let render_snapshot = vn_runtime::RenderSnapshot {
+        background: app_state.render_state.current_background.clone(),
+        characters: app_state.render_state.visible_characters
+            .iter()
+            .map(|(alias, sprite)| vn_runtime::CharacterSnapshot {
+                alias: alias.clone(),
+                texture_path: sprite.texture_path.clone(),
+                position: format!("{:?}", sprite.position),
+            })
+            .collect(),
+    };
+    save_data = save_data.with_render(render_snapshot);
+
+    // 设置历史记录
+    save_data = save_data.with_history(runtime.history().clone());
+
+    // 保存
+    match app_state.save_manager.save(&save_data) {
+        Ok(()) => println!("💾 快速保存成功 (槽位 {})", slot),
+        Err(e) => eprintln!("❌ 保存失败: {}", e),
+    }
+}
+
+/// 快速读取
+fn quick_load(app_state: &mut AppState) {
+    let slot = app_state.current_save_slot;
+
+    // 读取存档
+    let save_data = match app_state.save_manager.load(slot) {
+        Ok(data) => data,
+        Err(e) => {
+            eprintln!("❌ 读取失败: {}", e);
+            return;
+        }
+    };
+
+    // 找到对应的脚本
+    let script_id = &save_data.runtime_state.position.script_id;
+    let script_index = SCRIPTS.iter().position(|(id, _)| *id == script_id);
+    
+    let Some(idx) = script_index else {
+        eprintln!("❌ 找不到脚本: {}", script_id);
+        return;
+    };
+
+    // 切换到对应脚本
+    app_state.script_index = idx;
+    load_script(app_state);
+
+    // 恢复 Runtime 状态和历史记录
+    if let Some(ref mut runtime) = app_state.vn_runtime {
+        runtime.restore_state(save_data.runtime_state);
+        runtime.restore_history(save_data.history);
+    }
+
+    // 恢复渲染状态
+    app_state.render_state.current_background = save_data.render.background;
+    app_state.render_state.visible_characters.clear();
+    for char_snap in save_data.render.characters {
+        // 尝试解析 position（简化处理，默认 Center）
+        let position = vn_runtime::Position::Center;
+        app_state.render_state.show_character(
+            char_snap.alias,
+            char_snap.texture_path,
+            position,
+        );
+    }
+
+    // 恢复音频状态
+    if let Some(ref mut audio) = app_state.audio_manager {
+        if let Some(ref bgm_path) = save_data.audio.current_bgm {
+            audio.play_bgm(bgm_path, save_data.audio.bgm_looping, Some(0.5));
+        }
+    }
+
+    // 切换到脚本模式
+    app_state.run_mode = RunMode::Script;
+    app_state.script_finished = false;
+    app_state.waiting_reason = WaitingReason::WaitForClick;
+
+    println!("💾 快速读取成功 (槽位 {})", slot);
 }
 
 //=============================================================================

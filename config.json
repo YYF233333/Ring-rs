@@ -1,0 +1,23 @@
+{
+  "assets_root": "assets",
+  "saves_dir": "saves",
+  "manifest_path": "manifest.json",
+  "default_font": null,
+  "window": {
+    "width": 1920,
+    "height": 1080,
+    "title": "Ring VN Engine",
+    "fullscreen": false
+  },
+  "debug": {
+    "enabled": false,
+    "show_fps": false,
+    "show_debug_info": false
+  },
+  "audio": {
+    "master_volume": 1.0,
+    "bgm_volume": 0.8,
+    "sfx_volume": 1.0,
+    "muted": false
+  }
+}

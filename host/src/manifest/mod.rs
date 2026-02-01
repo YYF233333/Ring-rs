@@ -95,6 +95,38 @@ impl Default for DefaultsConfig {
     }
 }
 
+/// Manifest 校验警告
+#[derive(Debug, Clone)]
+pub enum ManifestWarning {
+    /// 锚点值超出范围 (0.0 - 1.0)
+    InvalidAnchor { context: String, x: f32, y: f32 },
+    /// 预缩放值无效 (必须 > 0)
+    InvalidPreScale { context: String, value: f32 },
+    /// 预设位置超出范围
+    InvalidPresetPosition { context: String, value: f32 },
+    /// 引用了不存在的组
+    UnknownGroup { sprite_path: String, group_id: String },
+}
+
+impl std::fmt::Display for ManifestWarning {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ManifestWarning::InvalidAnchor { context, x, y } => {
+                write!(f, "{}: 锚点 ({}, {}) 超出范围 [0.0, 1.0]", context, x, y)
+            }
+            ManifestWarning::InvalidPreScale { context, value } => {
+                write!(f, "{}: 预缩放 {} 必须 > 0", context, value)
+            }
+            ManifestWarning::InvalidPresetPosition { context, value } => {
+                write!(f, "{}: 位置 {} 超出范围 [0.0, 1.0]", context, value)
+            }
+            ManifestWarning::UnknownGroup { sprite_path, group_id } => {
+                write!(f, "sprite '{}' 引用了不存在的组 '{}'", sprite_path, group_id)
+            }
+        }
+    }
+}
+
 /// 资源清单
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Manifest {
@@ -139,6 +171,105 @@ impl Manifest {
             presets,
             defaults: DefaultsConfig::default(),
         }
+    }
+
+    /// 验证 Manifest 配置有效性
+    /// 
+    /// 返回所有验证警告/错误
+    pub fn validate(&self) -> Vec<ManifestWarning> {
+        let mut warnings = Vec::new();
+
+        // 验证锚点范围 (0.0 - 1.0)
+        let validate_point = |p: &Point2D, context: &str| -> Option<ManifestWarning> {
+            if p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0 {
+                Some(ManifestWarning::InvalidAnchor {
+                    context: context.to_string(),
+                    x: p.x,
+                    y: p.y,
+                })
+            } else {
+                None
+            }
+        };
+
+        // 验证默认锚点
+        if let Some(w) = validate_point(&self.defaults.anchor, "defaults.anchor") {
+            warnings.push(w);
+        }
+
+        // 验证默认预缩放
+        if self.defaults.pre_scale <= 0.0 {
+            warnings.push(ManifestWarning::InvalidPreScale {
+                context: "defaults.pre_scale".to_string(),
+                value: self.defaults.pre_scale,
+            });
+        }
+
+        // 验证组配置
+        for (group_id, config) in &self.characters.groups {
+            let ctx = format!("characters.groups.{}", group_id);
+            
+            if let Some(w) = validate_point(&config.anchor, &format!("{}.anchor", ctx)) {
+                warnings.push(w);
+            }
+
+            if config.pre_scale <= 0.0 {
+                warnings.push(ManifestWarning::InvalidPreScale {
+                    context: format!("{}.pre_scale", ctx),
+                    value: config.pre_scale,
+                });
+            }
+        }
+
+        // 验证预设
+        for (preset_name, preset) in &self.presets {
+            let ctx = format!("presets.{}", preset_name);
+
+            if preset.x < 0.0 || preset.x > 1.0 {
+                warnings.push(ManifestWarning::InvalidPresetPosition {
+                    context: format!("{}.x", ctx),
+                    value: preset.x,
+                });
+            }
+
+            if preset.y < 0.0 || preset.y > 1.0 {
+                warnings.push(ManifestWarning::InvalidPresetPosition {
+                    context: format!("{}.y", ctx),
+                    value: preset.y,
+                });
+            }
+
+            if preset.scale <= 0.0 {
+                warnings.push(ManifestWarning::InvalidPreScale {
+                    context: format!("{}.scale", ctx),
+                    value: preset.scale,
+                });
+            }
+        }
+
+        // 验证 sprite 映射引用的组是否存在
+        for (sprite_path, group_id) in &self.characters.sprites {
+            if !self.characters.groups.contains_key(group_id) {
+                warnings.push(ManifestWarning::UnknownGroup {
+                    sprite_path: sprite_path.clone(),
+                    group_id: group_id.clone(),
+                });
+            }
+        }
+
+        warnings
+    }
+
+    /// 加载并验证 Manifest，打印警告
+    pub fn load_and_validate(path: &str) -> Result<Self, String> {
+        let manifest = Self::load(path)?;
+        
+        let warnings = manifest.validate();
+        for warning in &warnings {
+            eprintln!("⚠️ Manifest 警告: {}", warning);
+        }
+
+        Ok(manifest)
     }
 
     /// 获取立绘的组配置
