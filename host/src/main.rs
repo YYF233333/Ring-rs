@@ -68,6 +68,8 @@ struct AppState {
     vn_runtime: Option<VNRuntime>,
     /// 脚本是否执行完毕
     script_finished: bool,
+    /// 当前脚本索引
+    script_index: usize,
 }
 
 impl AppState {
@@ -102,6 +104,7 @@ impl AppState {
             run_mode: RunMode::Demo,
             vn_runtime: None,
             script_finished: false,
+            script_index: 0,
         }
     }
 }
@@ -138,10 +141,13 @@ async fn load_resources(app_state: &mut AppState) {
         eprintln!("⚠️ 字体加载失败，使用默认字体: {}", e);
     }
 
-    // 加载背景（使用 PNG 格式，macroquad 默认不支持 JPEG）
+    // 加载背景（PNG 和 JPG）
     let bg_paths = [
         "backgrounds/black.png",
         "backgrounds/white.png",
+        "backgrounds/BG12_pl_n_19201440.jpg",
+        "backgrounds/BG12_pl_cy_19201440.jpg",
+        "backgrounds/cg1.jpg",
     ];
     for path in &bg_paths {
         match app_state.resource_manager.load_texture(path).await {
@@ -182,16 +188,23 @@ async fn load_resources(app_state: &mut AppState) {
     init_demo_scene(app_state);
 }
 
+/// 可用的脚本列表
+const SCRIPTS: &[(&str, &str)] = &[
+    ("demo", "F:/Code/Ring-rs/assets/scripts/demo.md"),
+    ("test_comprehensive", "F:/Code/Ring-rs/assets/scripts/test_comprehensive.md"),
+];
+
 /// 加载脚本文件
 fn load_script(app_state: &mut AppState) {
-    let script_path = "F:/Code/Ring-rs/assets/scripts/demo.md";
+    let (script_id, script_path) = SCRIPTS[app_state.script_index % SCRIPTS.len()];
     
-    println!("📜 尝试加载脚本: {}", script_path);
+    println!("📜 加载脚本 [{}/{}]: {} ({})", 
+        app_state.script_index + 1, SCRIPTS.len(), script_id, script_path);
     
     match std::fs::read_to_string(script_path) {
         Ok(script_text) => {
             let mut parser = Parser::new();
-            match parser.parse("demo", &script_text) {
+            match parser.parse(script_id, &script_text) {
                 Ok(script) => {
                     println!("✅ 脚本解析成功！节点数: {}", script.len());
                     
@@ -202,7 +215,7 @@ fn load_script(app_state: &mut AppState) {
                     
                     // 创建 VNRuntime
                     app_state.vn_runtime = Some(VNRuntime::new(script));
-                    println!("✅ VNRuntime 创建成功！按 F3 切换到脚本模式");
+                    println!("✅ VNRuntime 创建成功！按 F3 切换到脚本模式，F4 切换脚本");
                 }
                 Err(e) => {
                     eprintln!("❌ 脚本解析失败: {:?}", e);
@@ -355,6 +368,18 @@ fn update(app_state: &mut AppState) {
             }
         } else {
             println!("⚠️ 脚本未加载，无法切换到脚本模式");
+        }
+    }
+
+    // F4: 切换脚本
+    if is_key_pressed(KeyCode::F4) {
+        app_state.script_index = (app_state.script_index + 1) % SCRIPTS.len();
+        load_script(app_state);
+        // 如果在脚本模式，重新开始
+        if app_state.run_mode == RunMode::Script {
+            app_state.render_state = RenderState::new();
+            app_state.script_finished = false;
+            run_script_tick(app_state, None);
         }
     }
 
@@ -723,6 +748,12 @@ fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
 
 /// 执行一次 VNRuntime tick
 fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
+    // 如果是选择输入，先清除选择界面
+    if let Some(RuntimeInput::ChoiceSelected { index }) = &input {
+        println!("📜 用户选择了选项 {}", index + 1);
+        app_state.render_state.clear_choices();
+    }
+
     // 先执行 tick 并收集结果
     let tick_result = {
         let runtime = match app_state.vn_runtime.as_mut() {
@@ -873,8 +904,9 @@ fn draw_help_text(app_state: &AppState) {
     let screen_h = screen_height();
     
     // 底部提示（使用自定义字体）
+    let script_name = SCRIPTS[app_state.script_index % SCRIPTS.len()].0;
     app_state.renderer.text_renderer.draw_ui_text(
-        &format!("{} {} | ESC退出 | F1调试 | F2命令 | F3脚本", mode_text, help_text),
+        &format!("{} {} | ESC退出 | F1调试 | F2命令 | F3脚本 | F4切换脚本({})", mode_text, help_text, script_name),
         10.0,
         screen_h - 10.0,
         18.0,
