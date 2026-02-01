@@ -7,3 +7,6 @@ edition = "2024"
 macroquad = "0.4.14"
 vn-runtime = { version = "0.1.0", path = "../vn-runtime" }
 thiserror = "2.0.18"
+
+# 音频库 - 支持 MP3, WAV, FLAC, OGG
+rodio = { version = "0.19", features = ["mp3", "wav", "flac", "vorbis"] }
