@@ -65,6 +65,36 @@ fn extract_img_src(s: &str) -> Option<&str> {
     Some(&after_quote[..end_quote])
 }
 
+/// 从字符串中提取 HTML audio 标签的 src 属性值
+///
+/// 输入: `<audio src="path/to/audio.mp3"></audio>`
+/// 输出: `Some("path/to/audio.mp3")`
+fn extract_audio_src(s: &str) -> Option<&str> {
+    // 查找 <audio
+    let audio_start = s.find("<audio")?;
+    let after_audio = &s[audio_start..];
+
+    // 查找 src=
+    let src_pos = after_audio.find("src")?;
+    let after_src = &after_audio[src_pos + 3..];
+
+    // 跳过空白和等号
+    let after_eq = skip_whitespace(after_src);
+    let after_eq = after_eq.strip_prefix('=')?;
+    let after_eq = skip_whitespace(after_eq);
+
+    // 提取引号内的内容
+    let quote_char = after_eq.chars().next()?;
+    if quote_char != '"' && quote_char != '\'' {
+        return None;
+    }
+
+    let after_quote = &after_eq[1..];
+    let end_quote = after_quote.find(quote_char)?;
+
+    Some(&after_quote[..end_quote])
+}
+
 /// 查找关键字并提取其后的值
 ///
 /// 输入: `"show <img> as royu at center with dissolve"`, `"as"`
@@ -341,7 +371,32 @@ impl Parser {
     /// # 返回
     ///
     /// 解析后的 `Script`，或解析错误
+    ///
+    /// # 注意
+    ///
+    /// 此方法使用空的 base_path，素材路径将保持原样。
+    /// 如需支持相对于脚本文件的路径，请使用 `parse_with_base_path`。
     pub fn parse(&mut self, script_id: &str, text: &str) -> Result<Script, ParseError> {
+        self.parse_with_base_path(script_id, text, "")
+    }
+
+    /// 解析脚本文本（带基础路径）
+    ///
+    /// # 参数
+    ///
+    /// - `script_id`: 脚本标识符
+    /// - `text`: 脚本文本内容
+    /// - `base_path`: 脚本文件所在目录，用于解析相对路径
+    ///
+    /// # 返回
+    ///
+    /// 解析后的 `Script`，或解析错误
+    pub fn parse_with_base_path(
+        &mut self,
+        script_id: &str,
+        text: &str,
+        base_path: &str,
+    ) -> Result<Script, ParseError> {
         self.warnings.clear();
 
         // 阶段 1：块识别
@@ -357,7 +412,7 @@ impl Parser {
             }
         }
 
-        Ok(Script::new(script_id, nodes))
+        Ok(Script::new(script_id, nodes, base_path))
     }
 
     /// 获取解析过程中的警告
@@ -474,8 +529,17 @@ impl Parser {
         if starts_with_ignore_case(line, "uianim") {
             return self.parse_ui_anim(line, line_number);
         }
+        if starts_with_ignore_case(line, "goto") {
+            return self.parse_goto(line, line_number);
+        }
 
-        // 4. 对话/旁白 (包含冒号和引号)
+        // 4. HTML 标签解析
+        // <audio src="..."> - 播放音频
+        if line.starts_with("<audio") {
+            return self.parse_audio(line, line_number);
+        }
+
+        // 5. 对话/旁白 (包含冒号和引号)
         if let Some((speaker, content)) = parse_dialogue(line) {
             return Ok(Some(ScriptNode::Dialogue { speaker, content }));
         }
@@ -628,6 +692,64 @@ impl Parser {
         })?;
 
         Ok(Some(ScriptNode::UIAnim { effect }))
+    }
+
+    /// 解析 goto 指令
+    ///
+    /// 语法: `goto **label**`
+    fn parse_goto(
+        &self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        // 跳过 "goto" 前缀
+        let content = line
+            .get(4..)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "goto".to_string(),
+                param: "目标标签".to_string(),
+            })?;
+
+        // 提取 **label** 中的 label
+        let target_label = if content.starts_with("**") && content.ends_with("**") && content.len() > 4 {
+            content[2..content.len() - 2].trim().to_string()
+        } else {
+            // 也支持不带 ** 的格式
+            content.to_string()
+        };
+
+        if target_label.is_empty() {
+            return Err(ParseError::MissingParameter {
+                line: line_number,
+                command: "goto".to_string(),
+                param: "目标标签".to_string(),
+            });
+        }
+
+        Ok(Some(ScriptNode::Goto { target_label }))
+    }
+
+    /// 解析 audio 标签
+    ///
+    /// 语法: `<audio src="path/to/audio.mp3"></audio>`
+    fn parse_audio(
+        &self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        // 提取 src 属性
+        let path = extract_audio_src(line).ok_or_else(|| ParseError::MissingParameter {
+            line: line_number,
+            command: "audio".to_string(),
+            param: "音频路径 (<audio src=\"...\">)".to_string(),
+        })?;
+
+        Ok(Some(ScriptNode::PlayAudio {
+            path: path.to_string(),
+        }))
     }
 
     /// 从行中提取 with 子句的过渡效果

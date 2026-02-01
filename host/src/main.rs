@@ -150,10 +150,11 @@ async fn load_resources(app_state: &mut AppState) {
         "backgrounds/cg1.jpg",
     ];
     for path in &bg_paths {
+        // 获取规范化后的完整路径作为缓存键
+        let full_path = app_state.resource_manager.resolve_path(path);
         match app_state.resource_manager.load_texture(path).await {
             Ok(texture) => {
-                app_state.textures.insert(path.to_string(), texture);
-                println!("✅ 加载背景: {}", path);
+                app_state.textures.insert(full_path, texture);
             }
             Err(e) => {
                 eprintln!("❌ 加载背景失败: {} - {}", path, e);
@@ -167,10 +168,11 @@ async fn load_resources(app_state: &mut AppState) {
         "characters/北风-日常服2.png",
     ];
     for path in &char_paths {
+        // 获取规范化后的完整路径作为缓存键
+        let full_path = app_state.resource_manager.resolve_path(path);
         match app_state.resource_manager.load_texture(path).await {
             Ok(texture) => {
-                app_state.textures.insert(path.to_string(), texture);
-                println!("✅ 加载角色: {}", path);
+                app_state.textures.insert(full_path, texture);
             }
             Err(e) => {
                 eprintln!("❌ 加载角色失败: {} - {}", path, e);
@@ -201,10 +203,18 @@ fn load_script(app_state: &mut AppState) {
     println!("📜 加载脚本 [{}/{}]: {} ({})", 
         app_state.script_index + 1, SCRIPTS.len(), script_id, script_path);
     
+    // 提取脚本所在目录作为 base_path（用于解析相对路径）
+    let base_path = std::path::Path::new(script_path)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    
+    println!("📁 脚本目录: {}", base_path);
+    
     match std::fs::read_to_string(script_path) {
         Ok(script_text) => {
             let mut parser = Parser::new();
-            match parser.parse(script_id, &script_text) {
+            match parser.parse_with_base_path(script_id, &script_text, &base_path) {
                 Ok(script) => {
                     println!("✅ 脚本解析成功！节点数: {}", script.len());
                     
@@ -821,7 +831,7 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
 /// 渲染函数
 fn draw(app_state: &AppState) {
     // 使用渲染器渲染
-    app_state.renderer.render(&app_state.render_state, &app_state.textures);
+    app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager);
 
     // 显示调试信息
     if app_state.host_state.debug_mode {

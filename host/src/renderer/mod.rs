@@ -13,6 +13,8 @@ use macroquad::prelude::*;
 use std::collections::HashMap;
 use vn_runtime::command::Position;
 
+use crate::resources::ResourceManager;
+
 pub mod render_state;
 mod text_renderer;
 mod transition;
@@ -54,15 +56,15 @@ impl Renderer {
     }
 
     /// 渲染完整画面
-    pub fn render(&self, state: &RenderState, textures: &HashMap<String, Texture2D>) {
+    pub fn render(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
         // 清空屏幕
         clear_background(BLACK);
 
         // 1. 渲染背景（带过渡效果）
-        self.render_background_with_transition(state, textures);
+        self.render_background_with_transition(state, textures, resource_manager);
 
         // 2. 渲染角色
-        self.render_characters(state, textures);
+        self.render_characters(state, textures, resource_manager);
 
         // 3. 渲染对话框
         self.render_dialogue(state);
@@ -105,11 +107,13 @@ impl Renderer {
     }
 
     /// 渲染背景（带过渡效果）
-    fn render_background_with_transition(&self, state: &RenderState, textures: &HashMap<String, Texture2D>) {
+    fn render_background_with_transition(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
         // 渲染旧背景（如果正在过渡中）
         if self.transition.is_active() {
             if let Some(ref old_bg_path) = self.old_background {
-                if let Some(texture) = textures.get(old_bg_path) {
+                // 规范化路径后查找纹理
+                let normalized_path = resource_manager.resolve_path(old_bg_path);
+                if let Some(texture) = textures.get(&normalized_path) {
                     let alpha = self.transition.old_content_alpha();
                     if alpha > 0.0 {
                         self.draw_texture_fit_with_alpha(texture, DrawMode::Cover, alpha);
@@ -120,7 +124,9 @@ impl Renderer {
 
         // 渲染新背景
         if let Some(ref bg_path) = state.current_background {
-            if let Some(texture) = textures.get(bg_path) {
+            // 规范化路径后查找纹理
+            let normalized_path = resource_manager.resolve_path(bg_path);
+            if let Some(texture) = textures.get(&normalized_path) {
                 let alpha = self.transition.new_content_alpha();
                 self.draw_texture_fit_with_alpha(texture, DrawMode::Cover, alpha);
             }
@@ -129,22 +135,25 @@ impl Renderer {
 
     /// 渲染背景（不带过渡效果，保留兼容）
     #[allow(dead_code)]
-    fn render_background(&self, state: &RenderState, textures: &HashMap<String, Texture2D>) {
+    fn render_background(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
         if let Some(ref bg_path) = state.current_background {
-            if let Some(texture) = textures.get(bg_path) {
+            let normalized_path = resource_manager.resolve_path(bg_path);
+            if let Some(texture) = textures.get(&normalized_path) {
                 self.draw_texture_fit(texture, DrawMode::Cover);
             }
         }
     }
 
     /// 渲染角色立绘
-    fn render_characters(&self, state: &RenderState, textures: &HashMap<String, Texture2D>) {
+    fn render_characters(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
         // 按 z_order 排序渲染
         let mut characters: Vec<_> = state.visible_characters.values().collect();
         characters.sort_by_key(|c| c.z_order);
 
         for character in characters {
-            if let Some(texture) = textures.get(&character.texture_path) {
+            // 规范化路径后查找纹理
+            let normalized_path = resource_manager.resolve_path(&character.texture_path);
+            if let Some(texture) = textures.get(&normalized_path) {
                 let (x, y) = self.position_to_screen_coords(character.position, texture);
                 
                 // 应用透明度

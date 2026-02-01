@@ -13,6 +13,54 @@ use crate::error::RuntimeError;
 use crate::script::{Script, ScriptNode};
 use crate::state::{RuntimeState, WaitingReason};
 
+/// 执行结果
+pub struct ExecuteResult {
+    /// 产生的命令
+    pub commands: Vec<Command>,
+    /// 等待原因（如果需要等待）
+    pub waiting: Option<WaitingReason>,
+    /// 跳转目标（如果需要跳转）
+    pub jump_to: Option<usize>,
+}
+
+impl ExecuteResult {
+    /// 创建空结果
+    fn empty() -> Self {
+        Self {
+            commands: Vec::new(),
+            waiting: None,
+            jump_to: None,
+        }
+    }
+
+    /// 创建带命令的结果
+    fn with_commands(commands: Vec<Command>) -> Self {
+        Self {
+            commands,
+            waiting: None,
+            jump_to: None,
+        }
+    }
+
+    /// 创建带等待的结果
+    fn with_wait(commands: Vec<Command>, waiting: WaitingReason) -> Self {
+        Self {
+            commands,
+            waiting: Some(waiting),
+            jump_to: None,
+        }
+    }
+
+    /// 创建跳转结果
+    fn with_jump(jump_to: usize) -> Self {
+        Self {
+            commands: Vec::new(),
+            waiting: None,
+            jump_to: Some(jump_to),
+        }
+    }
+}
+
 /// 节点执行器
 ///
 /// 负责将单个 ScriptNode 转换为 Command。
@@ -30,55 +78,61 @@ impl Executor {
     ///
     /// # 返回
     ///
-    /// - `Vec<Command>`: 产生的指令
-    /// - `Option<WaitingReason>`: 如果需要等待，返回等待原因
+    /// `ExecuteResult` 包含：
+    /// - `commands`: 产生的指令
+    /// - `waiting`: 如果需要等待，返回等待原因
+    /// - `jump_to`: 如果需要跳转，返回目标位置
     pub fn execute(
         &mut self,
         node: &ScriptNode,
         state: &mut RuntimeState,
-        _script: &Script,
-    ) -> Result<(Vec<Command>, Option<WaitingReason>), RuntimeError> {
-        let mut commands = Vec::new();
-        let mut waiting = None;
-
+        script: &Script,
+    ) -> Result<ExecuteResult, RuntimeError> {
         match node {
             ScriptNode::Chapter { title, level } => {
-                commands.push(Command::ChapterMark {
+                Ok(ExecuteResult::with_commands(vec![Command::ChapterMark {
                     title: title.clone(),
                     level: *level,
-                });
+                }]))
             }
 
             ScriptNode::Label { .. } => {
                 // 标签节点不产生 Command，只是跳转目标
+                Ok(ExecuteResult::empty())
             }
 
             ScriptNode::Dialogue { speaker, content } => {
-                commands.push(Command::ShowText {
-                    speaker: speaker.clone(),
-                    content: content.clone(),
-                });
-                waiting = Some(WaitingReason::WaitForClick);
+                Ok(ExecuteResult::with_wait(
+                    vec![Command::ShowText {
+                        speaker: speaker.clone(),
+                        content: content.clone(),
+                    }],
+                    WaitingReason::WaitForClick,
+                ))
             }
 
             ScriptNode::ChangeBG { path, transition } => {
+                // 解析路径（相对于脚本目录）
+                let resolved_path = script.resolve_path(path);
                 // 更新状态
-                state.current_background = Some(path.clone());
+                state.current_background = Some(resolved_path.clone());
 
-                commands.push(Command::ShowBackground {
-                    path: path.clone(),
+                Ok(ExecuteResult::with_commands(vec![Command::ShowBackground {
+                    path: resolved_path,
                     transition: transition.clone(),
-                });
+                }]))
             }
 
             ScriptNode::ChangeScene { path, transition } => {
+                // 解析路径（相对于脚本目录）
+                let resolved_path = script.resolve_path(path);
                 // 更新状态
-                state.current_background = Some(path.clone());
+                state.current_background = Some(resolved_path.clone());
 
-                commands.push(Command::ChangeScene {
-                    path: path.clone(),
+                Ok(ExecuteResult::with_commands(vec![Command::ChangeScene {
+                    path: resolved_path,
                     transition: transition.clone(),
-                });
+                }]))
             }
 
             ScriptNode::ShowCharacter {
@@ -87,27 +141,29 @@ impl Executor {
                 position,
                 transition,
             } => {
+                // 解析路径（相对于脚本目录）
+                let resolved_path = script.resolve_path(path);
                 // 更新状态
                 state
                     .visible_characters
-                    .insert(alias.clone(), (path.clone(), *position));
+                    .insert(alias.clone(), (resolved_path.clone(), *position));
 
-                commands.push(Command::ShowCharacter {
-                    path: path.clone(),
+                Ok(ExecuteResult::with_commands(vec![Command::ShowCharacter {
+                    path: resolved_path,
                     alias: alias.clone(),
                     position: *position,
                     transition: transition.clone(),
-                });
+                }]))
             }
 
             ScriptNode::HideCharacter { alias, transition } => {
                 // 更新状态
                 state.visible_characters.remove(alias);
 
-                commands.push(Command::HideCharacter {
+                Ok(ExecuteResult::with_commands(vec![Command::HideCharacter {
                     alias: alias.clone(),
                     transition: transition.clone(),
-                });
+                }]))
             }
 
             ScriptNode::Choice { style, options } => {
@@ -121,22 +177,42 @@ impl Executor {
 
                 let choice_count = choices.len();
 
-                commands.push(Command::PresentChoices {
-                    style: style.clone(),
-                    choices,
-                });
-
-                waiting = Some(WaitingReason::WaitForChoice { choice_count });
+                Ok(ExecuteResult::with_wait(
+                    vec![Command::PresentChoices {
+                        style: style.clone(),
+                        choices,
+                    }],
+                    WaitingReason::WaitForChoice { choice_count },
+                ))
             }
 
             ScriptNode::UIAnim { effect } => {
-                commands.push(Command::UIAnimation {
+                Ok(ExecuteResult::with_commands(vec![Command::UIAnimation {
                     effect: effect.clone(),
-                });
+                }]))
+            }
+
+            ScriptNode::PlayAudio { path } => {
+                // 解析路径（相对于脚本目录）
+                let resolved_path = script.resolve_path(path);
+                
+                Ok(ExecuteResult::with_commands(vec![Command::PlayBgm {
+                    path: resolved_path,
+                    looping: true, // 默认循环播放
+                }]))
+            }
+
+            ScriptNode::Goto { target_label } => {
+                // 查找标签位置
+                let target_index = script.find_label(target_label).ok_or_else(|| {
+                    RuntimeError::LabelNotFound {
+                        label: target_label.clone(),
+                    }
+                })?;
+
+                Ok(ExecuteResult::with_jump(target_index))
             }
         }
-
-        Ok((commands, waiting))
     }
 }
 
@@ -156,29 +232,29 @@ mod tests {
     fn test_execute_dialogue() {
         let mut executor = Executor::new();
         let mut state = RuntimeState::new("test");
-        let script = Script::new("test", vec![]);
+        let script = Script::new("test", vec![], "");
 
         let node = ScriptNode::Dialogue {
             speaker: Some("Test".to_string()),
             content: "Hello".to_string(),
         };
 
-        let (commands, waiting) = executor.execute(&node, &mut state, &script).unwrap();
+        let result = executor.execute(&node, &mut state, &script).unwrap();
 
-        assert_eq!(commands.len(), 1);
+        assert_eq!(result.commands.len(), 1);
         assert!(matches!(
-            &commands[0],
+            &result.commands[0],
             Command::ShowText { speaker: Some(s), content }
             if s == "Test" && content == "Hello"
         ));
-        assert!(matches!(waiting, Some(WaitingReason::WaitForClick)));
+        assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
     }
 
     #[test]
     fn test_execute_show_character() {
         let mut executor = Executor::new();
         let mut state = RuntimeState::new("test");
-        let script = Script::new("test", vec![]);
+        let script = Script::new("test", vec![], "");
 
         let node = ScriptNode::ShowCharacter {
             path: "char.png".to_string(),
@@ -187,10 +263,10 @@ mod tests {
             transition: None,
         };
 
-        let (commands, waiting) = executor.execute(&node, &mut state, &script).unwrap();
+        let result = executor.execute(&node, &mut state, &script).unwrap();
 
-        assert_eq!(commands.len(), 1);
-        assert!(waiting.is_none());
+        assert_eq!(result.commands.len(), 1);
+        assert!(result.waiting.is_none());
 
         // 验证状态更新
         assert!(state.visible_characters.contains_key("test_char"));
@@ -200,7 +276,7 @@ mod tests {
     fn test_execute_choice() {
         let mut executor = Executor::new();
         let mut state = RuntimeState::new("test");
-        let script = Script::new("test", vec![]);
+        let script = Script::new("test", vec![], "");
 
         let node = ScriptNode::Choice {
             style: Some("横排".to_string()),
@@ -216,15 +292,15 @@ mod tests {
             ],
         };
 
-        let (commands, waiting) = executor.execute(&node, &mut state, &script).unwrap();
+        let result = executor.execute(&node, &mut state, &script).unwrap();
 
-        assert_eq!(commands.len(), 1);
+        assert_eq!(result.commands.len(), 1);
         assert!(matches!(
-            &commands[0],
+            &result.commands[0],
             Command::PresentChoices { choices, .. } if choices.len() == 2
         ));
         assert!(matches!(
-            waiting,
+            result.waiting,
             Some(WaitingReason::WaitForChoice { choice_count: 2 })
         ));
     }
@@ -233,16 +309,81 @@ mod tests {
     fn test_execute_label_no_command() {
         let mut executor = Executor::new();
         let mut state = RuntimeState::new("test");
-        let script = Script::new("test", vec![]);
+        let script = Script::new("test", vec![], "");
 
         let node = ScriptNode::Label {
             name: "test".to_string(),
         };
 
-        let (commands, waiting) = executor.execute(&node, &mut state, &script).unwrap();
+        let result = executor.execute(&node, &mut state, &script).unwrap();
 
-        assert!(commands.is_empty());
-        assert!(waiting.is_none());
+        assert!(result.commands.is_empty());
+        assert!(result.waiting.is_none());
+    }
+
+    #[test]
+    fn test_execute_goto() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new(
+            "test",
+            vec![
+                ScriptNode::Label { name: "start".to_string() },
+                ScriptNode::Dialogue { speaker: None, content: "Hello".to_string() },
+                ScriptNode::Label { name: "end".to_string() },
+            ],
+            "",
+        );
+
+        let node = ScriptNode::Goto {
+            target_label: "end".to_string(),
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert!(result.commands.is_empty());
+        assert!(result.waiting.is_none());
+        assert_eq!(result.jump_to, Some(2)); // 跳转到 "end" 标签
+    }
+
+    #[test]
+    fn test_execute_play_audio() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "scripts");
+
+        let node = ScriptNode::PlayAudio {
+            path: "../bgm/music.mp3".to_string(),
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(
+            &result.commands[0],
+            Command::PlayBgm { path, looping: true }
+            if path == "scripts/../bgm/music.mp3"
+        ));
+    }
+
+    #[test]
+    fn test_path_resolution() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "assets/scripts");
+
+        let node = ScriptNode::ChangeBG {
+            path: "../backgrounds/bg.jpg".to_string(),
+            transition: None,
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert!(matches!(
+            &result.commands[0],
+            Command::ShowBackground { path, .. }
+            if path == "assets/scripts/../backgrounds/bg.jpg"
+        ));
     }
 }
 

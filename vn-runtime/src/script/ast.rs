@@ -114,6 +114,22 @@ pub enum ScriptNode {
         /// 动画效果
         effect: Transition,
     },
+
+    /// 播放音频
+    ///
+    /// 对应 `<audio src="...">` 语法
+    PlayAudio {
+        /// 音频文件路径
+        path: String,
+    },
+
+    /// 无条件跳转
+    ///
+    /// 对应 `goto **label**` 语法
+    Goto {
+        /// 跳转目标标签
+        target_label: String,
+    },
 }
 
 impl ScriptNode {
@@ -147,6 +163,9 @@ pub struct Script {
     pub id: String,
     /// 节点列表
     pub nodes: Vec<ScriptNode>,
+    /// 脚本文件所在目录（用于解析相对路径）
+    /// 素材路径相对于脚本文件，需要此字段来构建完整路径
+    pub base_path: String,
     /// 标签到节点索引的映射
     #[serde(skip)]
     label_index: std::collections::HashMap<String, usize>,
@@ -154,15 +173,39 @@ pub struct Script {
 
 impl Script {
     /// 创建新脚本
-    pub fn new(id: impl Into<String>, nodes: Vec<ScriptNode>) -> Self {
+    ///
+    /// # 参数
+    /// - `id`: 脚本标识符
+    /// - `nodes`: 脚本节点列表
+    /// - `base_path`: 脚本文件所在目录，用于解析相对路径
+    pub fn new(id: impl Into<String>, nodes: Vec<ScriptNode>, base_path: impl Into<String>) -> Self {
         let id = id.into();
+        let base_path = base_path.into();
         let mut script = Self {
             id,
             nodes,
+            base_path,
             label_index: std::collections::HashMap::new(),
         };
         script.build_label_index();
         script
+    }
+
+    /// 解析相对于脚本的资源路径，返回完整路径
+    ///
+    /// 将相对于脚本文件的路径转换为相对于资源根目录的路径
+    pub fn resolve_path(&self, relative_path: &str) -> String {
+        if relative_path.starts_with('/') || relative_path.starts_with("http") {
+            // 绝对路径或 URL，直接返回
+            return relative_path.to_string();
+        }
+        
+        if self.base_path.is_empty() {
+            return relative_path.to_string();
+        }
+        
+        // 拼接脚本目录和相对路径
+        format!("{}/{}", self.base_path, relative_path)
     }
 
     /// 构建标签索引
@@ -236,7 +279,7 @@ mod tests {
             },
         ];
 
-        let script = Script::new("test", nodes);
+        let script = Script::new("test", nodes, "");
 
         assert_eq!(script.find_label("start"), Some(0));
         assert_eq!(script.find_label("end"), Some(2));
@@ -250,10 +293,27 @@ mod tests {
             content: "Test".to_string(),
         }];
 
-        let script = Script::new("test", nodes);
+        let script = Script::new("test", nodes, "");
 
         assert!(script.get_node(0).is_some());
         assert!(script.get_node(1).is_none());
+    }
+
+    #[test]
+    fn test_script_resolve_path() {
+        let script = Script::new("test", vec![], "scripts");
+        
+        // 相对路径
+        assert_eq!(script.resolve_path("../bgm/music.mp3"), "scripts/../bgm/music.mp3");
+        assert_eq!(script.resolve_path("images/bg.png"), "scripts/images/bg.png");
+        
+        // 绝对路径不变
+        assert_eq!(script.resolve_path("/absolute/path.png"), "/absolute/path.png");
+        assert_eq!(script.resolve_path("http://example.com/img.png"), "http://example.com/img.png");
+        
+        // 空 base_path
+        let script_no_base = Script::new("test", vec![], "");
+        assert_eq!(script_no_base.resolve_path("images/bg.png"), "images/bg.png");
     }
 }
 

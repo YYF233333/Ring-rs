@@ -116,16 +116,21 @@ impl VNRuntime {
             };
 
             // 执行当前节点
-            let (node_commands, should_wait) =
-                self.executor.execute(&node, &mut self.state, &self.script)?;
+            let result = self.executor.execute(&node, &mut self.state, &self.script)?;
 
-            commands.extend(node_commands);
+            commands.extend(result.commands);
+
+            // 处理跳转
+            if let Some(target) = result.jump_to {
+                self.state.position.jump_to(target);
+                continue; // 继续执行跳转目标
+            }
 
             // 前进到下一个节点
             self.state.position.advance();
 
             // 如果需要等待，停止执行
-            if let Some(reason) = should_wait {
+            if let Some(reason) = result.waiting {
                 self.state.wait(reason.clone());
                 return Ok((commands, reason));
             }
@@ -228,6 +233,7 @@ mod tests {
                     content: "World".to_string(),
                 },
             ],
+            "",
         )
     }
 
@@ -276,6 +282,7 @@ mod tests {
                 path: "bg.png".to_string(),
                 transition: None,
             }],
+            "",
         );
         let mut runtime = VNRuntime::new(script);
 

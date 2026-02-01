@@ -59,14 +59,76 @@ impl ResourceManager {
     }
 
     /// 解析资源路径（将相对路径转换为完整路径）
-    pub(crate) fn resolve_path(&self, path: &str) -> String {
-        // 如果路径已经是绝对路径或包含 "assets"，直接返回
-        if path.starts_with('/') || path.contains("assets") {
-            return path.to_string();
+    ///
+    /// 使用 std::path 处理路径规范化，支持 `..` 等相对路径
+    pub fn resolve_path(&self, path: &str) -> String {
+        use std::path::{Path, PathBuf};
+        
+        let path_obj = Path::new(path);
+        
+        // 如果是绝对路径，直接规范化并返回
+        if path_obj.is_absolute() {
+            return Self::normalize_path_components(path_obj);
         }
+        
+        // 检查是否已经包含 base_path
+        if path.contains(&self.base_path) {
+            return Self::normalize_path_components(path_obj);
+        }
+        
+        // 拼接 base_path 和相对路径
+        let full_path: PathBuf = [&self.base_path, path].iter().collect();
+        Self::normalize_path_components(&full_path)
+    }
 
-        // 否则拼接基础路径
-        format!("{}/{}", self.base_path, path)
+    /// 使用 std::path 规范化路径，处理 `..` 和 `.`
+    fn normalize_path_components(path: &std::path::Path) -> String {
+        use std::path::Component;
+        
+        let mut components: Vec<String> = Vec::new();
+        
+        for component in path.components() {
+            match component {
+                Component::Prefix(p) => {
+                    // Windows 盘符，如 C:
+                    components.push(p.as_os_str().to_string_lossy().to_string());
+                }
+                Component::RootDir => {
+                    // 根目录 /
+                    if components.is_empty() {
+                        components.push(String::new()); // 会在 join 时产生开头的 /
+                    }
+                }
+                Component::CurDir => {
+                    // . 当前目录，跳过
+                }
+                Component::ParentDir => {
+                    // .. 父目录，弹出上一级
+                    // 但要保留盘符
+                    if components.len() > 1 || (components.len() == 1 && !components[0].contains(':')) {
+                        components.pop();
+                    }
+                }
+                Component::Normal(name) => {
+                    components.push(name.to_string_lossy().to_string());
+                }
+            }
+        }
+        
+        // 用 / 连接（跨平台统一使用 /）
+        if components.is_empty() {
+            return String::new();
+        }
+        
+        // 处理 Windows 盘符的情况
+        if components.len() >= 2 && components[0].contains(':') {
+            // 第一个是盘符如 "F:"，第二个开始是路径
+            let drive = &components[0];
+            let rest = components[1..].join("/");
+            format!("{}/{}", drive, rest)
+        } else {
+            components.join("/")
+        }
     }
 
     /// 加载图片资源
@@ -84,13 +146,13 @@ impl ResourceManager {
     ///
     /// 加载的 Texture2D，或加载错误
     pub async fn load_texture(&mut self, path: &str) -> Result<Texture2D, ResourceError> {
-        // 检查缓存
-        if let Some(texture) = self.textures.get(path) {
+        // 解析并规范化路径（用于缓存键和加载）
+        let full_path = self.resolve_path(path);
+        
+        // 检查缓存（使用规范化后的路径）
+        if let Some(texture) = self.textures.get(&full_path) {
             return Ok(texture.clone());
         }
-
-        // 解析路径
-        let full_path = self.resolve_path(path);
 
         // 检查文件扩展名，决定使用哪种加载方式
         let lower_path = full_path.to_lowercase();
@@ -117,8 +179,8 @@ impl ResourceManager {
         // 设置纹理过滤模式（平滑缩放）
         texture.set_filter(FilterMode::Linear);
 
-        // 缓存资源
-        self.textures.insert(path.to_string(), texture.clone());
+        // 缓存资源（使用规范化后的路径作为键）
+        self.textures.insert(full_path, texture.clone());
 
         // 返回缓存的资源
         Ok(texture)
@@ -165,7 +227,8 @@ impl ResourceManager {
     ///
     /// 如果资源未缓存，返回 None。
     pub fn get_texture(&self, path: &str) -> Option<Texture2D> {
-        self.textures.get(path).cloned()
+        let full_path = self.resolve_path(path);
+        self.textures.get(&full_path).cloned()
     }
 
     /// 获取已缓存的音频资源（不加载）
@@ -177,7 +240,8 @@ impl ResourceManager {
 
     /// 检查图片资源是否已加载
     pub fn has_texture(&self, path: &str) -> bool {
-        self.textures.contains_key(path)
+        let full_path = self.resolve_path(path);
+        self.textures.contains_key(&full_path)
     }
 
     /// 检查音频资源是否已加载
@@ -211,7 +275,8 @@ impl ResourceManager {
 
     /// 释放指定的图片资源
     pub fn unload_texture(&mut self, path: &str) {
-        self.textures.remove(path);
+        let full_path = self.resolve_path(path);
+        self.textures.remove(&full_path);
     }
 
     /// 释放指定的音频资源
