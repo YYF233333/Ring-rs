@@ -85,10 +85,35 @@ impl AudioManager {
 
     /// 解析音频路径
     fn resolve_path(&self, path: &str) -> String {
+        use std::path::PathBuf;
+        
+        // 已经是绝对路径
         if path.starts_with('/') || path.contains(':') {
-            path.to_string()
+            return path.to_string();
+        }
+        
+        // 规范化路径分隔符
+        let normalized_path = path.replace('\\', "/");
+        let normalized_base = self.base_path.replace('\\', "/");
+        
+        // 如果已经以 base_path 开头，不要再添加
+        if normalized_path.starts_with(&normalized_base) 
+            || normalized_path.starts_with(&format!("{}/", normalized_base)) 
+        {
+            // 使用 PathBuf 规范化路径（处理 .. 等）
+            let path_buf = PathBuf::from(path);
+            if let Ok(canonical) = path_buf.canonicalize() {
+                return canonical.to_string_lossy().to_string();
+            }
+            return path.to_string();
+        }
+        
+        // 拼接并规范化
+        let full_path = PathBuf::from(&self.base_path).join(path);
+        if let Ok(canonical) = full_path.canonicalize() {
+            canonical.to_string_lossy().to_string()
         } else {
-            format!("{}/{}", self.base_path, path)
+            full_path.to_string_lossy().to_string()
         }
     }
 

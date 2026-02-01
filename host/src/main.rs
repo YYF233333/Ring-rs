@@ -7,17 +7,16 @@ use host::HostState;
 use host::resources::ResourceManager;
 use host::renderer::{Renderer, RenderState};
 use host::renderer::render_state::ChoiceItem;
-use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager};
+use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager, AppConfig};
 use vn_runtime::command::{Command, Choice, Position};
 use vn_runtime::state::WaitingReason;
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::{VNRuntime, Parser};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
-/// 窗口配置
-const WINDOW_WIDTH: f32 = 1280.0;
-const WINDOW_HEIGHT: f32 = 720.0;
-const WINDOW_TITLE: &str = "Visual Novel Engine";
+/// 配置文件路径
+const CONFIG_PATH: &str = "config.json";
 
 /// 打字机效果速度（每秒字符数）
 const TYPEWRITER_SPEED: f32 = 30.0;
@@ -46,6 +45,8 @@ enum RunMode {
 
 /// 应用状态
 struct AppState {
+    /// 应用配置
+    config: AppConfig,
     host_state: HostState,
     resource_manager: ResourceManager,
     renderer: Renderer,
@@ -76,12 +77,19 @@ struct AppState {
     save_manager: host::save_manager::SaveManager,
     /// 当前存档槽位
     current_save_slot: u32,
+    /// 可用脚本列表 (id, path)
+    scripts: Vec<(String, PathBuf)>,
+    /// 游戏开始时间（用于计算游戏时长）
+    play_start_time: std::time::Instant,
 }
 
 impl AppState {
-    fn new() -> Self {
+    fn new(config: AppConfig) -> Self {
+        let assets_root = config.assets_root.to_string_lossy().to_string();
+        let saves_dir = config.saves_dir.to_string_lossy().to_string();
+        
         // 初始化音频管理器
-        let audio_manager = match AudioManager::new("F:/Code/Ring-rs/assets") {
+        let audio_manager = match AudioManager::new(&assets_root) {
             Ok(am) => {
                 println!("✅ 音频系统初始化成功");
                 Some(am)
@@ -93,9 +101,10 @@ impl AppState {
         };
 
         // 加载资源清单（立绘配置）
-        let manifest = match host::manifest::Manifest::load("F:/Code/Ring-rs/assets/manifest.json") {
+        let manifest_path = config.manifest_full_path();
+        let manifest = match host::manifest::Manifest::load(&manifest_path.to_string_lossy()) {
             Ok(m) => {
-                println!("✅ 资源清单加载成功");
+                println!("✅ 资源清单加载成功: {:?}", manifest_path);
                 m
             }
             Err(e) => {
@@ -105,13 +114,21 @@ impl AppState {
         };
 
         // 初始化存档管理器
-        let save_manager = host::save_manager::SaveManager::new("F:/Code/Ring-rs/saves");
-        println!("✅ 存档管理器初始化成功");
+        let save_manager = host::save_manager::SaveManager::new(&saves_dir);
+        println!("✅ 存档管理器初始化成功: {}", saves_dir);
+
+        // 扫描脚本目录
+        let scripts = scan_scripts(&config.assets_root);
+        println!("📜 发现 {} 个脚本文件", scripts.len());
+
+        // 从配置获取窗口尺寸
+        let (width, height) = (config.window.width as f32, config.window.height as f32);
 
         Self {
+            config,
             host_state: HostState::new(),
-            resource_manager: ResourceManager::new("F:/Code/Ring-rs/assets"),
-            renderer: Renderer::new(1920.0, 1080.0),
+            resource_manager: ResourceManager::new(&assets_root),
+            renderer: Renderer::new(width, height),
             render_state: RenderState::new(),
             input_manager: InputManager::new(),
             command_executor: CommandExecutor::new(),
@@ -130,15 +147,45 @@ impl AppState {
             manifest,
             save_manager,
             current_save_slot: 1,
+            scripts,
+            play_start_time: std::time::Instant::now(),
         }
     }
+}
+
+/// 扫描脚本目录，返回 (script_id, script_path) 列表
+fn scan_scripts(assets_root: &PathBuf) -> Vec<(String, PathBuf)> {
+    let scripts_dir = assets_root.join("scripts");
+    let mut scripts = Vec::new();
+
+    if let Ok(entries) = std::fs::read_dir(&scripts_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "md") {
+                if let Some(stem) = path.file_stem() {
+                    let script_id = stem.to_string_lossy().to_string();
+                    scripts.push((script_id, path));
+                }
+            }
+        }
+    }
+
+    // 按文件名排序，确保顺序稳定
+    scripts.sort_by(|a, b| a.0.cmp(&b.0));
+    scripts
 }
 
 /// 主函数
 #[macroquad::main(window_conf)]
 async fn main() {
+    // 加载配置文件
+    let config = AppConfig::load(CONFIG_PATH);
+    println!("✅ 配置加载完成: {:?}", CONFIG_PATH);
+    println!("   assets_root: {:?}", config.assets_root);
+    println!("   saves_dir: {:?}", config.saves_dir);
+
     // 初始化应用状态
-    let mut app_state = AppState::new();
+    let mut app_state = AppState::new(config);
 
     // 加载资源
     load_resources(&mut app_state).await;
@@ -160,9 +207,14 @@ async fn main() {
 async fn load_resources(app_state: &mut AppState) {
     println!("📦 开始加载资源...");
 
-    // 加载中文字体（使用黑体）
-    let font_path = "F:/Code/Ring-rs/assets/fonts/simhei.ttf";
-    if let Err(e) = app_state.renderer.init(font_path).await {
+    // 加载中文字体
+    let font_path = if let Some(ref font) = app_state.config.default_font {
+        app_state.config.assets_root.join(font)
+    } else {
+        app_state.config.assets_root.join("fonts/simhei.ttf")
+    };
+    println!("✅ 加载字体: {:?}", font_path);
+    if let Err(e) = app_state.renderer.init(&font_path.to_string_lossy()).await {
         eprintln!("⚠️ 字体加载失败，使用默认字体: {}", e);
     }
 
@@ -216,20 +268,21 @@ async fn load_resources(app_state: &mut AppState) {
 }
 
 /// 可用的脚本列表
-const SCRIPTS: &[(&str, &str)] = &[
-    ("demo", "F:/Code/Ring-rs/assets/scripts/demo.md"),
-    ("test_comprehensive", "F:/Code/Ring-rs/assets/scripts/test_comprehensive.md"),
-];
-
 /// 加载脚本文件
 fn load_script(app_state: &mut AppState) {
-    let (script_id, script_path) = SCRIPTS[app_state.script_index % SCRIPTS.len()];
+    if app_state.scripts.is_empty() {
+        eprintln!("❌ 没有找到脚本文件");
+        return;
+    }
+
+    let script_count = app_state.scripts.len();
+    let (script_id, script_path) = &app_state.scripts[app_state.script_index % script_count];
     
-    println!("📜 加载脚本 [{}/{}]: {} ({})", 
-        app_state.script_index + 1, SCRIPTS.len(), script_id, script_path);
+    println!("📜 加载脚本 [{}/{}]: {} ({:?})", 
+        app_state.script_index + 1, script_count, script_id, script_path);
     
     // 提取脚本所在目录作为 base_path（用于解析相对路径）
-    let base_path = std::path::Path::new(script_path)
+    let base_path = script_path
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
@@ -239,7 +292,7 @@ fn load_script(app_state: &mut AppState) {
     match std::fs::read_to_string(script_path) {
         Ok(script_text) => {
             let mut parser = Parser::new();
-            match parser.parse_with_base_path(script_id, &script_text, &base_path) {
+            match parser.parse_with_base_path(&script_id, &script_text, &base_path) {
                 Ok(script) => {
                     println!("✅ 脚本解析成功！节点数: {}", script.len());
                     
@@ -258,7 +311,7 @@ fn load_script(app_state: &mut AppState) {
             }
         }
         Err(e) => {
-            eprintln!("❌ 脚本文件加载失败: {} - {}", script_path, e);
+            eprintln!("❌ 脚本文件加载失败: {:?} - {}", script_path, e);
         }
     }
 }
@@ -329,12 +382,15 @@ fn init_demo_scene(app_state: &mut AppState) {
 
 /// 窗口配置
 fn window_conf() -> Conf {
+    // 在窗口创建前读取配置（此函数在 main 之前被 macroquad 调用）
+    let config = AppConfig::load(CONFIG_PATH);
+    
     Conf {
-        window_title: WINDOW_TITLE.to_string(),
-        window_width: WINDOW_WIDTH as i32,
-        window_height: WINDOW_HEIGHT as i32,
+        window_title: config.window.title,
+        window_width: config.window.width as i32,
+        window_height: config.window.height as i32,
         window_resizable: false,
-        fullscreen: false,
+        fullscreen: config.window.fullscreen,
         ..Default::default()
     }
 }
@@ -407,8 +463,8 @@ fn update(app_state: &mut AppState) {
     }
 
     // F4: 切换脚本
-    if is_key_pressed(KeyCode::F4) {
-        app_state.script_index = (app_state.script_index + 1) % SCRIPTS.len();
+    if is_key_pressed(KeyCode::F4) && !app_state.scripts.is_empty() {
+        app_state.script_index = (app_state.script_index + 1) % app_state.scripts.len();
         load_script(app_state);
         // 如果在脚本模式，重新开始
         if app_state.run_mode == RunMode::Script {
@@ -426,6 +482,20 @@ fn update(app_state: &mut AppState) {
     // F9: 快速读取
     if is_key_pressed(KeyCode::F9) {
         quick_load(app_state);
+    }
+
+    // [ / ]: 切换存档槽位
+    if is_key_pressed(KeyCode::LeftBracket) {
+        if app_state.current_save_slot > 1 {
+            app_state.current_save_slot -= 1;
+            println!("📂 切换到存档槽位: {}", app_state.current_save_slot);
+        }
+    }
+    if is_key_pressed(KeyCode::RightBracket) {
+        if app_state.current_save_slot < 99 {
+            app_state.current_save_slot += 1;
+            println!("📂 切换到存档槽位: {}", app_state.current_save_slot);
+        }
     }
 
     // 更新过渡效果
@@ -800,6 +870,10 @@ fn quick_save(app_state: &mut AppState) {
         save_data = save_data.with_chapter(&chapter.title);
     }
 
+    // 设置游戏时长
+    let play_time = app_state.play_start_time.elapsed().as_secs();
+    save_data.metadata.play_time_secs = play_time;
+
     // 设置音频状态
     if let Some(ref audio) = app_state.audio_manager {
         save_data = save_data.with_audio(vn_runtime::AudioState {
@@ -847,7 +921,7 @@ fn quick_load(app_state: &mut AppState) {
 
     // 找到对应的脚本
     let script_id = &save_data.runtime_state.position.script_id;
-    let script_index = SCRIPTS.iter().position(|(id, _)| *id == script_id);
+    let script_index = app_state.scripts.iter().position(|(id, _)| id == script_id);
     
     let Some(idx) = script_index else {
         eprintln!("❌ 找不到脚本: {}", script_id);
@@ -1076,12 +1150,28 @@ fn draw_help_text(app_state: &AppState) {
     let screen_h = screen_height();
     
     // 底部提示（使用自定义字体）
-    let script_name = SCRIPTS[app_state.script_index % SCRIPTS.len()].0;
+    let script_name = if app_state.scripts.is_empty() {
+        "(无脚本)"
+    } else {
+        &app_state.scripts[app_state.script_index % app_state.scripts.len()].0
+    };
+    
+    // 第一行：模式和操作提示
     app_state.renderer.text_renderer.draw_ui_text(
         &format!("{} {} | ESC退出 | F1调试 | F2命令 | F3脚本 | F4切换脚本({})", mode_text, help_text, script_name),
         10.0,
-        screen_h - 10.0,
+        screen_h - 28.0,
         18.0,
         Color::new(1.0, 1.0, 1.0, 0.7),
+    );
+    
+    // 第二行：存档信息
+    let slot_info = format!("F5保存 F9读取 [/]切换槽位 | 当前槽位: {}", app_state.current_save_slot);
+    app_state.renderer.text_renderer.draw_ui_text(
+        &slot_info,
+        10.0,
+        screen_h - 10.0,
+        16.0,
+        Color::new(1.0, 1.0, 0.8, 0.6),
     );
 }

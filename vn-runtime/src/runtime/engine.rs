@@ -131,8 +131,12 @@ impl VNRuntime {
 
             commands.extend(result.commands);
 
-            // 处理跳转
+            // 处理跳转（记录历史）
             if let Some(target) = result.jump_to {
+                // 从当前节点获取跳转目标标签（用于历史记录）
+                if let ScriptNode::Goto { target_label } = &node {
+                    self.history.push(HistoryEvent::jump(target_label.clone()));
+                }
                 self.state.position.jump_to(target);
                 continue; // 继续执行跳转目标
             }
@@ -174,7 +178,14 @@ impl VNRuntime {
                 let current_index = self.state.position.node_index.saturating_sub(1);
                 if let Some(ScriptNode::Choice { options, .. }) = self.script.get_node(current_index)
                 {
+                    // 记录选择事件到历史
+                    let option_texts: Vec<String> = options.iter().map(|o| o.text.clone()).collect();
+                    self.history.push(HistoryEvent::choice_made(option_texts, index));
+
                     if let Some(option) = options.get(index) {
+                        // 记录跳转事件
+                        self.history.push(HistoryEvent::jump(option.target_label.clone()));
+
                         let target_index = self.script.find_label(&option.target_label).ok_or(
                             RuntimeError::LabelNotFound {
                                 label: option.target_label.clone(),
