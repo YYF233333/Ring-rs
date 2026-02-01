@@ -192,13 +192,28 @@ impl Executor {
                 }]))
             }
 
-            ScriptNode::PlayAudio { path } => {
+            ScriptNode::PlayAudio { path, is_bgm } => {
                 // 解析路径（相对于脚本目录）
                 let resolved_path = script.resolve_path(path);
                 
-                Ok(ExecuteResult::with_commands(vec![Command::PlayBgm {
-                    path: resolved_path,
-                    looping: true, // 默认循环播放
+                if *is_bgm {
+                    // BGM: 循环播放，有 loop 标识
+                    Ok(ExecuteResult::with_commands(vec![Command::PlayBgm {
+                        path: resolved_path,
+                        looping: true,
+                    }]))
+                } else {
+                    // SFX: 播放一次
+                    Ok(ExecuteResult::with_commands(vec![Command::PlaySfx {
+                        path: resolved_path,
+                    }]))
+                }
+            }
+
+            ScriptNode::StopBgm => {
+                // 停止 BGM，默认使用淡出效果（1秒）
+                Ok(ExecuteResult::with_commands(vec![Command::StopBgm {
+                    fade_out: Some(1.0),
                 }]))
             }
 
@@ -347,13 +362,15 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_play_audio() {
+    fn test_execute_play_bgm() {
         let mut executor = Executor::new();
         let mut state = RuntimeState::new("test");
         let script = Script::new("test", vec![], "scripts");
 
+        // BGM: 有 loop 标识
         let node = ScriptNode::PlayAudio {
             path: "../bgm/music.mp3".to_string(),
+            is_bgm: true,
         };
 
         let result = executor.execute(&node, &mut state, &script).unwrap();
@@ -363,6 +380,45 @@ mod tests {
             &result.commands[0],
             Command::PlayBgm { path, looping: true }
             if path == "scripts/../bgm/music.mp3"
+        ));
+    }
+
+    #[test]
+    fn test_execute_play_sfx() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "scripts");
+
+        // SFX: 无 loop 标识
+        let node = ScriptNode::PlayAudio {
+            path: "../sfx/click.mp3".to_string(),
+            is_bgm: false,
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(
+            &result.commands[0],
+            Command::PlaySfx { path }
+            if path == "scripts/../sfx/click.mp3"
+        ));
+    }
+
+    #[test]
+    fn test_execute_stop_bgm() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::StopBgm;
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(
+            &result.commands[0],
+            Command::StopBgm { fade_out: Some(_) }
         ));
     }
 

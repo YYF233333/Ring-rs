@@ -532,9 +532,13 @@ impl Parser {
         if starts_with_ignore_case(line, "goto") {
             return self.parse_goto(line, line_number);
         }
+        // stopBGM - 停止 BGM
+        if starts_with_ignore_case(line, "stopbgm") {
+            return Ok(Some(ScriptNode::StopBgm));
+        }
 
         // 4. HTML 标签解析
-        // <audio src="..."> - 播放音频
+        // <audio src="..."></audio> 或 <audio src="..."></audio> loop
         if line.starts_with("<audio") {
             return self.parse_audio(line, line_number);
         }
@@ -734,7 +738,9 @@ impl Parser {
 
     /// 解析 audio 标签
     ///
-    /// 语法: `<audio src="path/to/audio.mp3"></audio>`
+    /// 语法: 
+    /// - `<audio src="path/to/audio.mp3"></audio>` - SFX（播放一次）
+    /// - `<audio src="path/to/audio.mp3"></audio> loop` - BGM（循环播放）
     fn parse_audio(
         &self,
         line: &str,
@@ -747,8 +753,19 @@ impl Parser {
             param: "音频路径 (<audio src=\"...\">)".to_string(),
         })?;
 
+        // 检查是否有 loop 标识（在 </audio> 后面）
+        // 查找 </audio> 的位置
+        let is_bgm = if let Some(close_tag_pos) = line.to_lowercase().find("</audio>") {
+            // 检查 </audio> 后面是否有 "loop"
+            let after_tag = &line[close_tag_pos + 8..]; // "</audio>" 长度为 8
+            after_tag.to_lowercase().contains("loop")
+        } else {
+            false
+        };
+
         Ok(Some(ScriptNode::PlayAudio {
             path: path.to_string(),
+            is_bgm,
         }))
     }
 

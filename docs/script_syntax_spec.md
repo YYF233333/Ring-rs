@@ -193,10 +193,23 @@ UIAnim Dissolve(1.5)
 
 ## 音乐与音效
 
-使用HTML audio语法
+使用HTML audio语法播放音乐
 
 ```markdown
 <audio src="../bgm/Signal.mp3"></audio>
+<audio src="../bgm/Signal.mp3"></audio> loop
+```
+
+参数说明：
+- `<audio src=="...">`: 音频文件路径
+- `loop`: 标识BGM，循环播放，没有该标识认为是SFX，play once
+
+同一时间只能有一个BGM播放，播放下一个会自动停止前一个，BGM切换自带交叉淡化效果。SFX不做限制。
+
+停止BGM：
+
+```markdown
+stopBGM
 ```
 
 ## 控制逻辑

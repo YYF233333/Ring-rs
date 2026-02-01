@@ -716,8 +716,15 @@ fn handle_audio_command(app_state: &mut AppState) {
     if let Some(ref mut audio_manager) = app_state.audio_manager {
         if let Some(cmd) = audio_cmd {
             match cmd {
-                AudioCommand::PlayBgm { path, looping, fade_in } => {
-                    audio_manager.play_bgm(&path, looping, fade_in);
+                AudioCommand::PlayBgm { path, looping, fade_in: _ } => {
+                    // BGM 切换自带交叉淡化效果（规范要求）
+                    // 如果当前有 BGM 在播放，使用交叉淡化；否则直接播放（带淡入）
+                    const CROSSFADE_DURATION: f32 = 1.0; // 交叉淡化时长
+                    if audio_manager.is_bgm_playing() {
+                        audio_manager.crossfade_bgm(&path, looping, CROSSFADE_DURATION);
+                    } else {
+                        audio_manager.play_bgm(&path, looping, Some(CROSSFADE_DURATION));
+                    }
                 }
                 AudioCommand::StopBgm { fade_out } => {
                     audio_manager.stop_bgm(fade_out);

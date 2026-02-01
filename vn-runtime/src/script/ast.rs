@@ -117,11 +117,20 @@ pub enum ScriptNode {
 
     /// 播放音频
     ///
-    /// 对应 `<audio src="...">` 语法
+    /// 对应 `<audio src="..."></audio>` 或 `<audio src="..."></audio> loop` 语法
     PlayAudio {
         /// 音频文件路径
         path: String,
+        /// 是否为 BGM（有 loop 标识）
+        /// true = BGM（循环播放，同时只有一个）
+        /// false = SFX（播放一次）
+        is_bgm: bool,
     },
+
+    /// 停止 BGM
+    ///
+    /// 对应 `stopBGM` 语法
+    StopBgm,
 
     /// 无条件跳转
     ///
