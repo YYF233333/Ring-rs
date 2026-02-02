@@ -196,7 +196,7 @@ async fn main() {
         update(&mut app_state);
 
         // 渲染
-        draw(&app_state);
+        draw(&mut app_state);
 
         // 等待下一帧
         next_frame().await;
@@ -225,6 +225,7 @@ async fn load_resources(app_state: &mut AppState) {
         "backgrounds/BG12_pl_n_19201440.jpg",
         "backgrounds/BG12_pl_cy_19201440.jpg",
         "backgrounds/cg1.jpg",
+        "backgrounds/rule_10.png", // Rule 遮罩图片
     ];
     for path in &bg_paths {
         // 获取规范化后的完整路径作为缓存键
@@ -395,6 +396,55 @@ fn window_conf() -> Conf {
     }
 }
 
+/// 更新场景遮罩状态
+///
+/// 三阶段流程：
+/// 1. phase 0: 遮罩淡入（UI 隐藏）
+/// 2. phase 1: 遮罩淡出（UI 仍隐藏）
+/// 3. phase 2: UI 淡入（0.2s dissolve）
+fn update_scene_mask(render_state: &mut host::renderer::RenderState, dt: f32) {
+    let mut pending_background: Option<String> = None;
+    let mut should_show_ui = false;
+    let mut completed = false;
+
+    if let Some(ref mut mask) = render_state.scene_mask {
+        completed = mask.update(dt);
+
+        // 在遮罩中点时切换背景
+        // Fade/FadeWhite: phase 1 开始时（遮罩全覆盖后）
+        // Rule: phase 2 开始时（黑屏停顿结束后，即将从黑屏溶解到新背景）
+        if mask.is_at_midpoint() {
+            pending_background = mask.pending_background.take();
+        }
+
+        // 当进入 UI 淡入阶段时，恢复 UI 可见性
+        // Fade/FadeWhite: phase 2
+        // Rule: phase 3
+        if mask.is_ui_fading_in() && !render_state.ui_visible {
+            should_show_ui = true;
+        }
+    }
+
+    if let Some(path) = pending_background {
+        render_state.set_background(path);
+    }
+
+    if should_show_ui {
+        render_state.ui_visible = true;
+    }
+
+    if completed {
+        // 遮罩完成，清除状态
+        if let Some(ref mut mask) = render_state.scene_mask {
+            if let Some(path) = mask.pending_background.take() {
+                render_state.set_background(path);
+            }
+        }
+        render_state.scene_mask = None;
+        render_state.ui_visible = true;
+    }
+}
+
 /// 更新逻辑
 fn update(app_state: &mut AppState) {
     let dt = get_frame_time();
@@ -501,6 +551,9 @@ fn update(app_state: &mut AppState) {
     // 更新过渡效果
     app_state.command_executor.update_transition(dt);
     app_state.renderer.update_transition(dt);
+
+    // 更新场景遮罩状态（changeScene 的 Fade/FadeWhite/Rule 效果）
+    update_scene_mask(&mut app_state.render_state, dt);
 
     // 更新音频状态（淡入淡出等）
     if let Some(ref mut audio_manager) = app_state.audio_manager {
@@ -1065,7 +1118,7 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
 }
 
 /// 渲染函数
-fn draw(app_state: &AppState) {
+fn draw(app_state: &mut AppState) {
     // 使用渲染器渲染
     app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
 

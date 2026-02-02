@@ -8,8 +8,8 @@
 //! - 执行器不直接渲染，只更新状态，渲染由 `Renderer` 负责
 //! - 支持过渡效果的执行（通过 `TransitionState` 管理）
 
-use vn_runtime::command::{Command, Choice, Position, Transition};
-use crate::renderer::{RenderState, ChoiceItem};
+use vn_runtime::command::{Command, Choice, Position, Transition, TransitionArg};
+use crate::renderer::{RenderState, ChoiceItem, SceneMaskState, SceneMaskType};
 use crate::resources::ResourceManager;
 
 /// Command 执行结果
@@ -120,8 +120,8 @@ impl CommandExecutor {
                 self.execute_show_background(path, transition.clone(), render_state)
             }
             Command::ChangeScene { path, transition } => {
-                // ChangeScene 与 ShowBackground 类似，但可能有不同的过渡效果
-                self.execute_show_background(path, transition.clone(), render_state)
+                // ChangeScene 是复合场景切换，包含：清立绘、换背景、遮罩过渡
+                self.execute_change_scene(path, transition.clone(), render_state, _resource_manager)
             }
             Command::ShowCharacter { path, alias, position, transition } => {
                 self.execute_show_character(path, alias, *position, transition, render_state)
@@ -211,6 +211,119 @@ impl CommandExecutor {
         if let Some(ref trans) = transition {
             self.start_transition(trans);
         }
+
+        ExecuteResult::Ok
+    }
+
+    /// 执行 ChangeScene（复合场景切换）
+    ///
+    /// 与 ShowBackground 不同，ChangeScene 会：
+    /// 1. 隐藏 UI
+    /// 2. 清除所有立绘
+    /// 3. 使用遮罩过渡效果切换背景
+    /// 4. 恢复 UI
+    fn execute_change_scene(
+        &mut self,
+        path: &str,
+        transition: Option<Transition>,
+        render_state: &mut RenderState,
+        resource_manager: &ResourceManager,
+    ) -> ExecuteResult {
+        // 保存旧背景用于过渡效果
+        let old_background = render_state.current_background.clone();
+
+        // 1. 隐藏 UI（对话框、选择分支等）
+        render_state.ui_visible = false;
+
+        // 2. 清除所有立绘
+        render_state.hide_all_characters();
+
+        // 3. 根据 transition 类型设置遮罩/过渡
+        if let Some(ref trans) = transition {
+            let name_lower = trans.name.to_lowercase();
+            let duration = trans.get_duration().unwrap_or(0.5) as f32;
+
+            match name_lower.as_str() {
+                "fade" => {
+                    // 黑屏遮罩
+                    let mut mask = SceneMaskState::new(
+                        SceneMaskType::SolidBlack,
+                        duration,
+                    );
+                    mask.set_pending_background(path.to_string());
+                    render_state.scene_mask = Some(mask);
+                    println!("🎬 changeScene: Fade 黑屏过渡 ({}s)", duration);
+                }
+                "fadewhite" => {
+                    // 白屏遮罩
+                    let mut mask = SceneMaskState::new(
+                        SceneMaskType::SolidWhite,
+                        duration,
+                    );
+                    mask.set_pending_background(path.to_string());
+                    render_state.scene_mask = Some(mask);
+                    println!("🎬 changeScene: FadeWhite 白屏过渡 ({}s)", duration);
+                }
+                "rule" => {
+                    // 图片遮罩 - 使用 resource_manager 规范化路径
+                    let raw_mask_path = trans.get_named("mask")
+                        .and_then(|arg| {
+                            if let TransitionArg::String(s) = arg {
+                                Some(s.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or_default();
+                    
+                    // 规范化路径：相对路径需要基于脚本目录解析
+                    // 注意：这里的 raw_mask_path 是相对于脚本文件的路径
+                    // 需要与背景路径 path 使用相同的基准目录
+                    let normalized_mask_path = resource_manager.resolve_path(&raw_mask_path);
+                    let reversed = trans.get_reversed().unwrap_or(false);
+                    
+                    let mut mask = SceneMaskState::new(
+                        SceneMaskType::Rule { mask_path: normalized_mask_path.clone(), reversed },
+                        duration,
+                    );
+                    mask.set_pending_background(path.to_string());
+                    render_state.scene_mask = Some(mask);
+                    println!("🎬 changeScene: Rule 遮罩过渡 ({}, {}s, reversed={})", normalized_mask_path, duration, reversed);
+                }
+                "dissolve" => {
+                    // Dissolve 使用 TransitionManager 处理背景过渡
+                    // 记录过渡信息，让 main.rs 启动背景过渡
+                    self.last_output.transition_info = TransitionInfo {
+                        has_background_transition: true,
+                        old_background: old_background.clone(),
+                        transition: transition.clone(),
+                    };
+                    // 立即切换背景（交叉溶解依赖 old_background）
+                    render_state.set_background(path.to_string());
+                    // 立即恢复 UI
+                    render_state.ui_visible = true;
+                    println!("🎬 changeScene: Dissolve 过渡 ({}s)", duration);
+                }
+                _ => {
+                    // 未知效果，使用默认 dissolve
+                    self.last_output.transition_info = TransitionInfo {
+                        has_background_transition: true,
+                        old_background: old_background.clone(),
+                        transition: transition.clone(),
+                    };
+                    render_state.set_background(path.to_string());
+                    render_state.ui_visible = true;
+                    println!("🎬 changeScene: 未知效果 '{}', 使用 dissolve", trans.name);
+                }
+            }
+        } else {
+            // 无过渡效果，立即恢复 UI
+            render_state.set_background(path.to_string());
+            render_state.ui_visible = true;
+        }
+
+        // 注意：对于 Fade/FadeWhite/Rule 效果，不设置 has_background_transition
+        // 因为这些效果使用 SceneMaskState 处理，而不是 TransitionManager
 
         ExecuteResult::Ok
     }
@@ -369,18 +482,8 @@ impl CommandExecutor {
         self.transition_active = true;
         self.transition_timer = 0.0;
 
-        // 从参数中提取时长，默认 0.3 秒
-        self.transition_duration = transition
-            .args
-            .first()
-            .and_then(|arg| {
-                if let vn_runtime::command::TransitionArg::Number(n) = arg {
-                    Some(*n as f32)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0.3);
+        // 从参数中提取时长，默认 0.3 秒（优先命名参数，回退位置参数）
+        self.transition_duration = transition.get_duration().map(|d| d as f32).unwrap_or(0.3);
 
         println!("🎬 开始过渡效果: {} ({}s)", transition.name, self.transition_duration);
     }

@@ -95,17 +95,7 @@ impl TransitionManager {
     /// 从 vn-runtime 的 Transition 解析
     pub fn start_from_command(&mut self, transition: &vn_runtime::command::Transition) {
         let name = transition.name.to_lowercase();
-        let duration = transition
-            .args
-            .first()
-            .and_then(|arg| {
-                if let vn_runtime::command::TransitionArg::Number(n) = arg {
-                    Some(*n as f32)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0.3);
+        let duration = transition.get_duration().map(|d| d as f32).unwrap_or(0.3);
 
         let transition_type = match name.as_str() {
             "dissolve" => TransitionType::Dissolve,

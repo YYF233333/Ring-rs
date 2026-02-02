@@ -19,10 +19,12 @@ use crate::manifest::Manifest;
 pub mod render_state;
 mod text_renderer;
 mod transition;
+mod image_dissolve;
 
-pub use render_state::{RenderState, CharacterSprite, DialogueState, ChoiceItem, ChoicesState};
+pub use render_state::{RenderState, CharacterSprite, DialogueState, ChoiceItem, ChoicesState, SceneMaskState, SceneMaskType};
 pub use text_renderer::TextRenderer;
 pub use transition::{TransitionManager, TransitionType, TransitionPhase};
+pub use image_dissolve::ImageDissolve;
 
 /// 渲染器
 ///
@@ -32,6 +34,8 @@ pub struct Renderer {
     pub text_renderer: TextRenderer,
     /// 过渡效果管理器
     pub transition: TransitionManager,
+    /// ImageDissolve 效果器（用于 Rule 过渡）
+    pub image_dissolve: ImageDissolve,
     /// 设计分辨率（用于坐标计算）
     design_width: f32,
     design_height: f32,
@@ -45,6 +49,7 @@ impl Renderer {
         Self {
             text_renderer: TextRenderer::new(),
             transition: TransitionManager::new(),
+            image_dissolve: ImageDissolve::new(),
             design_width,
             design_height,
             old_background: None,
@@ -53,11 +58,20 @@ impl Renderer {
 
     /// 异步初始化（加载字体等资源）
     pub async fn init(&mut self, font_path: &str) -> Result<(), String> {
-        self.text_renderer.load_font(font_path).await
+        // 初始化字体
+        self.text_renderer.load_font(font_path).await?;
+        
+        // 初始化 ImageDissolve shader
+        if let Err(e) = self.image_dissolve.init() {
+            eprintln!("⚠️ ImageDissolve shader 初始化失败，将使用降级方案: {}", e);
+            // 不返回错误，因为有降级方案
+        }
+        
+        Ok(())
     }
 
     /// 渲染完整画面
-    pub fn render(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager, manifest: &Manifest) {
+    pub fn render(&mut self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager, manifest: &Manifest) {
         // 清空屏幕
         clear_background(BLACK);
 
@@ -67,16 +81,25 @@ impl Renderer {
         // 2. 渲染角色
         self.render_characters(state, textures, resource_manager, manifest);
 
-        // 3. 渲染对话框
-        self.render_dialogue(state);
+        // 3-5. 渲染 UI 层（仅当 ui_visible 为 true）
+        if state.ui_visible {
+            // 获取 UI 透明度（用于 changeScene 后的 UI 淡入效果）
+            let ui_alpha = state.get_effective_ui_alpha();
 
-        // 4. 渲染选择界面
-        self.render_choices(state);
+            // 3. 渲染对话框
+            self.render_dialogue_with_alpha(state, ui_alpha);
 
-        // 5. 渲染章节标记
-        self.render_chapter_mark(state);
+            // 4. 渲染选择界面
+            self.render_choices_with_alpha(state, ui_alpha);
 
-        // 6. 渲染过渡效果遮罩（Fade 效果）
+            // 5. 渲染章节标记
+            self.render_chapter_mark_with_alpha(state, ui_alpha);
+        }
+
+        // 6. 渲染场景遮罩（changeScene 的 Fade/FadeWhite/Rule 效果）
+        self.render_scene_mask(state, textures, resource_manager);
+
+        // 7. 渲染过渡效果遮罩（普通 Fade 效果）
         self.transition.render_overlay();
     }
 
@@ -222,35 +245,142 @@ impl Renderer {
         }
     }
 
-    /// 渲染对话框
-    fn render_dialogue(&self, state: &RenderState) {
+    /// 渲染对话框（带透明度）
+    fn render_dialogue_with_alpha(&self, state: &RenderState, alpha: f32) {
         if let Some(ref dialogue) = state.dialogue {
-            self.text_renderer.render_dialogue_box(
+            self.text_renderer.render_dialogue_box_with_alpha(
                 dialogue.speaker.as_deref(),
                 &dialogue.content,
                 dialogue.visible_chars,
+                alpha,
             );
         }
     }
 
-    /// 渲染章节标记
-    fn render_chapter_mark(&self, state: &RenderState) {
+    /// 渲染章节标记（带透明度）
+    fn render_chapter_mark_with_alpha(&self, state: &RenderState, alpha: f32) {
         if let Some(ref chapter) = state.chapter_mark {
+            // 章节标记有自己的 alpha，与 UI alpha 相乘
+            let effective_alpha = chapter.alpha * alpha;
             self.text_renderer.render_chapter_title(
                 &chapter.title,
-                chapter.alpha,
+                effective_alpha,
             );
         }
     }
 
-    /// 渲染选择界面
-    fn render_choices(&self, state: &RenderState) {
+    /// 渲染选择界面（带透明度）
+    fn render_choices_with_alpha(&self, state: &RenderState, alpha: f32) {
         if let Some(ref choices_state) = state.choices {
-            self.text_renderer.render_choices(
+            self.text_renderer.render_choices_with_alpha(
                 &choices_state.choices,
                 choices_state.selected_index,
                 choices_state.hovered_index,
+                alpha,
             );
+        }
+    }
+
+    /// 渲染场景遮罩（用于 changeScene 的 Fade/FadeWhite/Rule 效果）
+    fn render_scene_mask(&mut self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
+        if let Some(ref mask) = state.scene_mask {
+            // 遮罩已完成，不需要渲染
+            if mask.is_mask_complete() {
+                return;
+            }
+
+            match &mask.mask_type {
+                SceneMaskType::SolidBlack => {
+                    // 绘制黑色遮罩
+                    if mask.alpha > 0.0 {
+                        draw_rectangle(
+                            0.0, 0.0,
+                            screen_width(), screen_height(),
+                            Color::new(0.0, 0.0, 0.0, mask.alpha),
+                        );
+                    }
+                }
+                SceneMaskType::SolidWhite => {
+                    // 绘制白色遮罩
+                    if mask.alpha > 0.0 {
+                        draw_rectangle(
+                            0.0, 0.0,
+                            screen_width(), screen_height(),
+                            Color::new(1.0, 1.0, 1.0, mask.alpha),
+                        );
+                    }
+                }
+                SceneMaskType::Rule { mask_path, reversed } => {
+                    // Rule 遮罩：使用 ImageDissolve shader 实现
+                    // 三阶段：phase 0: 旧背景→黑屏，phase 1: 黑屏停顿，phase 2: 黑屏→新背景
+                    let normalized_mask_path = resource_manager.resolve_path(mask_path);
+
+                    let mask_texture = textures.get(&normalized_mask_path)
+                        .unwrap_or_else(|| panic!("Rule 遮罩纹理未找到: {}", normalized_mask_path));
+
+                    if !self.image_dissolve.is_initialized() {
+                        panic!("ImageDissolve shader 未初始化，无法使用 rule 过渡");
+                    }
+
+                    let progress = mask.dissolve_progress;
+                    let black_path = resource_manager.resolve_path("backgrounds/black.png");
+                    let black_texture = textures.get(&black_path)
+                        .unwrap_or_else(|| panic!("缺少黑色背景纹理: {}", black_path));
+
+                    match mask.phase {
+                        0 => {
+                            // phase 0: 旧背景 → 黑屏
+                            let old_bg_path = state.current_background.as_ref()
+                                .unwrap_or_else(|| panic!("Rule 遮罩缺少当前背景"));
+                            let old_bg_normalized = resource_manager.resolve_path(old_bg_path);
+                            let old_bg_texture = textures.get(&old_bg_normalized)
+                                .unwrap_or_else(|| panic!("Rule 旧背景纹理未找到: {}", old_bg_normalized));
+
+                            let (dest_w, dest_h, x, y) =
+                                self.calculate_draw_rect(old_bg_texture, DrawMode::Cover);
+                            // 从旧背景溶解到黑色
+                            self.image_dissolve.draw(
+                                black_texture,      // 目标：黑色
+                                old_bg_texture,     // 源：旧背景
+                                mask_texture,
+                                progress,
+                                *reversed,
+                                (x, y, dest_w, dest_h),
+                            );
+                        }
+                        1 => {
+                            // phase 1: 黑屏停顿 - 绘制纯黑屏
+                            draw_rectangle(
+                                0.0, 0.0,
+                                screen_width(), screen_height(),
+                                Color::new(0.0, 0.0, 0.0, 1.0),
+                            );
+                        }
+                        2 => {
+                            // phase 2: 黑屏 → 新背景
+                            // 注意：此时 pending_background 已在 is_at_midpoint() 时被 take 并设置到 current_background
+                            let new_bg_path = state.current_background.as_ref()
+                                .unwrap_or_else(|| panic!("Rule 遮罩缺少新背景（current_background）"));
+                            let new_bg_normalized = resource_manager.resolve_path(new_bg_path);
+                            let new_bg_texture = textures.get(&new_bg_normalized)
+                                .unwrap_or_else(|| panic!("Rule 新背景纹理未找到: {}", new_bg_normalized));
+
+                            let (dest_w, dest_h, x, y) =
+                                self.calculate_draw_rect(new_bg_texture, DrawMode::Cover);
+                            // 从黑色溶解到新背景（反向溶解）
+                            self.image_dissolve.draw(
+                                new_bg_texture,     // 目标：新背景
+                                black_texture,      // 源：黑色
+                                mask_texture,
+                                progress,
+                                !*reversed,         // 反向，让效果对称
+                                (x, y, dest_w, dest_h),
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
     }
 
@@ -273,12 +403,29 @@ impl Renderer {
 
     /// 绘制纹理以适应屏幕（带透明度）
     fn draw_texture_fit_with_alpha(&self, texture: &Texture2D, mode: DrawMode, alpha: f32) {
+        let (dest_w, dest_h, x, y) = self.calculate_draw_rect(texture, mode);
+
+        let color = Color::new(1.0, 1.0, 1.0, alpha);
+        draw_texture_ex(
+            texture,
+            x,
+            y,
+            color,
+            DrawTextureParams {
+                dest_size: Some(vec2(dest_w, dest_h)),
+                ..Default::default()
+            },
+        );
+    }
+
+    /// 计算纹理绘制矩形（dest_w, dest_h, x, y）
+    fn calculate_draw_rect(&self, texture: &Texture2D, mode: DrawMode) -> (f32, f32, f32, f32) {
         let screen_w = screen_width();
         let screen_h = screen_height();
         let tex_w = texture.width();
         let tex_h = texture.height();
 
-        let (dest_w, dest_h, x, y) = match mode {
+        match mode {
             DrawMode::Cover => {
                 // 覆盖模式：填满屏幕，可能裁剪
                 let scale = (screen_w / tex_w).max(screen_h / tex_h);
@@ -301,19 +448,7 @@ impl Renderer {
                 // 拉伸模式：完全填满
                 (screen_w, screen_h, 0.0, 0.0)
             }
-        };
-
-        let color = Color::new(1.0, 1.0, 1.0, alpha);
-        draw_texture_ex(
-            texture,
-            x,
-            y,
-            color,
-            DrawTextureParams {
-                dest_size: Some(vec2(dest_w, dest_h)),
-                ..Default::default()
-            },
-        );
+        }
     }
 }
 

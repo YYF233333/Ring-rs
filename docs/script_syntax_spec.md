@@ -93,59 +93,85 @@ VN 脚本文件使用 `.md` 扩展名，采用 UTF-8 编码。
 
 ### 5.1 背景切换 (changeBG)
 
+> **职责**：简单背景切换，不涉及遮罩或复合演出流程。
+
 ```markdown
-changeBG <img src="path/to/image.jpg" /> with transition
 changeBG <img src="path/to/image.jpg" />
+changeBG <img src="path/to/image.jpg" /> with dissolve
+changeBG <img src="path/to/image.jpg" /> with Dissolve(duration: 1.5)
 ```
 
 参数说明：
 - `<img src="...">`: 图片路径（支持 Typora 拖拽插入格式）
 - `with transition`: 过渡效果（可选）
 
-过渡效果支持：
-- `dissolve` - 淡入淡出
-- `fade` - 渐隐渐显
-- `Dissolve(duration)` - 指定时长的淡入淡出，如 `Dissolve(1.5)`
+**支持的过渡效果**（仅限简单效果）：
+- 无 `with` - 立即切换（无过渡）
+- `dissolve` - 交叉溶解（默认时长）
+- `Dissolve(duration: N)` 或 `Dissolve(N)` - 指定时长的交叉溶解
+
+**不支持的效果**（请使用 `changeScene`）：
+- ~~`fade`~~ / ~~`fadewhite`~~ → 迁移到 `changeScene with Fade(...)` / `FadeWhite(...)`
+- 任何涉及遮罩的效果 → 使用 `changeScene`
+
+> **迁移提示**：如果旧脚本使用 `changeBG ... with fade/fadewhite`，解析器会报错并提示迁移到 `changeScene with Fade(...)` / `FadeWhite(...)`。
 
 ### 5.2 场景切换 (changeScene)
 
+> **职责**：复合场景切换，涉及 UI 隐藏/恢复、遮罩过渡、清除立绘等完整演出流程。
+
 ```markdown
-changeScene <img src="path/to/image.jpg" /> with transition
-changeScene <img src="path/to/image.jpg" /> with <img src="rule.png" /> (duration: 1, reversed: true)
+changeScene <img src="bg.jpg" /> with Dissolve(duration: 1)
+changeScene <img src="bg.jpg" /> with Fade(duration: 1)
+changeScene <img src="bg.jpg" /> with FadeWhite(duration: 1)
+changeScene <img src="bg.jpg" /> with <img src="rule.png" /> (duration: 1, reversed: true)
 ```
 
-#### 5.2.1 设计意图（语法糖）
+#### 5.2.1 设计意图
 
-`changeScene` 是一个**复合场景切换**语法糖，用一行脚本表达一个完整的演出流程（具体实现由 Host 决定；Runtime 只需发出声明式的 `Command::ChangeScene`）。
+`changeScene` 是一个**复合场景切换**指令，用一行脚本表达完整的演出流程。与 `changeBG` 的区别：
 
-目标语义（推荐实现）：
+| 特性 | changeBG | changeScene |
+|------|----------|-------------|
+| UI 隐藏/恢复 | ❌ | ✅ |
+| 清除立绘 | ❌ | ✅ |
+| 支持遮罩 | ❌ | ✅ |
+| 复合流程 | ❌ | ✅ |
+
+#### 5.2.2 目标语义（推荐实现）
 
 1. 使用 `dissolve` 隐藏 UI（对话框/选择分支/章节标题等 UI 层）
-2. 使用 `with` 指定的效果把**纯黑 mask** 叠加到场景上（形成黑屏遮罩）
+2. 使用 `with` 指定的效果叠加遮罩（黑色/白色/rule 图片）
 3. 清除所有立绘，替换背景为新指定背景
-4. 使用同一效果隐去 mask
+4. 使用同一效果隐去遮罩
 5. 使用 `dissolve` 恢复 UI
 
 > 说明：以上是**推荐的可观察语义**。为了保持 Runtime/Host 分离，这些步骤可以全部在 Host 内部完成。
 
-#### 5.2.2 语法约束
+#### 5.2.3 支持的效果
+
+| 效果类型 | 语法 | 遮罩 | 说明 |
+|---------|------|------|------|
+| **Dissolve** | `with Dissolve(duration: N)` | 无遮罩 | UI隐藏 → 背景交叉溶解+清立绘 → UI恢复 |
+| **Fade** | `with Fade(duration: N)` | 纯黑色 | UI隐藏 → 黑屏 → 换背景+清立绘 → 显现 → UI恢复 |
+| **FadeWhite** | `with FadeWhite(duration: N)` | 纯白色 | UI隐藏 → 白屏 → 换背景+清立绘 → 显现 → UI恢复 |
+| **Rule** | `with <img src="rule.png"/> (duration: N, reversed: bool)` | 图片遮罩 | UI隐藏 → rule过渡遮罩 → 换背景+清立绘 → rule反向 → UI恢复 |
+
+#### 5.2.4 语法约束
 
 - `changeScene` **必须**带 `with` 子句（没有 `with` 视为语法错误）
-- 第一个 `<img src="..."/>` 是新背景路径（按“素材路径相对于脚本文件”的规则解析）
-- `with` 子句支持两类效果：
-  - **Dissolve 类**：`with Dissolve(duration: N)`（语法糖，等价于 `with Dissolve(N)`）
-  - **rule 遮罩类**：`with <img src="rule.png" /> (duration: N, reversed: true|false)`  
-    （语法糖，等价于 `with rule("rule.png", N, true|false)`）
+- 第一个 `<img src="..."/>` 是新背景路径（按"素材路径相对于脚本文件"的规则解析）
 
-#### 5.2.3 参数说明
+#### 5.2.5 参数说明
 
 - `duration`: 过渡时长（秒），建议范围 \(0.1 \sim 3.0\)
-- `reversed`: 是否反转遮罩方向（`true` 反向，`false` 正向）
+- `reversed`: 是否反转遮罩方向（`true` 反向，`false` 正向，仅 Rule 效果）
 
-#### 5.2.4 错误处理规则
+#### 5.2.6 错误处理规则
 
 - 缺少背景 `<img src="...">`：报错并带行号
 - 缺少 `with`：报错并带行号
+- `Fade` 的 `color` 不是 `black`/`white`：报错并带行号
 - `duration` 不是数字 / `reversed` 不是布尔：报错并带行号
 - rule 图片无法加载：Host 打印错误但不崩溃（与资源系统一致）
 
@@ -257,23 +283,31 @@ goto **label**
 
 ## 七、过渡效果语法
 
-### 7.1 统一函数调用语法
+### 7.1 统一效果表达式（支持命名参数）
 
-所有过渡效果使用统一的**函数调用语法**，解析器不解释具体效果语义：
+所有过渡效果使用统一的效果表达式语法，解析器不解释具体效果语义：
 
 ```
 with <effect_expr>
 
-effect_expr := identifier                      // 无参效果
-             | identifier(arg, arg, ...)       // 带参效果
+effect_expr := identifier                                  // 无参效果
+             | identifier(positional_args)                  // 位置参数
+             | identifier(named_args)                       // 命名参数（不允许与位置参数混用）
+             | <img src="mask.png" ... /> (named_args)      // rule-based effect（仅此形式）
+
+positional_args := arg ("," arg)*
+named_args      := named_arg ("," named_arg)*
+named_arg       := identifier ":" arg
 ```
 
 **示例**：
 ```markdown
 with dissolve                    // 无参数
-with fade
 with Dissolve(1.5)               // 位置参数
-with rule("mask.png", 1.0, true) // 多个位置参数
+with Dissolve(duration: 1.5)     // 命名参数（不允许与位置参数混用）
+with Fade(duration: 1)           // Fade 黑屏过渡（仅 changeScene）
+with FadeWhite(duration: 1)      // FadeWhite 白屏过渡（仅 changeScene）
+with <img src="assets/rule_10.png" /> (duration: 1, reversed: true) // rule-based effect（仅 changeScene）
 ```
 
 ### 7.2 解析器产出结构
@@ -282,13 +316,13 @@ with rule("mask.png", 1.0, true) // 多个位置参数
 
 ```rust
 pub struct Transition {
-    pub name: String,           // 效果名，如 "dissolve", "Dissolve", "rule"
-    pub args: Vec<TransitionArg>,
+    pub name: String,           // 效果名，如 "dissolve", "Dissolve", "Fade", "rule"
+    pub args: Vec<(Option<String>, TransitionArg)>, // None=位置参数，Some(key)=命名参数
 }
 
 pub enum TransitionArg {
     Number(f64),                // 数字，如 1.5
-    String(String),             // 字符串，如 "mask.png"
+    String(String),             // 字符串，如 "mask.png", "black", "white"
     Bool(bool),                 // 布尔值，如 true/false
 }
 ```
@@ -297,32 +331,60 @@ pub enum TransitionArg {
 - 解析器只负责**结构提取**，不需要知道有哪些效果
 - 新增效果时，只需在 Runtime/Host 层添加处理逻辑
 - 避免"效果数 × 操作数"的规则爆炸
+- 命名参数的意义在于：允许乱序、允许只填写部分参数，其余使用默认值（由 Host/具体 effect 解释层决定）
+- 同一次调用中**不允许混用**位置参数与命名参数（语法层保证，避免歧义）
 
 ### 7.3 内置效果参考
 
-以下是内置效果参考（解析器无需感知；具体支持情况由 Host 决定）：
+以下是内置效果参考（解析器无需感知；具体支持情况由 Host/指令决定）：
 
-| 效果名 | 语法 | 说明 |
-|--------|------|------|
-| dissolve | `dissolve` 或 `Dissolve(秒数)` | 淡入淡出 |
-| fade | `fade` 或 `Fade(秒数)` | 渐隐渐显 |
-| rule | `rule("mask.png", duration, reversed)` | 遮罩过渡（配合 `changeScene` 使用更常见） |
+| 效果名 | 语法 | 适用指令 | 说明 |
+|--------|------|---------|------|
+| dissolve | `dissolve` 或 `Dissolve(duration: N)` | changeBG, changeScene, show, hide | 交叉溶解 |
+| Fade | `Fade(duration: N)` | **仅 changeScene** | 黑屏遮罩过渡 |
+| FadeWhite | `FadeWhite(duration: N)` | **仅 changeScene** | 白屏遮罩过渡 |
+| rule | `<img src="mask.png" /> (duration: N, reversed: bool)` | **仅 changeScene** | 图片遮罩过渡 |
 
-#### 7.3.1 `rule` 的两种写法（推荐在 `changeScene` 中用语法糖）
+> **注意**：旧语法 `changeBG with fade/fadewhite` 已废弃，请使用 `changeScene with Fade(...)`/`FadeWhite(...)`。
 
-1) 通用写法（函数调用语法）：
+#### 7.3.1 `Fade` / `FadeWhite` 效果（纯色遮罩）
+
+`Fade` 和 `FadeWhite` 使用纯色遮罩实现场景切换，**仅在 `changeScene` 中可用**：
 
 ```markdown
-with rule("assets/rule_10.png", 1.0, true)
+changeScene <img src="bg.jpg" /> with Fade(duration: 1)       // 黑屏过渡
+changeScene <img src="bg.jpg" /> with FadeWhite(duration: 1)  // 白屏过渡
 ```
 
-2) `changeScene` 专用语法糖（更适合 Typora 编辑与预览）：
+解析器归一化为：
+```
+Transition { name: "Fade", args: [(Some("duration"), Number(1.0))] }
+Transition { name: "FadeWhite", args: [(Some("duration"), Number(1.0))] }
+```
+
+#### 7.3.2 `rule` 效果（图片遮罩 / ImageDissolve）
 
 ```markdown
 changeScene <img src="assets/bg2.jpg" /> with <img src="assets/rule_10.png" /> (duration: 1, reversed: true)
 ```
 
-两者等价：解析器应将语法糖归一化为 `Transition { name: "rule", args: [String(mask), Number(duration), Bool(reversed)] }`。
+解析器应将该写法归一化为 `Transition { name: "rule", args: [(Some("mask"), String(mask)), (Some("duration"), Number(duration)), (Some("reversed"), Bool(reversed))] }`。
+
+**ImageDissolve 原理**（参考 Ren'Py）：
+- 遮罩图片必须是**灰度图**（或使用红色通道作为亮度值）
+- 过渡过程中，根据像素亮度值控制溶解顺序：
+  - 亮度 ≤ progress 的像素显示新内容
+  - 亮度 > progress 的像素仍显示旧内容/遮罩
+- `reversed: true` 时反转亮度判断（暗的先溶解）
+
+**参数说明**：
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `mask` | String | 必填 | 遮罩图片路径（相对于脚本文件目录） |
+| `duration` | Number | 0.5 | 过渡时长（秒） |
+| `reversed` | Bool | false | 是否反转溶解顺序 |
+
+**路径解析**：`mask` 路径支持相对路径，自动相对于脚本文件所在目录解析。例如脚本在 `assets/scripts/main.md`，遮罩路径为 `../backgrounds/rule_10.png`，则解析为 `assets/backgrounds/rule_10.png`。
 
 > **注意**：效果名大小写敏感，`dissolve` 和 `Dissolve(1.5)` 是不同的效果标识。
 

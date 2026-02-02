@@ -159,7 +159,7 @@ fn extract_keyword_value<'a>(s: &'a str, keyword: &str) -> Option<&'a str> {
 
 /// 解析过渡效果表达式
 ///
-/// 输入: `"dissolve"` 或 `"Dissolve(1.5)"` 或 `"rule(\"mask.png\", 1.0, true)"`
+/// 输入: `"dissolve"` 或 `"Dissolve(1.5)"` 或 `"Dissolve(duration: 1.5)"`
 fn parse_transition(s: &str) -> Option<Transition> {
     let s = s.trim();
     if s.is_empty() {
@@ -173,58 +173,169 @@ fn parse_transition(s: &str) -> Option<Transition> {
         let paren_end = s.rfind(')')?;
         let args_str = &s[paren_start + 1..paren_end];
 
-        let args = parse_transition_args(args_str);
-        Some(Transition::with_args(name, args))
+        match parse_transition_args(args_str) {
+            Ok(args) => Some(Transition::with_named_args(name, args)),
+            Err(_) => None, // 参数解析失败
+        }
     } else {
         // 简单名称格式: name
         Some(Transition::simple(s))
     }
 }
 
-/// 解析过渡效果参数列表
-fn parse_transition_args(s: &str) -> Vec<TransitionArg> {
+/// 解析过渡效果参数列表（支持位置参数和命名参数，不允许混用）
+///
+/// - 位置参数: `1.0, 0.5, true, "x"`
+/// - 命名参数: `duration: 1.0, reversed: true`
+/// - 混用会返回 Err
+fn parse_transition_args(s: &str) -> Result<Vec<(Option<String>, TransitionArg)>, String> {
     let s = s.trim();
     if s.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
+    }
+
+    // 先分割参数（考虑字符串内的逗号）
+    let raw_args = split_args(s);
+    if raw_args.is_empty() {
+        return Ok(Vec::new());
     }
 
     let mut args = Vec::new();
+    let mut has_named = false;
+    let mut has_positional = false;
+    let mut seen_keys = std::collections::HashSet::new();
+
+    for raw in &raw_args {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            continue;
+        }
+
+        // 检测是否是命名参数（包含 key: value 模式）
+        // 注意：字符串里的冒号不算
+        if let Some((key, value)) = parse_named_arg(raw) {
+            // 命名参数
+            if has_positional {
+                return Err("不允许混用位置参数和命名参数".to_string());
+            }
+            has_named = true;
+
+            // 检查重复 key
+            if seen_keys.contains(&key) {
+                return Err(format!("重复的命名参数: {}", key));
+            }
+            seen_keys.insert(key.clone());
+
+            args.push((Some(key), value));
+        } else {
+            // 位置参数
+            if has_named {
+                return Err("不允许混用位置参数和命名参数".to_string());
+            }
+            has_positional = true;
+
+            args.push((None, parse_arg_value(raw)));
+        }
+    }
+
+    Ok(args)
+}
+
+/// 分割参数列表（考虑字符串内的逗号）
+fn split_args(s: &str) -> Vec<String> {
+    let mut result = Vec::new();
     let mut current = String::new();
     let mut in_string = false;
     let mut string_char = '"';
 
     for ch in s.chars() {
         if in_string {
+            current.push(ch);
             if ch == string_char {
                 in_string = false;
-                // 将字符串内容作为参数
-                args.push(TransitionArg::String(current.clone()));
-                current.clear();
-            } else {
-                current.push(ch);
             }
         } else if ch == '"' || ch == '\'' {
             in_string = true;
             string_char = ch;
+            current.push(ch);
         } else if ch == ',' {
-            // 参数分隔符
-            let arg = current.trim();
-            if !arg.is_empty() {
-                args.push(parse_single_arg(arg));
-            }
+            result.push(current.trim().to_string());
             current.clear();
         } else {
             current.push(ch);
         }
     }
 
-    // 处理最后一个参数
-    let arg = current.trim();
-    if !arg.is_empty() {
-        args.push(parse_single_arg(arg));
+    // 最后一个参数
+    let last = current.trim();
+    if !last.is_empty() {
+        result.push(last.to_string());
     }
 
-    args
+    result
+}
+
+/// 尝试解析命名参数 "key: value"
+/// 返回 Some((key, value)) 或 None（如果不是命名参数）
+fn parse_named_arg(s: &str) -> Option<(String, TransitionArg)> {
+    // 查找第一个不在字符串内的冒号
+    let mut in_string = false;
+    let mut string_char = '"';
+    let mut colon_pos = None;
+
+    for (i, ch) in s.char_indices() {
+        if in_string {
+            if ch == string_char {
+                in_string = false;
+            }
+        } else if ch == '"' || ch == '\'' {
+            in_string = true;
+            string_char = ch;
+        } else if ch == ':' {
+            colon_pos = Some(i);
+            break;
+        }
+    }
+
+    let colon_pos = colon_pos?;
+    let key = s[..colon_pos].trim();
+    let value_str = s[colon_pos + 1..].trim();
+
+    // key 必须是有效标识符 [a-zA-Z_][a-zA-Z0-9_]*
+    if !is_valid_identifier(key) {
+        return None;
+    }
+
+    // 解析 value
+    let value = parse_arg_value(value_str);
+    Some((key.to_string(), value))
+}
+
+/// 检查是否是有效标识符
+fn is_valid_identifier(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    let mut chars = s.chars();
+    let first = chars.next().unwrap();
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// 解析参数值（可能带引号的字符串、数字、布尔值）
+fn parse_arg_value(s: &str) -> TransitionArg {
+    let s = s.trim();
+
+    // 带引号的字符串
+    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+        if s.len() >= 2 {
+            return TransitionArg::String(s[1..s.len() - 1].to_string());
+        }
+    }
+
+    parse_single_arg(s)
 }
 
 /// 解析单个参数值
@@ -576,6 +687,9 @@ impl Parser {
     }
 
     /// 解析 changeBG 指令
+    ///
+    /// changeBG 只支持简单效果：无过渡、dissolve、Dissolve(duration)
+    /// fade/fadewhite/Fade/FadeWhite 已废弃，请使用 changeScene
     fn parse_change_bg(
         &self,
         line: &str,
@@ -589,6 +703,31 @@ impl Parser {
 
         let transition = self.extract_transition_from_line(line);
 
+        // 检查是否使用了废弃的效果
+        if let Some(ref t) = transition {
+            let name_lower = t.name.to_lowercase();
+            if name_lower == "fade" || name_lower == "fadewhite" {
+                return Err(ParseError::InvalidTransition {
+                    line: line_number,
+                    message: format!(
+                        "changeBG 不再支持 '{}' 效果。请使用 changeScene with {}(...) 替代",
+                        t.name,
+                        if name_lower == "fade" { "Fade" } else { "FadeWhite" }
+                    ),
+                });
+            }
+            // 只允许 dissolve/Dissolve
+            if name_lower != "dissolve" {
+                return Err(ParseError::InvalidTransition {
+                    line: line_number,
+                    message: format!(
+                        "changeBG 只支持 dissolve 效果，不支持 '{}'。如需复杂过渡，请使用 changeScene",
+                        t.name
+                    ),
+                });
+            }
+        }
+
         Ok(Some(ScriptNode::ChangeBG {
             path: path.to_string(),
             transition,
@@ -596,6 +735,11 @@ impl Parser {
     }
 
     /// 解析 changeScene 指令
+    ///
+    /// changeScene 必须带 with 子句，支持：
+    /// - Dissolve(duration)
+    /// - Fade(duration) / FadeWhite(duration)
+    /// - <img src="rule.png"/> (duration: N, reversed: bool)
     fn parse_change_scene(
         &self,
         line: &str,
@@ -607,11 +751,26 @@ impl Parser {
             param: "图片路径 (<img src=\"...\">)".to_string(),
         })?;
 
-        let transition = self.extract_transition_from_line(line);
+        // changeScene 强制要求 with 子句
+        let lower = line.to_lowercase();
+        if !lower.contains(" with ") && !lower.contains(">with ") && !lower.contains(" with`") {
+            return Err(ParseError::MissingParameter {
+                line: line_number,
+                command: "changeScene".to_string(),
+                param: "with 子句（changeScene 必须指定过渡效果）".to_string(),
+            });
+        }
+
+        let transition = self.extract_transition_from_line(line).ok_or_else(|| {
+            ParseError::InvalidTransition {
+                line: line_number,
+                message: "无法解析 changeScene 的过渡效果".to_string(),
+            }
+        })?;
 
         Ok(Some(ScriptNode::ChangeScene {
             path: path.to_string(),
-            transition,
+            transition: Some(transition),
         }))
     }
 
@@ -775,6 +934,7 @@ impl Parser {
     /// - `... with dissolve` (标准空格分隔)
     /// - `...>with dissolve` (无空格)
     /// - `... with `Dissolve(2.0)`` (行内代码格式)
+    /// - `... with <img src="rule.png"/> (duration: 1, reversed: true)` (rule-based effect)
     fn extract_transition_from_line(&self, line: &str) -> Option<Transition> {
         let lower = line.to_lowercase();
 
@@ -799,12 +959,12 @@ impl Parser {
         let transition_text = text_after_with.trim();
 
         // 如果包含 <img，这是 rule 类型的过渡
+        // 格式: <img src="rule.png" .../> (duration: 1, reversed: true)
         if transition_text.contains("<img") {
             if let Some(rule_path) = extract_img_src(transition_text) {
-                return Some(Transition::with_args(
-                    "rule",
-                    vec![TransitionArg::String(rule_path.to_string())],
-                ));
+                // 尝试提取括号内的参数
+                let args = self.extract_rule_args(transition_text, &rule_path);
+                return Some(Transition::with_named_args("rule", args));
             }
             return Some(Transition::simple("rule"));
         }
@@ -824,6 +984,32 @@ impl Parser {
         };
 
         parse_transition(transition_text.trim())
+    }
+
+    /// 从 rule-based effect 文本中提取参数
+    ///
+    /// 输入格式: `<img src="rule.png" .../> (duration: 1, reversed: true)`
+    fn extract_rule_args(&self, text: &str, mask_path: &str) -> Vec<(Option<String>, TransitionArg)> {
+        let mut args = vec![
+            (Some("mask".to_string()), TransitionArg::String(mask_path.to_string())),
+        ];
+
+        // 查找 /> 后面的括号参数
+        if let Some(img_end) = text.find("/>") {
+            let after_img = &text[img_end + 2..];
+            // 查找 (...)
+            if let Some(paren_start) = after_img.find('(') {
+                if let Some(paren_end) = after_img.rfind(')') {
+                    let params_str = &after_img[paren_start + 1..paren_end];
+                    // 解析参数（命名参数格式）
+                    if let Ok(parsed_args) = parse_transition_args(params_str) {
+                        args.extend(parsed_args);
+                    }
+                }
+            }
+        }
+
+        args
     }
 
     /// 解析表格块（选择分支）
@@ -943,13 +1129,71 @@ mod tests {
         assert_eq!(t.name, "dissolve");
         assert!(t.args.is_empty());
 
+        // 位置参数
         let t = parse_transition("Dissolve(1.5)").unwrap();
         assert_eq!(t.name, "Dissolve");
         assert_eq!(t.args.len(), 1);
-        assert!(matches!(&t.args[0], TransitionArg::Number(n) if (*n - 1.5).abs() < 0.001));
+        assert!(matches!(&t.args[0], (None, TransitionArg::Number(n)) if (*n - 1.5).abs() < 0.001));
 
         let t = parse_transition("fade").unwrap();
         assert_eq!(t.name, "fade");
+    }
+
+    #[test]
+    fn test_parse_transition_named_args() {
+        // 命名参数
+        let t = parse_transition("Dissolve(duration: 1.5)").unwrap();
+        assert_eq!(t.name, "Dissolve");
+        assert_eq!(t.args.len(), 1);
+        assert!(matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 1.5).abs() < 0.001));
+        assert!(t.is_all_named());
+
+        // 多个命名参数
+        let t = parse_transition("Fade(duration: 2.0, reversed: true)").unwrap();
+        assert_eq!(t.name, "Fade");
+        assert_eq!(t.args.len(), 2);
+        assert!(matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 2.0).abs() < 0.001));
+        assert!(matches!(&t.args[1], (Some(key), TransitionArg::Bool(true)) if key == "reversed"));
+
+        // 辅助方法测试
+        assert_eq!(t.get_duration(), Some(2.0));
+        assert_eq!(t.get_reversed(), Some(true));
+    }
+
+    #[test]
+    fn test_parse_transition_positional_args() {
+        // 多个位置参数
+        let t = parse_transition("Effect(1.0, 0.5, true, \"test\")").unwrap();
+        assert_eq!(t.name, "Effect");
+        assert_eq!(t.args.len(), 4);
+        assert!(t.is_all_positional());
+        assert!(matches!(&t.args[0], (None, TransitionArg::Number(n)) if (*n - 1.0).abs() < 0.001));
+        assert!(matches!(&t.args[1], (None, TransitionArg::Number(n)) if (*n - 0.5).abs() < 0.001));
+        assert!(matches!(&t.args[2], (None, TransitionArg::Bool(true))));
+        assert!(matches!(&t.args[3], (None, TransitionArg::String(s)) if s == "test"));
+
+        // 辅助方法测试（位置参数回退）
+        assert_eq!(t.get_positional(0), Some(&TransitionArg::Number(1.0)));
+    }
+
+    #[test]
+    fn test_parse_transition_mixed_args_error() {
+        // 混用位置参数和命名参数应该失败
+        let result = parse_transition_args("1.0, duration: 2.0");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("不允许混用"));
+
+        let result = parse_transition_args("duration: 2.0, 1.0");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("不允许混用"));
+    }
+
+    #[test]
+    fn test_parse_transition_duplicate_key_error() {
+        // 重复的命名参数 key 应该失败
+        let result = parse_transition_args("duration: 1.0, duration: 2.0");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("重复的命名参数"));
     }
 
     #[test]
@@ -1124,7 +1368,31 @@ mod tests {
         {
             assert_eq!(t.name, "Dissolve");
             assert_eq!(t.args.len(), 1);
-            assert!(matches!(&t.args[0], TransitionArg::Number(n) if (*n - 1.5).abs() < 0.001));
+            assert!(matches!(&t.args[0], (None, TransitionArg::Number(n)) if (*n - 1.5).abs() < 0.001));
+        } else {
+            panic!("Expected ChangeBG node");
+        }
+    }
+
+    #[test]
+    fn test_parse_transition_with_named_args() {
+        let mut parser = Parser::new();
+        let script = parser
+            .parse(
+                "test",
+                r#"changeBG <img src="bg.png" /> with Dissolve(duration: 2.0)"#,
+            )
+            .unwrap();
+
+        if let ScriptNode::ChangeBG {
+            transition: Some(t),
+            ..
+        } = &script.nodes[0]
+        {
+            assert_eq!(t.name, "Dissolve");
+            assert_eq!(t.args.len(), 1);
+            assert!(matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 2.0).abs() < 0.001));
+            assert_eq!(t.get_duration(), Some(2.0));
         } else {
             panic!("Expected ChangeBG node");
         }
@@ -1661,5 +1929,157 @@ stopBGM
         assert!(has_goto, "应该有 goto 指令");
         assert!(has_stop_bgm, "应该有 stopBGM 指令");
         assert!(has_choice, "应该有选择分支");
+    }
+
+    //=========================================================================
+    // changeScene / changeBG 职责分离测试
+    //=========================================================================
+
+    /// 测试 changeBG 不允许 fade 效果
+    #[test]
+    fn test_parse_change_bg_fade_deprecated() {
+        let mut parser = Parser::new();
+        let result = parser.parse(
+            "test",
+            r#"changeBG <img src="bg.jpg" /> with fade"#
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(format!("{:?}", err).contains("fade") || format!("{:?}", err).contains("Fade"));
+    }
+
+    /// 测试 changeBG 不允许 fadewhite 效果
+    #[test]
+    fn test_parse_change_bg_fadewhite_deprecated() {
+        let mut parser = Parser::new();
+        let result = parser.parse(
+            "test",
+            r#"changeBG <img src="bg.jpg" /> with fadewhite"#
+        );
+        assert!(result.is_err());
+    }
+
+    /// 测试 changeBG 不允许其他非 dissolve 效果
+    #[test]
+    fn test_parse_change_bg_only_dissolve() {
+        let mut parser = Parser::new();
+        
+        // dissolve 允许
+        let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with dissolve"#);
+        assert!(result.is_ok());
+        
+        // Dissolve(duration) 允许
+        let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with Dissolve(1.5)"#);
+        assert!(result.is_ok());
+        
+        // 其他效果不允许
+        let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with rule"#);
+        assert!(result.is_err());
+    }
+
+    /// 测试 changeScene 必须带 with 子句
+    #[test]
+    fn test_parse_change_scene_requires_with() {
+        let mut parser = Parser::new();
+        let result = parser.parse(
+            "test",
+            r#"changeScene <img src="bg.jpg" />"#
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(format!("{:?}", err).contains("with"));
+    }
+
+    /// 测试 changeScene with Dissolve
+    #[test]
+    fn test_parse_change_scene_dissolve() {
+        let mut parser = Parser::new();
+        let script = parser.parse(
+            "test",
+            r#"changeScene <img src="bg.jpg" /> with Dissolve(duration: 1)"#
+        ).unwrap();
+        
+        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+            assert_eq!(path, "bg.jpg");
+            assert_eq!(t.name, "Dissolve");
+            assert_eq!(t.get_duration(), Some(1.0));
+        } else {
+            panic!("Expected ChangeScene node");
+        }
+    }
+
+    /// 测试 changeScene with Fade
+    #[test]
+    fn test_parse_change_scene_fade() {
+        let mut parser = Parser::new();
+        let script = parser.parse(
+            "test",
+            r#"changeScene <img src="bg.jpg" /> with Fade(duration: 1.5)"#
+        ).unwrap();
+        
+        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+            assert_eq!(path, "bg.jpg");
+            assert_eq!(t.name, "Fade");
+            assert_eq!(t.get_duration(), Some(1.5));
+        } else {
+            panic!("Expected ChangeScene node");
+        }
+    }
+
+    /// 测试 changeScene with FadeWhite
+    #[test]
+    fn test_parse_change_scene_fade_white() {
+        let mut parser = Parser::new();
+        let script = parser.parse(
+            "test",
+            r#"changeScene <img src="bg.jpg" /> with FadeWhite(duration: 2)"#
+        ).unwrap();
+        
+        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+            assert_eq!(path, "bg.jpg");
+            assert_eq!(t.name, "FadeWhite");
+            assert_eq!(t.get_duration(), Some(2.0));
+        } else {
+            panic!("Expected ChangeScene node");
+        }
+    }
+
+    /// 测试 changeScene with rule-based effect
+    #[test]
+    fn test_parse_change_scene_rule() {
+        let mut parser = Parser::new();
+        let script = parser.parse(
+            "test",
+            r#"changeScene <img src="bg.jpg" /> with <img src="rule_10.png" /> (duration: 1, reversed: true)"#
+        ).unwrap();
+        
+        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+            assert_eq!(path, "bg.jpg");
+            assert_eq!(t.name, "rule");
+            // 检查参数
+            assert_eq!(t.get_named("mask"), Some(&TransitionArg::String("rule_10.png".to_string())));
+            assert_eq!(t.get_duration(), Some(1.0));
+            assert_eq!(t.get_reversed(), Some(true));
+        } else {
+            panic!("Expected ChangeScene node");
+        }
+    }
+
+    /// 测试 changeScene with rule-based effect（无参数）
+    #[test]
+    fn test_parse_change_scene_rule_no_params() {
+        let mut parser = Parser::new();
+        let script = parser.parse(
+            "test",
+            r#"changeScene <img src="bg.jpg" /> with <img src="mask.png" />"#
+        ).unwrap();
+        
+        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+            assert_eq!(path, "bg.jpg");
+            assert_eq!(t.name, "rule");
+            assert_eq!(t.get_named("mask"), Some(&TransitionArg::String("mask.png".to_string())));
+        } else {
+            panic!("Expected ChangeScene node");
+        }
     }
 }

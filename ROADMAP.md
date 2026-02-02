@@ -26,7 +26,7 @@
    - ✅ 输入处理（键盘/鼠标，防抖）
    - ✅ Command 执行器
    - ✅ Runtime 集成
-   - ✅ 过渡效果实现（dissolve/fade/fadewhite）
+   - ✅ 过渡效果实现（dissolve/fade/fadewhite/rule(ImageDissolve)）
    - ✅ 音频系统（rodio，支持 MP3/WAV/FLAC/OGG）
 
 ---
@@ -132,7 +132,7 @@
   - `vn-runtime/src/save.rs`：定义 `SaveData`、`SaveVersion`、`SaveMetadata`、`AudioState`、`RenderSnapshot`
   - 版本兼容策略：major 版本必须一致，minor 可不同
   - `host/src/save_manager/mod.rs`：存档文件布局 `saves/slot_XXX.json`，读写 API
-  - 快捷键：F5 保存，F9 读取
+  - 快捷键：F5 保存，F9 读取（后续将以 UI 替代，快捷键仅 dev-only，见阶段 16）
   - `VNRuntime::restore_state()` 支持状态恢复
 
 ### 12.2 历史记录数据模型 ✅
@@ -184,6 +184,7 @@
 
 ### 14.2 存档系统完善 ✅
 - 多 slot 管理：`[` / `]` 快捷键切换槽位（1-99）
+- （后续将以 UI 替代，快捷键仅 dev-only，见阶段 16）
 - 元信息完善：保存时记录游戏时长 `play_time_secs`
 - UI 显示当前槽位
 
@@ -198,71 +199,235 @@
 
 ---
 
-## 后续开发方向
+## 阶段 15：演出系统重构（changeBG/changeScene + Rule/ImageDissolve）✅ 已完成
 
-> 后续方向以"UI/演出增强 → 性能与工具链"为原则推进。
+> 主题：**收敛演出语义**，把“简单背景切换”和“复合场景切换（遮罩/清场/UI 时序）”彻底分离，确保脚本语义清晰且 Host 侧实现稳定可控。
 
-### 演出增强：`changeScene` 语法糖与 `rule` 遮罩过渡（优先级：中）
+### 15.1 `changeBG` / `changeScene` 职责分离 ✅
 
-> 目标：提供“复合场景切换”语法糖，让编剧用一行脚本实现 **UI 隐藏 → 黑屏遮罩 → 清场 + 换背景 → 遮罩消失 → UI 恢复** 的完整演出。
+- **原则**
+  - `changeBG`：只做简单背景切换（立即 / dissolve）
+  - `changeScene`：统一承载复合演出（UI 隐藏、清立绘、遮罩过渡、UI 恢复）
 
-#### 目标脚本语法（规范见 `docs/script_syntax_spec.md`）
+- **Parser**
+  - `changeBG` 限制只支持 `dissolve`（其他效果报错并提示迁移到 `changeScene`）
+  - `changeScene` 强制要求 `with` 子句
+  - 支持 `Fade(duration: N)` / `FadeWhite(duration: N)`
+  - 支持 `with <img src="rule.png"/> (duration: N, reversed: bool)`（Rule 语法糖）
+
+- **Runtime**
+  - `Command::ChangeScene { path, transition }` 仍保持声明式
+  - `rule` 的 `mask` 路径在发送到 Host 前会按“相对脚本目录”自动解析
+
+- **Host**
+  - Fade/FadeWhite：三阶段（遮罩淡入 → 遮罩淡出 → UI 淡入 0.2s）
+  - Rule：四阶段（旧背景→黑屏 → 黑屏停顿 0.2s → 黑屏→新背景 → UI 淡入 0.2s）
+  - Rule 使用 `ImageDissolve`（灰度遮罩像素亮度控制溶解顺序），并移除 fallback：缺资源/缺 shader 直接 `panic!`
+
+### 15.2 过渡命名参数（named args）✅
+
+- `Transition.args` 升级为 `Vec<(Option<String>, TransitionArg)>`
+- 支持位置参数与命名参数两种写法，**禁止混用**
+- Host 端读取参数时：命名参数优先，位置参数回退
+
+### 15.3 稳定性修复与验收 ✅
+
+- 修复 Rule phase 之间的闪帧（遮罩保持全覆盖 + 增加黑屏停顿）
+- 修复 Rule phase 2 读取 `pending_background` 导致的崩溃（phase 2 使用 `current_background` 作为新背景来源）
+- 端到端 演示脚本已更新：`assets/scripts/test_comprehensive.md`
+- 测试通过：**101 个（host 24 + vn-runtime 77）**
+
+### 15.4 `changeScene` 脚本语法与效果定义（归档）✅
+
+#### 设计原则
+
+- **changeBG**：简单背景切换（无复合流程）
+  - 支持：无过渡（立即切换）、`dissolve`（交叉溶解）
+  - **不再支持** `fade`/`fadewhite`（迁移到 `changeScene with Fade(...)`）
+  
+- **changeScene**：复合场景切换（涉及遮罩/清场/UI 时序）
+  - 语义：UI 隐藏 → 遮罩覆盖 → 清立绘+换背景 → 遮罩消失 → UI 恢复
+  - 支持效果：`Dissolve` / `Fade` / `FadeWhite` / `Rule`（图片遮罩）
+
+#### 目标脚本语法
 
 ```markdown
-changeScene <img src="assets/bg2.jpg" alt="bg2" style="zoom:15%;" /> with <img src="assets/rule_10.png" alt="rule_10" style="zoom:25%;" /> (duration: 1, reversed: true)
+# changeBG（简单背景切换）
+changeBG <img src="bg.jpg"/>                      # 无过渡，立即切换
+changeBG <img src="bg.jpg"/> with dissolve        # 交叉溶解
+changeBG <img src="bg.jpg"/> with Dissolve(duration: 1.5)
 
-changeScene <img src="assets/bg2.jpg" alt="bg2" style="zoom:15%;" /> with Dissolve(duration: 1)
+# changeScene（复合场景切换）- 必须带 with
+changeScene <img src="bg.jpg"/> with Dissolve(duration: 1)
+changeScene <img src="bg.jpg"/> with Fade(duration: 1)
+changeScene <img src="bg.jpg"/> with FadeWhite(duration: 1)
+changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reversed: true)
 ```
 
-#### 语义（Host 可实现为复合行为；Runtime 只需发出一个声明式 Command）
+#### changeScene 效果详解
 
-1. `dissolve` 隐藏 UI（对话框/选择分支/章节标题等 UI 层）
-2. 使用 `with` 指定效果把**纯黑 mask** 叠加到场景上（形成黑屏遮罩）
-3. 清除所有立绘（visible_characters），替换背景为 `changeScene` 的新背景
-4. 使用同一效果隐去 mask
-5. `dissolve` 恢复 UI
+| 效果 | 语法 | 遮罩颜色/类型 | 说明 |
+|------|------|--------------|------|
+| Dissolve | `with Dissolve(duration: N)` | 无遮罩 | UI隐藏 → 背景交叉溶解 → UI恢复 |
+| Fade | `with Fade(duration: N)` | 纯黑 | UI隐藏 → 黑屏 → 换背景+清立绘 → 显现 → UI恢复 |
+| FadeWhite | `with FadeWhite(duration: N)` | 纯白 | UI隐藏 → 白屏 → 换背景+清立绘 → 显现 → UI恢复 |
+| Rule | `with <img src="rule.png"/> (...)` | 图片遮罩（ImageDissolve） | UI隐藏 → 旧背景→黑屏（按灰度顺序溶解） → 黑屏停顿 0.2s → 黑屏→新背景（反向溶解） → UI 淡入 0.2s |
 
-#### 拆分工作项（实现路线）
+---
 
-- **脚本层（Parser）**
-  - `changeScene` 强制要求 `with` 子句（无 `with` → ParseError）
-  - 支持 `with Dissolve(duration: N)` 语法糖（归一化为 `Transition { name: "Dissolve", args: [Number(N)] }`）
-  - 支持 `with <img src="rule.png" /> (duration: N, reversed: bool)` 语法糖  
-    归一化为 `Transition { name: "rule", args: [String("rule.png"), Number(N), Bool(reversed)] }`
-  - 兼容空格/换行/Typora 生成的 `alt/style` 等属性（只提取 `src`）
+## 阶段 16：玩家 UI / 体验增强（主界面入口 + 存读档/设置/历史 UI + 测试入口重构）🟦 计划
 
-- **Runtime（Executor/Engine）**
-  - 保持 `ScriptNode::ChangeScene` → `Command::ChangeScene { path, transition }`（声明式）
-  - 运行时状态/历史记录：记录 `BackgroundChange`（以及可选的 `SceneChange` 扩展事件）
+> 主题：把“可玩”从 **开发者快捷键驱动**升级为 **玩家 UI 驱动**。该阶段只做 UI/流程与测试入口重构，避免引入新的脚本语法与演出系统变更。
 
-- **Host（渲染与执行）**
-  - `CommandExecutor` 对 `Command::ChangeScene` 增加专用执行管线（按“语义”五步）
-  - 为 UI 层增加显示开关（例如 `RenderState::ui_visible: bool`），并让渲染器按开关跳过 UI 渲染
-  - 引入“遮罩层”渲染状态（例如 `RenderState::scene_mask: Option<MaskState>`）
-  - 实现 `rule` 遮罩过渡：
-    - 参数：`mask_path` / `duration` / `reversed`
-    - 行为：按进度用 mask 进行阈值裁剪（或灰度映射），从全遮到全显/反向
-    - 资源：mask 作为纹理加载并走统一的路径规范化与缓存 key
+### 16.1 应用流程（App Flow）重构：引入“主界面入口”🟦
 
-- **测试与验收**
-  - Parser 单测：两种 `changeScene` 语法都能解析，并产出正确的 `Transition` 参数（含 duration/reversed）
-  - Host 侧回归：执行 `changeScene` 时不会残留旧立绘；UI 隐藏/恢复正确；遮罩过渡可见且可跳过（如需要）
-  - 文档：更新脚本 spec（语法、语义、错误规则、示例、与 `rule()` 的等价关系）
+- **目标**
+  - 启动后进入 **主菜单（Title/MainMenu）**，提供明确入口：开始游戏 / 读档 / 设置
+  - 游戏内提供 **系统菜单（InGameMenu）**：存档 / 读档 / 设置 / 历史 / 返回标题 / 退出
+  - **不再依赖快捷键**进行存读档与设置入口（保留 debug hotkey 仅限 dev feature 或 debug build）
 
-### 脚本语法增强
+- **需要新增/明确的状态**
+  - `AppMode`：`Title | InGame | InGameMenu | SaveLoad | Settings | History`
+  - `Navigation`：统一返回栈（例如从 InGameMenu 打开 SaveLoad，返回仍回 InGameMenu）
+  - `InputCapture`：菜单打开时屏蔽推进剧情/选择等输入，避免“双重消费”
 
-1. 效果支持命名参数（例：`Dissolve(duration: 1)`），原有的位置参数模式保留，不支持混用
+- **验收标准**
+  - 进入游戏、读档、打开设置均可通过 UI 完成
+  - 不使用任何快捷键也能完成：开始→存档→退出到标题→读档→继续
 
-1. **玩家 UI / 体验增强**
-   - **历史回看 UI**：面板展示历史对话、点击跳回（可选）、与存档对齐
-   - **存档 UI**：slot 列表、预览、删除、重命名
-   - **设置 UI**：音量/静音/字体/分辨率等（注意：音量属于玩家控制，不进脚本）
-   - **对话框样式增强**：阴影、描边、自定义背景皮肤
+### 16.2 主菜单（Title/MainMenu）🟦
 
-2. **工程化 / 性能 / 工具链（持续）**
-   - **性能**：资源预加载与按需释放、纹理缓存策略、渲染性能优化
-   - **工程化**：CI（fmt/clippy/test）、发布构建脚本、崩溃日志与诊断开关
-   - **工具链**：资源打包工具、脚本 linter/formatter、manifest 可视化调参工具（可选）
+- **功能**
+  - **开始游戏**：从配置指定的默认脚本/入口 label 启动（例如 `config.json` 增加 `start_script_id` / `start_label`，或在 Host 侧约定默认脚本）
+  - **继续**：自动加载“最新存档”（按 `timestamp/play_time` 选择），若无则灰掉
+  - **读档**：进入 Save/Load 界面（默认在 “Load” tab）
+  - **设置**：进入 Settings
+  - **退出**：优雅退出（保存设置）
+
+- **验收标准**
+  - “继续”在无存档时不会崩溃、不会误导（状态清晰）
+  - 主菜单与游戏内菜单的视觉/交互一致（同一套 UI 组件）
+
+### 16.3 游戏内系统菜单（InGameMenu）🟦
+
+- **功能**
+  - 打开方式：UI按钮（例如右上角“菜单”）与可选键位（如 `Esc`）——但**存读档/设置功能不再只靠键位**
+  - 菜单项：继续 / 存档 / 读档 / 设置 / 历史 / 返回标题 / 退出
+  - “返回标题”默认不自动存档，但可给二次确认（避免误操作）
+
+- **验收标准**
+  - 菜单打开时剧情停止推进、选择不被误触发
+  - 菜单关闭后输入恢复正常
+
+### 16.4 存档 / 读档 UI（SaveLoad）🟦
+
+- **信息架构**
+  - Slot 列表（1-99，可分页/滚动）
+  - 每个 slot 显示：章节/脚本 id、时间戳、游玩时长、（可选）缩略图预览
+  - 操作：保存（覆盖提示）、读取（确认）、删除、重命名（可延后）
+
+- **与现有系统的对接原则**
+  - 继续沿用 `SaveManager`、`SaveMetadata`、`play_time_secs`
+  - 快速存读档快捷键（F5/F9）降级为 dev-only（计划：feature gate），正式流程只走 UI
+
+- **验收标准**
+  - 无存档/损坏存档/旧版本存档能给出可理解错误提示，不崩溃
+  - 读档后脚本定位与渲染/音频/历史均正确恢复（回归现有验收）
+
+### 16.5 设置 UI（Settings）🟦
+
+- **范围（玩家设置，不进脚本）**
+  - 音量：BGM/SFX（含静音）
+  - 显示：全屏/窗口、分辨率（可选）、UI 缩放/字体大小（可选）
+  - 其他：文字速度/自动播放（可后置）
+
+- **配置治理**
+  - `config.json` 作为“默认配置/工程配置”
+  - 新增 `user_settings.json`（或同类文件）保存玩家设置（覆盖默认但不污染工程配置）
+
+- **验收标准**
+  - 设置修改即时生效，并在重启后保留
+  - 设置界面可从 Title 与 InGameMenu 双入口打开
+
+### 16.6 历史回看 UI（History）🟦
+
+- **功能**
+  - 面板显示 `HistoryEvent`（至少：对白/旁白/章节标记/选择项）
+  - 支持滚动、按章节分段（可选）、按角色过滤（可选）
+  - 不要求“点击回跳/回放”
+
+- **验收标准**
+  - 历史 UI 不影响当前游戏状态，不会导致推进/选择被触发
+  - 与存档的历史数据一致（读档后历史可继续累积）
+
+### 16.7 视觉与交互一致性（UI 基建）🟦
+
+- **组件化**
+  - Button / Panel / List / Tabs / Modal(Confirm) / Toast
+  - 统一布局与字体（与现有 TextRenderer 兼容）
+
+- **交互**
+  - 操作提示（例如保存成功 toast）
+  - 危险操作二次确认（覆盖存档、返回标题、退出）
+
+### 16.8 测试入口重构：移除“演示模式/命令模式”🟦
+
+- **目标**
+  - 测试不再依赖运行时的“演示模式/命令模式”分支（删除这些分支，逻辑回归到唯一入口：Title/MainMenu→Start/Load）
+  - 建立可扩展的集成测试入口：以“场景驱动”模拟 UI 操作与脚本推进
+
+- **建议方向（不强绑定实现）**
+  - Host 侧抽象 `AppDriver` / `TestDriver`：可注入脚本、注入输入、读取 RenderState/RuntimeState 快照
+  - 以“流程用例”替代“模式切换”：Start→Save→BackToTitle→Load→Continue
+  - 回归覆盖：存档/读档、UI 可见性、转场、音频状态、历史累积
+
+- **验收标准**
+  - 不需要 demo/command 模式也能跑完端到端集成测试
+  - CI 里测试稳定（无依赖交互式键盘输入）
+
+---
+
+### 附：脚本语法增强（已完成的实现要点归档）
+
+1. **效果支持命名参数**（例：`Dissolve(duration: 1)`）
+   - **目标**：在不破坏现有 `Dissolve(1.0)` / `Fade(0.5)` 位置参数写法的前提下，支持更可读、可扩展的命名参数写法。
+   - **语法范围**：仅作用于 `with <effect_expr>` 的 `effect_expr`（即 `Transition` 解析），不改变其他指令结构。
+   - **语法定义**
+     - **位置参数（现有）**：`Name(1.0, 0.5, true, "x")`
+     - **命名参数（新增）**：`Name(duration: 1.0, reversed: true, mask: "rule.png")`
+     - 命名参数是为了支持用户乱序填写参数或者只填充部分参数，其余使用默认值的qol优化
+     - **不允许混用**：同一次调用中**只能**全是位置参数或全是命名参数：
+       - ✅ `Dissolve(1.0)`
+       - ✅ `Dissolve(duration: 1.0)`
+       - ❌ `Dissolve(1.0, duration: 1.0)`
+   - **解析产物（兼容策略）**
+     - `Transition` 的参数建议升级为“带可选名称的参数项列表”，避免在 `Vec<TransitionArg>` 里做隐式编码：
+       - `args: Vec<(Option<String>, TransitionArg)>`
+       - `None` 表示位置参数，`Some(key)` 表示命名参数
+     - 示例：
+       - `Dissolve(1.0)` → `[(None, Number(1.0))]`
+       - `Dissolve(duration: 1.0)` → `[(Some("duration"), Number(1.0))]`
+     - 位置参数保持原样：`(None, Number(1.0))`
+   - **类型规则**
+     - 命名参数 key 必须是标识符（建议：[a-zA-Z_][a-zA-Z0-9_]*）（同意）
+     - value 支持 `Number` / `Bool` / `String` 
+     - 同名 key 不允许重复（重复 → 报错并带行号）
+   - **错误规则（必须可定位）**
+     - 混用位置/命名参数 → ParseError（指出 effect 名与行号）
+     - 命名参数缺少 `:` 或 value → ParseError
+     - 命名参数 key 非法 / 重复 key → ParseError
+     - 括号不匹配 / 逗号格式错误 → ParseError
+   - **与现有语法的关系（落地建议）**
+     - `Dissolve(duration: 1)` 视为 `Dissolve(1)` 的等价写法（Host 端读取 duration 时优先命名参数，再回退位置参数）
+     - `changeScene ... with <img .../> (duration: 1, reversed: true)` 的括号参数也复用同一套“命名参数列表”解析器（避免两套语法/两套 bug）
+   - **测试计划**
+     - 单测覆盖：纯位置参数、纯命名参数、不允许混用、重复 key、非法 key、缺少冒号/值、字符串/布尔/数字三类值
+     - 回归：现有脚本（含 `Dissolve(1.5)` / `with dissolve`）全部应保持通过
+     - 说明：`rule("mask.png", 1.0, true)` 这种函数写法**不要求支持**；rule-based effect 统一走 `<img src="..."/>(args)` 语法糖
+   - **验收标准**
+     - `docs/script_syntax_spec.md` 增补命名参数语法与“不混用”规则
+     - Parser 新增测试并通过
+     - Host 对至少 `Dissolve/Fade/rule` 能正确读取 `duration/reversed`（命名优先，位置回退）
 
 ---
 

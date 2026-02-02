@@ -129,9 +129,27 @@ impl Executor {
                 // 更新状态
                 state.current_background = Some(resolved_path.clone());
 
+                // 解析 transition 中的路径参数（如 rule 效果的 mask 路径）
+                let resolved_transition = transition.as_ref().map(|t| {
+                    let mut new_transition = t.clone();
+                    // 遍历参数，解析路径类型的字符串
+                    new_transition.args = t.args.iter().map(|(key, arg)| {
+                        if let Some(k) = key {
+                            // 命名参数：mask 参数需要解析路径
+                            if k == "mask" {
+                                if let crate::command::TransitionArg::String(s) = arg {
+                                    return (Some(k.clone()), crate::command::TransitionArg::String(script.resolve_path(s)));
+                                }
+                            }
+                        }
+                        (key.clone(), arg.clone())
+                    }).collect();
+                    new_transition
+                });
+
                 Ok(ExecuteResult::with_commands(vec![Command::ChangeScene {
                     path: resolved_path,
-                    transition: transition.clone(),
+                    transition: resolved_transition,
                 }]))
             }
 
