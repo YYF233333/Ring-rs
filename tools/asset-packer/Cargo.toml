@@ -1,0 +1,15 @@
+[package]
+name = "asset-packer"
+version = "0.1.0"
+edition = "2024"
+description = "资源打包工具 - 将 assets 目录打包为 ZIP 文件"
+default-run = "packer"
+
+[[bin]]
+name = "packer"
+path = "src/main.rs"
+
+[dependencies]
+zip = { version = "2.2", features = ["deflate"] }
+walkdir = "2.5"
+clap = { version = "4", features = ["derive"] }

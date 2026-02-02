@@ -10,7 +10,6 @@
 //! 4. 覆盖层（章节标记、过渡效果等）
 
 use macroquad::prelude::*;
-use std::collections::HashMap;
 use vn_runtime::command::Position;
 
 use crate::resources::ResourceManager;
@@ -71,15 +70,17 @@ impl Renderer {
     }
 
     /// 渲染完整画面
-    pub fn render(&mut self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager, manifest: &Manifest) {
+    ///
+    /// 纹理从 `resource_manager` 缓存中获取（使用 `peek_texture` 不更新 LRU）。
+    pub fn render(&mut self, state: &RenderState, resource_manager: &ResourceManager, manifest: &Manifest) {
         // 清空屏幕
         clear_background(BLACK);
 
         // 1. 渲染背景（带过渡效果）
-        self.render_background_with_transition(state, textures, resource_manager);
+        self.render_background_with_transition(state, resource_manager);
 
         // 2. 渲染角色
-        self.render_characters(state, textures, resource_manager, manifest);
+        self.render_characters(state, resource_manager, manifest);
 
         // 3-5. 渲染 UI 层（仅当 ui_visible 为 true）
         if state.ui_visible {
@@ -97,7 +98,7 @@ impl Renderer {
         }
 
         // 6. 渲染场景遮罩（changeScene 的 Fade/FadeWhite/Rule 效果）
-        self.render_scene_mask(state, textures, resource_manager);
+        self.render_scene_mask(state, resource_manager);
 
         // 7. 渲染过渡效果遮罩（普通 Fade 效果）
         self.transition.render_overlay();
@@ -131,16 +132,14 @@ impl Renderer {
     }
 
     /// 渲染背景（带过渡效果）
-    fn render_background_with_transition(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
+    fn render_background_with_transition(&self, state: &RenderState, resource_manager: &ResourceManager) {
         // 渲染旧背景（如果正在过渡中）
         if self.transition.is_active() {
             if let Some(ref old_bg_path) = self.old_background {
-                // 规范化路径后查找纹理
-                let normalized_path = resource_manager.resolve_path(old_bg_path);
-                if let Some(texture) = textures.get(&normalized_path) {
+                if let Some(texture) = resource_manager.peek_texture(old_bg_path) {
                     let alpha = self.transition.old_content_alpha();
                     if alpha > 0.0 {
-                        self.draw_texture_fit_with_alpha(texture, DrawMode::Cover, alpha);
+                        self.draw_texture_fit_with_alpha(&texture, DrawMode::Cover, alpha);
                     }
                 }
             }
@@ -148,22 +147,19 @@ impl Renderer {
 
         // 渲染新背景
         if let Some(ref bg_path) = state.current_background {
-            // 规范化路径后查找纹理
-            let normalized_path = resource_manager.resolve_path(bg_path);
-            if let Some(texture) = textures.get(&normalized_path) {
+            if let Some(texture) = resource_manager.peek_texture(bg_path) {
                 let alpha = self.transition.new_content_alpha();
-                self.draw_texture_fit_with_alpha(texture, DrawMode::Cover, alpha);
+                self.draw_texture_fit_with_alpha(&texture, DrawMode::Cover, alpha);
             }
         }
     }
 
     /// 渲染背景（不带过渡效果，保留兼容）
     #[allow(dead_code)]
-    fn render_background(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
+    fn render_background(&self, state: &RenderState, resource_manager: &ResourceManager) {
         if let Some(ref bg_path) = state.current_background {
-            let normalized_path = resource_manager.resolve_path(bg_path);
-            if let Some(texture) = textures.get(&normalized_path) {
-                self.draw_texture_fit(texture, DrawMode::Cover);
+            if let Some(texture) = resource_manager.peek_texture(bg_path) {
+                self.draw_texture_fit(&texture, DrawMode::Cover);
             }
         }
     }
@@ -174,7 +170,7 @@ impl Renderer {
     /// 1. 从 manifest 获取立绘组的 anchor 和 pre_scale
     /// 2. 从 manifest 获取站位预设的 x, y, scale
     /// 3. 计算最终位置和尺寸
-    fn render_characters(&self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager, manifest: &Manifest) {
+    fn render_characters(&self, state: &RenderState, resource_manager: &ResourceManager, manifest: &Manifest) {
         // 按 z_order 排序渲染
         let mut characters: Vec<_> = state.visible_characters.values().collect();
         characters.sort_by_key(|c| c.z_order);
@@ -184,9 +180,8 @@ impl Renderer {
         let base_scale = self.get_scale_factor();
 
         for character in characters {
-            // 规范化路径后查找纹理
-            let normalized_path = resource_manager.resolve_path(&character.texture_path);
-            if let Some(texture) = textures.get(&normalized_path) {
+            // 从 ResourceManager 缓存获取纹理
+            if let Some(texture) = resource_manager.peek_texture(&character.texture_path) {
                 // 获取立绘组配置
                 let group_config = manifest.get_group_config(&character.texture_path);
                 
@@ -217,7 +212,7 @@ impl Renderer {
                 let color = Color::new(1.0, 1.0, 1.0, character.alpha);
                 
                 draw_texture_ex(
-                    texture,
+                    &texture,
                     x,
                     y,
                     color,
@@ -282,7 +277,7 @@ impl Renderer {
     }
 
     /// 渲染场景遮罩（用于 changeScene 的 Fade/FadeWhite/Rule 效果）
-    fn render_scene_mask(&mut self, state: &RenderState, textures: &HashMap<String, Texture2D>, resource_manager: &ResourceManager) {
+    fn render_scene_mask(&mut self, state: &RenderState, resource_manager: &ResourceManager) {
         if let Some(ref mask) = state.scene_mask {
             // 遮罩已完成，不需要渲染
             if mask.is_mask_complete() {
@@ -313,36 +308,32 @@ impl Renderer {
                 SceneMaskType::Rule { mask_path, reversed } => {
                     // Rule 遮罩：使用 ImageDissolve shader 实现
                     // 三阶段：phase 0: 旧背景→黑屏，phase 1: 黑屏停顿，phase 2: 黑屏→新背景
-                    let normalized_mask_path = resource_manager.resolve_path(mask_path);
-
-                    let mask_texture = textures.get(&normalized_mask_path)
-                        .unwrap_or_else(|| panic!("Rule 遮罩纹理未找到: {}", normalized_mask_path));
+                    let mask_texture = resource_manager.peek_texture(mask_path)
+                        .unwrap_or_else(|| panic!("Rule 遮罩纹理未找到: {}", mask_path));
 
                     if !self.image_dissolve.is_initialized() {
                         panic!("ImageDissolve shader 未初始化，无法使用 rule 过渡");
                     }
 
                     let progress = mask.dissolve_progress;
-                    let black_path = resource_manager.resolve_path("backgrounds/black.png");
-                    let black_texture = textures.get(&black_path)
-                        .unwrap_or_else(|| panic!("缺少黑色背景纹理: {}", black_path));
+                    let black_texture = resource_manager.peek_texture("backgrounds/black.png")
+                        .unwrap_or_else(|| panic!("缺少黑色背景纹理: backgrounds/black.png"));
 
                     match mask.phase {
                         0 => {
                             // phase 0: 旧背景 → 黑屏
                             let old_bg_path = state.current_background.as_ref()
                                 .unwrap_or_else(|| panic!("Rule 遮罩缺少当前背景"));
-                            let old_bg_normalized = resource_manager.resolve_path(old_bg_path);
-                            let old_bg_texture = textures.get(&old_bg_normalized)
-                                .unwrap_or_else(|| panic!("Rule 旧背景纹理未找到: {}", old_bg_normalized));
+                            let old_bg_texture = resource_manager.peek_texture(old_bg_path)
+                                .unwrap_or_else(|| panic!("Rule 旧背景纹理未找到: {}", old_bg_path));
 
                             let (dest_w, dest_h, x, y) =
-                                self.calculate_draw_rect(old_bg_texture, DrawMode::Cover);
+                                self.calculate_draw_rect(&old_bg_texture, DrawMode::Cover);
                             // 从旧背景溶解到黑色
                             self.image_dissolve.draw(
-                                black_texture,      // 目标：黑色
-                                old_bg_texture,     // 源：旧背景
-                                mask_texture,
+                                &black_texture,      // 目标：黑色
+                                &old_bg_texture,     // 源：旧背景
+                                &mask_texture,
                                 progress,
                                 *reversed,
                                 (x, y, dest_w, dest_h),
@@ -361,17 +352,16 @@ impl Renderer {
                             // 注意：此时 pending_background 已在 is_at_midpoint() 时被 take 并设置到 current_background
                             let new_bg_path = state.current_background.as_ref()
                                 .unwrap_or_else(|| panic!("Rule 遮罩缺少新背景（current_background）"));
-                            let new_bg_normalized = resource_manager.resolve_path(new_bg_path);
-                            let new_bg_texture = textures.get(&new_bg_normalized)
-                                .unwrap_or_else(|| panic!("Rule 新背景纹理未找到: {}", new_bg_normalized));
+                            let new_bg_texture = resource_manager.peek_texture(new_bg_path)
+                                .unwrap_or_else(|| panic!("Rule 新背景纹理未找到: {}", new_bg_path));
 
                             let (dest_w, dest_h, x, y) =
-                                self.calculate_draw_rect(new_bg_texture, DrawMode::Cover);
+                                self.calculate_draw_rect(&new_bg_texture, DrawMode::Cover);
                             // 从黑色溶解到新背景（反向溶解）
                             self.image_dissolve.draw(
-                                new_bg_texture,     // 目标：新背景
-                                black_texture,      // 源：黑色
-                                mask_texture,
+                                &new_bg_texture,     // 目标：新背景
+                                &black_texture,      // 源：黑色
+                                &mask_texture,
                                 progress,
                                 !*reversed,         // 反向，让效果对称
                                 (x, y, dest_w, dest_h),

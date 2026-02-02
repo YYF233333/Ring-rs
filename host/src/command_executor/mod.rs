@@ -541,7 +541,7 @@ mod tests {
     fn test_execute_show_text() {
         let mut executor = CommandExecutor::new();
         let mut render_state = RenderState::new();
-        let resource_manager = ResourceManager::new("assets");
+        let resource_manager = ResourceManager::new("assets", 256);
 
         let cmd = Command::ShowText {
             speaker: Some("北风".to_string()),
@@ -557,7 +557,7 @@ mod tests {
     fn test_execute_present_choices() {
         let mut executor = CommandExecutor::new();
         let mut render_state = RenderState::new();
-        let resource_manager = ResourceManager::new("assets");
+        let resource_manager = ResourceManager::new("assets", 256);
 
         let cmd = Command::PresentChoices {
             style: None,

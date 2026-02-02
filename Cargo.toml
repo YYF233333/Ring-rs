@@ -4,7 +4,7 @@ resolver = "3"
 members = [
     "vn-runtime",
     "host",
-    "host-cli",
+    "tools/asset-packer",
 ]
 
 default-members = ["host"]

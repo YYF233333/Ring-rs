@@ -12,10 +12,26 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// 资源来源类型
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AssetSourceType {
+    /// 文件系统（开发模式）
+    Fs,
+    /// ZIP 文件（发布模式）
+    Zip,
+}
+
+impl Default for AssetSourceType {
+    fn default() -> Self {
+        Self::Fs
+    }
+}
+
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    /// 资源根目录
+    /// 资源根目录（仅 Fs 模式使用）
     #[serde(default = "default_assets_root")]
     pub assets_root: PathBuf,
 
@@ -28,13 +44,24 @@ pub struct AppConfig {
     pub manifest_path: String,
 
     /// 默认字体路径（相对于 assets_root）
-    #[serde(default)]
-    pub default_font: Option<String>,
+    /// 
+    /// 默认值为 `"fonts/simhei.ttf"`，支持中文显示。
+    /// 可以指定其他字体文件路径（如 `"fonts/custom.ttf"`）。
+    #[serde(default = "default_font_path")]
+    pub default_font: String,
 
     /// **入口脚本路径**（相对于 assets_root）
     /// 
     /// 必须配置，未配置将 panic。
     pub start_script_path: String,
+
+    /// 资源来源类型（fs/zip）
+    #[serde(default)]
+    pub asset_source: AssetSourceType,
+
+    /// ZIP 文件路径（仅 Zip 模式使用）
+    #[serde(default)]
+    pub zip_path: Option<String>,
 
     /// 窗口配置
     #[serde(default)]
@@ -47,6 +74,10 @@ pub struct AppConfig {
     /// 音频配置
     #[serde(default)]
     pub audio: AudioConfig,
+
+    /// 资源缓存配置
+    #[serde(default)]
+    pub resources: ResourceConfig,
 }
 
 /// 窗口配置
@@ -105,6 +136,22 @@ pub struct AudioConfig {
     pub muted: bool,
 }
 
+/// 资源缓存配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceConfig {
+    /// 纹理缓存大小（MB）
+    #[serde(default = "default_texture_cache_size_mb")]
+    pub texture_cache_size_mb: usize,
+}
+
+impl Default for ResourceConfig {
+    fn default() -> Self {
+        Self {
+            texture_cache_size_mb: default_texture_cache_size_mb(),
+        }
+    }
+}
+
 // 默认值函数
 fn default_assets_root() -> PathBuf {
     PathBuf::from("assets")
@@ -142,17 +189,28 @@ fn default_sfx_volume() -> f32 {
     1.0
 }
 
+fn default_texture_cache_size_mb() -> usize {
+    256
+}
+
+fn default_font_path() -> String {
+    "fonts/simhei.ttf".to_string()
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             assets_root: default_assets_root(),
             saves_dir: default_saves_dir(),
             manifest_path: default_manifest_path(),
-            default_font: None,
+            default_font: default_font_path(),
             start_script_path: String::new(), // 必须在 config.json 中配置
+            asset_source: AssetSourceType::default(),
+            zip_path: None,
             window: WindowConfig::default(),
             debug: DebugConfig::default(),
             audio: AudioConfig::default(),
+            resources: ResourceConfig::default(),
         }
     }
 }
@@ -236,12 +294,42 @@ impl AppConfig {
 
     /// 验证配置有效性
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // 检查资源目录存在
-        if !self.assets_root.exists() {
-            return Err(ConfigError::ValidationFailed(format!(
-                "资源目录不存在: {:?}",
-                self.assets_root
-            )));
+        // 根据资源来源类型检查
+        match self.asset_source {
+            AssetSourceType::Fs => {
+                // 检查资源目录存在
+                if !self.assets_root.exists() {
+                    return Err(ConfigError::ValidationFailed(format!(
+                        "资源目录不存在: {:?}",
+                        self.assets_root
+                    )));
+                }
+
+                // 检查入口脚本存在
+                let script_full_path = self.assets_root.join(&self.start_script_path);
+                if !script_full_path.exists() {
+                    return Err(ConfigError::ValidationFailed(format!(
+                        "入口脚本不存在: {:?}",
+                        script_full_path
+                    )));
+                }
+            }
+            AssetSourceType::Zip => {
+                // 检查 ZIP 路径配置
+                let zip_path = self.zip_path.as_ref().ok_or_else(|| {
+                    ConfigError::ValidationFailed(
+                        "Zip 模式必须配置 zip_path".to_string(),
+                    )
+                })?;
+
+                // 检查 ZIP 文件存在
+                if !Path::new(zip_path).exists() {
+                    return Err(ConfigError::ValidationFailed(format!(
+                        "ZIP 文件不存在: {}",
+                        zip_path
+                    )));
+                }
+            }
         }
 
         // **必须配置入口脚本**
@@ -249,15 +337,6 @@ impl AppConfig {
             return Err(ConfigError::ValidationFailed(
                 "必须配置 start_script_path（入口脚本路径）".to_string(),
             ));
-        }
-
-        // 检查入口脚本存在
-        let script_full_path = self.assets_root.join(&self.start_script_path);
-        if !script_full_path.exists() {
-            return Err(ConfigError::ValidationFailed(format!(
-                "入口脚本不存在: {:?}",
-                script_full_path
-            )));
         }
 
         // 检查音量范围

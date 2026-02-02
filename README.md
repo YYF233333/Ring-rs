@@ -44,7 +44,8 @@ Ring-rs/
 └── docs/                # 文档
     ├── script_syntax_spec.md   # 脚本语法规范
     ├── save_format.md   # 存档格式说明
-    └── manifest_guide.md  # 立绘布局配置说明
+    ├── manifest_guide.md  # 立绘布局配置说明
+    └── resource_management.md  # 资源管理系统使用指南
 ```
 
 ## 快速开始
@@ -229,16 +230,24 @@ stopBGM                                       # 停止 BGM（淡出）
 
 ### 待实现
 
-- ⏳ `rule` 遮罩过渡效果
+- ⏳ 脚本变量系统（数字/字符串/布尔）
+- ⏳ 条件分支（`if/elseif/else`）
+- ⏳ 循环（`while`）
+- ⏳ 立绘动画（淡入/淡出、移动、缩放）
 - ⏳ 对话框样式增强
-- ⏳ 历史对话回看 UI
-- ⏳ 存档 UI 面板
+- ⏳ 跨平台支持（Linux、macOS）
 
 ## 开发文档
 
 - [PLAN.md](PLAN.md) - 架构设计文档
 - [ROADMAP.md](ROADMAP.md) - 开发路线图
+
+### 用户文档
+
 - [docs/script_syntax_spec.md](docs/script_syntax_spec.md) - 脚本语法规范
+- [docs/save_format.md](docs/save_format.md) - 存档格式说明
+- [docs/manifest_guide.md](docs/manifest_guide.md) - 立绘布局配置说明
+- [docs/resource_management.md](docs/resource_management.md) - 资源管理系统使用指南（动态加载、缓存、打包）
 
 ## License
 

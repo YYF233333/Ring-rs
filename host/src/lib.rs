@@ -27,12 +27,12 @@ pub mod ui;
 pub mod screens;
 
 pub use state::HostState;
-pub use resources::{ResourceManager, ResourceError};
+pub use resources::{ResourceManager, ResourceError, ResourceSource, FsSource, ZipSource, TextureCache, CacheStats};
 pub use renderer::{Renderer, RenderState, DrawMode, TransitionManager, TransitionType};
 pub use input::InputManager;
 pub use command_executor::{CommandExecutor, ExecuteResult, TransitionInfo, AudioCommand, CommandOutput};
 pub use audio::AudioManager;
 pub use manifest::Manifest;
 pub use save_manager::SaveManager;
-pub use config::{AppConfig, WindowConfig, DebugConfig, AudioConfig};
+pub use config::{AppConfig, WindowConfig, DebugConfig, AudioConfig, AssetSourceType};
 pub use app_mode::{AppMode, NavigationStack, InputCapture, SaveLoadTab, UserSettings};

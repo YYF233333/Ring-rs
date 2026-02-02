@@ -5,9 +5,11 @@
 use macroquad::prelude::*;
 use host::HostState;
 use host::resources::ResourceManager;
-use host::renderer::{Renderer, RenderState};
-use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager, AppConfig};
+use host::renderer::{Renderer, RenderState, SceneMaskType};
+use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager, AppConfig, AssetSourceType};
 use host::{AppMode, NavigationStack, SaveLoadTab, UserSettings};
+use host::ZipSource;
+use std::sync::Arc;
 use host::ui::{UiContext, Theme, ToastManager};
 use host::screens::{TitleScreen, InGameMenuScreen, SaveLoadScreen, SettingsScreen, HistoryScreen};
 use host::screens::title::TitleAction;
@@ -18,7 +20,6 @@ use host::screens::history::HistoryAction;
 use vn_runtime::state::WaitingReason;
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::{VNRuntime, Parser};
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// 配置文件路径
@@ -37,7 +38,6 @@ struct AppState {
     input_manager: InputManager,
     command_executor: CommandExecutor,
     audio_manager: Option<AudioManager>,
-    textures: HashMap<String, Texture2D>,
     waiting_reason: WaitingReason,
     typewriter_timer: f32,
     loading_complete: bool,
@@ -86,6 +86,24 @@ impl AppState {
         let assets_root = config.assets_root.to_string_lossy().to_string();
         let saves_dir = config.saves_dir.to_string_lossy().to_string();
         
+        // 根据配置选择资源来源
+        let resource_manager = match config.asset_source {
+            AssetSourceType::Fs => {
+                println!("📂 资源来源: 文件系统 ({})", assets_root);
+                ResourceManager::new(&assets_root, config.resources.texture_cache_size_mb)
+            }
+            AssetSourceType::Zip => {
+                let zip_path = config.zip_path.as_ref()
+                    .expect("Zip 模式必须配置 zip_path");
+                println!("📦 资源来源: ZIP 文件 ({})", zip_path);
+                ResourceManager::with_source(
+                    &assets_root,
+                    Arc::new(ZipSource::new(zip_path)),
+                    config.resources.texture_cache_size_mb,
+                )
+            }
+        };
+
         // 初始化音频管理器
         let audio_manager = match AudioManager::new(&assets_root) {
             Ok(am) => {
@@ -129,13 +147,12 @@ impl AppState {
         Self {
             config,
             host_state: HostState::new(),
-            resource_manager: ResourceManager::new(&assets_root),
+            resource_manager,
             renderer: Renderer::new(width, height),
             render_state: RenderState::new(),
             input_manager: InputManager::new(),
             command_executor: CommandExecutor::new(),
             audio_manager,
-            textures: HashMap::new(),
             waiting_reason: WaitingReason::None,
             typewriter_timer: 0.0,
             loading_complete: false,
@@ -212,6 +229,9 @@ async fn main() {
         // 更新逻辑
         update(&mut app_state);
 
+        // 确保渲染所需资源已加载（按需加载）
+        ensure_render_resources(&mut app_state).await;
+
         // 渲染
         draw(&mut app_state);
 
@@ -227,62 +247,102 @@ async fn main() {
 async fn load_resources(app_state: &mut AppState) {
     println!("📦 开始加载资源...");
 
-    // 加载中文字体
-    let font_path = if let Some(ref font) = app_state.config.default_font {
-        app_state.config.assets_root.join(font)
-    } else {
-        app_state.config.assets_root.join("fonts/simhei.ttf")
-    };
+    // 加载字体（使用配置中的字体路径）
+    let font_path = app_state.config.assets_root.join(&app_state.config.default_font);
     println!("✅ 加载字体: {:?}", font_path);
     if let Err(e) = app_state.renderer.init(&font_path.to_string_lossy()).await {
-        eprintln!("⚠️ 字体加载失败，使用默认字体: {}", e);
+        eprintln!("⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}", e);
     }
 
-    // 加载背景（PNG 和 JPG）
-    let bg_paths = [
+    // 预加载必需的 UI 纹理（用于过渡效果）
+    // 其他资源改为按需加载（由 TextureCache 管理）
+    let essential_textures = [
         "backgrounds/black.png",
         "backgrounds/white.png",
-        "backgrounds/BG12_pl_n_19201440.jpg",
-        "backgrounds/BG12_pl_cy_19201440.jpg",
-        "backgrounds/cg1.jpg",
-        "backgrounds/rule_10.png", // Rule 遮罩图片
     ];
-    for path in &bg_paths {
-        // 获取规范化后的完整路径作为缓存键
-        let full_path = app_state.resource_manager.resolve_path(path);
+    for path in &essential_textures {
         match app_state.resource_manager.load_texture(path).await {
-            Ok(texture) => {
-                app_state.textures.insert(full_path, texture);
-            }
-            Err(e) => {
-                eprintln!("❌ 加载背景失败: {} - {}", path, e);
-            }
-        }
-    }
-
-    // 加载角色立绘
-    let char_paths = [
-        "characters/北风-日常服.png",
-        "characters/北风-日常服2.png",
-    ];
-    for path in &char_paths {
-        // 获取规范化后的完整路径作为缓存键
-        let full_path = app_state.resource_manager.resolve_path(path);
-        match app_state.resource_manager.load_texture(path).await {
-            Ok(texture) => {
-                app_state.textures.insert(full_path, texture);
-            }
-            Err(e) => {
-                eprintln!("❌ 加载角色失败: {} - {}", path, e);
-            }
+            Ok(_) => println!("✅ 预加载: {}", path),
+            Err(e) => eprintln!("⚠️ 预加载失败: {} - {}", path, e),
         }
     }
 
     app_state.loading_complete = true;
-    println!("📦 资源加载完成！共 {} 个纹理", app_state.textures.len());
+    let stats = app_state.resource_manager.texture_cache_stats();
+    println!("📦 资源加载完成！{}", stats.format());
 
     // 预加载脚本（但不开始游戏）
     load_script(app_state);
+}
+
+/// 从命令列表中收集需要预取的资源路径
+fn collect_prefetch_paths(commands: &[vn_runtime::Command]) -> Vec<String> {
+    use vn_runtime::command::TransitionArg;
+    use vn_runtime::Command;
+
+    let mut paths = Vec::new();
+
+    for command in commands {
+        match command {
+            Command::ShowBackground { path, .. } => {
+                paths.push(path.clone());
+            }
+            Command::ChangeScene { path, transition } => {
+                paths.push(path.clone());
+                // Rule 过渡还需要遮罩纹理
+                if let Some(trans) = transition {
+                    if let Some(TransitionArg::String(mask)) = trans.get_named("mask") {
+                        paths.push(mask.clone());
+                    }
+                }
+            }
+            Command::ShowCharacter { path, .. } => {
+                paths.push(path.clone());
+            }
+            _ => {}
+        }
+    }
+
+    paths
+}
+
+/// 确保渲染所需资源已加载（按需加载）
+///
+/// 检查 RenderState 中引用的资源，如果尚未缓存则加载。
+async fn ensure_render_resources(app_state: &mut AppState) {
+    // 收集需要加载的资源路径
+    let mut paths_to_load: Vec<String> = Vec::new();
+
+    // 检查当前背景
+    if let Some(ref bg_path) = app_state.render_state.current_background {
+        if !app_state.resource_manager.has_texture(bg_path) {
+            paths_to_load.push(bg_path.clone());
+        }
+    }
+
+    // 检查可见角色
+    for character in app_state.render_state.visible_characters.values() {
+        if !app_state.resource_manager.has_texture(&character.texture_path) {
+            paths_to_load.push(character.texture_path.clone());
+        }
+    }
+
+    // 检查场景遮罩（Rule 效果需要遮罩纹理）
+    if let Some(ref mask) = app_state.render_state.scene_mask {
+        if let SceneMaskType::Rule { mask_path, .. } = &mask.mask_type {
+            if !app_state.resource_manager.has_texture(mask_path) {
+                paths_to_load.push(mask_path.clone());
+            }
+        }
+    }
+
+    // 加载缺失的资源
+    for path in paths_to_load {
+        match app_state.resource_manager.load_texture(&path).await {
+            Ok(_) => println!("📦 按需加载: {}", path),
+            Err(e) => eprintln!("❌ 加载失败: {} - {}", path, e),
+        }
+    }
 }
 
 /// 可用的脚本列表
@@ -480,6 +540,7 @@ fn update(app_state: &mut AppState) {
     // 切换调试模式（全局可用）
     if is_key_pressed(KeyCode::F1) {
         app_state.host_state.debug_mode = !app_state.host_state.debug_mode;
+        println!("🔧 调试模式: {}", if app_state.host_state.debug_mode { "开启" } else { "关闭" });
     }
 
     // 根据当前模式处理更新
@@ -1037,6 +1098,12 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
         Ok((commands, waiting)) => {
             println!("📜 tick 返回 {} 条命令, 等待状态: {:?}", commands.len(), waiting);
 
+            // 收集命令中的资源路径（用于预取统计）
+            let prefetch_paths = collect_prefetch_paths(&commands);
+            if !prefetch_paths.is_empty() {
+                println!("  📦 预取资源: {:?}", prefetch_paths);
+            }
+
             // 执行所有命令
             for command in &commands {
                 println!("  ▶️ {:?}", command);
@@ -1045,13 +1112,13 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                     &mut app_state.render_state,
                     &app_state.resource_manager,
                 );
-                
+
                 // 应用过渡效果
                 apply_transition_effect(app_state);
-                
+
                 // 处理音频命令
                 handle_audio_command(app_state);
-                
+
                 // 检查执行结果
                 if let ExecuteResult::Error(e) = result {
                     eprintln!("  ❌ 命令执行失败: {}", e);
@@ -1095,17 +1162,17 @@ fn draw(app_state: &mut AppState) {
         }
         AppMode::InGame => {
             // 渲染游戏画面
-            app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
         }
         AppMode::InGameMenu => {
             // 先渲染游戏画面，再渲染菜单覆盖层
-            app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
             app_state.ingame_menu.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
         AppMode::SaveLoad => {
             // 如果是从游戏内打开，先渲染游戏画面
             if app_state.vn_runtime.is_some() {
-                app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+                app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
             }
             app_state.save_load_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
@@ -1114,7 +1181,7 @@ fn draw(app_state: &mut AppState) {
         }
         AppMode::History => {
             // 先渲染游戏画面，再渲染历史覆盖层
-            app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
             app_state.history_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
     }
@@ -1131,33 +1198,67 @@ fn draw(app_state: &mut AppState) {
 /// 绘制调试信息
 fn draw_debug_info(app_state: &AppState) {
     let fps = get_fps();
-    let texture_count = app_state.textures.len();
     let char_count = app_state.render_state.visible_characters.len();
     let has_bg = app_state.render_state.current_background.is_some();
     let has_dialogue = app_state.render_state.dialogue.is_some();
     let current_mode = app_state.navigation.current();
 
-    // 绘制半透明背景
-    draw_rectangle(5.0, 5.0, 280.0, 160.0, Color::new(0.0, 0.0, 0.0, 0.7));
-    
-    // 调试信息使用自定义字体
-    let lines = [
-        format!("FPS: {}", fps),
-        format!("纹理数量: {}", texture_count),
-        format!("角色数量: {}", char_count),
-        format!("背景: {}", has_bg),
-        format!("对话: {}", has_dialogue),
-        format!("模式: {:?}", current_mode),
-        format!("导航栈: {}", app_state.navigation.depth()),
+    // 获取缓存统计
+    let cache_stats = app_state.resource_manager.texture_cache_stats();
+
+    // 绘制半透明背景（加高以容纳更多信息）
+    // 注意：使用较高的 alpha 值确保可见性
+    draw_rectangle(5.0, 5.0, 320.0, 240.0, Color::new(0.0, 0.0, 0.0, 0.85));
+
+    // 基础信息
+    let mut lines: Vec<(String, Color)> = vec![
+        (format!("FPS: {}", fps), GREEN),
+        (format!("模式: {:?}", current_mode), GREEN),
+        (format!("角色: {} | 背景: {} | 对话: {}", char_count, has_bg, has_dialogue), GREEN),
     ];
-    
-    for (i, line) in lines.iter().enumerate() {
+
+    // 缓存统计
+    lines.push(("--- 纹理缓存 ---".to_string(), YELLOW));
+    lines.push((
+        format!(
+            "条目: {} | 占用: {:.1}MB / {:.1}MB",
+            cache_stats.entries,
+            cache_stats.used_bytes as f64 / 1024.0 / 1024.0,
+            cache_stats.budget_bytes as f64 / 1024.0 / 1024.0
+        ),
+        WHITE,
+    ));
+    lines.push((
+        format!(
+            "命中率: {:.1}% ({}/{})",
+            cache_stats.hit_rate * 100.0,
+            cache_stats.hits,
+            cache_stats.hits + cache_stats.misses
+        ),
+        if cache_stats.hit_rate > 0.8_f64 { GREEN } else if cache_stats.hit_rate > 0.5_f64 { YELLOW } else { RED },
+    ));
+    lines.push((
+        format!("驱逐次数: {}", cache_stats.evictions),
+        if cache_stats.evictions == 0 { GREEN } else { YELLOW },
+    ));
+
+    // 资源来源
+    let source_info = match app_state.config.asset_source {
+        AssetSourceType::Fs => "文件系统".to_string(),
+        AssetSourceType::Zip => format!("ZIP: {}", app_state.config.zip_path.as_deref().unwrap_or("?")),
+    };
+    lines.push((format!("来源: {}", source_info), Color::new(0.7, 0.7, 0.7, 1.0))); // 灰色
+
+    // 绘制所有行
+    for (i, (line, color)) in lines.iter().enumerate() {
+        let y = 25.0 + i as f32 * 22.0;
+        // 使用文本渲染器绘制（支持中文）
         app_state.renderer.text_renderer.draw_ui_text(
             line,
             10.0,
-            25.0 + i as f32 * 20.0,
+            y,
             16.0,
-            GREEN,
+            *color,
         );
     }
 }

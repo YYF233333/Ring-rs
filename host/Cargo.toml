@@ -15,3 +15,6 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 
 # 音频库 - 支持 MP3, WAV, FLAC, OGG
 rodio = { version = "0.19", features = ["mp3", "wav", "flac", "vorbis"] }
+
+# ZIP 文件支持（资源打包/发布）
+zip = "2.2"

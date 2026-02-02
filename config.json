@@ -2,7 +2,7 @@
   "assets_root": "assets",
   "saves_dir": "saves",
   "manifest_path": "manifest.json",
-  "default_font": null,
+  "default_font": "fonts/simhei.ttf",
   "start_script_path": "scripts/test_comprehensive.md",
   "window": {
     "width": 1280,
@@ -20,5 +20,8 @@
     "bgm_volume": 0.8,
     "sfx_volume": 1.0,
     "muted": false
+  },
+  "resources": {
+    "texture_cache_size_mb": 256
   }
 }

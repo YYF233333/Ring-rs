@@ -5,56 +5,94 @@
 use macroquad::prelude::*;
 use macroquad::audio::{Sound, load_sound};
 use std::collections::HashMap;
+use std::sync::Arc;
 
+mod cache;
 mod error;
+mod source;
 
+pub use cache::{TextureCache, CacheStats, DEFAULT_TEXTURE_BUDGET_MB};
 pub use error::ResourceError;
+pub use source::{ResourceSource, FsSource, ZipSource};
 
-/// 使用 image crate 加载图片并转换为 Texture2D
+/// 从字节数据加载图片并转换为 Texture2D
 /// 支持 JPEG、PNG 等格式
-async fn load_texture_with_image_crate(path: &str) -> Result<Texture2D, String> {
-    // 读取文件
-    let bytes = std::fs::read(path)
-        .map_err(|e| format!("无法读取文件 {}: {}", path, e))?;
-    
+fn load_texture_from_bytes(bytes: &[u8], path: &str) -> Result<Texture2D, String> {
     // 使用 image crate 解码
-    let img = image::load_from_memory(&bytes)
+    let img = image::load_from_memory(bytes)
         .map_err(|e| format!("无法解码图片 {}: {}", path, e))?;
-    
+
     // 转换为 RGBA8
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
-    
+
     // 创建 macroquad Texture2D
     let texture = Texture2D::from_rgba8(width as u16, height as u16, &rgba);
-    
+
     Ok(texture)
 }
 
 /// 资源管理器
 ///
 /// 负责加载和缓存所有游戏资源（图片、音频等）。
-#[derive(Debug)]
+/// 纹理使用 LRU 缓存 + 显存预算管理。
 pub struct ResourceManager {
-    /// 图片资源缓存（路径 -> Texture2D）
-    textures: HashMap<String, Texture2D>,
+    /// 纹理缓存（带 LRU 驱逐）
+    texture_cache: TextureCache,
     /// 音频资源缓存（路径 -> Sound）
     sounds: HashMap<String, Sound>,
     /// 资源基础路径
     base_path: String,
+    /// 资源来源（文件系统/ZIP 等）
+    source: Arc<dyn ResourceSource>,
 }
 
 impl ResourceManager {
-    /// 创建新的资源管理器
+    /// 创建新的资源管理器（使用文件系统来源）
     ///
     /// # 参数
     ///
     /// - `base_path`: 资源文件的基础路径（如 "assets"）
-    pub fn new(base_path: impl Into<String>) -> Self {
+    /// - `texture_cache_size_mb`: 纹理缓存大小（MB）
+    pub fn new(base_path: impl Into<String>, texture_cache_size_mb: usize) -> Self {
+        let base = base_path.into();
         Self {
-            textures: HashMap::new(),
+            texture_cache: TextureCache::new(texture_cache_size_mb),
+            sounds: HashMap::new(),
+            source: Arc::new(FsSource::new(&base)),
+            base_path: base,
+        }
+    }
+
+    /// 创建使用自定义资源来源的资源管理器
+    ///
+    /// # 参数
+    ///
+    /// - `base_path`: 资源基础路径（用于路径解析）
+    /// - `source`: 资源来源实现
+    /// - `texture_cache_size_mb`: 纹理缓存大小（MB）
+    pub fn with_source(base_path: impl Into<String>, source: Arc<dyn ResourceSource>, texture_cache_size_mb: usize) -> Self {
+        Self {
+            texture_cache: TextureCache::new(texture_cache_size_mb),
             sounds: HashMap::new(),
             base_path: base_path.into(),
+            source,
+        }
+    }
+
+    /// 创建指定缓存大小的资源管理器
+    ///
+    /// # 参数
+    ///
+    /// - `base_path`: 资源基础路径
+    /// - `texture_cache_size_mb`: 纹理缓存大小（MB）
+    pub fn with_budget(base_path: impl Into<String>, texture_cache_size_mb: usize) -> Self {
+        let base = base_path.into();
+        Self {
+            texture_cache: TextureCache::new(texture_cache_size_mb),
+            sounds: HashMap::new(),
+            source: Arc::new(FsSource::new(&base)),
+            base_path: base,
         }
     }
 
@@ -134,7 +172,8 @@ impl ResourceManager {
     /// 加载图片资源
     ///
     /// 如果资源已缓存，直接返回缓存的资源。
-    /// 否则从文件系统加载并缓存。
+    /// 否则通过 ResourceSource 加载并缓存。
+    /// 使用 LRU 缓存，超出预算时自动驱逐旧资源。
     ///
     /// 支持 PNG、JPEG 等格式。
     ///
@@ -148,41 +187,30 @@ impl ResourceManager {
     pub async fn load_texture(&mut self, path: &str) -> Result<Texture2D, ResourceError> {
         // 解析并规范化路径（用于缓存键和加载）
         let full_path = self.resolve_path(path);
-        
+
         // 检查缓存（使用规范化后的路径）
-        if let Some(texture) = self.textures.get(&full_path) {
-            return Ok(texture.clone());
+        if let Some(texture) = self.texture_cache.get(&full_path) {
+            return Ok(texture);
         }
 
-        // 检查文件扩展名，决定使用哪种加载方式
-        let lower_path = full_path.to_lowercase();
-        let texture = if lower_path.ends_with(".jpg") || lower_path.ends_with(".jpeg") {
-            // JPEG 文件使用 image crate 加载
-            load_texture_with_image_crate(&full_path)
-                .await
-                .map_err(|e| ResourceError::LoadFailed {
-                    path: full_path.clone(),
-                    kind: "texture".to_string(),
-                    message: e,
-                })?
-        } else {
-            // 其他格式（PNG 等）使用 macroquad 原生加载
-            load_texture(&full_path)
-                .await
-                .map_err(|e| ResourceError::LoadFailed {
-                    path: full_path.clone(),
-                    kind: "texture".to_string(),
-                    message: e.to_string(),
-                })?
-        };
+        // 通过 ResourceSource 读取字节
+        let bytes = self.source.read(path)?;
+
+        // 统一使用 image crate 解码（支持 PNG/JPEG/GIF/WebP 等）
+        let texture = load_texture_from_bytes(&bytes, &full_path).map_err(|e| {
+            ResourceError::LoadFailed {
+                path: full_path.clone(),
+                kind: "texture".to_string(),
+                message: e,
+            }
+        })?;
 
         // 设置纹理过滤模式（平滑缩放）
         texture.set_filter(FilterMode::Linear);
 
-        // 缓存资源（使用规范化后的路径作为键）
-        self.textures.insert(full_path, texture.clone());
+        // 缓存资源（LRU 缓存会自动驱逐旧资源）
+        self.texture_cache.insert(full_path, texture.clone());
 
-        // 返回缓存的资源
         Ok(texture)
     }
 
@@ -226,9 +254,18 @@ impl ResourceManager {
     /// 获取已缓存的图片资源（不加载）
     ///
     /// 如果资源未缓存，返回 None。
-    pub fn get_texture(&self, path: &str) -> Option<Texture2D> {
+    /// 注意：此方法会更新 LRU 顺序。
+    pub fn get_texture(&mut self, path: &str) -> Option<Texture2D> {
         let full_path = self.resolve_path(path);
-        self.textures.get(&full_path).cloned()
+        self.texture_cache.get(&full_path)
+    }
+
+    /// 只读获取已缓存的图片资源（不更新 LRU）
+    ///
+    /// 用于渲染时快速查询，不影响缓存驱逐顺序。
+    pub fn peek_texture(&self, path: &str) -> Option<Texture2D> {
+        let full_path = self.resolve_path(path);
+        self.texture_cache.peek(&full_path)
     }
 
     /// 获取已缓存的音频资源（不加载）
@@ -241,7 +278,7 @@ impl ResourceManager {
     /// 检查图片资源是否已加载
     pub fn has_texture(&self, path: &str) -> bool {
         let full_path = self.resolve_path(path);
-        self.textures.contains_key(&full_path)
+        self.texture_cache.contains(&full_path)
     }
 
     /// 检查音频资源是否已加载
@@ -276,7 +313,7 @@ impl ResourceManager {
     /// 释放指定的图片资源
     pub fn unload_texture(&mut self, path: &str) {
         let full_path = self.resolve_path(path);
-        self.textures.remove(&full_path);
+        self.texture_cache.remove(&full_path);
     }
 
     /// 释放指定的音频资源
@@ -286,13 +323,35 @@ impl ResourceManager {
 
     /// 释放所有资源
     pub fn clear(&mut self) {
-        self.textures.clear();
+        self.texture_cache.clear();
         self.sounds.clear();
     }
 
     /// 获取已加载的图片资源数量
     pub fn texture_count(&self) -> usize {
-        self.textures.len()
+        self.texture_cache.len()
+    }
+
+    /// 获取纹理缓存统计信息
+    pub fn texture_cache_stats(&self) -> CacheStats {
+        self.texture_cache.stats()
+    }
+
+    /// Pin 纹理（防止当前帧被驱逐）
+    pub fn pin_texture(&mut self, path: &str) {
+        let full_path = self.resolve_path(path);
+        self.texture_cache.pin(&full_path);
+    }
+
+    /// Unpin 纹理
+    pub fn unpin_texture(&mut self, path: &str) {
+        let full_path = self.resolve_path(path);
+        self.texture_cache.unpin(&full_path);
+    }
+
+    /// Unpin 所有纹理（帧结束时调用）
+    pub fn unpin_all_textures(&mut self) {
+        self.texture_cache.unpin_all();
     }
 
     /// 获取已加载的音频资源数量
@@ -307,14 +366,14 @@ mod tests {
 
     #[test]
     fn test_resource_manager_creation() {
-        let manager = ResourceManager::new("assets");
+        let manager = ResourceManager::new("assets", 256);
         assert_eq!(manager.texture_count(), 0);
         assert_eq!(manager.sound_count(), 0);
     }
 
     #[test]
     fn test_resolve_path() {
-        let manager = ResourceManager::new("assets");
+        let manager = ResourceManager::new("assets", 256);
         
         // 相对路径
         let path = manager.resolve_path("bg.png");
