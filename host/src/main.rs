@@ -631,8 +631,8 @@ fn update_ingame(app_state: &mut AppState, dt: f32) {
         }
     }
 
-    // 使用 InputManager 处理游戏输入
-    if let Some(input) = app_state.input_manager.update(&app_state.waiting_reason) {
+    // 使用 InputManager 处理游戏输入（传入 dt 用于长按快进）
+    if let Some(input) = app_state.input_manager.update(&app_state.waiting_reason, dt) {
         handle_script_mode_input(app_state, input);
     }
 
@@ -687,22 +687,8 @@ fn update_ingame_menu(app_state: &mut AppState) {
             app_state.navigation.navigate_to(AppMode::History);
         }
         InGameMenuAction::ReturnToTitle => {
-            // 保存 Continue 存档
-            save_continue(app_state);
-            
-            // 停止音乐
-            if let Some(ref mut audio) = app_state.audio_manager {
-                audio.stop_bgm(Some(0.5));
-            }
-            
-            // 清理游戏状态
-            app_state.vn_runtime = None;
-            app_state.render_state = RenderState::new();
-            app_state.script_finished = false;
-            
-            // 返回标题
-            app_state.navigation.return_to_title();
-            app_state.title_screen.mark_needs_init();
+            // 用户主动返回，保存 Continue 存档
+            return_to_title_from_game(app_state, true);
         }
         InGameMenuAction::Exit => {
             app_state.host_state.stop();
@@ -982,6 +968,33 @@ fn save_continue(app_state: &mut AppState) {
     }
 }
 
+/// 从游戏状态返回主界面
+/// 用于脚本执行完毕或用户主动返回时清理状态并跳转到 Title
+/// 
+/// # 参数
+/// - `should_save_continue`: 是否保存 Continue 存档。脚本执行完毕时应该为 `false`，用户主动返回时为 `true`
+fn return_to_title_from_game(app_state: &mut AppState, should_save_continue: bool) {
+    // 只在用户主动返回时保存 Continue 存档
+    // 脚本执行完毕时不保存，避免下次 Continue 直接跳到末尾
+    if should_save_continue {
+        save_continue(app_state);
+    }
+    
+    // 停止音乐
+    if let Some(ref mut audio) = app_state.audio_manager {
+        audio.stop_bgm(Some(0.5));
+    }
+    
+    // 清理游戏状态
+    app_state.vn_runtime = None;
+    app_state.render_state = RenderState::new();
+    app_state.script_finished = false;
+    
+    // 返回标题
+    app_state.navigation.return_to_title();
+    app_state.title_screen.mark_needs_init();
+}
+
 /// 从存档数据恢复游戏状态
 fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::SaveData) -> bool {
     // 加载对应的脚本
@@ -1053,21 +1066,29 @@ fn quick_load(app_state: &mut AppState) -> bool {
 
 /// 处理脚本模式下的输入
 fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
+    // 如果转场正在进行（changeBG），允许输入用于跳过转场
+    if app_state.renderer.transition.is_active() {
+        // 跳过转场效果
+        app_state.renderer.transition.skip();
+        return;
+    }
+
+    // 如果场景遮罩正在进行（changeScene），允许输入用于跳过转场
+    if let Some(ref mut mask) = app_state.render_state.scene_mask {
+        if !mask.is_mask_complete() {
+            // 跳过当前阶段的转场动画
+            mask.skip_current_phase();
+            return;
+        }
+    }
+
     // 如果对话正在打字，先完成打字
     if !app_state.render_state.is_dialogue_complete() {
         app_state.render_state.complete_typewriter();
         return;
     }
 
-    // 如果脚本已执行完毕，重新加载
-    if app_state.script_finished {
-        println!("🔄 脚本执行完毕，重新开始");
-        load_script(app_state);
-        app_state.render_state = RenderState::new();
-        app_state.script_finished = false;
-        run_script_tick(app_state, None);
-        return;
-    }
+    // 脚本执行完毕后已自动返回主界面，这里不再处理
 
     // 将输入传递给 VNRuntime
     run_script_tick(app_state, Some(input));
@@ -1137,9 +1158,11 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
             let is_finished = app_state.vn_runtime.as_ref()
                 .map(|r| r.is_finished())
                 .unwrap_or(false);
-            if is_finished {
+            if is_finished && !app_state.script_finished {
                 app_state.script_finished = true;
-                println!("📜 脚本执行完毕！按空格键重新开始");
+                println!("📜 脚本执行完毕，自动返回主界面");
+                // 自动返回主界面，不保存 Continue 存档（避免下次 Continue 直接跳到末尾）
+                return_to_title_from_game(app_state, false);
             }
 
             // 重置打字机计时器

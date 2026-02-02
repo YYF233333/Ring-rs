@@ -186,6 +186,80 @@ impl SceneMaskState {
         }
     }
 
+    /// 跳过当前阶段的转场动画
+    /// 
+    /// - phase 0（遮罩淡入）：立刻跳到遮罩完全显现的状态
+    ///   - Rule: 跳到 phase 2 开始（黑屏停顿结束，准备显示新背景）
+    ///   - Fade/FadeWhite: 跳到 phase 1 开始（遮罩完全显现，准备淡出）
+    /// - phase 1（遮罩淡出/黑屏停顿）：立刻完成整个转场（phase 2/3 结束）
+    /// - phase 2（黑屏→新背景/UI淡入）：立刻完成整个转场
+    pub fn skip_current_phase(&mut self) {
+        match self.phase {
+            0 => {
+                // phase 0: 遮罩淡入 → 立刻跳到遮罩完全显现
+                match self.mask_type {
+                    SceneMaskType::Rule { .. } => {
+                        // Rule: 跳到 phase 2 开始（黑屏停顿结束，准备显示新背景）
+                        // 这样背景会在 is_at_midpoint() 时切换
+                        self.phase = 2;
+                        self.alpha = 1.0;
+                        self.dissolve_progress = 0.0;  // 准备从黑屏溶解到新背景
+                        self.timer = 0.0;
+                    }
+                    _ => {
+                        // Fade/FadeWhite: 跳到 phase 1 开始（遮罩完全显现，准备淡出）
+                        // 这样背景会在 is_at_midpoint() 时切换
+                        self.phase = 1;
+                        self.alpha = 1.0;  // 遮罩完全显现
+                        self.dissolve_progress = 1.0;
+                        self.timer = 0.0;
+                    }
+                }
+            }
+            1 => {
+                // phase 1: 遮罩淡出/黑屏停顿 → 立刻完成整个转场
+                match self.mask_type {
+                    SceneMaskType::Rule { .. } => {
+                        // Rule: 跳到 phase 3（UI淡入）的结束状态
+                        self.phase = 3;
+                        self.alpha = 0.0;
+                        self.dissolve_progress = 1.0;  // 新背景完全显示
+                        self.ui_alpha = 1.0;
+                        self.timer = 0.0;
+                    }
+                    _ => {
+                        // Fade/FadeWhite: 跳到 phase 2（UI淡入）的结束状态
+                        self.phase = 2;
+                        self.alpha = 0.0;
+                        self.dissolve_progress = 0.0;
+                        self.ui_alpha = 1.0;
+                        self.timer = 0.0;
+                    }
+                }
+            }
+            2 => {
+                // phase 2: 黑屏→新背景/UI淡入 → 立刻完成
+                match self.mask_type {
+                    SceneMaskType::Rule { .. } => {
+                        // Rule: 跳到 phase 3（UI淡入）的结束状态
+                        self.phase = 3;
+                        self.dissolve_progress = 1.0;
+                        self.ui_alpha = 1.0;
+                        self.timer = 0.0;
+                    }
+                    _ => {
+                        // Fade/FadeWhite: 已经是 phase 2（UI淡入），直接完成
+                        self.ui_alpha = 1.0;
+                        self.timer = 0.0;
+                    }
+                }
+            }
+            _ => {
+                // phase 3 或更高，已经完成，无需处理
+            }
+        }
+    }
+
     /// 获取当前 UI 透明度
     pub fn get_ui_alpha(&self) -> f32 {
         self.ui_alpha

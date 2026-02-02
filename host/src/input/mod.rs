@@ -16,6 +16,12 @@ use vn_runtime::state::WaitingReason;
 /// 输入防抖配置
 const CLICK_DEBOUNCE_SECONDS: f64 = 0.15;
 
+/// 长按快进配置
+/// 第一次按下后等待的时间，之后才开始快进
+const HOLD_INITIAL_DELAY: f64 = 0.3;
+/// 长按快进时的重复间隔（秒），越小越快
+const HOLD_REPEAT_INTERVAL: f64 = 0.05;
+
 /// 输入管理器
 ///
 /// 负责采集用户输入并转换为 RuntimeInput。
@@ -33,6 +39,10 @@ pub struct InputManager {
     pending_input: Option<RuntimeInput>,
     /// 选择框矩形区域缓存
     choice_rects: Vec<(f32, f32, f32, f32)>,
+    /// 长按计时器（用于快进）
+    hold_timer: f64,
+    /// 上次快进触发时间
+    last_hold_trigger_time: f64,
 }
 
 impl InputManager {
@@ -45,6 +55,8 @@ impl InputManager {
             choice_count: 0,
             pending_input: None,
             choice_rects: Vec::new(),
+            hold_timer: 0.0,
+            last_hold_trigger_time: 0.0,
         }
     }
 
@@ -65,7 +77,11 @@ impl InputManager {
     ///
     /// 根据当前的 `WaitingReason` 采集相应的输入。
     /// 返回可能产生的 `RuntimeInput`。
-    pub fn update(&mut self, waiting: &WaitingReason) -> Option<RuntimeInput> {
+    /// 
+    /// # 参数
+    /// - `waiting`: 当前的等待状态
+    /// - `dt`: 帧时间（秒），用于长按快进计时
+    pub fn update(&mut self, waiting: &WaitingReason, dt: f32) -> Option<RuntimeInput> {
         // 如果有待处理的输入，先返回它
         if let Some(input) = self.pending_input.take() {
             return Some(input);
@@ -73,50 +89,83 @@ impl InputManager {
 
         match waiting {
             WaitingReason::None => {
-                // 不等待时，不处理输入
+                // 不等待时，不处理输入，重置长按计时器
+                self.hold_timer = 0.0;
+                self.last_hold_trigger_time = 0.0;
                 None
             }
             WaitingReason::WaitForClick => {
-                self.handle_click_input()
+                self.handle_click_input(dt)
             }
             WaitingReason::WaitForChoice { choice_count } => {
                 // 如果选项数量变化，重置选择
                 if self.choice_count != *choice_count {
                     self.reset_choice(*choice_count);
                 }
+                // 选择分支时不支持长按快进，重置计时器
+                self.hold_timer = 0.0;
+                self.last_hold_trigger_time = 0.0;
                 self.handle_choice_input()
             }
             WaitingReason::WaitForTime(_) => {
                 // 时间等待由 Host 处理，不需要用户输入
+                self.hold_timer = 0.0;
+                self.last_hold_trigger_time = 0.0;
                 None
             }
             WaitingReason::WaitForSignal(_) => {
                 // 信号等待由外部系统触发，暂不处理
+                self.hold_timer = 0.0;
+                self.last_hold_trigger_time = 0.0;
                 None
             }
         }
     }
 
-    /// 处理点击输入
-    fn handle_click_input(&mut self) -> Option<RuntimeInput> {
+    /// 处理点击输入（支持长按快进）
+    fn handle_click_input(&mut self, dt: f32) -> Option<RuntimeInput> {
         let current_time = get_time();
+        let dt_f64 = dt as f64;
 
-        // 检查防抖
-        if current_time - self.last_click_time < CLICK_DEBOUNCE_SECONDS {
-            return None;
+        // 检查是否刚刚按下（单次点击检测，优先处理）
+        let just_pressed = is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter);
+        // 检查鼠标点击（不支持长按，只支持单次点击）
+        let mouse_clicked = is_mouse_button_pressed(MouseButton::Left);
+        // 检查是否按下空格或回车（长按检测）
+        let is_holding = is_key_down(KeyCode::Space) || is_key_down(KeyCode::Enter);
+
+        // 优先处理单次按下或鼠标点击（立即响应）
+        if just_pressed || mouse_clicked {
+            // 检查防抖
+            if current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
+                self.last_click_time = current_time;
+                self.hold_timer = 0.0;  // 重置长按计时器
+                self.last_hold_trigger_time = 0.0;
+                return Some(RuntimeInput::Click);
+            }
         }
 
-        // 检查鼠标点击或键盘按键
-        let clicked = is_mouse_button_pressed(MouseButton::Left)
-            || is_key_pressed(KeyCode::Space)
-            || is_key_pressed(KeyCode::Enter);
+        // 处理长按快进
+        if is_holding {
+            // 长按状态：更新计时器
+            self.hold_timer += dt_f64;
 
-        if clicked {
-            self.last_click_time = current_time;
-            Some(RuntimeInput::Click)
+            // 检查是否超过初始延迟
+            if self.hold_timer >= HOLD_INITIAL_DELAY {
+                // 开始快进：以固定频率触发输入
+                if current_time - self.last_hold_trigger_time >= HOLD_REPEAT_INTERVAL {
+                    self.last_hold_trigger_time = current_time;
+                    self.last_click_time = current_time;
+                    return Some(RuntimeInput::Click);
+                }
+            }
         } else {
-            None
+            // 没有按下：重置长按计时器
+            self.hold_timer = 0.0;
+            self.last_hold_trigger_time = 0.0;
         }
+
+        None
     }
 
     /// 处理选择输入
