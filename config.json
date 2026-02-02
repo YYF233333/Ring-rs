@@ -1,4 +1,5 @@
 {
+  "name": "Ring VN Engine",
   "assets_root": "assets",
   "saves_dir": "saves",
   "manifest_path": "manifest.json",

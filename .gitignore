@@ -22,5 +22,6 @@ target
 
 assets/
 saves/
+dist/
 user_settings.json
-game.zip
+*.zip

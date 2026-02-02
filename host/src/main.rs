@@ -117,15 +117,41 @@ impl AppState {
         };
 
         // 加载资源清单（立绘配置）
-        let manifest_path = config.manifest_full_path();
-        let manifest = match host::manifest::Manifest::load(&manifest_path.to_string_lossy()) {
-            Ok(m) => {
-                println!("✅ 资源清单加载成功: {:?}", manifest_path);
-                m
+        let manifest = match config.asset_source {
+            AssetSourceType::Fs => {
+                let manifest_path = config.manifest_full_path();
+                match host::manifest::Manifest::load(&manifest_path.to_string_lossy()) {
+                    Ok(m) => {
+                        println!("✅ 资源清单加载成功: {:?}", manifest_path);
+                        m
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ 资源清单加载失败，使用默认配置: {}", e);
+                        host::manifest::Manifest::with_defaults()
+                    }
+                }
             }
-            Err(e) => {
-                eprintln!("⚠️ 资源清单加载失败，使用默认配置: {}", e);
-                host::manifest::Manifest::with_defaults()
+            AssetSourceType::Zip => {
+                // ZIP 模式：通过 ResourceManager 读取
+                let manifest_path = &config.manifest_path;
+                match resource_manager.read_text(manifest_path) {
+                    Ok(content) => {
+                        match host::manifest::Manifest::load_from_bytes(content.as_bytes()) {
+                            Ok(m) => {
+                                println!("✅ 资源清单加载成功: {}", manifest_path);
+                                m
+                            }
+                            Err(e) => {
+                                eprintln!("⚠️ 资源清单解析失败，使用默认配置: {}", e);
+                                host::manifest::Manifest::with_defaults()
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ 资源清单加载失败，使用默认配置: {}", e);
+                        host::manifest::Manifest::with_defaults()
+                    }
+                }
             }
         };
 
@@ -248,10 +274,43 @@ async fn load_resources(app_state: &mut AppState) {
     println!("📦 开始加载资源...");
 
     // 加载字体（使用配置中的字体路径）
-    let font_path = app_state.config.assets_root.join(&app_state.config.default_font);
-    println!("✅ 加载字体: {:?}", font_path);
-    if let Err(e) = app_state.renderer.init(&font_path.to_string_lossy()).await {
-        eprintln!("⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}", e);
+    match app_state.config.asset_source {
+        AssetSourceType::Fs => {
+            let font_path = app_state.config.assets_root.join(&app_state.config.default_font);
+            println!("✅ 加载字体: {:?}", font_path);
+            if let Err(e) = app_state.renderer.init(&font_path.to_string_lossy()).await {
+                eprintln!("⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}", e);
+            }
+        }
+        AssetSourceType::Zip => {
+            // ZIP 模式：需要将字体文件写入临时文件
+            // 因为 macroquad 的 load_ttf_font 只接受文件路径
+            let font_bytes = match app_state.resource_manager.read_bytes(&app_state.config.default_font) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    eprintln!("⚠️ 无法从 ZIP 读取字体文件: {} - {}", app_state.config.default_font, e);
+                    eprintln!("⚠️ 回退到 macroquad 默认字体（仅支持 ASCII）");
+                    return;
+                }
+            };
+            
+            // 创建临时文件
+            let temp_dir = std::env::temp_dir();
+            let temp_font_path = temp_dir.join(format!("ring_font_{}.ttf", std::process::id()));
+            
+            if let Err(e) = std::fs::write(&temp_font_path, &font_bytes) {
+                eprintln!("⚠️ 无法写入临时字体文件: {} - {}", temp_font_path.display(), e);
+                eprintln!("⚠️ 回退到 macroquad 默认字体（仅支持 ASCII）");
+                return;
+            }
+            
+            println!("✅ 加载字体: {} (临时文件: {:?})", app_state.config.default_font, temp_font_path);
+            if let Err(e) = app_state.renderer.init(&temp_font_path.to_string_lossy()).await {
+                eprintln!("⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}", e);
+            }
+            
+            // 注意：临时文件会在程序退出时自动清理（操作系统负责）
+        }
     }
 
     // 预加载必需的 UI 纹理（用于过渡效果）
@@ -365,30 +424,52 @@ fn load_script_from_path(app_state: &mut AppState, script_path: &PathBuf) -> boo
     
     println!("📁 脚本目录: {}", base_path);
     
-    match std::fs::read_to_string(script_path) {
-        Ok(script_text) => {
-            let mut parser = Parser::new();
-            match parser.parse_with_base_path(&script_id, &script_text, &base_path) {
-                Ok(script) => {
-                    println!("✅ 脚本解析成功！节点数: {}", script.len());
-                    
-                    // 打印警告
-                    for warning in parser.warnings() {
-                        println!("⚠️ 解析警告: {}", warning);
-                    }
-                    
-                    // 创建 VNRuntime
-                    app_state.vn_runtime = Some(VNRuntime::new(script));
-                    true
-                }
+    // 根据资源来源类型选择读取方式
+    let script_text = match app_state.config.asset_source {
+        AssetSourceType::Fs => {
+            // 文件系统模式：直接读取
+            match std::fs::read_to_string(script_path) {
+                Ok(text) => text,
                 Err(e) => {
-                    eprintln!("❌ 脚本解析失败: {}", e);
-                    false
+                    eprintln!("❌ 脚本文件加载失败: {:?} - {}", script_path, e);
+                    return false;
                 }
             }
         }
+        AssetSourceType::Zip => {
+            // ZIP 模式：通过 ResourceManager 读取
+            // 需要将完整路径转换为相对于 assets_root 的路径
+            let relative_path = match script_path.strip_prefix(&app_state.config.assets_root) {
+                Ok(stripped) => stripped.to_string_lossy().replace('\\', "/"),
+                Err(_) => script_path.to_string_lossy().replace('\\', "/"),
+            };
+            
+            match app_state.resource_manager.read_text(&relative_path) {
+                Ok(text) => text,
+                Err(e) => {
+                    eprintln!("❌ 脚本文件加载失败: {} - {}", relative_path, e);
+                    return false;
+                }
+            }
+        }
+    };
+    
+    let mut parser = Parser::new();
+    match parser.parse_with_base_path(&script_id, &script_text, &base_path) {
+        Ok(script) => {
+            println!("✅ 脚本解析成功！节点数: {}", script.len());
+            
+            // 打印警告
+            for warning in parser.warnings() {
+                println!("⚠️ 解析警告: {}", warning);
+            }
+            
+            // 创建 VNRuntime
+            app_state.vn_runtime = Some(VNRuntime::new(script));
+            true
+        }
         Err(e) => {
-            eprintln!("❌ 无法读取脚本文件: {}", e);
+            eprintln!("❌ 脚本解析失败: {}", e);
             false
         }
     }

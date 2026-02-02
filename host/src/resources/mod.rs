@@ -358,6 +358,38 @@ impl ResourceManager {
     pub fn sound_count(&self) -> usize {
         self.sounds.len()
     }
+
+    /// 读取文本资源（用于 manifest、脚本等）
+    ///
+    /// # 参数
+    /// - `path`: 资源路径（相对于 base_path）
+    ///
+    /// # 返回
+    /// 文本内容，或错误
+    pub fn read_text(&self, path: &str) -> Result<String, ResourceError> {
+        let bytes = self.source.read(path)?;
+        String::from_utf8(bytes).map_err(|e| ResourceError::LoadFailed {
+            path: path.to_string(),
+            kind: "text".to_string(),
+            message: format!("无法将字节转换为 UTF-8 字符串: {}", e),
+        })
+    }
+
+    /// 检查资源是否存在
+    pub fn resource_exists(&self, path: &str) -> bool {
+        self.source.exists(path)
+    }
+
+    /// 读取原始字节资源（用于字体等二进制文件）
+    ///
+    /// # 参数
+    /// - `path`: 资源路径（相对于 base_path）
+    ///
+    /// # 返回
+    /// 字节内容，或错误
+    pub fn read_bytes(&self, path: &str) -> Result<Vec<u8>, ResourceError> {
+        self.source.read(path)
+    }
 }
 
 #[cfg(test)]

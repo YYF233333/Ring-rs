@@ -142,10 +142,19 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// 从文件加载 Manifest
+    /// 从文件加载 Manifest（文件系统模式）
     pub fn load(path: &str) -> Result<Self, String> {
         let content = fs::read_to_string(path)
             .map_err(|e| format!("无法读取 manifest 文件: {} - {}", path, e))?;
+        
+        serde_json::from_str(&content)
+            .map_err(|e| format!("无法解析 manifest JSON: {}", e))
+    }
+
+    /// 从字节数据加载 Manifest（ZIP 模式）
+    pub fn load_from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let content = String::from_utf8(bytes.to_vec())
+            .map_err(|e| format!("无法将字节转换为 UTF-8 字符串: {}", e))?;
         
         serde_json::from_str(&content)
             .map_err(|e| format!("无法解析 manifest JSON: {}", e))

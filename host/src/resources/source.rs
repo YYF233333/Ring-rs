@@ -206,24 +206,64 @@ impl ZipSource {
     }
 
     /// 规范化逻辑路径
+    /// 
+    /// 处理路径组件，包括：
+    /// - 统一使用 / 分隔符
+    /// - 移除开头的 ./
+    /// - 处理 .. 组件（向上级目录）
+    /// - 处理 . 组件（当前目录）
     fn normalize_path(path: &str) -> String {
-        // 统一使用 / 分隔符，移除开头的 ./
+        // 统一使用 / 分隔符
         let normalized = path.replace('\\', "/");
-        if normalized.starts_with("./") {
-            normalized[2..].to_string()
+        
+        // 移除开头的 ./
+        let path = if normalized.starts_with("./") {
+            &normalized[2..]
         } else {
-            normalized
+            &normalized
+        };
+        
+        // 处理路径组件
+        let mut components = Vec::new();
+        for component in path.split('/') {
+            match component {
+                "" | "." => {
+                    // 空组件或当前目录，跳过
+                }
+                ".." => {
+                    // 上级目录，移除最后一个组件（如果存在）
+                    if !components.is_empty() {
+                        components.pop();
+                    }
+                }
+                _ => {
+                    // 正常路径组件
+                    components.push(component);
+                }
+            }
         }
+        
+        // 重新组合路径
+        components.join("/")
     }
 }
 
 impl ResourceSource for ZipSource {
     fn read(&self, path: &str) -> Result<Vec<u8>, ResourceError> {
         let normalized = Self::normalize_path(path);
+        
+        // 移除开头的 assets/ 前缀（如果存在）
+        // ZIP 文件中的路径不包含 assets 前缀
+        let zip_path = if normalized.starts_with("assets/") {
+            &normalized[7..] // 移除 "assets/" 前缀
+        } else {
+            &normalized
+        };
+        
         let index = self.get_index()?;
 
-        let file_index = index.get(&normalized).ok_or_else(|| ResourceError::NotFound {
-            path: normalized.clone(),
+        let file_index = index.get(zip_path).ok_or_else(|| ResourceError::NotFound {
+            path: zip_path.to_string(),
         })?;
 
         let file = File::open(&self.zip_path).map_err(|e| ResourceError::LoadFailed {
@@ -240,7 +280,7 @@ impl ResourceSource for ZipSource {
 
         let mut zip_file = archive.by_index(*file_index).map_err(|e| {
             ResourceError::LoadFailed {
-                path: normalized.clone(),
+                path: zip_path.to_string(),
                 kind: "zip_entry".to_string(),
                 message: format!("无法读取 ZIP 条目: {}", e),
             }
@@ -249,7 +289,7 @@ impl ResourceSource for ZipSource {
         let mut buffer = Vec::new();
         zip_file.read_to_end(&mut buffer).map_err(|e| {
             ResourceError::LoadFailed {
-                path: normalized.clone(),
+                path: zip_path.to_string(),
                 kind: "zip_read".to_string(),
                 message: format!("读取 ZIP 条目失败: {}", e),
             }
@@ -260,13 +300,27 @@ impl ResourceSource for ZipSource {
 
     fn exists(&self, path: &str) -> bool {
         let normalized = Self::normalize_path(path);
+        
+        // 移除开头的 assets/ 前缀（如果存在）
+        let zip_path = if normalized.starts_with("assets/") {
+            &normalized[7..]
+        } else {
+            &normalized
+        };
+        
         self.get_index()
-            .map(|index| index.contains_key(&normalized))
+            .map(|index| index.contains_key(zip_path))
             .unwrap_or(false)
     }
 
     fn full_path(&self, path: &str) -> String {
-        format!("zip://{}#{}", self.zip_path.display(), Self::normalize_path(path))
+        let normalized = Self::normalize_path(path);
+        let zip_path = if normalized.starts_with("assets/") {
+            &normalized[7..]
+        } else {
+            &normalized
+        };
+        format!("zip://{}#{}", self.zip_path.display(), zip_path)
     }
 }
 
@@ -317,5 +371,13 @@ mod tests {
         assert_eq!(ZipSource::normalize_path("./bg.png"), "bg.png");
         assert_eq!(ZipSource::normalize_path("backgrounds\\bg.png"), "backgrounds/bg.png");
         assert_eq!(ZipSource::normalize_path("backgrounds/bg.png"), "backgrounds/bg.png");
+        // 测试 .. 组件处理
+        assert_eq!(ZipSource::normalize_path("scripts/../backgrounds/bg.png"), "backgrounds/bg.png");
+        assert_eq!(ZipSource::normalize_path("scripts/../backgrounds/../bgm/music.mp3"), "bgm/music.mp3");
+        assert_eq!(ZipSource::normalize_path("../backgrounds/bg.png"), "backgrounds/bg.png");
+        // 测试 . 组件处理
+        assert_eq!(ZipSource::normalize_path("scripts/./images/char.png"), "scripts/images/char.png");
+        // 测试多个 .. 组件
+        assert_eq!(ZipSource::normalize_path("a/b/../../c/d.png"), "c/d.png");
     }
 }
