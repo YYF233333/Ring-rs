@@ -114,7 +114,40 @@ changeScene <img src="path/to/image.jpg" /> with transition
 changeScene <img src="path/to/image.jpg" /> with <img src="rule.png" /> (duration: 1, reversed: true)
 ```
 
-支持使用 rule 图片定义切换遮罩效果。
+#### 5.2.1 设计意图（语法糖）
+
+`changeScene` 是一个**复合场景切换**语法糖，用一行脚本表达一个完整的演出流程（具体实现由 Host 决定；Runtime 只需发出声明式的 `Command::ChangeScene`）。
+
+目标语义（推荐实现）：
+
+1. 使用 `dissolve` 隐藏 UI（对话框/选择分支/章节标题等 UI 层）
+2. 使用 `with` 指定的效果把**纯黑 mask** 叠加到场景上（形成黑屏遮罩）
+3. 清除所有立绘，替换背景为新指定背景
+4. 使用同一效果隐去 mask
+5. 使用 `dissolve` 恢复 UI
+
+> 说明：以上是**推荐的可观察语义**。为了保持 Runtime/Host 分离，这些步骤可以全部在 Host 内部完成。
+
+#### 5.2.2 语法约束
+
+- `changeScene` **必须**带 `with` 子句（没有 `with` 视为语法错误）
+- 第一个 `<img src="..."/>` 是新背景路径（按“素材路径相对于脚本文件”的规则解析）
+- `with` 子句支持两类效果：
+  - **Dissolve 类**：`with Dissolve(duration: N)`（语法糖，等价于 `with Dissolve(N)`）
+  - **rule 遮罩类**：`with <img src="rule.png" /> (duration: N, reversed: true|false)`  
+    （语法糖，等价于 `with rule("rule.png", N, true|false)`）
+
+#### 5.2.3 参数说明
+
+- `duration`: 过渡时长（秒），建议范围 \(0.1 \sim 3.0\)
+- `reversed`: 是否反转遮罩方向（`true` 反向，`false` 正向）
+
+#### 5.2.4 错误处理规则
+
+- 缺少背景 `<img src="...">`：报错并带行号
+- 缺少 `with`：报错并带行号
+- `duration` 不是数字 / `reversed` 不是布尔：报错并带行号
+- rule 图片无法加载：Host 打印错误但不崩溃（与资源系统一致）
 
 ### 5.3 显示角色 (show)
 
@@ -267,13 +300,29 @@ pub enum TransitionArg {
 
 ### 7.3 内置效果参考
 
-以下是 Runtime 层支持的内置效果（解析器无需感知）：
+以下是内置效果参考（解析器无需感知；具体支持情况由 Host 决定）：
 
 | 效果名 | 语法 | 说明 |
 |--------|------|------|
 | dissolve | `dissolve` 或 `Dissolve(秒数)` | 淡入淡出 |
 | fade | `fade` 或 `Fade(秒数)` | 渐隐渐显 |
-| rule | `rule("mask.png", duration, reversed)` | 遮罩过渡 |
+| rule | `rule("mask.png", duration, reversed)` | 遮罩过渡（配合 `changeScene` 使用更常见） |
+
+#### 7.3.1 `rule` 的两种写法（推荐在 `changeScene` 中用语法糖）
+
+1) 通用写法（函数调用语法）：
+
+```markdown
+with rule("assets/rule_10.png", 1.0, true)
+```
+
+2) `changeScene` 专用语法糖（更适合 Typora 编辑与预览）：
+
+```markdown
+changeScene <img src="assets/bg2.jpg" /> with <img src="assets/rule_10.png" /> (duration: 1, reversed: true)
+```
+
+两者等价：解析器应将语法糖归一化为 `Transition { name: "rule", args: [String(mask), Number(duration), Bool(reversed)] }`。
 
 > **注意**：效果名大小写敏感，`dissolve` 和 `Dissolve(1.5)` 是不同的效果标识。
 

@@ -202,12 +202,62 @@
 
 > 后续方向以"UI/演出增强 → 性能与工具链"为原则推进。
 
+### 演出增强：`changeScene` 语法糖与 `rule` 遮罩过渡（优先级：中）
+
+> 目标：提供“复合场景切换”语法糖，让编剧用一行脚本实现 **UI 隐藏 → 黑屏遮罩 → 清场 + 换背景 → 遮罩消失 → UI 恢复** 的完整演出。
+
+#### 目标脚本语法（规范见 `docs/script_syntax_spec.md`）
+
+```markdown
+changeScene <img src="assets/bg2.jpg" alt="bg2" style="zoom:15%;" /> with <img src="assets/rule_10.png" alt="rule_10" style="zoom:25%;" /> (duration: 1, reversed: true)
+
+changeScene <img src="assets/bg2.jpg" alt="bg2" style="zoom:15%;" /> with Dissolve(duration: 1)
+```
+
+#### 语义（Host 可实现为复合行为；Runtime 只需发出一个声明式 Command）
+
+1. `dissolve` 隐藏 UI（对话框/选择分支/章节标题等 UI 层）
+2. 使用 `with` 指定效果把**纯黑 mask** 叠加到场景上（形成黑屏遮罩）
+3. 清除所有立绘（visible_characters），替换背景为 `changeScene` 的新背景
+4. 使用同一效果隐去 mask
+5. `dissolve` 恢复 UI
+
+#### 拆分工作项（实现路线）
+
+- **脚本层（Parser）**
+  - `changeScene` 强制要求 `with` 子句（无 `with` → ParseError）
+  - 支持 `with Dissolve(duration: N)` 语法糖（归一化为 `Transition { name: "Dissolve", args: [Number(N)] }`）
+  - 支持 `with <img src="rule.png" /> (duration: N, reversed: bool)` 语法糖  
+    归一化为 `Transition { name: "rule", args: [String("rule.png"), Number(N), Bool(reversed)] }`
+  - 兼容空格/换行/Typora 生成的 `alt/style` 等属性（只提取 `src`）
+
+- **Runtime（Executor/Engine）**
+  - 保持 `ScriptNode::ChangeScene` → `Command::ChangeScene { path, transition }`（声明式）
+  - 运行时状态/历史记录：记录 `BackgroundChange`（以及可选的 `SceneChange` 扩展事件）
+
+- **Host（渲染与执行）**
+  - `CommandExecutor` 对 `Command::ChangeScene` 增加专用执行管线（按“语义”五步）
+  - 为 UI 层增加显示开关（例如 `RenderState::ui_visible: bool`），并让渲染器按开关跳过 UI 渲染
+  - 引入“遮罩层”渲染状态（例如 `RenderState::scene_mask: Option<MaskState>`）
+  - 实现 `rule` 遮罩过渡：
+    - 参数：`mask_path` / `duration` / `reversed`
+    - 行为：按进度用 mask 进行阈值裁剪（或灰度映射），从全遮到全显/反向
+    - 资源：mask 作为纹理加载并走统一的路径规范化与缓存 key
+
+- **测试与验收**
+  - Parser 单测：两种 `changeScene` 语法都能解析，并产出正确的 `Transition` 参数（含 duration/reversed）
+  - Host 侧回归：执行 `changeScene` 时不会残留旧立绘；UI 隐藏/恢复正确；遮罩过渡可见且可跳过（如需要）
+  - 文档：更新脚本 spec（语法、语义、错误规则、示例、与 `rule()` 的等价关系）
+
+### 脚本语法增强
+
+1. 效果支持命名参数（例：`Dissolve(duration: 1)`），原有的位置参数模式保留，不支持混用
+
 1. **玩家 UI / 体验增强**
    - **历史回看 UI**：面板展示历史对话、点击跳回（可选）、与存档对齐
    - **存档 UI**：slot 列表、预览、删除、重命名
    - **设置 UI**：音量/静音/字体/分辨率等（注意：音量属于玩家控制，不进脚本）
    - **对话框样式增强**：阴影、描边、自定义背景皮肤
-   - **`rule` 遮罩过渡**：演出增强（非结构性）
 
 2. **工程化 / 性能 / 工具链（持续）**
    - **性能**：资源预加载与按需释放、纹理缓存策略、渲染性能优化
