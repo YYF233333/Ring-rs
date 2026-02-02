@@ -319,7 +319,7 @@ mod tests {
         let script = Script::new("test", vec![], "");
 
         let node = ScriptNode::ShowCharacter {
-            path: "char.png".to_string(),
+            path: Some("char.png".to_string()),
             alias: "test_char".to_string(),
             position: Position::Center,
             transition: None,

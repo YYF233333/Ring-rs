@@ -8,10 +8,17 @@
 //! - BGM 播放：支持循环、淡入淡出、切换
 //! - SFX 播放：支持多音效同时播放
 //! - 音量控制：独立的 BGM/SFX 音量设置
+//!
+//! ## 路径处理
+//!
+//! 音频路径使用**逻辑路径**（相对于 assets_root），由调用方负责规范化。
+//! 内部根据 `use_zip_mode` 决定从文件系统还是临时文件加载。
 
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
+use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Cursor};
+use std::path::PathBuf;
 
 /// 音频管理器
 ///
@@ -23,7 +30,7 @@ pub struct AudioManager {
     stream_handle: OutputStreamHandle,
     /// BGM 播放器
     bgm_sink: Option<Sink>,
-    /// 当前 BGM 路径
+    /// 当前 BGM 路径（逻辑路径）
     current_bgm_path: Option<String>,
     /// BGM 主音量 (0.0 - 1.0)
     bgm_volume: f32,
@@ -33,8 +40,13 @@ pub struct AudioManager {
     muted: bool,
     /// 淡入淡出状态
     fade_state: FadeState,
-    /// 资源基础路径
-    base_path: String,
+    /// 资源基础路径（文件系统模式使用）
+    base_path: PathBuf,
+    /// 是否使用 ZIP 模式
+    use_zip_mode: bool,
+    /// 音频字节缓存（逻辑路径 -> 字节数据）
+    /// 用于 ZIP 模式，避免重复从 ResourceManager 读取
+    audio_cache: HashMap<String, Vec<u8>>,
 }
 
 /// 淡入淡出状态
@@ -65,7 +77,7 @@ enum FadeState {
 }
 
 impl AudioManager {
-    /// 创建新的音频管理器
+    /// 创建新的音频管理器（文件系统模式）
     pub fn new(base_path: &str) -> Result<Self, String> {
         let (stream, stream_handle) = OutputStream::try_default()
             .map_err(|e| format!("无法初始化音频输出: {}", e))?;
@@ -79,73 +91,106 @@ impl AudioManager {
             sfx_volume: 1.0,
             muted: false,
             fade_state: FadeState::None,
-            base_path: base_path.to_string(),
+            base_path: PathBuf::from(base_path),
+            use_zip_mode: false,
+            audio_cache: HashMap::new(),
         })
     }
 
-    /// 解析音频路径
-    fn resolve_path(&self, path: &str) -> String {
-        use std::path::PathBuf;
+    /// 创建 ZIP 模式的音频管理器
+    pub fn new_zip_mode(base_path: &str) -> Result<Self, String> {
+        let (stream, stream_handle) = OutputStream::try_default()
+            .map_err(|e| format!("无法初始化音频输出: {}", e))?;
+
+        Ok(Self {
+            _stream: stream,
+            stream_handle,
+            bgm_sink: None,
+            current_bgm_path: None,
+            bgm_volume: 1.0,
+            sfx_volume: 1.0,
+            muted: false,
+            fade_state: FadeState::None,
+            base_path: PathBuf::from(base_path),
+            use_zip_mode: true,
+            audio_cache: HashMap::new(),
+        })
+    }
+
+    /// 预加载音频字节数据（用于 ZIP 模式）
+    /// 
+    /// 在 ZIP 模式下，需要先通过 ResourceManager 读取音频字节，
+    /// 然后调用此方法缓存数据。
+    pub fn cache_audio_bytes(&mut self, logical_path: &str, bytes: Vec<u8>) {
+        self.audio_cache.insert(logical_path.to_string(), bytes);
+    }
+
+    /// 解析音频路径到完整文件系统路径（仅文件系统模式使用）
+    fn resolve_fs_path(&self, logical_path: &str) -> PathBuf {
+        use crate::resources::normalize_logical_path;
         
-        // 已经是绝对路径
-        if path.starts_with('/') || path.contains(':') {
-            return path.to_string();
-        }
+        // 规范化逻辑路径
+        let normalized = normalize_logical_path(logical_path);
         
-        // 规范化路径分隔符
-        let normalized_path = path.replace('\\', "/");
-        let normalized_base = self.base_path.replace('\\', "/");
-        
-        // 如果已经以 base_path 开头，不要再添加
-        if normalized_path.starts_with(&normalized_base) 
-            || normalized_path.starts_with(&format!("{}/", normalized_base)) 
-        {
-            // 使用 PathBuf 规范化路径（处理 .. 等）
-            let path_buf = PathBuf::from(path);
-            if let Ok(canonical) = path_buf.canonicalize() {
-                return canonical.to_string_lossy().to_string();
-            }
-            return path.to_string();
-        }
-        
-        // 拼接并规范化
-        let full_path = PathBuf::from(&self.base_path).join(path);
-        if let Ok(canonical) = full_path.canonicalize() {
-            canonical.to_string_lossy().to_string()
-        } else {
-            full_path.to_string_lossy().to_string()
-        }
+        // 拼接 base_path
+        self.base_path.join(&normalized)
     }
 
     /// 播放 BGM
     ///
     /// # 参数
     ///
-    /// - `path`: BGM 路径
+    /// - `path`: BGM 逻辑路径（相对于 assets_root，如 `bgm/music.mp3`）
     /// - `looping`: 是否循环
     /// - `fade_in`: 淡入时长（秒），None 表示立即播放
     pub fn play_bgm(&mut self, path: &str, looping: bool, fade_in: Option<f32>) {
+        use crate::resources::normalize_logical_path;
+        
         // 如果当前有 BGM 在播放，先停止
         if let Some(ref sink) = self.bgm_sink {
             sink.stop();
         }
 
-        let full_path = self.resolve_path(path);
-        
-        // 加载音频文件
-        let file = match File::open(&full_path) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("❌ 无法打开音频文件: {} - {}", full_path, e);
-                return;
-            }
-        };
+        // 规范化路径
+        let logical_path = normalize_logical_path(path);
 
-        let source = match Decoder::new(BufReader::new(file)) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("❌ 无法解码音频文件: {} - {}", full_path, e);
-                return;
+        // 根据模式加载音频
+        let source: Box<dyn Source<Item = i16> + Send> = if self.use_zip_mode {
+            // ZIP 模式：从缓存读取字节
+            let bytes = match self.audio_cache.get(&logical_path) {
+                Some(b) => b.clone(),
+                None => {
+                    eprintln!("❌ 音频未缓存: {} (请先调用 cache_audio_bytes)", logical_path);
+                    return;
+                }
+            };
+            
+            let cursor = Cursor::new(bytes);
+            match Decoder::new(cursor) {
+                Ok(s) => Box::new(s.convert_samples::<i16>()),
+                Err(e) => {
+                    eprintln!("❌ 无法解码音频: {} - {}", logical_path, e);
+                    return;
+                }
+            }
+        } else {
+            // 文件系统模式：直接读取文件
+            let full_path = self.resolve_fs_path(&logical_path);
+            
+            let file = match File::open(&full_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("❌ 无法打开音频文件: {} - {}", full_path.display(), e);
+                    return;
+                }
+            };
+
+            match Decoder::new(BufReader::new(file)) {
+                Ok(s) => Box::new(s.convert_samples::<i16>()),
+                Err(e) => {
+                    eprintln!("❌ 无法解码音频文件: {} - {}", full_path.display(), e);
+                    return;
+                }
             }
         };
 
@@ -170,7 +215,7 @@ impl AudioManager {
         }
 
         self.bgm_sink = Some(sink);
-        self.current_bgm_path = Some(path.to_string());
+        self.current_bgm_path = Some(logical_path.clone());
 
         // 设置淡入状态
         if let Some(duration) = fade_in {
@@ -183,7 +228,7 @@ impl AudioManager {
             }
         }
 
-        println!("🎵 开始播放 BGM: {} (循环: {}, 淡入: {:?})", path, looping, fade_in);
+        println!("🎵 开始播放 BGM: {} (循环: {}, 淡入: {:?})", logical_path, looping, fade_in);
     }
 
     /// 停止 BGM
@@ -256,27 +301,54 @@ impl AudioManager {
     ///
     /// # 参数
     ///
-    /// - `path`: 音效路径
+    /// - `path`: 音效逻辑路径（相对于 assets_root，如 `sfx/click.mp3`）
     pub fn play_sfx(&self, path: &str) {
+        use crate::resources::normalize_logical_path;
+        
         if self.muted {
             return;
         }
 
-        let full_path = self.resolve_path(path);
-        
-        let file = match File::open(&full_path) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("❌ 无法打开音效文件: {} - {}", full_path, e);
-                return;
-            }
-        };
+        // 规范化路径
+        let logical_path = normalize_logical_path(path);
 
-        let source = match Decoder::new(BufReader::new(file)) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("❌ 无法解码音效文件: {} - {}", full_path, e);
-                return;
+        // 根据模式加载音频
+        let source: Box<dyn Source<Item = i16> + Send> = if self.use_zip_mode {
+            // ZIP 模式：从缓存读取字节
+            let bytes = match self.audio_cache.get(&logical_path) {
+                Some(b) => b.clone(),
+                None => {
+                    eprintln!("❌ 音效未缓存: {} (请先调用 cache_audio_bytes)", logical_path);
+                    return;
+                }
+            };
+            
+            let cursor = Cursor::new(bytes);
+            match Decoder::new(cursor) {
+                Ok(s) => Box::new(s.convert_samples::<i16>()),
+                Err(e) => {
+                    eprintln!("❌ 无法解码音效: {} - {}", logical_path, e);
+                    return;
+                }
+            }
+        } else {
+            // 文件系统模式：直接读取文件
+            let full_path = self.resolve_fs_path(&logical_path);
+            
+            let file = match File::open(&full_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("❌ 无法打开音效文件: {} - {}", full_path.display(), e);
+                    return;
+                }
+            };
+
+            match Decoder::new(BufReader::new(file)) {
+                Ok(s) => Box::new(s.convert_samples::<i16>()),
+                Err(e) => {
+                    eprintln!("❌ 无法解码音效文件: {} - {}", full_path.display(), e);
+                    return;
+                }
             }
         };
 
@@ -285,7 +357,7 @@ impl AudioManager {
             sink.set_volume(self.sfx_volume);
             sink.append(source);
             sink.detach(); // 分离后自动播放完毕
-            println!("🔊 播放音效: {}", path);
+            println!("🔊 播放音效: {}", logical_path);
         }
     }
 

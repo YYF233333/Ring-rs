@@ -226,6 +226,11 @@ impl VNRuntime {
         &self.state
     }
 
+    /// 获取可变状态引用
+    pub fn state_mut(&mut self) -> &mut RuntimeState {
+        &mut self.state
+    }
+
     /// 恢复状态（用于读档）
     /// 
     /// 将 Runtime 状态恢复到指定状态。

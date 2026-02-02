@@ -104,15 +104,31 @@ impl AppState {
             }
         };
 
-        // 初始化音频管理器
-        let audio_manager = match AudioManager::new(&assets_root) {
-            Ok(am) => {
-                println!("✅ 音频系统初始化成功");
-                Some(am)
+        // 初始化音频管理器（根据资源来源选择模式）
+        let audio_manager = match config.asset_source {
+            AssetSourceType::Fs => {
+                match AudioManager::new(&assets_root) {
+                    Ok(am) => {
+                        println!("✅ 音频系统初始化成功");
+                        Some(am)
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ 音频系统初始化失败: {}", e);
+                        None
+                    }
+                }
             }
-            Err(e) => {
-                eprintln!("⚠️ 音频系统初始化失败: {}", e);
-                None
+            AssetSourceType::Zip => {
+                match AudioManager::new_zip_mode(&assets_root) {
+                    Ok(am) => {
+                        println!("✅ 音频系统初始化成功 (ZIP 模式)");
+                        Some(am)
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ 音频系统初始化失败: {}", e);
+                        None
+                    }
+                }
             }
         };
 
@@ -160,7 +176,10 @@ impl AppState {
         println!("✅ 存档管理器初始化成功: {}", saves_dir);
 
         // 扫描脚本目录
-        let scripts = scan_scripts(&config.assets_root);
+        let scripts = match config.asset_source {
+            AssetSourceType::Fs => scan_scripts(&config.assets_root),
+            AssetSourceType::Zip => scan_scripts_from_zip(&resource_manager),
+        };
         println!("📜 发现 {} 个脚本文件", scripts.len());
 
         // 从配置获取窗口尺寸
@@ -330,8 +349,8 @@ async fn load_resources(app_state: &mut AppState) {
     let stats = app_state.resource_manager.texture_cache_stats();
     println!("📦 资源加载完成！{}", stats.format());
 
-    // 预加载脚本（但不开始游戏）
-    load_script(app_state);
+    // 不再预加载脚本，等待用户选择"开始新游戏"
+    // load_script(app_state);
 }
 
 /// 从命令列表中收集需要预取的资源路径
@@ -404,10 +423,94 @@ async fn ensure_render_resources(app_state: &mut AppState) {
     }
 }
 
-/// 可用的脚本列表
-/// 加载脚本文件
-/// 从指定路径加载脚本
+/// 从 ZIP 扫描脚本文件
+fn scan_scripts_from_zip(resource_manager: &ResourceManager) -> Vec<(String, PathBuf)> {
+    let mut scripts = Vec::new();
+    
+    // 通过 ResourceManager 列出 scripts 目录下的文件
+    let files = resource_manager.list_files("scripts");
+    
+    for file_path in files {
+        // 只处理 .md 文件
+        if file_path.ends_with(".md") {
+            if let Some(stem) = PathBuf::from(&file_path).file_stem() {
+                let script_id = stem.to_string_lossy().to_string();
+                // 使用完整路径作为 PathBuf（ZIP 模式下路径已经是相对于 assets_root 的）
+                let full_path = PathBuf::from(&file_path);
+                scripts.push((script_id, full_path));
+            }
+        }
+    }
+    
+    // 按文件名排序，确保顺序稳定
+    scripts.sort_by(|a, b| a.0.cmp(&b.0));
+    scripts
+}
+
+/// 从逻辑路径加载脚本
+/// 
+/// # 参数
+/// - `logical_path`: 逻辑路径（相对于 assets_root，如 `scripts/test.md`）
+/// 
+/// # 返回
+/// 是否加载成功
+fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &str) -> bool {
+    use host::resources::{normalize_logical_path, extract_script_id, extract_base_dir};
+    
+    // 规范化路径
+    let normalized_path = normalize_logical_path(logical_path);
+    let script_id = extract_script_id(&normalized_path);
+    let base_dir = extract_base_dir(&normalized_path);
+    
+    println!("📜 加载脚本: {} (路径: {})", script_id, normalized_path);
+    println!("📁 脚本目录: {}", base_dir);
+    
+    // 通过 ResourceManager 读取（统一处理 FS 和 ZIP 模式）
+    let script_text = match app_state.resource_manager.read_text(&normalized_path) {
+        Ok(text) => text,
+        Err(e) => {
+            eprintln!("❌ 脚本文件加载失败: {} - {}", normalized_path, e);
+            return false;
+        }
+    };
+    
+    let mut parser = Parser::new();
+    match parser.parse_with_base_path(&script_id, &script_text, &base_dir) {
+        Ok(script) => {
+            println!("✅ 脚本解析成功！节点数: {}", script.len());
+            
+            // 打印警告
+            for warning in parser.warnings() {
+                println!("⚠️ 解析警告: {}", warning);
+            }
+            
+            // 创建 VNRuntime 并设置脚本路径
+            let mut runtime = VNRuntime::new(script);
+            runtime.state_mut().position.set_path(&normalized_path);
+            app_state.vn_runtime = Some(runtime);
+            true
+        }
+        Err(e) => {
+            eprintln!("❌ 脚本解析失败: {}", e);
+            false
+        }
+    }
+}
+
+/// 从 PathBuf 加载脚本（兼容旧接口）
 fn load_script_from_path(app_state: &mut AppState, script_path: &PathBuf) -> bool {
+    use host::resources::normalize_logical_path;
+    
+    // 将 PathBuf 转换为逻辑路径
+    let path_str = script_path.to_string_lossy().replace('\\', "/");
+    let logical_path = normalize_logical_path(&path_str);
+    
+    load_script_from_logical_path(app_state, &logical_path)
+}
+
+/// 【已废弃】旧版加载函数，保留兼容性
+#[allow(dead_code)]
+fn load_script_from_path_legacy(app_state: &mut AppState, script_path: &PathBuf) -> bool {
     // 提取脚本 ID（文件名，不含扩展名）
     let script_id = script_path
         .file_stem()
@@ -475,24 +578,43 @@ fn load_script_from_path(app_state: &mut AppState, script_path: &PathBuf) -> boo
     }
 }
 
-/// 根据脚本 ID 加载脚本（用于存档恢复）
+/// 根据脚本路径或 ID 加载脚本（用于存档恢复）
+/// 
+/// 优先使用 script_path（如果非空），否则回退到 script_id。
+fn load_script_by_path_or_id(app_state: &mut AppState, script_path: &str, script_id: &str) -> bool {
+    // 如果有脚本路径，直接使用
+    if !script_path.is_empty() {
+        println!("📜 从路径加载脚本: {}", script_path);
+        return load_script_from_logical_path(app_state, script_path);
+    }
+    
+    // 否则从 ID 推断路径
+    load_script_by_id(app_state, script_id)
+}
+
+/// 根据脚本 ID 加载脚本（兼容旧存档）
 fn load_script_by_id(app_state: &mut AppState, script_id: &str) -> bool {
+    println!("📜 从 ID 推断脚本路径: {}", script_id);
+    
     // 在 scripts 列表中查找
     if let Some((_, path)) = app_state.scripts.iter().find(|(id, _)| id == script_id) {
         let path = path.clone();
         return load_script_from_path(app_state, &path);
     }
     
-    // 尝试在 assets/scripts 目录下查找
-    let script_path = app_state.config.assets_root
-        .join("scripts")
-        .join(format!("{}.md", script_id));
+    // 尝试常见的脚本位置
+    let possible_paths = [
+        format!("scripts/{}.md", script_id),
+        format!("{}.md", script_id),
+    ];
     
-    if script_path.exists() {
-        return load_script_from_path(app_state, &script_path);
+    for path in &possible_paths {
+        if app_state.resource_manager.resource_exists(path) {
+            return load_script_from_logical_path(app_state, path);
+        }
     }
     
-    eprintln!("❌ 找不到脚本: {}", script_id);
+    eprintln!("❌ 找不到脚本: {} (尝试过: {:?})", script_id, possible_paths);
     false
 }
 
@@ -869,10 +991,10 @@ fn update_history(app_state: &mut AppState) {
 
 /// 开始新游戏（使用 config.start_script_path）
 fn start_new_game(app_state: &mut AppState) {
-    // 使用配置的入口脚本
-    let script_path = app_state.config.start_script_full_path();
+    // 使用配置的入口脚本（逻辑路径）
+    let script_path = app_state.config.start_script_path.clone();
     
-    if load_script_from_path(app_state, &script_path) {
+    if load_script_from_logical_path(app_state, &script_path) {
         app_state.render_state = RenderState::new();
         app_state.script_finished = false;
         app_state.play_start_time = std::time::Instant::now();
@@ -882,7 +1004,7 @@ fn start_new_game(app_state: &mut AppState) {
         
         // 切换到游戏模式
         app_state.navigation.switch_to(AppMode::InGame);
-        println!("🎮 开始新游戏: {:?}", script_path);
+        println!("🎮 开始新游戏: {}", script_path);
     } else {
         app_state.toast_manager.error("无法加载入口脚本");
     }
@@ -936,10 +1058,37 @@ fn apply_transition_effect(app_state: &mut AppState) {
 
 /// 处理音频命令
 fn handle_audio_command(app_state: &mut AppState) {
+    use host::resources::normalize_logical_path;
+    
     let audio_cmd = app_state.command_executor.last_output.audio_command.clone();
     
-    if let Some(ref mut audio_manager) = app_state.audio_manager {
-        if let Some(cmd) = audio_cmd {
+    if let Some(cmd) = audio_cmd {
+        // ZIP 模式下需要先缓存音频字节
+        if let AssetSourceType::Zip = app_state.config.asset_source {
+            let path_to_cache = match &cmd {
+                AudioCommand::PlayBgm { path, .. } => Some(path.clone()),
+                AudioCommand::PlaySfx { path } => Some(path.clone()),
+                AudioCommand::StopBgm { .. } => None,
+            };
+            
+            if let Some(path) = path_to_cache {
+                let logical_path = normalize_logical_path(&path);
+                // 读取音频字节并缓存
+                match app_state.resource_manager.read_bytes(&logical_path) {
+                    Ok(bytes) => {
+                        if let Some(ref mut audio) = app_state.audio_manager {
+                            audio.cache_audio_bytes(&logical_path, bytes);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("❌ 无法读取音频文件: {} - {}", logical_path, e);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        if let Some(ref mut audio_manager) = app_state.audio_manager {
             match cmd {
                 AudioCommand::PlayBgm { path, looping, fade_in: _ } => {
                     // BGM 切换自带交叉淡化效果（规范要求）
@@ -1013,8 +1162,8 @@ fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::SaveDa
 
 /// 快速保存（到槽位）
 fn quick_save(app_state: &mut AppState) {
-    // 只在游戏模式下可以保存
-    if !app_state.navigation.current().is_in_game() {
+    // 检查是否有游戏状态（允许从 SaveLoad 界面保存）
+    if app_state.vn_runtime.is_none() {
         println!("⚠️ 只能在游戏中保存");
         return;
     }
@@ -1081,12 +1230,20 @@ fn return_to_title_from_game(app_state: &mut AppState, should_save_continue: boo
 
 /// 从存档数据恢复游戏状态
 fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::SaveData) -> bool {
-    // 加载对应的脚本
+    // 加载对应的脚本（优先使用 script_path，回退到 script_id）
+    let script_path = &save_data.runtime_state.position.script_path;
     let script_id = &save_data.runtime_state.position.script_id;
     
-    if !load_script_by_id(app_state, script_id) {
-        eprintln!("❌ 找不到脚本: {}", script_id);
-        return false;
+    println!("📜 尝试加载脚本: path={}, id={}", script_path, script_id);
+    if !load_script_by_path_or_id(app_state, script_path, script_id) {
+        eprintln!("❌ 找不到脚本");
+        // 尝试使用 start_script_path 作为后备
+        println!("📜 尝试使用 start_script_path 作为后备");
+        let start_path = app_state.config.start_script_path.clone();
+        if !load_script_from_logical_path(app_state, &start_path) {
+            eprintln!("❌ 后备脚本加载也失败");
+            return false;
+        }
     }
 
     // 恢复 Runtime 状态和历史记录

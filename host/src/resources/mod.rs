@@ -9,10 +9,12 @@ use std::sync::Arc;
 
 mod cache;
 mod error;
+pub mod path;
 mod source;
 
 pub use cache::{TextureCache, CacheStats, DEFAULT_TEXTURE_BUDGET_MB};
 pub use error::ResourceError;
+pub use path::{normalize_logical_path, resolve_relative_path, extract_script_id, extract_base_dir};
 pub use source::{ResourceSource, FsSource, ZipSource};
 
 /// 从字节数据加载图片并转换为 Texture2D
@@ -389,6 +391,17 @@ impl ResourceManager {
     /// 字节内容，或错误
     pub fn read_bytes(&self, path: &str) -> Result<Vec<u8>, ResourceError> {
         self.source.read(path)
+    }
+
+    /// 列出指定目录下的所有文件
+    ///
+    /// # 参数
+    /// - `dir_path`: 目录路径（相对于 base_path）
+    ///
+    /// # 返回
+    /// 文件路径列表（相对于 base_path）
+    pub fn list_files(&self, dir_path: &str) -> Vec<String> {
+        self.source.list_files(dir_path)
     }
 }
 

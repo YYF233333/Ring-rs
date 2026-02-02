@@ -104,8 +104,15 @@ pub enum VarValue {
 /// 记录当前执行到脚本的哪个位置。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScriptPosition {
-    /// 当前脚本文件（如果支持多文件）
+    /// 脚本标识符（文件名，不含路径和扩展名）
     pub script_id: String,
+    /// 脚本完整路径（相对于 assets_root，用于加载脚本）
+    /// 
+    /// 例如：`scripts/chapter1/intro.md`
+    /// 
+    /// 注意：为了向后兼容，此字段可选。如果为空，则尝试从 `script_id` 推断路径。
+    #[serde(default)]
+    pub script_path: String,
     /// 当前执行的节点索引
     pub node_index: usize,
 }
@@ -113,8 +120,19 @@ pub struct ScriptPosition {
 impl ScriptPosition {
     /// 创建新的脚本位置
     pub fn new(script_id: impl Into<String>, node_index: usize) -> Self {
+        let id = script_id.into();
+        Self {
+            script_id: id.clone(),
+            script_path: String::new(), // 默认为空，由 host 在加载时设置
+            node_index,
+        }
+    }
+
+    /// 创建带完整路径的脚本位置
+    pub fn with_path(script_id: impl Into<String>, script_path: impl Into<String>, node_index: usize) -> Self {
         Self {
             script_id: script_id.into(),
+            script_path: script_path.into(),
             node_index,
         }
     }
@@ -122,6 +140,16 @@ impl ScriptPosition {
     /// 创建默认位置（脚本开头）
     pub fn start(script_id: impl Into<String>) -> Self {
         Self::new(script_id, 0)
+    }
+
+    /// 创建带路径的默认位置（脚本开头）
+    pub fn start_with_path(script_id: impl Into<String>, script_path: impl Into<String>) -> Self {
+        Self::with_path(script_id, script_path, 0)
+    }
+
+    /// 设置脚本路径
+    pub fn set_path(&mut self, path: impl Into<String>) {
+        self.script_path = path.into();
     }
 
     /// 前进到下一个节点
@@ -215,12 +243,18 @@ mod tests {
     fn test_script_position() {
         let mut pos = ScriptPosition::start("main");
         assert_eq!(pos.node_index, 0);
+        assert_eq!(pos.script_path, "");
 
         pos.advance();
         assert_eq!(pos.node_index, 1);
 
         pos.jump_to(10);
         assert_eq!(pos.node_index, 10);
+
+        // 测试带路径的位置
+        let pos_with_path = ScriptPosition::start_with_path("intro", "scripts/chapter1/intro.md");
+        assert_eq!(pos_with_path.script_id, "intro");
+        assert_eq!(pos_with_path.script_path, "scripts/chapter1/intro.md");
     }
 
     #[test]
