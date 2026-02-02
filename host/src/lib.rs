@@ -22,6 +22,9 @@ pub mod audio;
 pub mod manifest;
 pub mod save_manager;
 pub mod config;
+pub mod app_mode;
+pub mod ui;
+pub mod screens;
 
 pub use state::HostState;
 pub use resources::{ResourceManager, ResourceError};
@@ -32,3 +35,4 @@ pub use audio::AudioManager;
 pub use manifest::Manifest;
 pub use save_manager::SaveManager;
 pub use config::{AppConfig, WindowConfig, DebugConfig, AudioConfig};
+pub use app_mode::{AppMode, NavigationStack, InputCapture, SaveLoadTab, UserSettings};

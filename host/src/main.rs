@@ -8,6 +8,14 @@ use host::resources::ResourceManager;
 use host::renderer::{Renderer, RenderState};
 use host::renderer::render_state::ChoiceItem;
 use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager, AppConfig};
+use host::{AppMode, NavigationStack, SaveLoadTab, UserSettings};
+use host::ui::{UiContext, Theme, ToastManager};
+use host::screens::{TitleScreen, InGameMenuScreen, SaveLoadScreen, SettingsScreen, HistoryScreen};
+use host::screens::title::TitleAction;
+use host::screens::ingame_menu::InGameMenuAction;
+use host::screens::save_load::SaveLoadAction;
+use host::screens::settings::SettingsAction;
+use host::screens::history::HistoryAction;
 use vn_runtime::command::{Command, Choice, Position};
 use vn_runtime::state::WaitingReason;
 use vn_runtime::input::RuntimeInput;
@@ -17,31 +25,11 @@ use std::path::PathBuf;
 
 /// 配置文件路径
 const CONFIG_PATH: &str = "config.json";
+/// 用户设置文件路径
+const USER_SETTINGS_PATH: &str = "user_settings.json";
 
 /// 打字机效果速度（每秒字符数）
 const TYPEWRITER_SPEED: f32 = 30.0;
-
-/// 演示模式状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DemoState {
-    ShowBackground,
-    ShowCharacter,
-    ShowDialogue,
-    ShowChoices,
-    ShowChapter,
-    Complete,
-}
-
-/// 运行模式
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RunMode {
-    /// 演示模式（原有的硬编码演示）
-    Demo,
-    /// 命令模式（CommandExecutor 演示）
-    Command,
-    /// 脚本模式（真正的 VNRuntime 集成）
-    Script,
-}
 
 /// 应用状态
 struct AppState {
@@ -55,16 +43,9 @@ struct AppState {
     command_executor: CommandExecutor,
     audio_manager: Option<AudioManager>,
     textures: HashMap<String, Texture2D>,
-    demo_state: DemoState,
     waiting_reason: WaitingReason,
     typewriter_timer: f32,
     loading_complete: bool,
-    /// 命令队列（用于演示 CommandExecutor）
-    command_queue: Vec<Command>,
-    /// 当前命令索引
-    command_index: usize,
-    /// 当前运行模式
-    run_mode: RunMode,
     /// VN Runtime（脚本模式）
     vn_runtime: Option<VNRuntime>,
     /// 脚本是否执行完毕
@@ -81,6 +62,28 @@ struct AppState {
     scripts: Vec<(String, PathBuf)>,
     /// 游戏开始时间（用于计算游戏时长）
     play_start_time: std::time::Instant,
+    
+    // ===== 阶段16新增：UI 系统 =====
+    /// 导航栈（管理界面切换和返回）
+    navigation: NavigationStack,
+    /// UI 上下文
+    ui_context: UiContext,
+    /// 用户设置
+    user_settings: UserSettings,
+    /// Toast 提示管理器
+    toast_manager: ToastManager,
+    
+    // ===== 各界面状态 =====
+    /// 主标题界面
+    title_screen: TitleScreen,
+    /// 游戏内菜单
+    ingame_menu: InGameMenuScreen,
+    /// 存档/读档界面
+    save_load_screen: SaveLoadScreen,
+    /// 设置界面
+    settings_screen: SettingsScreen,
+    /// 历史界面
+    history_screen: HistoryScreen,
 }
 
 impl AppState {
@@ -124,6 +127,10 @@ impl AppState {
         // 从配置获取窗口尺寸
         let (width, height) = (config.window.width as f32, config.window.height as f32);
 
+        // 加载用户设置
+        let user_settings = UserSettings::load(USER_SETTINGS_PATH);
+        println!("✅ 用户设置加载完成");
+
         Self {
             config,
             host_state: HostState::new(),
@@ -134,13 +141,9 @@ impl AppState {
             command_executor: CommandExecutor::new(),
             audio_manager,
             textures: HashMap::new(),
-            demo_state: DemoState::ShowBackground,
             waiting_reason: WaitingReason::None,
             typewriter_timer: 0.0,
             loading_complete: false,
-            command_queue: Vec::new(),
-            command_index: 0,
-            run_mode: RunMode::Demo,
             vn_runtime: None,
             script_finished: false,
             script_index: 0,
@@ -149,6 +152,19 @@ impl AppState {
             current_save_slot: 1,
             scripts,
             play_start_time: std::time::Instant::now(),
+            
+            // UI 系统
+            navigation: NavigationStack::new(),
+            ui_context: UiContext::new(Theme::dark()),
+            user_settings,
+            toast_manager: ToastManager::new(),
+            
+            // 界面状态
+            title_screen: TitleScreen::new(),
+            ingame_menu: InGameMenuScreen::new(),
+            save_load_screen: SaveLoadScreen::new(),
+            settings_screen: SettingsScreen::new(),
+            history_screen: HistoryScreen::new(),
         }
     }
 }
@@ -261,11 +277,8 @@ async fn load_resources(app_state: &mut AppState) {
     app_state.loading_complete = true;
     println!("📦 资源加载完成！共 {} 个纹理", app_state.textures.len());
 
-    // 尝试加载脚本
+    // 预加载脚本（但不开始游戏）
     load_script(app_state);
-
-    // 初始化演示场景
-    init_demo_scene(app_state);
 }
 
 /// 可用的脚本列表
@@ -315,70 +328,6 @@ fn load_script(app_state: &mut AppState) {
             eprintln!("❌ 脚本文件加载失败: {:?} - {}", script_path, e);
         }
     }
-}
-
-/// 初始化演示场景
-fn init_demo_scene(app_state: &mut AppState) {
-    // 设置背景
-    app_state.render_state.set_background("backgrounds/black.png".to_string());
-    // 设置初始等待状态
-    app_state.waiting_reason = WaitingReason::WaitForClick;
-
-    // 初始化命令队列（用于演示 CommandExecutor）
-    app_state.command_queue = vec![
-        // 播放 BGM 测试
-        Command::PlayBgm {
-            path: "bgm/Signal.mp3".to_string(),
-            looping: true,
-        },
-        Command::ShowBackground {
-            path: "backgrounds/black.png".to_string(),
-            transition: None,
-        },
-        Command::ShowCharacter {
-            path: "characters/北风-日常服.png".to_string(),
-            alias: "beifeng".to_string(),
-            position: Position::Center,
-            transition: None,
-        },
-        Command::ShowText {
-            speaker: Some("北风".to_string()),
-            content: "你好，这是通过 CommandExecutor 执行的对话！\n按 F2 切换到命令模式，BGM 正在播放中 🎵".to_string(),
-        },
-        Command::PresentChoices {
-            style: None,
-            choices: vec![
-                Choice { text: "了解更多".to_string(), target_label: "more".to_string() },
-                Choice { text: "继续前进".to_string(), target_label: "continue".to_string() },
-            ],
-        },
-        Command::ChapterMark {
-            title: "第一章 命令系统".to_string(),
-            level: 1,
-        },
-        Command::ShowBackground {
-            path: "backgrounds/white.png".to_string(),
-            transition: None,
-        },
-        Command::ShowCharacter {
-            path: "characters/北风-日常服2.png".to_string(),
-            alias: "beifeng2".to_string(),
-            position: Position::Right,
-            transition: None,
-        },
-        Command::ShowText {
-            speaker: Some("北风".to_string()),
-            content: "按空格键停止 BGM（淡出 2 秒）".to_string(),
-        },
-        // 停止 BGM 测试（带淡出）
-        Command::StopBgm {
-            fade_out: Some(2.0),
-        },
-        Command::ShowText {
-            speaker: Some("北风".to_string()),
-            content: "BGM 已停止！命令模式演示完成。按空格键重新开始。".to_string(),
-        },
-    ];
 }
 
 /// 窗口配置
@@ -449,199 +398,119 @@ fn update_scene_mask(render_state: &mut host::renderer::RenderState, dt: f32) {
 fn update(app_state: &mut AppState) {
     let dt = get_frame_time();
 
-    // 检查窗口关闭
-    if is_key_pressed(KeyCode::Escape) {
-        app_state.host_state.stop();
-    }
+    // 更新 UI 上下文
+    app_state.ui_context.update();
 
-    // 切换调试模式
+    // 更新 Toast
+    app_state.toast_manager.update(dt);
+
+    // 切换调试模式（全局可用）
     if is_key_pressed(KeyCode::F1) {
         app_state.host_state.debug_mode = !app_state.host_state.debug_mode;
     }
 
-    // 切换模式 (F2: 命令模式, F3: 脚本模式)
-    if is_key_pressed(KeyCode::F2) {
-        match app_state.run_mode {
-            RunMode::Command => {
-                // 从命令模式切换回演示模式
-                app_state.run_mode = RunMode::Demo;
-                app_state.demo_state = DemoState::ShowBackground;
-                app_state.render_state = RenderState::new();
-                app_state.render_state.set_background("backgrounds/black.png".to_string());
-                app_state.waiting_reason = WaitingReason::WaitForClick;
-                println!("🎮 切换到演示模式");
-            }
-            _ => {
-                // 进入命令模式
-                app_state.run_mode = RunMode::Command;
-                app_state.command_index = 0;
-                app_state.render_state = RenderState::new();
-                execute_next_command(app_state);
-                println!("🎮 切换到命令模式");
-            }
-        }
-    }
-    
-    if is_key_pressed(KeyCode::F3) {
-        if app_state.vn_runtime.is_some() {
-            match app_state.run_mode {
-                RunMode::Script => {
-                    // 从脚本模式切换回演示模式
-                    app_state.run_mode = RunMode::Demo;
-                    app_state.demo_state = DemoState::ShowBackground;
-                    app_state.render_state = RenderState::new();
-                    app_state.render_state.set_background("backgrounds/black.png".to_string());
-                    app_state.waiting_reason = WaitingReason::WaitForClick;
-                    app_state.script_finished = false;
-                    println!("🎮 切换到演示模式");
-                }
-                _ => {
-                    // 进入脚本模式
-                    app_state.run_mode = RunMode::Script;
-                    app_state.render_state = RenderState::new();
-                    app_state.script_finished = false;
-                    // 重新加载脚本以重置状态
-                    load_script(app_state);
-                    // 执行第一次 tick
-                    run_script_tick(app_state, None);
-                    println!("🎮 切换到脚本模式");
-                }
-            }
-        } else {
-            println!("⚠️ 脚本未加载，无法切换到脚本模式");
-        }
+    // 根据当前模式处理更新
+    let current_mode = app_state.navigation.current();
+    match current_mode {
+        AppMode::Title => update_title(app_state),
+        AppMode::InGame => update_ingame(app_state, dt),
+        AppMode::InGameMenu => update_ingame_menu(app_state),
+        AppMode::SaveLoad => update_save_load(app_state),
+        AppMode::Settings => update_settings(app_state),
+        AppMode::History => update_history(app_state),
     }
 
-    // F4: 切换脚本
-    if is_key_pressed(KeyCode::F4) && !app_state.scripts.is_empty() {
-        app_state.script_index = (app_state.script_index + 1) % app_state.scripts.len();
-        load_script(app_state);
-        // 如果在脚本模式，重新开始
-        if app_state.run_mode == RunMode::Script {
-            app_state.render_state = RenderState::new();
-            app_state.script_finished = false;
-            run_script_tick(app_state, None);
-        }
+    // 游戏进行时的通用更新（过渡效果、音频等）
+    if current_mode.is_in_game() {
+        // 更新过渡效果
+        app_state.command_executor.update_transition(dt);
+        app_state.renderer.update_transition(dt);
+
+        // 更新场景遮罩状态
+        update_scene_mask(&mut app_state.render_state, dt);
     }
 
-    // F5: 快速保存
-    if is_key_pressed(KeyCode::F5) {
-        quick_save(app_state);
-    }
-
-    // F9: 快速读取
-    if is_key_pressed(KeyCode::F9) {
-        quick_load(app_state);
-    }
-
-    // [ / ]: 切换存档槽位
-    if is_key_pressed(KeyCode::LeftBracket) {
-        if app_state.current_save_slot > 1 {
-            app_state.current_save_slot -= 1;
-            println!("📂 切换到存档槽位: {}", app_state.current_save_slot);
-        }
-    }
-    if is_key_pressed(KeyCode::RightBracket) {
-        if app_state.current_save_slot < 99 {
-            app_state.current_save_slot += 1;
-            println!("📂 切换到存档槽位: {}", app_state.current_save_slot);
-        }
-    }
-
-    // 更新过渡效果
-    app_state.command_executor.update_transition(dt);
-    app_state.renderer.update_transition(dt);
-
-    // 更新场景遮罩状态（changeScene 的 Fade/FadeWhite/Rule 效果）
-    update_scene_mask(&mut app_state.render_state, dt);
-
-    // 更新音频状态（淡入淡出等）
+    // 更新音频状态（所有模式都需要）
     if let Some(ref mut audio_manager) = app_state.audio_manager {
         audio_manager.update(dt);
     }
+}
 
-    // 音量控制快捷键
-    if is_key_pressed(KeyCode::M) {
-        if let Some(ref mut audio_manager) = app_state.audio_manager {
-            audio_manager.toggle_mute();
-            let muted = if audio_manager.is_muted() { "静音" } else { "取消静音" };
-            println!("🔊 {}", muted);
+/// 更新主标题界面
+fn update_title(app_state: &mut AppState) {
+    // 初始化界面
+    if app_state.title_screen.needs_init() {
+        app_state.title_screen.init(
+            &app_state.save_manager,
+            &app_state.ui_context.theme,
+            app_state.ui_context.screen_width,
+            app_state.ui_context.screen_height,
+        );
+    }
+
+    // 处理用户操作
+    match app_state.title_screen.update(&app_state.ui_context) {
+        TitleAction::StartGame => {
+            start_new_game(app_state);
+        }
+        TitleAction::Continue => {
+            if let Some(slot) = app_state.title_screen.latest_slot() {
+                load_game(app_state, slot);
+            }
+        }
+        TitleAction::LoadGame => {
+            app_state.save_load_screen = SaveLoadScreen::new().with_tab(SaveLoadTab::Load);
+            app_state.save_load_screen.mark_needs_init();
+            app_state.navigation.navigate_to(AppMode::SaveLoad);
+        }
+        TitleAction::Settings => {
+            app_state.settings_screen.mark_needs_init();
+            app_state.navigation.navigate_to(AppMode::Settings);
+        }
+        TitleAction::Exit => {
+            app_state.host_state.stop();
+        }
+        TitleAction::None => {}
+    }
+}
+
+/// 更新游戏进行中
+fn update_ingame(app_state: &mut AppState, dt: f32) {
+    // ESC 打开系统菜单
+    if is_key_pressed(KeyCode::Escape) {
+        app_state.ingame_menu.mark_needs_init();
+        app_state.navigation.navigate_to(AppMode::InGameMenu);
+        return;
+    }
+
+    // 开发者快捷键（后续考虑 feature gate）
+    #[cfg(debug_assertions)]
+    {
+        if is_key_pressed(KeyCode::F5) {
+            quick_save(app_state);
+        }
+        if is_key_pressed(KeyCode::F9) {
+            quick_load(app_state);
         }
     }
 
-    // 使用 InputManager 处理输入
+    // 使用 InputManager 处理游戏输入
     if let Some(input) = app_state.input_manager.update(&app_state.waiting_reason) {
-        match app_state.run_mode {
-            RunMode::Demo => handle_runtime_input(app_state, input),
-            RunMode::Command => handle_command_mode_input(app_state, input),
-            RunMode::Script => handle_script_mode_input(app_state, input),
-        }
+        handle_script_mode_input(app_state, input);
     }
 
-    // 同步选择索引到 RenderState，并更新选择框矩形
+    // 同步选择索引到 RenderState
     if let Some(ref mut choices) = app_state.render_state.choices {
-        // 更新选择框矩形（用于鼠标悬停检测）
         let choice_rects = app_state.renderer.get_choice_rects(choices.choices.len());
         app_state.input_manager.set_choice_rects(choice_rects);
-        
-        // 同步选择索引和悬停状态
         choices.selected_index = app_state.input_manager.selected_index;
         choices.hovered_index = app_state.input_manager.hovered_index;
-    }
-
-    // 按数字键直接切换演示状态（调试用）
-    if is_key_pressed(KeyCode::Key1) {
-        app_state.demo_state = DemoState::ShowBackground;
-        app_state.waiting_reason = WaitingReason::WaitForClick;
-        app_state.render_state = RenderState::new();
-        app_state.render_state.set_background("backgrounds/black.png".to_string());
-    }
-    if is_key_pressed(KeyCode::Key2) {
-        app_state.demo_state = DemoState::ShowCharacter;
-        app_state.waiting_reason = WaitingReason::WaitForClick;
-        app_state.render_state.set_background("backgrounds/black.png".to_string());
-        app_state.render_state.show_character(
-            "beifeng".to_string(),
-            "characters/北风-日常服.png".to_string(),
-            Position::Center,
-        );
-    }
-    if is_key_pressed(KeyCode::Key3) {
-        app_state.demo_state = DemoState::ShowDialogue;
-        app_state.waiting_reason = WaitingReason::WaitForClick;
-        app_state.render_state.set_background("backgrounds/black.png".to_string());
-        app_state.render_state.show_character(
-            "beifeng".to_string(),
-            "characters/北风-日常服.png".to_string(),
-            Position::Center,
-        );
-        app_state.render_state.start_typewriter(
-            Some("北风".to_string()),
-            "你好，欢迎来到 Visual Novel Engine 的演示！这是一个使用 Rust 和 macroquad 构建的视觉小说引擎。".to_string(),
-        );
-        app_state.typewriter_timer = 0.0;
-    }
-    if is_key_pressed(KeyCode::Key4) {
-        app_state.demo_state = DemoState::ShowChoices;
-        app_state.waiting_reason = WaitingReason::WaitForChoice { choice_count: 3 };
-        app_state.input_manager.reset_choice(3);
-        app_state.render_state.set_choices(vec![
-            ChoiceItem { text: "选项一：前往森林探险".to_string(), target_label: "forest".to_string() },
-            ChoiceItem { text: "选项二：返回村庄休息".to_string(), target_label: "village".to_string() },
-            ChoiceItem { text: "选项三：继续向前走".to_string(), target_label: "forward".to_string() },
-        ], None);
-    }
-    if is_key_pressed(KeyCode::Key5) {
-        app_state.demo_state = DemoState::ShowChapter;
-        app_state.waiting_reason = WaitingReason::WaitForClick;
-        app_state.render_state = RenderState::new();
-        app_state.render_state.set_chapter_mark("第一章 相遇".to_string(), 1);
     }
 
     // 更新打字机效果
     if let Some(ref dialogue) = app_state.render_state.dialogue {
         if !dialogue.is_complete {
-            app_state.typewriter_timer += dt * TYPEWRITER_SPEED;
+            app_state.typewriter_timer += dt * app_state.user_settings.text_speed;
             while app_state.typewriter_timer >= 1.0 {
                 app_state.typewriter_timer -= 1.0;
                 if app_state.render_state.advance_typewriter() {
@@ -652,204 +521,167 @@ fn update(app_state: &mut AppState) {
     }
 }
 
-/// 处理来自 InputManager 的 RuntimeInput
-fn handle_runtime_input(app_state: &mut AppState, input: RuntimeInput) {
-    match input {
-        RuntimeInput::Click => {
-            handle_click(app_state);
+/// 更新游戏内菜单
+fn update_ingame_menu(app_state: &mut AppState) {
+    if app_state.ingame_menu.needs_init() {
+        app_state.ingame_menu.init(&app_state.ui_context);
+    }
+
+    match app_state.ingame_menu.update(&app_state.ui_context) {
+        InGameMenuAction::Resume => {
+            app_state.navigation.go_back();
         }
-        RuntimeInput::ChoiceSelected { index } => {
-            handle_choice_selected(app_state, index);
+        InGameMenuAction::Save => {
+            app_state.save_load_screen = SaveLoadScreen::new().with_tab(SaveLoadTab::Save);
+            app_state.save_load_screen.mark_needs_init();
+            app_state.navigation.navigate_to(AppMode::SaveLoad);
         }
-        RuntimeInput::Signal { id } => {
-            println!("收到信号: {}", id);
-            // 信号处理暂不实现
+        InGameMenuAction::Load => {
+            app_state.save_load_screen = SaveLoadScreen::new().with_tab(SaveLoadTab::Load);
+            app_state.save_load_screen.mark_needs_init();
+            app_state.navigation.navigate_to(AppMode::SaveLoad);
         }
+        InGameMenuAction::Settings => {
+            app_state.settings_screen.mark_needs_init();
+            app_state.navigation.navigate_to(AppMode::Settings);
+        }
+        InGameMenuAction::History => {
+            app_state.history_screen.mark_needs_init();
+            app_state.navigation.navigate_to(AppMode::History);
+        }
+        InGameMenuAction::ReturnToTitle => {
+            // 停止音乐
+            if let Some(ref mut audio) = app_state.audio_manager {
+                audio.stop_bgm(Some(0.5));
+            }
+            app_state.navigation.return_to_title();
+            app_state.title_screen.mark_needs_init();
+            app_state.vn_runtime = None;
+        }
+        InGameMenuAction::Exit => {
+            app_state.host_state.stop();
+        }
+        InGameMenuAction::None => {}
     }
 }
 
-/// 处理点击输入
-fn handle_click(app_state: &mut AppState) {
-    // 如果对话正在打字，先完成打字
-    if !app_state.render_state.is_dialogue_complete() {
-        app_state.render_state.complete_typewriter();
-        return;
+/// 更新存档/读档界面
+fn update_save_load(app_state: &mut AppState) {
+    if app_state.save_load_screen.needs_init() {
+        app_state.save_load_screen.init(&app_state.ui_context, &app_state.save_manager);
+    }
+    if app_state.save_load_screen.needs_refresh() {
+        app_state.save_load_screen.refresh_saves(&app_state.save_manager);
     }
 
-    // 根据当前状态切换到下一个状态
-    match app_state.demo_state {
-        DemoState::ShowBackground => {
-            app_state.demo_state = DemoState::ShowCharacter;
-            app_state.waiting_reason = WaitingReason::WaitForClick;
-            app_state.render_state.show_character(
-                "beifeng".to_string(),
-                "characters/北风-日常服.png".to_string(),
-                Position::Center,
-            );
+    match app_state.save_load_screen.update(&app_state.ui_context) {
+        SaveLoadAction::Back => {
+            app_state.navigation.go_back();
         }
-        DemoState::ShowCharacter => {
-            app_state.demo_state = DemoState::ShowDialogue;
-            app_state.waiting_reason = WaitingReason::WaitForClick;
-            app_state.render_state.start_typewriter(
-                Some("北风".to_string()),
-                "你好，欢迎来到 Visual Novel Engine 的演示！\n这是一个使用 Rust 和 macroquad 构建的视觉小说引擎。".to_string(),
-            );
-            app_state.typewriter_timer = 0.0;
+        SaveLoadAction::Save(slot) => {
+            app_state.current_save_slot = slot;
+            quick_save(app_state);
+            app_state.toast_manager.success(format!("已保存到槽位 {}", slot));
+            app_state.save_load_screen.refresh_saves(&app_state.save_manager);
         }
-        DemoState::ShowDialogue => {
-            // 进入选择界面
-            app_state.demo_state = DemoState::ShowChoices;
-            app_state.waiting_reason = WaitingReason::WaitForChoice { choice_count: 3 };
-            app_state.input_manager.reset_choice(3);
-            app_state.render_state.clear_dialogue();
-            app_state.render_state.set_choices(vec![
-                ChoiceItem { text: "选项一：前往森林探险".to_string(), target_label: "forest".to_string() },
-                ChoiceItem { text: "选项二：返回村庄休息".to_string(), target_label: "village".to_string() },
-                ChoiceItem { text: "选项三：继续向前走".to_string(), target_label: "forward".to_string() },
-            ], None);
+        SaveLoadAction::Load(slot) => {
+            load_game(app_state, slot);
+            app_state.toast_manager.success(format!("已读取槽位 {}", slot));
         }
-        DemoState::ShowChoices => {
-            // 选择界面不响应普通点击，只响应 ChoiceSelected
+        SaveLoadAction::Delete(slot) => {
+            if app_state.save_manager.delete(slot).is_ok() {
+                app_state.toast_manager.info(format!("已删除槽位 {}", slot));
+                app_state.save_load_screen.refresh_saves(&app_state.save_manager);
+            } else {
+                app_state.toast_manager.error("删除失败");
+            }
         }
-        DemoState::ShowChapter => {
-            app_state.demo_state = DemoState::Complete;
-            app_state.waiting_reason = WaitingReason::WaitForClick;
-            app_state.render_state.clear_chapter_mark();
-            app_state.render_state.set_background("backgrounds/white.png".to_string());
-            app_state.render_state.show_character(
-                "beifeng2".to_string(),
-                "characters/北风-日常服2.png".to_string(),
-                Position::Right,
-            );
-            app_state.render_state.set_dialogue(
-                Some("北风".to_string()),
-                "演示完成！按空格键或点击屏幕重新开始。".to_string(),
-            );
-        }
-        DemoState::Complete => {
-            // 重新开始演示
-            app_state.demo_state = DemoState::ShowBackground;
-            app_state.waiting_reason = WaitingReason::WaitForClick;
-            app_state.render_state = RenderState::new();
-            app_state.render_state.set_background("backgrounds/black.png".to_string());
-        }
+        SaveLoadAction::None => {}
     }
 }
 
-/// 处理选择输入
-fn handle_choice_selected(app_state: &mut AppState, index: usize) {
-    if app_state.demo_state != DemoState::ShowChoices {
-        return;
+/// 更新设置界面
+fn update_settings(app_state: &mut AppState) {
+    if app_state.settings_screen.needs_init() {
+        app_state.settings_screen.init(&app_state.ui_context, &app_state.user_settings);
     }
 
-    // 获取选择的选项
-    let choice_text = app_state.render_state.choices
-        .as_ref()
-        .and_then(|c| c.choices.get(index))
-        .map(|item| item.text.clone())
-        .unwrap_or_else(|| format!("选项 {}", index + 1));
-
-    println!("✅ 用户选择了: {} (索引: {})", choice_text, index);
-
-    // 清除选择界面，显示章节标题
-    app_state.demo_state = DemoState::ShowChapter;
-    app_state.waiting_reason = WaitingReason::WaitForClick;
-    app_state.render_state.clear_choices();
-    app_state.render_state.hide_all_characters();
-    app_state.render_state.set_chapter_mark("第一章 相遇".to_string(), 1);
-}
-
-/// 处理命令模式下的输入
-fn handle_command_mode_input(app_state: &mut AppState, input: RuntimeInput) {
-    match input {
-        RuntimeInput::Click => {
-            // 如果对话正在打字，先完成打字
-            if !app_state.render_state.is_dialogue_complete() {
-                app_state.render_state.complete_typewriter();
-                return;
+    match app_state.settings_screen.update(&app_state.ui_context) {
+        SettingsAction::Back => {
+            app_state.navigation.go_back();
+        }
+        SettingsAction::Apply => {
+            // 应用设置
+            app_state.user_settings = app_state.settings_screen.settings().clone();
+            
+            // 应用音量
+            if let Some(ref mut audio) = app_state.audio_manager {
+                audio.set_bgm_volume(app_state.user_settings.bgm_volume);
+                audio.set_sfx_volume(app_state.user_settings.sfx_volume);
+                audio.set_muted(app_state.user_settings.muted);
             }
 
-            // 执行下一条命令
-            execute_next_command(app_state);
-        }
-        RuntimeInput::ChoiceSelected { index } => {
-            // 获取选择的选项
-            let choice_text = app_state.render_state.choices
-                .as_ref()
-                .and_then(|c| c.choices.get(index))
-                .map(|item| item.text.clone())
-                .unwrap_or_else(|| format!("选项 {}", index + 1));
+            // 保存设置
+            if let Err(e) = app_state.user_settings.save(USER_SETTINGS_PATH) {
+                eprintln!("⚠️ 保存用户设置失败: {}", e);
+                app_state.toast_manager.error("设置保存失败");
+            } else {
+                app_state.toast_manager.success("设置已保存");
+            }
 
-            println!("✅ [命令模式] 用户选择了: {} (索引: {})", choice_text, index);
-
-            // 清除选择界面，执行下一条命令
-            app_state.render_state.clear_choices();
-            execute_next_command(app_state);
+            app_state.navigation.go_back();
         }
-        RuntimeInput::Signal { id } => {
-            println!("收到信号: {}", id);
-        }
+        SettingsAction::None => {}
     }
 }
 
-/// 执行下一条命令
-fn execute_next_command(app_state: &mut AppState) {
-    if app_state.command_index >= app_state.command_queue.len() {
-        // 命令执行完毕，重新开始
-        app_state.command_index = 0;
-        app_state.render_state = RenderState::new();
-        println!("🔄 命令执行完毕，重新开始");
+/// 更新历史界面
+fn update_history(app_state: &mut AppState) {
+    if app_state.history_screen.needs_init() {
+        if let Some(ref runtime) = app_state.vn_runtime {
+            app_state.history_screen.init(&app_state.ui_context, runtime.history());
+        }
     }
 
-    // 获取当前命令
-    let command = app_state.command_queue[app_state.command_index].clone();
-    app_state.command_index += 1;
+    match app_state.history_screen.update(&app_state.ui_context) {
+        HistoryAction::Back => {
+            app_state.navigation.go_back();
+        }
+        HistoryAction::None => {}
+    }
+}
 
-    println!("▶️ 执行命令 {}: {:?}", app_state.command_index, command);
-
-    // 执行命令
-    let result = app_state.command_executor.execute(
-        &command,
-        &mut app_state.render_state,
-        &app_state.resource_manager,
-    );
-
-    // 应用过渡效果
-    apply_transition_effect(app_state);
+/// 开始新游戏
+fn start_new_game(app_state: &mut AppState) {
+    // 加载第一个脚本
+    app_state.script_index = 0;
+    load_script(app_state);
     
-    // 处理音频命令
-    handle_audio_command(app_state);
-
-    // 根据执行结果设置等待状态
-    match result {
-        ExecuteResult::Ok => {
-            // 继续执行下一条命令
-            execute_next_command(app_state);
-        }
-        ExecuteResult::WaitForClick => {
-            app_state.waiting_reason = WaitingReason::WaitForClick;
-            app_state.typewriter_timer = 0.0;
-        }
-        ExecuteResult::WaitForChoice { choice_count } => {
-            app_state.waiting_reason = WaitingReason::WaitForChoice { choice_count };
-            app_state.input_manager.reset_choice(choice_count);
-        }
-        ExecuteResult::WaitForTime(ms) => {
-            app_state.waiting_reason = WaitingReason::WaitForTime(
-                std::time::Duration::from_millis(ms)
-            );
-        }
-        ExecuteResult::Loading => {
-            // 资源加载中，等待
-            app_state.waiting_reason = WaitingReason::None;
-        }
-        ExecuteResult::Error(e) => {
-            eprintln!("❌ 命令执行失败: {}", e);
-            // 跳过错误，继续执行
-            execute_next_command(app_state);
-        }
+    if app_state.vn_runtime.is_some() {
+        app_state.render_state = RenderState::new();
+        app_state.script_finished = false;
+        app_state.play_start_time = std::time::Instant::now();
+        
+        // 执行第一次 tick
+        run_script_tick(app_state, None);
+        
+        // 切换到游戏模式
+        app_state.navigation.switch_to(AppMode::InGame);
+        println!("🎮 开始新游戏");
+    } else {
+        app_state.toast_manager.error("没有可用的脚本");
     }
 }
+
+/// 读取存档
+fn load_game(app_state: &mut AppState, slot: u32) {
+    app_state.current_save_slot = slot;
+    if quick_load(app_state) {
+        // 成功读档后切换到游戏模式
+        app_state.navigation.switch_to(AppMode::InGame);
+    }
+}
+
 
 //=============================================================================
 // 过渡效果处理
@@ -901,9 +733,9 @@ fn handle_audio_command(app_state: &mut AppState) {
 
 /// 快速保存
 fn quick_save(app_state: &mut AppState) {
-    // 只在脚本模式下可以保存
-    if app_state.run_mode != RunMode::Script {
-        println!("⚠️ 只能在脚本模式下保存");
+    // 只在游戏模式下可以保存
+    if !app_state.navigation.current().is_in_game() {
+        println!("⚠️ 只能在游戏中保存");
         return;
     }
 
@@ -960,7 +792,7 @@ fn quick_save(app_state: &mut AppState) {
 }
 
 /// 快速读取
-fn quick_load(app_state: &mut AppState) {
+fn quick_load(app_state: &mut AppState) -> bool {
     let slot = app_state.current_save_slot;
 
     // 读取存档
@@ -968,7 +800,7 @@ fn quick_load(app_state: &mut AppState) {
         Ok(data) => data,
         Err(e) => {
             eprintln!("❌ 读取失败: {}", e);
-            return;
+            return false;
         }
     };
 
@@ -978,7 +810,7 @@ fn quick_load(app_state: &mut AppState) {
     
     let Some(idx) = script_index else {
         eprintln!("❌ 找不到脚本: {}", script_id);
-        return;
+        return false;
     };
 
     // 切换到对应脚本
@@ -1011,12 +843,12 @@ fn quick_load(app_state: &mut AppState) {
         }
     }
 
-    // 切换到脚本模式
-    app_state.run_mode = RunMode::Script;
+    // 设置游戏状态
     app_state.script_finished = false;
     app_state.waiting_reason = WaitingReason::WaitForClick;
 
     println!("💾 快速读取成功 (槽位 {})", slot);
+    true
 }
 
 //=============================================================================
@@ -1119,16 +951,46 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
 
 /// 渲染函数
 fn draw(app_state: &mut AppState) {
-    // 使用渲染器渲染
-    app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+    let current_mode = app_state.navigation.current();
+
+    // 根据当前模式绘制
+    match current_mode {
+        AppMode::Title => {
+            app_state.title_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+        }
+        AppMode::InGame => {
+            // 渲染游戏画面
+            app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+        }
+        AppMode::InGameMenu => {
+            // 先渲染游戏画面，再渲染菜单覆盖层
+            app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+            app_state.ingame_menu.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+        }
+        AppMode::SaveLoad => {
+            // 如果是从游戏内打开，先渲染游戏画面
+            if app_state.vn_runtime.is_some() {
+                app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+            }
+            app_state.save_load_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+        }
+        AppMode::Settings => {
+            app_state.settings_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+        }
+        AppMode::History => {
+            // 先渲染游戏画面，再渲染历史覆盖层
+            app_state.renderer.render(&app_state.render_state, &app_state.textures, &app_state.resource_manager, &app_state.manifest);
+            app_state.history_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+        }
+    }
+
+    // 绘制 Toast 提示（所有模式都可显示）
+    app_state.toast_manager.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
 
     // 显示调试信息
     if app_state.host_state.debug_mode {
         draw_debug_info(app_state);
     }
-
-    // 显示操作提示
-    draw_help_text(app_state);
 }
 
 /// 绘制调试信息
@@ -1138,9 +1000,10 @@ fn draw_debug_info(app_state: &AppState) {
     let char_count = app_state.render_state.visible_characters.len();
     let has_bg = app_state.render_state.current_background.is_some();
     let has_dialogue = app_state.render_state.dialogue.is_some();
+    let current_mode = app_state.navigation.current();
 
     // 绘制半透明背景
-    draw_rectangle(5.0, 5.0, 280.0, 140.0, Color::new(0.0, 0.0, 0.0, 0.7));
+    draw_rectangle(5.0, 5.0, 280.0, 160.0, Color::new(0.0, 0.0, 0.0, 0.7));
     
     // 调试信息使用自定义字体
     let lines = [
@@ -1149,7 +1012,8 @@ fn draw_debug_info(app_state: &AppState) {
         format!("角色数量: {}", char_count),
         format!("背景: {}", has_bg),
         format!("对话: {}", has_dialogue),
-        format!("状态: {:?}", app_state.demo_state),
+        format!("模式: {:?}", current_mode),
+        format!("导航栈: {}", app_state.navigation.depth()),
     ];
     
     for (i, line) in lines.iter().enumerate() {
@@ -1161,70 +1025,4 @@ fn draw_debug_info(app_state: &AppState) {
             GREEN,
         );
     }
-}
-
-/// 绘制帮助文本
-fn draw_help_text(app_state: &AppState) {
-    let mode_text = match app_state.run_mode {
-        RunMode::Demo => "[演示模式]",
-        RunMode::Command => "[命令模式]",
-        RunMode::Script => "[脚本模式]",
-    };
-    
-    let help_text = match app_state.run_mode {
-        RunMode::Script => {
-            if app_state.script_finished {
-                "空格键:重新开始"
-            } else {
-                match &app_state.waiting_reason {
-                    WaitingReason::WaitForChoice { .. } => "↑↓选择 回车确认",
-                    _ => "空格键:下一步",
-                }
-            }
-        }
-        RunMode::Command => {
-            match &app_state.waiting_reason {
-                WaitingReason::WaitForChoice { .. } => "↑↓选择 回车确认",
-                _ => "空格键:下一步",
-            }
-        }
-        RunMode::Demo => {
-            match app_state.demo_state {
-                DemoState::ShowBackground => "空格键:显示角色",
-                DemoState::ShowCharacter => "空格键:显示对话",
-                DemoState::ShowDialogue => "空格键:显示选项",
-                DemoState::ShowChoices => "↑↓选择 回车确认",
-                DemoState::ShowChapter => "空格键:继续",
-                DemoState::Complete => "空格键:重新开始",
-            }
-        }
-    };
-
-    let screen_h = screen_height();
-    
-    // 底部提示（使用自定义字体）
-    let script_name = if app_state.scripts.is_empty() {
-        "(无脚本)"
-    } else {
-        &app_state.scripts[app_state.script_index % app_state.scripts.len()].0
-    };
-    
-    // 第一行：模式和操作提示
-    app_state.renderer.text_renderer.draw_ui_text(
-        &format!("{} {} | ESC退出 | F1调试 | F2命令 | F3脚本 | F4切换脚本({})", mode_text, help_text, script_name),
-        10.0,
-        screen_h - 28.0,
-        18.0,
-        Color::new(1.0, 1.0, 1.0, 0.7),
-    );
-    
-    // 第二行：存档信息
-    let slot_info = format!("F5保存 F9读取 [/]切换槽位 | 当前槽位: {}", app_state.current_save_slot);
-    app_state.renderer.text_renderer.draw_ui_text(
-        &slot_info,
-        10.0,
-        screen_h - 10.0,
-        16.0,
-        Color::new(1.0, 1.0, 0.8, 0.6),
-    );
 }

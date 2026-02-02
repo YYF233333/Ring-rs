@@ -1,0 +1,15 @@
+//! # 界面模块
+//!
+//! 各个 UI 界面的实现。
+
+pub mod title;
+pub mod ingame_menu;
+pub mod save_load;
+pub mod settings;
+pub mod history;
+
+pub use title::TitleScreen;
+pub use ingame_menu::InGameMenuScreen;
+pub use save_load::SaveLoadScreen;
+pub use settings::SettingsScreen;
+pub use history::HistoryScreen;

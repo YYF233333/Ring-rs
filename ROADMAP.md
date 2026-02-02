@@ -275,11 +275,11 @@ changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reverse
 
 ---
 
-## 阶段 16：玩家 UI / 体验增强（主界面入口 + 存读档/设置/历史 UI + 测试入口重构）🟦 计划
+## 阶段 16：玩家 UI / 体验增强（主界面入口 + 存读档/设置/历史 UI + 测试入口重构）✅ 已完成
 
-> 主题：把“可玩”从 **开发者快捷键驱动**升级为 **玩家 UI 驱动**。该阶段只做 UI/流程与测试入口重构，避免引入新的脚本语法与演出系统变更。
+> 主题：把"可玩"从 **开发者快捷键驱动**升级为 **玩家 UI 驱动**。该阶段只做 UI/流程与测试入口重构，避免引入新的脚本语法与演出系统变更。
 
-### 16.1 应用流程（App Flow）重构：引入“主界面入口”🟦
+### 16.1 应用流程（App Flow）重构：引入"主界面入口" ✅
 
 - **目标**
   - 启动后进入 **主菜单（Title/MainMenu）**，提供明确入口：开始游戏 / 读档 / 设置
@@ -295,7 +295,7 @@ changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reverse
   - 进入游戏、读档、打开设置均可通过 UI 完成
   - 不使用任何快捷键也能完成：开始→存档→退出到标题→读档→继续
 
-### 16.2 主菜单（Title/MainMenu）🟦
+### 16.2 主菜单（Title/MainMenu）✅
 
 - **功能**
   - **开始游戏**：从配置指定的默认脚本/入口 label 启动（例如 `config.json` 增加 `start_script_id` / `start_label`，或在 Host 侧约定默认脚本）
@@ -308,7 +308,7 @@ changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reverse
   - “继续”在无存档时不会崩溃、不会误导（状态清晰）
   - 主菜单与游戏内菜单的视觉/交互一致（同一套 UI 组件）
 
-### 16.3 游戏内系统菜单（InGameMenu）🟦
+### 16.3 游戏内系统菜单（InGameMenu）✅
 
 - **功能**
   - 打开方式：UI按钮（例如右上角“菜单”）与可选键位（如 `Esc`）——但**存读档/设置功能不再只靠键位**
@@ -319,7 +319,7 @@ changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reverse
   - 菜单打开时剧情停止推进、选择不被误触发
   - 菜单关闭后输入恢复正常
 
-### 16.4 存档 / 读档 UI（SaveLoad）🟦
+### 16.4 存档 / 读档 UI（SaveLoad）✅
 
 - **信息架构**
   - Slot 列表（1-99，可分页/滚动）
@@ -334,7 +334,7 @@ changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reverse
   - 无存档/损坏存档/旧版本存档能给出可理解错误提示，不崩溃
   - 读档后脚本定位与渲染/音频/历史均正确恢复（回归现有验收）
 
-### 16.5 设置 UI（Settings）🟦
+### 16.5 设置 UI（Settings）✅
 
 - **范围（玩家设置，不进脚本）**
   - 音量：BGM/SFX（含静音）
@@ -349,7 +349,7 @@ changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reverse
   - 设置修改即时生效，并在重启后保留
   - 设置界面可从 Title 与 InGameMenu 双入口打开
 
-### 16.6 历史回看 UI（History）🟦
+### 16.6 历史回看 UI（History）✅
 
 - **功能**
   - 面板显示 `HistoryEvent`（至少：对白/旁白/章节标记/选择项）
@@ -360,7 +360,7 @@ changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reverse
   - 历史 UI 不影响当前游戏状态，不会导致推进/选择被触发
   - 与存档的历史数据一致（读档后历史可继续累积）
 
-### 16.7 视觉与交互一致性（UI 基建）🟦
+### 16.7 视觉与交互一致性（UI 基建）✅
 
 - **组件化**
   - Button / Panel / List / Tabs / Modal(Confirm) / Toast
@@ -370,7 +370,7 @@ changeScene <img src="bg.jpg"/> with <img src="rule.png"/> (duration: 1, reverse
   - 操作提示（例如保存成功 toast）
   - 危险操作二次确认（覆盖存档、返回标题、退出）
 
-### 16.8 测试入口重构：移除“演示模式/命令模式”🟦
+### 16.8 测试入口重构：移除"演示模式/命令模式" ✅
 
 - **目标**
   - 测试不再依赖运行时的“演示模式/命令模式”分支（删除这些分支，逻辑回归到唯一入口：Title/MainMenu→Start/Load）
