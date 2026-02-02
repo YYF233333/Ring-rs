@@ -775,19 +775,43 @@ impl Parser {
     }
 
     /// 解析 show 指令
+    /// 
+    /// 支持两种格式：
+    /// - `show <img src="..."> as alias at position` - 显示新立绘并绑定别名
+    /// - `show alias at position` - 使用已绑定的别名改变位置
     fn parse_show(&self, line: &str, line_number: usize) -> Result<Option<ScriptNode>, ParseError> {
-        let path = extract_img_src(line).ok_or_else(|| ParseError::MissingParameter {
-            line: line_number,
-            command: "show".to_string(),
-            param: "图片路径 (<img src=\"...\">)".to_string(),
-        })?;
+        // 尝试提取图片路径（可选）
+        let path = extract_img_src(line).map(|s| s.to_string());
 
-        let alias =
+        // 提取别名
+        // 如果有 <img src>，别名在 "as" 后面
+        // 如果没有 <img src>，别名就是 "show" 后面的第一个词
+        let alias: String = if path.is_some() {
+            // 标准格式：show <img src="..."> as alias at position
             extract_keyword_value(line, "as").ok_or_else(|| ParseError::MissingParameter {
                 line: line_number,
                 command: "show".to_string(),
                 param: "as (别名)".to_string(),
+            })?.to_string()
+        } else {
+            // 简化格式：show alias at position
+            // 提取 "show" 后面的第一个词（到 "at" 之前）
+            let line_lower = line.to_lowercase();
+            let show_pos = line_lower.find("show").ok_or_else(|| ParseError::InvalidLine {
+                line: line_number,
+                message: "无法找到 'show' 关键字".to_string(),
             })?;
+            let after_show = &line[show_pos + 4..].trim_start();
+            
+            // 查找 "at" 的位置
+            let at_pos = after_show.to_lowercase().find(" at ").ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "show".to_string(),
+                param: "at (位置)".to_string(),
+            })?;
+            
+            after_show[..at_pos].trim().to_string()
+        };
 
         let position_str =
             extract_keyword_value(line, "at").ok_or_else(|| ParseError::MissingParameter {
@@ -806,8 +830,8 @@ impl Parser {
         let transition = self.extract_transition_from_line(line);
 
         Ok(Some(ScriptNode::ShowCharacter {
-            path: path.to_string(),
-            alias: alias.to_string(),
+            path,
+            alias,
             position,
             transition,
         }))
@@ -1316,8 +1340,25 @@ mod tests {
 
         assert!(matches!(
             &script.nodes[0],
-            ScriptNode::ShowCharacter { path, alias, position: Position::Center, transition: Some(t) }
-            if path == "assets/char.png" && alias == "royu" && t.name == "Dissolve"
+            ScriptNode::ShowCharacter { path: Some(path), alias, position: Position::Center, transition: Some(t) }
+            if path.as_str() == "assets/char.png" && alias == "royu" && t.name == "Dissolve"
+        ));
+    }
+
+    #[test]
+    fn test_parse_show_character_without_path() {
+        let mut parser = Parser::new();
+        let script = parser
+            .parse(
+                "test",
+                r#"show beifeng at left"#,
+            )
+            .unwrap();
+
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::ShowCharacter { path: None, alias, position: Position::Left, transition: None }
+            if alias == "beifeng"
         ));
     }
 
@@ -1522,8 +1563,8 @@ hide protagonist with fade
 
         assert!(matches!(
             &script.nodes[0],
-            ScriptNode::ShowCharacter { alias, path, position: Position::Left, transition: None }
-            if alias == "红叶" && path == "assets/bg2.jpg"
+            ScriptNode::ShowCharacter { alias, path: Some(path), position: Position::Left, transition: None }
+            if alias == "红叶" && path.as_str() == "assets/bg2.jpg"
         ));
     }
 
@@ -1749,8 +1790,8 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
         ));
 
         // 验证 show
-        if let ScriptNode::ShowCharacter { path, alias, position: _, transition } = &script.nodes[3] {
-            assert_eq!(path, "assets/chara.png");
+        if let ScriptNode::ShowCharacter { path: Some(path), alias, position: _, transition } = &script.nodes[3] {
+            assert_eq!(path.as_str(), "assets/chara.png");
             assert_eq!(alias, "红叶");
             assert!(transition.is_some());
             assert_eq!(transition.as_ref().unwrap().name, "dissolve");
@@ -1879,8 +1920,8 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
         assert_eq!(script.nodes.len(), 1);
         assert!(matches!(
             &script.nodes[0],
-            ScriptNode::ShowCharacter { path, alias, .. } 
-            if path == "../characters/北风.png" && alias == "beifeng"
+            ScriptNode::ShowCharacter { path: Some(path), alias, .. } 
+            if path.as_str() == "../characters/北风.png" && alias == "beifeng"
         ));
     }
 

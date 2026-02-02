@@ -562,6 +562,9 @@ fn update(app_state: &mut AppState) {
 
         // 更新场景遮罩状态
         update_scene_mask(&mut app_state.render_state, dt);
+
+        // 更新角色过渡效果
+        app_state.render_state.update_character_transitions(dt);
     }
 
     // 更新音频状态（所有模式都需要）

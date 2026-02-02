@@ -159,12 +159,41 @@ impl Executor {
                 position,
                 transition,
             } => {
-                // 解析路径（相对于脚本目录）
-                let resolved_path = script.resolve_path(path);
-                // 更新状态
-                state
-                    .visible_characters
-                    .insert(alias.clone(), (resolved_path.clone(), *position));
+                // 如果 path 为 None，尝试从已绑定的别名中查找
+                let resolved_path = if let Some(p) = path {
+                    // 有路径：解析路径（相对于脚本目录）并绑定别名
+                    let resolved = script.resolve_path(p);
+                    // 更新状态
+                    state
+                        .visible_characters
+                        .insert(alias.clone(), (resolved.clone(), *position));
+                    resolved
+                } else {
+                    // 无路径：从已绑定的别名中查找
+                    // 先获取已绑定的路径（避免借用冲突）
+                    let existing_path = state.visible_characters
+                        .get(alias)
+                        .map(|(path, _)| path.clone());
+                    
+                    match existing_path {
+                        Some(path) => {
+                            // 找到已绑定的路径，更新位置
+                            state
+                                .visible_characters
+                                .insert(alias.clone(), (path.clone(), *position));
+                            path
+                        }
+                        None => {
+                            // 别名未绑定，报错
+                            return Err(RuntimeError::InvalidState {
+                                message: format!(
+                                    "别名 '{}' 尚未绑定立绘，无法改变位置。请先使用 'show <img src=\"...\"> as {} at ...' 绑定立绘。",
+                                    alias, alias
+                                ),
+                            });
+                        }
+                    }
+                };
 
                 Ok(ExecuteResult::with_commands(vec![Command::ShowCharacter {
                     path: resolved_path,

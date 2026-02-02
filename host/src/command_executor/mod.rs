@@ -337,17 +337,25 @@ impl CommandExecutor {
         transition: &Option<Transition>,
         render_state: &mut RenderState,
     ) -> ExecuteResult {
-        // 显示角色
-        render_state.show_character(
+        // 解析过渡效果持续时间
+        // 如果 transition 存在且是 dissolve/fade，使用指定的 duration 或默认 0.3 秒
+        let transition_duration = transition.as_ref().and_then(|t| {
+            let name_lower = t.name.to_lowercase();
+            if name_lower == "dissolve" || name_lower == "fade" {
+                // 如果有指定 duration 则使用，否则使用默认值 0.3 秒
+                Some(t.get_duration().map(|d| d as f32).unwrap_or(0.3))
+            } else {
+                None
+            }
+        });
+
+        // 显示角色（带过渡效果）
+        render_state.show_character_with_transition(
             alias.to_string(),
             path.to_string(),
             position,
+            transition_duration,
         );
-
-        // 处理过渡效果
-        if let Some(trans) = transition {
-            self.start_transition(trans);
-        }
 
         ExecuteResult::Ok
     }
@@ -359,13 +367,20 @@ impl CommandExecutor {
         transition: &Option<Transition>,
         render_state: &mut RenderState,
     ) -> ExecuteResult {
-        // 隐藏角色
-        render_state.hide_character(alias);
+        // 解析过渡效果持续时间
+        // 如果 transition 存在且是 dissolve/fade，使用指定的 duration 或默认 0.3 秒
+        let transition_duration = transition.as_ref().and_then(|t| {
+            let name_lower = t.name.to_lowercase();
+            if name_lower == "dissolve" || name_lower == "fade" {
+                // 如果有指定 duration 则使用，否则使用默认值 0.3 秒
+                Some(t.get_duration().map(|d| d as f32).unwrap_or(0.3))
+            } else {
+                None
+            }
+        });
 
-        // 处理过渡效果
-        if let Some(trans) = transition {
-            self.start_transition(trans);
-        }
+        // 隐藏角色（带过渡效果）
+        render_state.hide_character_with_transition(alias, transition_duration);
 
         ExecuteResult::Ok
     }

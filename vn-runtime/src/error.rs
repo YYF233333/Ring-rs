@@ -58,6 +58,10 @@ pub enum RuntimeError {
     /// 脚本执行结束
     #[error("脚本已执行完毕")]
     ScriptEnded,
+
+    /// 无效的状态操作
+    #[error("无效的状态操作: {message}")]
+    InvalidState { message: String },
 }
 
 /// vn-runtime 统一错误类型

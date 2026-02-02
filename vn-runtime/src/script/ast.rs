@@ -75,10 +75,10 @@ pub enum ScriptNode {
 
     /// 显示角色
     ///
-    /// 对应 `show <img> as alias at position with transition` 语法
+    /// 对应 `show <img> as alias at position with transition` 或 `show alias at position` 语法
     ShowCharacter {
-        /// 立绘图片路径
-        path: String,
+        /// 立绘图片路径（可选，如果为 None 则使用已绑定的别名）
+        path: Option<String>,
         /// 角色别名
         alias: String,
         /// 显示位置
