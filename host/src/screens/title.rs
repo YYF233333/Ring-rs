@@ -1,9 +1,8 @@
 //! # 主标题界面
 
 use macroquad::prelude::*;
-use crate::ui::{UiContext, Button, ButtonStyle, Theme, draw_rounded_rect};
-use crate::app_mode::{AppMode, NavigationStack, SaveLoadTab};
-use crate::save_manager::SaveManager;
+use crate::ui::{UiContext, Button, ButtonStyle, Theme};
+use crate::save_manager::{SaveManager, SaveInfo};
 use crate::renderer::TextRenderer;
 
 /// 主菜单项
@@ -11,6 +10,7 @@ use crate::renderer::TextRenderer;
 pub enum TitleAction {
     None,
     StartGame,
+    /// 继续游戏（读取专用 Continue 存档）
     Continue,
     LoadGame,
     Settings,
@@ -21,10 +21,10 @@ pub enum TitleAction {
 pub struct TitleScreen {
     /// 按钮列表
     buttons: Vec<(TitleAction, Button)>,
-    /// 是否有存档可继续
-    has_save: bool,
-    /// 最新存档槽位
-    latest_slot: Option<u32>,
+    /// 是否有 Continue 存档
+    has_continue: bool,
+    /// Continue 存档信息（用于显示）
+    continue_info: Option<SaveInfo>,
     /// 是否需要重新初始化
     needs_init: bool,
 }
@@ -33,20 +33,17 @@ impl TitleScreen {
     pub fn new() -> Self {
         Self {
             buttons: Vec::new(),
-            has_save: false,
-            latest_slot: None,
+            has_continue: false,
+            continue_info: None,
             needs_init: true,
         }
     }
 
-    /// 初始化界面（检查存档状态等）
+    /// 初始化界面（检查 Continue 存档状态）
     pub fn init(&mut self, save_manager: &SaveManager, theme: &Theme, screen_width: f32, screen_height: f32) {
-        // 检查是否有存档
-        let saves = save_manager.list_saves();
-        self.has_save = !saves.is_empty();
-        
-        // 找到最新的存档（按槽位号，实际应该按时间戳）
-        self.latest_slot = saves.iter().map(|(slot, _)| *slot).max();
+        // 检查是否有 Continue 存档
+        self.has_continue = save_manager.has_continue();
+        self.continue_info = save_manager.get_continue_info();
 
         // 创建按钮
         self.buttons.clear();
@@ -65,9 +62,9 @@ impl TitleScreen {
         self.buttons.push((TitleAction::StartGame, start_btn));
         y += button_height + spacing;
 
-        // 继续（如果有存档）
+        // 继续（仅当有 Continue 存档时可用）
         let mut continue_btn = Button::new("继续", center_x, y, button_width, button_height);
-        continue_btn.disabled = !self.has_save;
+        continue_btn.disabled = !self.has_continue;
         self.buttons.push((TitleAction::Continue, continue_btn));
         y += button_height + spacing;
 
@@ -177,9 +174,14 @@ impl TitleScreen {
         self.needs_init
     }
 
-    /// 获取最新存档槽位
-    pub fn latest_slot(&self) -> Option<u32> {
-        self.latest_slot
+    /// 是否有 Continue 存档
+    pub fn has_continue(&self) -> bool {
+        self.has_continue
+    }
+
+    /// 获取 Continue 存档信息
+    pub fn continue_info(&self) -> Option<&SaveInfo> {
+        self.continue_info.as_ref()
     }
 }
 

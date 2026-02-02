@@ -6,6 +6,7 @@
 //!
 //! ```text
 //! saves/
+//! ├── continue.json     # 专用"继续"存档（退出/返回标题时自动维护）
 //! ├── slot_001.json
 //! ├── slot_002.json
 //! └── ...
@@ -19,6 +20,9 @@ use vn_runtime::{SaveData, SaveError};
 
 /// 最大存档槽位数
 pub const MAX_SAVE_SLOTS: u32 = 99;
+
+/// Continue 存档文件名
+const CONTINUE_SAVE_NAME: &str = "continue.json";
 
 /// 存档管理器
 pub struct SaveManager {
@@ -154,10 +158,93 @@ impl SaveManager {
         // 尝试读取并解析元数据
         if let Ok(data) = self.load(slot) {
             Some(SaveInfo {
-                slot,
+                slot: Some(slot),
                 timestamp: data.metadata.timestamp.clone(),
                 chapter_title: data.metadata.chapter_title.clone(),
                 script_id: data.runtime_state.position.script_id.clone(),
+                play_time_secs: data.metadata.play_time_secs,
+            })
+        } else {
+            None
+        }
+    }
+
+    // =========================================================================
+    // Continue 存档（专用"继续"存档）
+    // =========================================================================
+
+    /// Continue 存档路径
+    fn continue_path(&self) -> PathBuf {
+        self.saves_dir.join(CONTINUE_SAVE_NAME)
+    }
+
+    /// 保存 Continue 存档
+    /// 
+    /// 在返回标题 / 退出游戏时调用，记录当前游戏位置。
+    pub fn save_continue(&self, data: &SaveData) -> Result<(), SaveError> {
+        self.ensure_dir()?;
+
+        let path = self.continue_path();
+        let json = data.to_json()?;
+
+        let mut file = File::create(&path)
+            .map_err(|e| SaveError::IoError(format!("无法创建 Continue 存档: {}", e)))?;
+
+        file.write_all(json.as_bytes())
+            .map_err(|e| SaveError::IoError(format!("无法写入 Continue 存档: {}", e)))?;
+
+        println!("💾 Continue 存档保存成功: {:?}", path);
+        Ok(())
+    }
+
+    /// 读取 Continue 存档
+    pub fn load_continue(&self) -> Result<SaveData, SaveError> {
+        let path = self.continue_path();
+
+        if !path.exists() {
+            return Err(SaveError::NotFound("Continue 存档不存在".to_string()));
+        }
+
+        let mut file = File::open(&path)
+            .map_err(|e| SaveError::IoError(format!("无法打开 Continue 存档: {}", e)))?;
+
+        let mut json = String::new();
+        file.read_to_string(&mut json)
+            .map_err(|e| SaveError::IoError(format!("无法读取 Continue 存档: {}", e)))?;
+
+        let data = SaveData::from_json(&json)?;
+        
+        println!("💾 Continue 存档读取成功");
+        Ok(data)
+    }
+
+    /// 检查 Continue 存档是否存在
+    pub fn has_continue(&self) -> bool {
+        self.continue_path().exists()
+    }
+
+    /// 删除 Continue 存档
+    pub fn delete_continue(&self) -> Result<(), SaveError> {
+        let path = self.continue_path();
+
+        if path.exists() {
+            fs::remove_file(&path)
+                .map_err(|e| SaveError::IoError(format!("无法删除 Continue 存档: {}", e)))?;
+            println!("💾 Continue 存档已删除");
+        }
+
+        Ok(())
+    }
+
+    /// 获取 Continue 存档信息
+    pub fn get_continue_info(&self) -> Option<SaveInfo> {
+        if let Ok(data) = self.load_continue() {
+            Some(SaveInfo {
+                slot: None, // Continue 没有槽位号
+                timestamp: data.metadata.timestamp.clone(),
+                chapter_title: data.metadata.chapter_title.clone(),
+                script_id: data.runtime_state.position.script_id.clone(),
+                play_time_secs: data.metadata.play_time_secs,
             })
         } else {
             None
@@ -168,10 +255,74 @@ impl SaveManager {
 /// 存档信息（用于 UI 显示）
 #[derive(Debug, Clone)]
 pub struct SaveInfo {
-    pub slot: u32,
+    /// 槽位号（Continue 存档为 None）
+    pub slot: Option<u32>,
+    /// 保存时间（ISO 8601 格式）
     pub timestamp: String,
+    /// 章节标题
     pub chapter_title: Option<String>,
+    /// 脚本 ID
     pub script_id: String,
+    /// 游戏时长（秒）
+    pub play_time_secs: u64,
+}
+
+impl SaveInfo {
+    /// 格式化时间戳为可读格式
+    pub fn formatted_timestamp(&self) -> String {
+        // 尝试解析 Unix 时间戳
+        if let Ok(secs) = self.timestamp.parse::<u64>() {
+            format_unix_timestamp(secs)
+        } else {
+            // 已经是格式化的字符串
+            self.timestamp.clone()
+        }
+    }
+
+    /// 格式化游玩时间
+    pub fn formatted_play_time(&self) -> String {
+        format_play_time(self.play_time_secs)
+    }
+}
+
+/// 格式化 Unix 时间戳为可读格式
+fn format_unix_timestamp(secs: u64) -> String {
+    use std::time::{Duration, UNIX_EPOCH};
+    
+    let datetime = UNIX_EPOCH + Duration::from_secs(secs);
+    
+    // 简单格式化（不依赖 chrono）
+    if let Ok(since_epoch) = datetime.duration_since(UNIX_EPOCH) {
+        let total_secs = since_epoch.as_secs();
+        // 计算年月日时分（简化版，不考虑时区和闰年精确性）
+        let days = total_secs / 86400;
+        let time_of_day = total_secs % 86400;
+        let hours = time_of_day / 3600;
+        let minutes = (time_of_day % 3600) / 60;
+        
+        // 粗略计算年份（从 1970 开始）
+        let years = 1970 + (days / 365);
+        let remaining_days = days % 365;
+        let month = remaining_days / 30 + 1;
+        let day = remaining_days % 30 + 1;
+        
+        format!("{:04}-{:02}-{:02} {:02}:{:02}", years, month.min(12), day.min(31), hours, minutes)
+    } else {
+        secs.to_string()
+    }
+}
+
+/// 格式化游玩时间
+fn format_play_time(secs: u64) -> String {
+    let hours = secs / 3600;
+    let minutes = (secs % 3600) / 60;
+    let seconds = secs % 60;
+    
+    if hours > 0 {
+        format!("{}:{:02}:{:02}", hours, minutes, seconds)
+    } else {
+        format!("{}:{:02}", minutes, seconds)
+    }
 }
 
 #[cfg(test)]

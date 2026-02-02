@@ -31,6 +31,11 @@ pub struct AppConfig {
     #[serde(default)]
     pub default_font: Option<String>,
 
+    /// **入口脚本路径**（相对于 assets_root）
+    /// 
+    /// 必须配置，未配置将 panic。
+    pub start_script_path: String,
+
     /// 窗口配置
     #[serde(default)]
     pub window: WindowConfig,
@@ -144,6 +149,7 @@ impl Default for AppConfig {
             saves_dir: default_saves_dir(),
             manifest_path: default_manifest_path(),
             default_font: None,
+            start_script_path: String::new(), // 必须在 config.json 中配置
             window: WindowConfig::default(),
             debug: DebugConfig::default(),
             audio: AudioConfig::default(),
@@ -238,6 +244,22 @@ impl AppConfig {
             )));
         }
 
+        // **必须配置入口脚本**
+        if self.start_script_path.is_empty() {
+            return Err(ConfigError::ValidationFailed(
+                "必须配置 start_script_path（入口脚本路径）".to_string(),
+            ));
+        }
+
+        // 检查入口脚本存在
+        let script_full_path = self.assets_root.join(&self.start_script_path);
+        if !script_full_path.exists() {
+            return Err(ConfigError::ValidationFailed(format!(
+                "入口脚本不存在: {:?}",
+                script_full_path
+            )));
+        }
+
         // 检查音量范围
         if self.audio.master_volume < 0.0 || self.audio.master_volume > 1.0 {
             return Err(ConfigError::ValidationFailed(
@@ -258,6 +280,11 @@ impl AppConfig {
         }
 
         Ok(())
+    }
+
+    /// 获取入口脚本完整路径
+    pub fn start_script_full_path(&self) -> PathBuf {
+        self.assets_root.join(&self.start_script_path)
     }
 }
 

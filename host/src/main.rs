@@ -6,7 +6,6 @@ use macroquad::prelude::*;
 use host::HostState;
 use host::resources::ResourceManager;
 use host::renderer::{Renderer, RenderState};
-use host::renderer::render_state::ChoiceItem;
 use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager, AppConfig};
 use host::{AppMode, NavigationStack, SaveLoadTab, UserSettings};
 use host::ui::{UiContext, Theme, ToastManager};
@@ -16,7 +15,6 @@ use host::screens::ingame_menu::InGameMenuAction;
 use host::screens::save_load::SaveLoadAction;
 use host::screens::settings::SettingsAction;
 use host::screens::history::HistoryAction;
-use vn_runtime::command::{Command, Choice, Position};
 use vn_runtime::state::WaitingReason;
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::{VNRuntime, Parser};
@@ -27,9 +25,6 @@ use std::path::PathBuf;
 const CONFIG_PATH: &str = "config.json";
 /// 用户设置文件路径
 const USER_SETTINGS_PATH: &str = "user_settings.json";
-
-/// 打字机效果速度（每秒字符数）
-const TYPEWRITER_SPEED: f32 = 30.0;
 
 /// 应用状态
 struct AppState {
@@ -199,6 +194,12 @@ async fn main() {
     println!("✅ 配置加载完成: {:?}", CONFIG_PATH);
     println!("   assets_root: {:?}", config.assets_root);
     println!("   saves_dir: {:?}", config.saves_dir);
+    println!("   start_script_path: {:?}", config.start_script_path);
+
+    // **验证配置（必须配置 start_script_path）**
+    if let Err(e) = config.validate() {
+        panic!("❌ 配置验证失败: {}", e);
+    }
 
     // 初始化应用状态
     let mut app_state = AppState::new(config);
@@ -217,6 +218,9 @@ async fn main() {
         // 等待下一帧
         next_frame().await;
     }
+    
+    // 退出前保存 Continue 存档
+    save_continue(&mut app_state);
 }
 
 /// 加载所有资源
@@ -283,6 +287,75 @@ async fn load_resources(app_state: &mut AppState) {
 
 /// 可用的脚本列表
 /// 加载脚本文件
+/// 从指定路径加载脚本
+fn load_script_from_path(app_state: &mut AppState, script_path: &PathBuf) -> bool {
+    // 提取脚本 ID（文件名，不含扩展名）
+    let script_id = script_path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    
+    println!("📜 加载脚本: {} ({:?})", script_id, script_path);
+    
+    // 提取脚本所在目录作为 base_path（用于解析相对路径）
+    let base_path = script_path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    
+    println!("📁 脚本目录: {}", base_path);
+    
+    match std::fs::read_to_string(script_path) {
+        Ok(script_text) => {
+            let mut parser = Parser::new();
+            match parser.parse_with_base_path(&script_id, &script_text, &base_path) {
+                Ok(script) => {
+                    println!("✅ 脚本解析成功！节点数: {}", script.len());
+                    
+                    // 打印警告
+                    for warning in parser.warnings() {
+                        println!("⚠️ 解析警告: {}", warning);
+                    }
+                    
+                    // 创建 VNRuntime
+                    app_state.vn_runtime = Some(VNRuntime::new(script));
+                    true
+                }
+                Err(e) => {
+                    eprintln!("❌ 脚本解析失败: {}", e);
+                    false
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ 无法读取脚本文件: {}", e);
+            false
+        }
+    }
+}
+
+/// 根据脚本 ID 加载脚本（用于存档恢复）
+fn load_script_by_id(app_state: &mut AppState, script_id: &str) -> bool {
+    // 在 scripts 列表中查找
+    if let Some((_, path)) = app_state.scripts.iter().find(|(id, _)| id == script_id) {
+        let path = path.clone();
+        return load_script_from_path(app_state, &path);
+    }
+    
+    // 尝试在 assets/scripts 目录下查找
+    let script_path = app_state.config.assets_root
+        .join("scripts")
+        .join(format!("{}.md", script_id));
+    
+    if script_path.exists() {
+        return load_script_from_path(app_state, &script_path);
+    }
+    
+    eprintln!("❌ 找不到脚本: {}", script_id);
+    false
+}
+
+/// 旧版 load_script（保留兼容性，使用 script_index）
 fn load_script(app_state: &mut AppState) {
     if app_state.scripts.is_empty() {
         eprintln!("❌ 没有找到脚本文件");
@@ -451,11 +524,14 @@ fn update_title(app_state: &mut AppState) {
     // 处理用户操作
     match app_state.title_screen.update(&app_state.ui_context) {
         TitleAction::StartGame => {
+            // 开始新游戏时删除旧的 Continue 存档
+            let _ = app_state.save_manager.delete_continue();
             start_new_game(app_state);
         }
         TitleAction::Continue => {
-            if let Some(slot) = app_state.title_screen.latest_slot() {
-                load_game(app_state, slot);
+            // 读取专用 Continue 存档
+            if app_state.title_screen.has_continue() {
+                load_continue(app_state);
             }
         }
         TitleAction::LoadGame => {
@@ -550,13 +626,22 @@ fn update_ingame_menu(app_state: &mut AppState) {
             app_state.navigation.navigate_to(AppMode::History);
         }
         InGameMenuAction::ReturnToTitle => {
+            // 保存 Continue 存档
+            save_continue(app_state);
+            
             // 停止音乐
             if let Some(ref mut audio) = app_state.audio_manager {
                 audio.stop_bgm(Some(0.5));
             }
+            
+            // 清理游戏状态
+            app_state.vn_runtime = None;
+            app_state.render_state = RenderState::new();
+            app_state.script_finished = false;
+            
+            // 返回标题
             app_state.navigation.return_to_title();
             app_state.title_screen.mark_needs_init();
-            app_state.vn_runtime = None;
         }
         InGameMenuAction::Exit => {
             app_state.host_state.stop();
@@ -651,13 +736,12 @@ fn update_history(app_state: &mut AppState) {
     }
 }
 
-/// 开始新游戏
+/// 开始新游戏（使用 config.start_script_path）
 fn start_new_game(app_state: &mut AppState) {
-    // 加载第一个脚本
-    app_state.script_index = 0;
-    load_script(app_state);
+    // 使用配置的入口脚本
+    let script_path = app_state.config.start_script_full_path();
     
-    if app_state.vn_runtime.is_some() {
+    if load_script_from_path(app_state, &script_path) {
         app_state.render_state = RenderState::new();
         app_state.script_finished = false;
         app_state.play_start_time = std::time::Instant::now();
@@ -667,18 +751,38 @@ fn start_new_game(app_state: &mut AppState) {
         
         // 切换到游戏模式
         app_state.navigation.switch_to(AppMode::InGame);
-        println!("🎮 开始新游戏");
+        println!("🎮 开始新游戏: {:?}", script_path);
     } else {
-        app_state.toast_manager.error("没有可用的脚本");
+        app_state.toast_manager.error("无法加载入口脚本");
     }
 }
 
-/// 读取存档
+/// 读取存档（槽位）
 fn load_game(app_state: &mut AppState, slot: u32) {
     app_state.current_save_slot = slot;
     if quick_load(app_state) {
         // 成功读档后切换到游戏模式
         app_state.navigation.switch_to(AppMode::InGame);
+    }
+}
+
+/// 读取 Continue 存档
+fn load_continue(app_state: &mut AppState) {
+    // 读取 Continue 存档
+    let save_data = match app_state.save_manager.load_continue() {
+        Ok(data) => data,
+        Err(e) => {
+            eprintln!("❌ Continue 读取失败: {}", e);
+            app_state.toast_manager.error("Continue 存档读取失败");
+            return;
+        }
+    };
+
+    // 恢复游戏状态
+    if restore_from_save_data(app_state, save_data) {
+        // 成功读档后切换到游戏模式
+        app_state.navigation.switch_to(AppMode::InGame);
+        println!("🎮 继续游戏");
     }
 }
 
@@ -731,23 +835,12 @@ fn handle_audio_command(app_state: &mut AppState) {
 // 存档系统
 //=============================================================================
 
-/// 快速保存
-fn quick_save(app_state: &mut AppState) {
-    // 只在游戏模式下可以保存
-    if !app_state.navigation.current().is_in_game() {
-        println!("⚠️ 只能在游戏中保存");
-        return;
-    }
-
-    let Some(ref runtime) = app_state.vn_runtime else {
-        println!("⚠️ 没有可保存的游戏状态");
-        return;
-    };
+/// 构建当前游戏状态的存档数据
+fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::SaveData> {
+    let runtime = app_state.vn_runtime.as_ref()?;
 
     // 构建存档数据
     let runtime_state = runtime.state().clone();
-    let slot = app_state.current_save_slot;
-
     let mut save_data = vn_runtime::SaveData::new(slot, runtime_state);
 
     // 设置章节标题（如果有）
@@ -784,6 +877,24 @@ fn quick_save(app_state: &mut AppState) {
     // 设置历史记录
     save_data = save_data.with_history(runtime.history().clone());
 
+    Some(save_data)
+}
+
+/// 快速保存（到槽位）
+fn quick_save(app_state: &mut AppState) {
+    // 只在游戏模式下可以保存
+    if !app_state.navigation.current().is_in_game() {
+        println!("⚠️ 只能在游戏中保存");
+        return;
+    }
+
+    let slot = app_state.current_save_slot;
+    
+    let Some(save_data) = build_save_data(app_state, slot) else {
+        println!("⚠️ 没有可保存的游戏状态");
+        return;
+    };
+
     // 保存
     match app_state.save_manager.save(&save_data) {
         Ok(()) => println!("💾 快速保存成功 (槽位 {})", slot),
@@ -791,31 +902,34 @@ fn quick_save(app_state: &mut AppState) {
     }
 }
 
-/// 快速读取
-fn quick_load(app_state: &mut AppState) -> bool {
-    let slot = app_state.current_save_slot;
+/// 保存 Continue 存档（用于"继续"功能）
+fn save_continue(app_state: &mut AppState) {
+    // 只在有游戏状态时保存
+    if app_state.vn_runtime.is_none() {
+        return;
+    }
 
-    // 读取存档
-    let save_data = match app_state.save_manager.load(slot) {
-        Ok(data) => data,
-        Err(e) => {
-            eprintln!("❌ 读取失败: {}", e);
-            return false;
-        }
+    // 使用槽位 0 作为 Continue 存档的元数据标记
+    let Some(save_data) = build_save_data(app_state, 0) else {
+        return;
     };
 
-    // 找到对应的脚本
+    // 保存 Continue 存档
+    match app_state.save_manager.save_continue(&save_data) {
+        Ok(()) => println!("💾 Continue 存档保存成功"),
+        Err(e) => eprintln!("⚠️ Continue 存档保存失败: {}", e),
+    }
+}
+
+/// 从存档数据恢复游戏状态
+fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::SaveData) -> bool {
+    // 加载对应的脚本
     let script_id = &save_data.runtime_state.position.script_id;
-    let script_index = app_state.scripts.iter().position(|(id, _)| id == script_id);
     
-    let Some(idx) = script_index else {
+    if !load_script_by_id(app_state, script_id) {
         eprintln!("❌ 找不到脚本: {}", script_id);
         return false;
-    };
-
-    // 切换到对应脚本
-    app_state.script_index = idx;
-    load_script(app_state);
+    }
 
     // 恢复 Runtime 状态和历史记录
     if let Some(ref mut runtime) = app_state.vn_runtime {
@@ -824,8 +938,8 @@ fn quick_load(app_state: &mut AppState) -> bool {
     }
 
     // 恢复渲染状态
+    app_state.render_state = RenderState::new();
     app_state.render_state.current_background = save_data.render.background;
-    app_state.render_state.visible_characters.clear();
     for char_snap in save_data.render.characters {
         // 尝试解析 position（简化处理，默认 Center）
         let position = vn_runtime::Position::Center;
@@ -846,9 +960,30 @@ fn quick_load(app_state: &mut AppState) -> bool {
     // 设置游戏状态
     app_state.script_finished = false;
     app_state.waiting_reason = WaitingReason::WaitForClick;
+    app_state.play_start_time = std::time::Instant::now(); // 重置开始时间
 
-    println!("💾 快速读取成功 (槽位 {})", slot);
     true
+}
+
+/// 快速读取（从槽位）
+fn quick_load(app_state: &mut AppState) -> bool {
+    let slot = app_state.current_save_slot;
+
+    // 读取存档
+    let save_data = match app_state.save_manager.load(slot) {
+        Ok(data) => data,
+        Err(e) => {
+            eprintln!("❌ 读取失败: {}", e);
+            return false;
+        }
+    };
+
+    if restore_from_save_data(app_state, save_data) {
+        println!("💾 快速读取成功 (槽位 {})", slot);
+        true
+    } else {
+        false
+    }
 }
 
 //=============================================================================

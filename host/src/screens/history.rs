@@ -1,7 +1,7 @@
 //! # 历史回看界面
 
 use macroquad::prelude::*;
-use crate::ui::{UiContext, Button, Panel, ListView, ListItem, draw_rounded_rect};
+use crate::ui::{UiContext, Button, Panel, ListView, ListItem};
 use crate::renderer::TextRenderer;
 use vn_runtime::history::{History, HistoryEvent};
 

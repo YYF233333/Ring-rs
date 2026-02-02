@@ -1,7 +1,7 @@
 //! # 游戏内系统菜单
 
 use macroquad::prelude::*;
-use crate::ui::{UiContext, Button, ButtonStyle, Panel, Modal, ModalResult, draw_rounded_rect};
+use crate::ui::{UiContext, Button, ButtonStyle, Panel, Modal, ModalResult};
 use crate::renderer::TextRenderer;
 
 /// 菜单操作

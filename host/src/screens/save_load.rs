@@ -3,7 +3,7 @@
 use macroquad::prelude::*;
 use crate::ui::{UiContext, Button, ButtonStyle, Panel, ListView, ListItem, Modal, ModalResult};
 use crate::app_mode::SaveLoadTab;
-use crate::save_manager::SaveManager;
+use crate::save_manager::{SaveManager, SaveInfo, MAX_SAVE_SLOTS};
 use crate::renderer::TextRenderer;
 use std::path::PathBuf;
 
@@ -120,17 +120,29 @@ impl SaveLoadScreen {
     pub fn refresh_saves(&mut self, save_manager: &SaveManager) {
         self.saves_cache = save_manager.list_saves();
         
-        // 转换为列表项
-        let items: Vec<ListItem> = (1..=20u32).map(|slot| {
-            let has_save = self.saves_cache.iter().any(|(s, _)| *s == slot);
-
-            if has_save {
+        // 预加载所有存档信息（用于显示元数据）
+        let save_infos: std::collections::HashMap<u32, SaveInfo> = self.saves_cache
+            .iter()
+            .filter_map(|(slot, _)| {
+                save_manager.get_save_info(*slot).map(|info| (*slot, info))
+            })
+            .collect();
+        
+        // 转换为列表项（支持 1-99 槽位）
+        let items: Vec<ListItem> = (1..=MAX_SAVE_SLOTS).map(|slot| {
+            if let Some(info) = save_infos.get(&slot) {
+                // 有存档：显示详细信息
+                let chapter = info.chapter_title.as_deref().unwrap_or("未知章节");
+                let timestamp = info.formatted_timestamp();
+                let play_time = info.formatted_play_time();
+                
                 ListItem::new(
-                    format!("槽位 {} - 有存档", slot),
+                    format!("槽位 {:02} - {}", slot, chapter),
                     slot.to_string()
-                ).with_secondary(format!("点击{}此槽位", if self.tab == SaveLoadTab::Save { "覆盖" } else { "读取" }))
+                ).with_secondary(format!("{} | 游玩: {}", timestamp, play_time))
             } else {
-                let mut item = ListItem::new(format!("槽位 {} - 空", slot), slot.to_string());
+                // 空槽位
+                let mut item = ListItem::new(format!("槽位 {:02} - 空", slot), slot.to_string());
                 // 读档模式下，空槽位禁用
                 if self.tab == SaveLoadTab::Load {
                     item = item.with_disabled(true);
@@ -333,15 +345,3 @@ impl Default for SaveLoadScreen {
     }
 }
 
-/// 格式化游玩时间
-fn format_play_time(secs: u64) -> String {
-    let hours = secs / 3600;
-    let minutes = (secs % 3600) / 60;
-    let seconds = secs % 60;
-    
-    if hours > 0 {
-        format!("{}:{:02}:{:02}", hours, minutes, seconds)
-    } else {
-        format!("{}:{:02}", minutes, seconds)
-    }
-}

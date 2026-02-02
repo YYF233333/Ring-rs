@@ -1,7 +1,7 @@
 //! # 模态对话框组件
 
 use macroquad::prelude::*;
-use super::{UiContext, Panel, Button, ButtonStyle, draw_rounded_rect};
+use super::{UiContext, Panel, Button, ButtonStyle};
 
 /// 模态对话框结果
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
