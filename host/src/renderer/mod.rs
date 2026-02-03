@@ -253,16 +253,6 @@ impl Renderer {
         }
     }
 
-    /// 渲染背景（不带过渡效果，保留兼容）
-    #[allow(dead_code)]
-    fn render_background(&self, state: &RenderState, resource_manager: &ResourceManager) {
-        if let Some(ref bg_path) = state.current_background {
-            if let Some(texture) = resource_manager.peek_texture(bg_path) {
-                self.draw_texture_fit(&texture, DrawMode::Cover);
-            }
-        }
-    }
-
     /// 渲染角色立绘
     ///
     /// 使用 manifest 配置的 anchor + pre_scale + preset 进行布局：
@@ -513,11 +503,6 @@ impl Renderer {
         let scale_x = screen_width() / self.design_width;
         let scale_y = screen_height() / self.design_height;
         scale_x.min(scale_y)
-    }
-
-    /// 绘制纹理以适应屏幕
-    fn draw_texture_fit(&self, texture: &Texture2D, mode: DrawMode) {
-        self.draw_texture_fit_with_alpha(texture, mode, 1.0);
     }
 
     /// 绘制纹理以适应屏幕（带透明度）

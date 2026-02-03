@@ -127,7 +127,7 @@
 
 ## 下一步开发方向
 
-### 阶段 20：仓库可维护性提升 🟦 计划中 
+### 阶段 20：仓库可维护性提升 🟨 进行中（20.1/20.2/20.3 已完成） 
 
 > **主题**：偿还技术债、降低耦合、提升可测试性与工程化质量门禁，让后续功能迭代更快更稳。
 
@@ -160,7 +160,7 @@
 
 ## 具体改进计划（建议按 3 个里程碑落地）
 
-### 20.1 工程化与质量门禁（优先级：最高）
+### 20.1 工程化与质量门禁（优先级：最高）✅ 已完成
 - **本地一键命令**：添加一条“单人开发门禁命令”（推荐其一）
   - `cargo` alias：例如 `cargo q` / `cargo check-all`（在 `.cargo/config.toml` 里维护）
   - 或 `justfile` / `Makefile` / `scripts/`：例如 `just check` 一键执行 `fmt + clippy + test`
@@ -173,9 +173,14 @@
   - Clippy：以 “新代码零 warning” 为目标（可先从 `vn-runtime` 开始，再逐步收紧到 `host`）
   - 文档：补充 `CONTRIBUTING.md`（开发/测试/打包命令、提交规范、目录约定）
 
+**落地内容**：
+- `cargo check-all`：已实现为 **cargo alias → `tools/xtask`** 串行执行 `fmt --check` → `clippy` → `test`
+- `.cargo/config.toml`：补齐常用 alias（`fmt-check`/`fmt-all`/`clippy-all`/`test-all` 等）
+- `tools/xtask`：新增 workspace 工具 crate，确保一键门禁跨平台可用（不依赖 PowerShell hack）
+
 **验收**：本地执行 1-2 条命令即可得到红/绿反馈；主分支始终可构建可测试。
 
-### 20.2 `host/src/main.rs` 拆分（优先级：最高）
+### 20.2 `host/src/main.rs` 拆分 ✅ 已完成
 把 `main.rs` 当前的顶层职责拆成可维护模块（建议结构）：
 - `host/src/bin/host.rs`（或保留 `main.rs` 但只做入口）：macroquad `main` + `window_conf`
 - `host/src/app/`
@@ -191,19 +196,31 @@
 - `host/src/app/save.rs`
   - `build_save_data`、`quick_save/quick_load`、`restore_from_save_data`、continue 存档逻辑
 
+**落地内容**：
+- `main.rs` 从 **1821 行** 缩减到 **169 行**（仅入口 + `load_resources` + `ensure_render_resources` 等 async 函数）
+- 新增 `host/src/app/` 模块树：
+  - `mod.rs`：`AppState` 定义与构造（~220 行）
+  - `script_loader.rs`：脚本扫描/加载（~310 行）
+  - `command_handlers/`：命令处理（`audio.rs`/`transition.rs`/`character.rs`）
+  - `save.rs`：存档系统（~250 行）
+  - `update.rs`：所有 `update_*` 函数 + `run_script_tick`（~420 行）
+  - `draw.rs`：渲染 + 调试信息（~140 行）
+
 **验收**：
-- `main.rs` 仅保留入口与组装，业务逻辑都有归属模块
-- 关键函数拥有清晰的输入/输出（减少 “到处传 `&mut AppState`” 的隐式耦合）
+- ✅ `main.rs` 仅保留入口与组装，业务逻辑都有归属模块
+- ✅ `cargo check-all` 通过（fmt + clippy + 全部测试）
 
-### 20.3 模块边界再梳理（优先级：中）
-- **`command_executor` 拆分**：从单文件巨模块拆为 `executor.rs + audio.rs + ui.rs + transition.rs + character.rs` 等
-  - 明确：输入（Runtime commands）、输出（渲染/音频/状态变化）与错误模型
-- **渲染层瘦身**：对 `renderer/scene_transition.rs`、`animation/system.rs` 进行“类型与职责”拆分
-  - 数学/时间轴/缓动：纯逻辑模块（易测）
-  - macroquad 绘制：薄壳模块（少逻辑）
-- **资源/清单/配置**：整理公共错误类型与路径处理（减少重复）
+### 20.3 模块边界再梳理 + 死代码清理 ✅ 已完成
+- **`command_executor` 拆分**：类型定义拆到 `types.rs`（573 → 485 行）
+- **死代码清理**：
+  - 删除 `load_script_from_path_legacy`（~70 行）- 已废弃旧版加载
+  - 删除 `load_script`（~55 行）- 使用 `script_index` 的旧版
+  - 删除 `render_background` + `draw_texture_fit`（~15 行）- 无过渡版本
+  - 删除 `AppState.script_index` 字段 - 仅被删除的函数使用
+  - 清理 unused imports
+- **渲染层**：当前最大文件 `scene_transition.rs`（560 行）职责单一，暂不强制拆分
 
-**验收**：Top-N 超长文件显著减少；模块间依赖更单向（App → executor → renderer/audio/resources）。
+**验收**：`cargo check -p host` 无 warning；`cargo check-all` 通过。
 
 ### 20.4 host 测试补强（优先级：中-高）
 建议把 host 测试分成三层：

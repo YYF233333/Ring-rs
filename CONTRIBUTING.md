@@ -13,6 +13,7 @@
 
 - **全量**（fmt + clippy + workspace tests）：
   - `cargo check-all`
+  - 说明：该命令通过 `tools/xtask` 串行执行 `fmt --check` → `clippy` → `test`
 
 ### 分步执行（定位问题用）
 

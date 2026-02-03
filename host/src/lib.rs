@@ -13,6 +13,7 @@
 //!
 //! Host 层不包含脚本逻辑，只负责执行 Runtime 发出的 Command。
 
+pub mod app;
 pub mod app_mode;
 pub mod audio;
 pub mod command_executor;

@@ -5,6 +5,7 @@ members = [
     "vn-runtime",
     "host",
     "tools/asset-packer",
+    "tools/xtask",
 ]
 
 default-members = ["host"]
