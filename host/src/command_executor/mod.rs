@@ -520,6 +520,28 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::WaitForClick);
         assert!(render_state.dialogue.is_some());
+
+        let dialogue = render_state.dialogue.as_ref().unwrap();
+        assert_eq!(dialogue.speaker, Some("北风".to_string()));
+        assert_eq!(dialogue.content, "你好");
+    }
+
+    #[test]
+    fn test_execute_show_text_narrator() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::ShowText {
+            speaker: None,
+            content: "旁白内容".to_string(),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::WaitForClick);
+
+        let dialogue = render_state.dialogue.as_ref().unwrap();
+        assert_eq!(dialogue.speaker, None);
     }
 
     #[test]
@@ -545,5 +567,210 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::WaitForChoice { choice_count: 2 });
         assert!(render_state.choices.is_some());
+
+        let choices = render_state.choices.as_ref().unwrap();
+        assert_eq!(choices.choices.len(), 2);
+        assert_eq!(choices.choices[0].text, "选项1");
+        assert_eq!(choices.choices[1].target_label, "label2");
+    }
+
+    #[test]
+    fn test_execute_show_background() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::ShowBackground {
+            path: "backgrounds/bg1.png".to_string(),
+            transition: None,
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+        assert_eq!(
+            render_state.current_background,
+            Some("backgrounds/bg1.png".to_string())
+        );
+    }
+
+    #[test]
+    fn test_execute_show_background_with_transition() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        // 先设置旧背景
+        render_state.set_background("old_bg.png".to_string());
+
+        let transition = Transition::simple("dissolve");
+        let cmd = Command::ShowBackground {
+            path: "new_bg.png".to_string(),
+            transition: Some(transition),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+        assert!(
+            executor
+                .last_output
+                .transition_info
+                .has_background_transition
+        );
+        assert_eq!(
+            executor.last_output.transition_info.old_background,
+            Some("old_bg.png".to_string())
+        );
+    }
+
+    #[test]
+    fn test_execute_show_character() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::ShowCharacter {
+            path: "characters/char1.png".to_string(),
+            alias: "char1".to_string(),
+            position: Position::Center,
+            transition: None,
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+        assert!(render_state.visible_characters.contains_key("char1"));
+
+        let char_sprite = render_state.visible_characters.get("char1").unwrap();
+        assert_eq!(char_sprite.texture_path, "characters/char1.png");
+        assert_eq!(char_sprite.position, Position::Center);
+    }
+
+    #[test]
+    fn test_execute_hide_character() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        // 先显示角色
+        render_state.show_character(
+            "char1".to_string(),
+            "characters/char1.png".to_string(),
+            Position::Center,
+        );
+
+        let cmd = Command::HideCharacter {
+            alias: "char1".to_string(),
+            transition: None,
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+        assert!(!render_state.visible_characters.contains_key("char1"));
+    }
+
+    #[test]
+    fn test_execute_chapter_mark() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::ChapterMark {
+            title: "第一章".to_string(),
+            level: 1,
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::WaitForClick);
+        assert!(render_state.chapter_mark.is_some());
+
+        let chapter = render_state.chapter_mark.as_ref().unwrap();
+        assert_eq!(chapter.title, "第一章");
+        assert_eq!(chapter.level, 1);
+    }
+
+    #[test]
+    fn test_execute_play_bgm() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::PlayBgm {
+            path: "bgm/track1.mp3".to_string(),
+            looping: true,
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+        assert!(executor.last_output.audio_command.is_some());
+
+        if let Some(AudioCommand::PlayBgm { path, looping, .. }) =
+            &executor.last_output.audio_command
+        {
+            assert_eq!(path, "bgm/track1.mp3");
+            assert!(*looping);
+        } else {
+            panic!("Expected PlayBgm command");
+        }
+    }
+
+    #[test]
+    fn test_execute_stop_bgm() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::StopBgm {
+            fade_out: Some(1.0),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        if let Some(AudioCommand::StopBgm { fade_out }) = &executor.last_output.audio_command {
+            assert_eq!(*fade_out, Some(1.0));
+        } else {
+            panic!("Expected StopBgm command");
+        }
+    }
+
+    #[test]
+    fn test_execute_play_sfx() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::PlaySfx {
+            path: "sfx/click.mp3".to_string(),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        if let Some(AudioCommand::PlaySfx { path }) = &executor.last_output.audio_command {
+            assert_eq!(path, "sfx/click.mp3");
+        } else {
+            panic!("Expected PlaySfx command");
+        }
+    }
+
+    #[test]
+    fn test_transition_lifecycle() {
+        let mut executor = CommandExecutor::new();
+        assert!(!executor.is_transition_active());
+
+        // 模拟启动过渡
+        let transition = Transition::simple("dissolve");
+        executor.start_transition(&transition);
+
+        assert!(executor.is_transition_active());
+        assert!(executor.get_transition_progress() < 1.0);
+
+        // 模拟更新
+        executor.update_transition(0.1);
+        assert!(executor.is_transition_active());
+
+        // 完成过渡
+        executor.update_transition(1.0);
+        assert!(!executor.is_transition_active());
+        assert_eq!(executor.get_transition_progress(), 1.0);
     }
 }

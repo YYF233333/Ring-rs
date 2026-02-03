@@ -28,6 +28,16 @@
 
 - `cargo pack -- --help`
 
+## 覆盖率（Coverage）
+
+本仓库的覆盖率目标以 **`vn-runtime` 接近 100%** 为主（`host` 不追求纯覆盖率数值，优先保证关键链路可回归、可 headless 测试）。
+
+- 运行（推荐 `cargo llvm-cov`，Windows 友好）：
+  - `cargo cov-runtime`：生成 `vn-runtime` 覆盖率 HTML 报告
+  - `cargo cov-workspace`：生成 workspace 覆盖率 HTML 报告（趋势观察）
+- 报告位置：`target/llvm-cov/html/index.html`
+- 详情见：`docs/coverage.md`
+
 ## 约定
 
 - 新增/修复逻辑时优先补单元测试；需要跨模块链路时补 `host/tests/` 集成测试（阶段 20 会补齐）。

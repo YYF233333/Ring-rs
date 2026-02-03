@@ -124,127 +124,73 @@
 - `host/src/renderer/transition.rs`
 - `host/src/renderer/scene_transition.rs`
 
+---
+
+## 阶段 20：仓库可维护性提升（技术债偿还）✅ 已完成
+
+> **主题**：降低耦合、减少“巨型文件/巨型模块”、补齐本地质量门禁与测试层，让后续功能迭代更快更稳。
+
+**核心成果（浓缩）**：
+- ✅ **本地质量门禁**：新增 `cargo` alias + `tools/xtask`，一键执行 `fmt --check → clippy → test`（`cargo check-all`）
+- ✅ **入口瘦身**：`host/src/main.rs` **1821 → 169 行**，仅保留 macroquad 入口与胶水；业务逻辑下沉到 `host/src/app/*`
+- ✅ **结构与死代码治理**：
+  - `command_executor` 拆分：类型定义下沉到 `host/src/command_executor/types.rs`（主模块明显变短）
+  - 清理遗留/无用实现：旧脚本加载器、无过渡渲染函数、无用字段/unused imports 等
+- ✅ **host 测试补强**：
+  - 单元测试：**~92 → 111**（补齐 `command_executor` / `render_state` 关键逻辑）
+  - 集成测试：`host/tests/command_execution.rs` 新增 **7** 个 headless 场景测试
+
+**关键文件**：
+- `.cargo/config.toml`、`tools/xtask/`
+- `host/src/main.rs`、`host/src/app/`
+- `host/src/command_executor/{mod.rs,types.rs}`
+- `host/src/renderer/render_state.rs`
+- `host/tests/command_execution.rs`
+
 
 ## 下一步开发方向
 
-### 阶段 20：仓库可维护性提升 🟨 进行中（20.1/20.2/20.3 已完成） 
+### 阶段 21：测试覆盖率攻坚（vn-runtime 近 100%）+ 技术债继续偿还 🟦 计划中
 
-> **主题**：偿还技术债、降低耦合、提升可测试性与工程化质量门禁，让后续功能迭代更快更稳。
+> **主题**：在不引入 CI 的前提下，把“质量反馈”从**能跑**提升到**可度量**；同时继续梳理不合理结构/边界，降低后续功能迭代风险。
 
-**现状（基于仓库扫描）**：
-- **`host/src/main.rs` 约 1515 行**：承载了脚本扫描/加载、UI 状态机、存档、运行循环、绘制、命令处理等多种职责，维护成本高。
-- `host` 存在不少单元测试，但 **`host/tests` 目前为空**（缺集成测试层），且部分测试对外部环境/设备依赖不清晰。
-- **无 CI**（仓库无 `.github`）。作为单人项目当前可以不引入 CI，但仍需要**本地一键质量门禁**（`fmt/clippy/test`）来降低回归风险。
-- `host` 里还有多处“超长模块”（如 `command_executor/mod.rs`、`renderer/scene_transition.rs`、`renderer/animation/system.rs` 等），需要继续拆分边界。
+**背景**：
+- `cargo tarpaulin` 显示 workspace 总体覆盖率 < 20%（host 受环境/设备/渲染驱动影响很难拉满）
+- `vn-runtime` 基本不依赖外部环境，理论上可做到接近 100% 覆盖率
 
----
+### 21.1 覆盖率度量与口径统一（优先级：高）
+- 统一覆盖率口径：
+  - **主目标**：`vn-runtime` 覆盖率（以 line 为主，必要时加 branch）
+  - **次目标**：workspace 覆盖率（允许合理 exclude：macroquad 入口/平台适配等）
+- 产出本地可复现报告（HTML/JSON 均可），并写清“如何跑”和“怎么看”。
+- 可选：评估 `cargo llvm-cov`（Windows 友好）与 `cargo tarpaulin`（Linux/WSL 常用）的取舍，最终选一个作为主口径。
 
-## 目标与验收标准（Definition of Done）
+**验收**：开发者本地一条命令可以生成报告；文档写清统计口径与 exclude 列表。
 
-**工程化门禁**：
-- 建立**本地一键质量门禁**：用脚本/alias 把 `cargo fmt --check`、`cargo clippy`、`cargo test` 串起来，保证每次改动都能快速得到红/绿反馈（可按 crate/feature 分层）。
-- 可选：基础质量配置（例如 `rustfmt.toml`、Clippy 约束策略）仍建议逐步补齐。
-- 可选：引入依赖/许可审计（`cargo-deny` / `cargo-audit`）；等未来开源/多人协作时再接入 CI。
+### 21.2 vn-runtime 覆盖率冲刺（优先级：最高）
+**目标**：`vn-runtime` 覆盖率达到 **95%+**（目标值可根据实际分支复杂度再收敛到 98%）。
 
-**代码结构**：
-- `host/src/main.rs` 目标缩减到 **< 200 行**：仅保留 macroquad 入口、window 配置与启动胶水代码。
-- 主要业务逻辑迁移到 `host` library 内的清晰模块边界（App/脚本加载/命令处理/存档/渲染桥接）。
-- `command_executor` 与 `renderer` 中的超长文件按职责拆分为子模块，并建立稳定 API（避免跨模块直接读写内部字段）。
+建议按模块补齐用例：
+- **脚本解析**：更多错误用例、边界输入（空行/缩进/非法 token/转义字符串/参数列表）
+- **执行引擎**：WaitingReason/输入驱动推进、goto/label、命令序列边界、错误路径
+- **状态/序列化**：save/load roundtrip、版本兼容（如有）、history 记录边界
+- **命令结构**：Transition 参数解析（位置/命名参数）、不允许混用的约束测试
 
-**测试体系**：
-- `vn-runtime` 维持并继续加强（已有较完整单测基础）。
-- `host` 新增 **集成测试**（`host/tests/*.rs` 至少 5 个），覆盖“配置/清单/资源路径/存档回放/命令执行桥接”等关键路径。
-- 为 host 引入“可测试边界”：将渲染/音频/时间/文件系统等外部依赖通过 trait/feature 注入，支持 headless 测试。
+**验收**：覆盖率达到目标；关键 bug 修复都有回归测试；无“只为覆盖率而写”的脆弱测试（断言语义而非实现细节）。
 
----
+### 21.3 host 结构与可测试边界第二轮（优先级：中）
+> 目标不是让 host 覆盖率“接近 100%”，而是把“能测的纯逻辑”抽出来，并建立稳定边界。
 
-## 具体改进计划（建议按 3 个里程碑落地）
+- 继续盘点不合理结构（文件位置、模块耦合、跨层读写内部字段）
+- 将可测试纯逻辑下沉到：
+  - `vn-runtime`（优先）或 host 的纯逻辑模块（不触碰 macroquad/音频设备）
+- 对外部依赖（时间/文件系统/音频/渲染）逐步引入 trait 注入或 feature gate（仅对新增/重构模块做，不强行全盘重写）
 
-### 20.1 工程化与质量门禁（优先级：最高）✅ 已完成
-- **本地一键命令**：添加一条“单人开发门禁命令”（推荐其一）
-  - `cargo` alias：例如 `cargo q` / `cargo check-all`（在 `.cargo/config.toml` 里维护）
-  - 或 `justfile` / `Makefile` / `scripts/`：例如 `just check` 一键执行 `fmt + clippy + test`
-- **建议分层执行**（快 → 慢）：
-  - `vn-runtime`：全量测试（纯逻辑，最快、最稳定）
-  - `host`：优先跑 `cargo test -p host --lib`（避免启动窗口），再逐步引入 headless 集成测试
-  - `quality`：`cargo fmt --check` + `cargo clippy`（建议逐步收敛到 `-D warnings`）
-- **统一工具链（可选）**：未来如需可复现构建，可再添加 `rust-toolchain.toml`（锁定 Rust 版本 + components）
-- **质量基线**：
-  - Clippy：以 “新代码零 warning” 为目标（可先从 `vn-runtime` 开始，再逐步收紧到 `host`）
-  - 文档：补充 `CONTRIBUTING.md`（开发/测试/打包命令、提交规范、目录约定）
-
-**落地内容**：
-- `cargo check-all`：已实现为 **cargo alias → `tools/xtask`** 串行执行 `fmt --check` → `clippy` → `test`
-- `.cargo/config.toml`：补齐常用 alias（`fmt-check`/`fmt-all`/`clippy-all`/`test-all` 等）
-- `tools/xtask`：新增 workspace 工具 crate，确保一键门禁跨平台可用（不依赖 PowerShell hack）
-
-**验收**：本地执行 1-2 条命令即可得到红/绿反馈；主分支始终可构建可测试。
-
-### 20.2 `host/src/main.rs` 拆分 ✅ 已完成
-把 `main.rs` 当前的顶层职责拆成可维护模块（建议结构）：
-- `host/src/bin/host.rs`（或保留 `main.rs` 但只做入口）：macroquad `main` + `window_conf`
-- `host/src/app/`
-  - `mod.rs`：`App`/`AppState`（只保留高层状态与调度）
-  - `update.rs`：`update()` 顶层分发（`Title/InGame/Menu/SaveLoad/Settings/History`）
-  - `draw.rs`：`draw()` / `draw_debug_info()`
-- `host/src/app/script_loader.rs`
-  - `scan_scripts*`、`load_script*`、`collect_prefetch_paths`、脚本来源（FS/ZIP）统一抽象
-- `host/src/app/command_handlers/`
-  - `audio.rs`：`handle_audio_command`
-  - `transition.rs`：`handle_scene_transition`、`apply_transition_effect`
-  - `character.rs`：`handle_character_animation`
-- `host/src/app/save.rs`
-  - `build_save_data`、`quick_save/quick_load`、`restore_from_save_data`、continue 存档逻辑
-
-**落地内容**：
-- `main.rs` 从 **1821 行** 缩减到 **169 行**（仅入口 + `load_resources` + `ensure_render_resources` 等 async 函数）
-- 新增 `host/src/app/` 模块树：
-  - `mod.rs`：`AppState` 定义与构造（~220 行）
-  - `script_loader.rs`：脚本扫描/加载（~310 行）
-  - `command_handlers/`：命令处理（`audio.rs`/`transition.rs`/`character.rs`）
-  - `save.rs`：存档系统（~250 行）
-  - `update.rs`：所有 `update_*` 函数 + `run_script_tick`（~420 行）
-  - `draw.rs`：渲染 + 调试信息（~140 行）
-
-**验收**：
-- ✅ `main.rs` 仅保留入口与组装，业务逻辑都有归属模块
-- ✅ `cargo check-all` 通过（fmt + clippy + 全部测试）
-
-### 20.3 模块边界再梳理 + 死代码清理 ✅ 已完成
-- **`command_executor` 拆分**：类型定义拆到 `types.rs`（573 → 485 行）
-- **死代码清理**：
-  - 删除 `load_script_from_path_legacy`（~70 行）- 已废弃旧版加载
-  - 删除 `load_script`（~55 行）- 使用 `script_index` 的旧版
-  - 删除 `render_background` + `draw_texture_fit`（~15 行）- 无过渡版本
-  - 删除 `AppState.script_index` 字段 - 仅被删除的函数使用
-  - 清理 unused imports
-- **渲染层**：当前最大文件 `scene_transition.rs`（560 行）职责单一，暂不强制拆分
-
-**验收**：`cargo check -p host` 无 warning；`cargo check-all` 通过。
-
-### 20.4 host 测试补强（优先级：中-高）
-建议把 host 测试分成三层：
-- **纯逻辑单测**（现有基础上补齐）：
-  - 过渡/动画系统：时间轴推进、状态机边界、插值正确性
-  - 配置/manifest：反序列化、默认值、错误提示
-- **Headless 集成测试（新增 `host/tests/`）**：
-  - 用 stub/trait 注入替代真实渲染/音频设备，跑“命令执行链路 + 状态演进”
-  - 典型用例：加载脚本 → tick → 产出 commands → host 执行 → 状态变化断言
-- **少量手工/冒烟**：
-  - 仅用于验证窗口/音频设备相关（不进入 CI 关键路径）
-
-**验收**：新增的 `host/tests` 能在本地稳定运行（未来接入 CI 时也应可稳定运行）；关键 bug 修复都有回归测试。
-
----
-
-## 建议的落地顺序（最小风险）
-1. 先上本地一键质量门禁 + 工具链（不改业务逻辑，收益最大）
-2. 再拆 `main.rs`（只做“搬家重排”，保持行为不变；每次拆分后跑测试）
-3. 最后做 headless 注入与集成测试（把外设依赖隔离掉）
+**验收**：新增/重构模块自带测试；host 的 headless 集成测试覆盖更多关键链路（按需增加 3-5 个场景）。
 
 
 
-### 阶段 20：脚本语法扩展（变量系统 + 条件分支）🟦 计划中
+### 阶段 22：脚本语法扩展（变量系统 + 条件分支）🟦 计划中
 
 > **主题**：扩展脚本语言，支持变量、条件分支、循环等编程特性，使脚本更灵活。
 
@@ -273,7 +219,7 @@
 - 变量随存档持久化
 - 现有脚本无需修改即可运行
 
-### 阶段 21：演出效果增强 🟦 计划中
+### 阶段 23：演出效果增强 🟦 计划中
 
 > **主题**：增强演出效果，支持立绘动画、对话框动画、更丰富的过渡效果。
 
@@ -288,7 +234,7 @@
 - `host/src/renderer/character.rs`：立绘动画
 - `host/src/renderer/dialogue.rs`：对话框动画
 
-### 阶段 22：编辑器工具 🟦 计划中
+### 阶段 24：编辑器工具 🟦 计划中
 
 > **主题**：开发可视化脚本编辑器，提升开发效率。
 

@@ -277,3 +277,182 @@ pub struct ChoicesState {
     /// 鼠标悬停索引
     pub hovered_index: Option<usize>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vn_runtime::command::Position;
+
+    #[test]
+    fn test_render_state_default() {
+        let state = RenderState::new();
+        assert!(state.current_background.is_none());
+        assert!(state.visible_characters.is_empty());
+        assert!(state.dialogue.is_none());
+        assert!(state.chapter_mark.is_none());
+        assert!(state.choices.is_none());
+        assert!(state.ui_visible);
+    }
+
+    #[test]
+    fn test_set_background() {
+        let mut state = RenderState::new();
+        state.set_background("bg.png".to_string());
+        assert_eq!(state.current_background, Some("bg.png".to_string()));
+
+        state.clear_background();
+        assert!(state.current_background.is_none());
+    }
+
+    #[test]
+    fn test_show_hide_character() {
+        let mut state = RenderState::new();
+
+        // 显示角色
+        state.show_character("alice".to_string(), "alice.png".to_string(), Position::Left);
+        assert!(state.visible_characters.contains_key("alice"));
+        assert_eq!(
+            state.visible_characters.get("alice").unwrap().texture_path,
+            "alice.png"
+        );
+
+        // 隐藏角色
+        state.hide_character("alice");
+        assert!(!state.visible_characters.contains_key("alice"));
+    }
+
+    #[test]
+    fn test_hide_all_characters() {
+        let mut state = RenderState::new();
+
+        state.show_character("alice".to_string(), "alice.png".to_string(), Position::Left);
+        state.show_character("bob".to_string(), "bob.png".to_string(), Position::Right);
+        assert_eq!(state.visible_characters.len(), 2);
+
+        state.hide_all_characters();
+        assert!(state.visible_characters.is_empty());
+    }
+
+    #[test]
+    fn test_character_fading_out() {
+        let mut state = RenderState::new();
+
+        state.show_character(
+            "alice".to_string(),
+            "alice.png".to_string(),
+            Position::Center,
+        );
+
+        // 标记为淡出
+        state.mark_character_fading_out("alice");
+        assert!(state.visible_characters.get("alice").unwrap().fading_out);
+
+        // 移除淡出完成的角色
+        state.remove_fading_out_characters(&["alice".to_string()]);
+        assert!(!state.visible_characters.contains_key("alice"));
+    }
+
+    #[test]
+    fn test_typewriter_effect() {
+        let mut state = RenderState::new();
+
+        // 开始打字机效果
+        state.start_typewriter(Some("北风".to_string()), "你好世界".to_string());
+        let dialogue = state.dialogue.as_ref().unwrap();
+        assert_eq!(dialogue.visible_chars, 0);
+        assert!(!dialogue.is_complete);
+        assert!(!state.is_dialogue_complete());
+
+        // 推进一个字符
+        state.advance_typewriter();
+        assert_eq!(state.dialogue.as_ref().unwrap().visible_chars, 1);
+
+        // 推进直到完成
+        while !state.is_dialogue_complete() {
+            state.advance_typewriter();
+        }
+        assert_eq!(state.dialogue.as_ref().unwrap().visible_chars, 4); // "你好世界" = 4 个字符
+        assert!(state.is_dialogue_complete());
+    }
+
+    #[test]
+    fn test_complete_typewriter() {
+        let mut state = RenderState::new();
+
+        state.start_typewriter(None, "测试文本".to_string());
+        assert!(!state.is_dialogue_complete());
+
+        // 立即完成
+        state.complete_typewriter();
+        assert!(state.is_dialogue_complete());
+        assert_eq!(state.dialogue.as_ref().unwrap().visible_chars, 4);
+    }
+
+    #[test]
+    fn test_set_dialogue() {
+        let mut state = RenderState::new();
+
+        state.set_dialogue(Some("说话者".to_string()), "内容".to_string());
+        let dialogue = state.dialogue.as_ref().unwrap();
+        assert_eq!(dialogue.speaker, Some("说话者".to_string()));
+        assert_eq!(dialogue.content, "内容");
+        assert!(dialogue.is_complete); // set_dialogue 直接显示全部
+
+        state.clear_dialogue();
+        assert!(state.dialogue.is_none());
+    }
+
+    #[test]
+    fn test_chapter_mark() {
+        let mut state = RenderState::new();
+
+        state.set_chapter_mark("第一章".to_string(), 1);
+        let chapter = state.chapter_mark.as_ref().unwrap();
+        assert_eq!(chapter.title, "第一章");
+        assert_eq!(chapter.level, 1);
+
+        state.clear_chapter_mark();
+        assert!(state.chapter_mark.is_none());
+    }
+
+    #[test]
+    fn test_choices() {
+        let mut state = RenderState::new();
+
+        let choices = vec![
+            ChoiceItem {
+                text: "选项A".to_string(),
+                target_label: "labelA".to_string(),
+            },
+            ChoiceItem {
+                text: "选项B".to_string(),
+                target_label: "labelB".to_string(),
+            },
+        ];
+
+        state.set_choices(choices, Some("default".to_string()));
+        let choices_state = state.choices.as_ref().unwrap();
+        assert_eq!(choices_state.choices.len(), 2);
+        assert_eq!(choices_state.style, Some("default".to_string()));
+        assert_eq!(choices_state.selected_index, 0);
+
+        state.clear_choices();
+        assert!(state.choices.is_none());
+    }
+
+    #[test]
+    fn test_character_z_order() {
+        let mut state = RenderState::new();
+
+        state.show_character("first".to_string(), "first.png".to_string(), Position::Left);
+        state.show_character(
+            "second".to_string(),
+            "second.png".to_string(),
+            Position::Right,
+        );
+
+        // 后添加的角色 z_order 更大
+        assert_eq!(state.visible_characters.get("first").unwrap().z_order, 0);
+        assert_eq!(state.visible_characters.get("second").unwrap().z_order, 1);
+    }
+}
