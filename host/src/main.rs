@@ -5,7 +5,7 @@
 use macroquad::prelude::*;
 use host::HostState;
 use host::resources::ResourceManager;
-use host::renderer::{Renderer, RenderState, SceneMaskType};
+use host::renderer::{Renderer, RenderState, SceneMaskType, AnimationSystem, PropertyKey};
 use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager, AppConfig, AssetSourceType};
 use host::{AppMode, NavigationStack, SaveLoadTab, UserSettings};
 use host::ZipSource;
@@ -79,6 +79,10 @@ struct AppState {
     settings_screen: SettingsScreen,
     /// 历史界面
     history_screen: HistoryScreen,
+    
+    // ===== 阶段19新增：动画系统 =====
+    /// 统一动画系统
+    animation_system: AnimationSystem,
 }
 
 impl AppState {
@@ -222,6 +226,9 @@ impl AppState {
             save_load_screen: SaveLoadScreen::new(),
             settings_screen: SettingsScreen::new(),
             history_screen: HistoryScreen::new(),
+            
+            // 动画系统
+            animation_system: AnimationSystem::new(),
         }
     }
 }
@@ -766,8 +773,30 @@ fn update(app_state: &mut AppState) {
         // 更新场景遮罩状态
         update_scene_mask(&mut app_state.render_state, dt);
 
-        // 更新角色过渡效果
-        app_state.render_state.update_character_transitions(dt);
+        // 更新动画系统
+        let events = app_state.animation_system.update(dt);
+        
+        // 处理动画完成事件，移除淡出完成的角色
+        let completed_fadeouts: Vec<String> = events
+            .iter()
+            .filter_map(|event| {
+                if let host::renderer::AnimationEvent::Completed(id) | host::renderer::AnimationEvent::Skipped(id) = event {
+                    // 检查是否是角色淡出动画（通过 PropertyKey 判断）
+                    if let Some(anim) = app_state.animation_system.get_animation(*id) {
+                        // 检查是否是角色 alpha 属性
+                        if let Some(alias) = anim.key.character_alias() {
+                            if app_state.render_state.visible_characters.get(alias).map(|c| c.fading_out).unwrap_or(false) {
+                                return Some(alias.to_string());
+                            }
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+        
+        // 移除淡出完成的角色
+        app_state.render_state.remove_fading_out_characters(&completed_fadeouts);
     }
 
     // 更新音频状态（所有模式都需要）
@@ -1111,6 +1140,28 @@ fn handle_audio_command(app_state: &mut AppState) {
     }
 }
 
+/// 处理角色动画命令
+fn handle_character_animation(app_state: &mut AppState) {
+    use host::command_executor::CharacterAnimationCommand;
+    
+    let anim_cmd = app_state.command_executor.last_output.character_animation.clone();
+    
+    if let Some(cmd) = anim_cmd {
+        match cmd {
+            CharacterAnimationCommand::Show { alias, duration } => {
+                // 启动淡入动画（使用 PropertyKey）
+                app_state.animation_system.character_fade_in(&alias, duration);
+                println!("🎭 角色淡入动画: {} ({}s)", alias, duration);
+            }
+            CharacterAnimationCommand::Hide { alias, duration } => {
+                // 启动淡出动画（使用 PropertyKey）
+                app_state.animation_system.character_fade_out(&alias, duration);
+                println!("🎭 角色淡出动画: {} ({}s)", alias, duration);
+            }
+        }
+    }
+}
+
 //=============================================================================
 // 存档系统
 //=============================================================================
@@ -1307,6 +1358,20 @@ fn quick_load(app_state: &mut AppState) -> bool {
 
 /// 处理脚本模式下的输入
 fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
+    // 如果有动画正在进行，跳过所有动画
+    if app_state.animation_system.has_active_animations() {
+        app_state.animation_system.skip_all();
+        // 应用最终状态并清理淡出完成的角色
+        let _ = app_state.animation_system.update(0.0);
+        let fading_out: Vec<String> = app_state.render_state.visible_characters
+            .iter()
+            .filter(|(_, c)| c.fading_out)
+            .map(|(alias, _)| alias.clone())
+            .collect();
+        app_state.render_state.remove_fading_out_characters(&fading_out);
+        return;
+    }
+
     // 如果转场正在进行（changeBG），允许输入用于跳过转场
     if app_state.renderer.transition.is_active() {
         // 跳过转场效果
@@ -1380,6 +1445,9 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
 
                 // 处理音频命令
                 handle_audio_command(app_state);
+                
+                // 处理角色动画命令
+                handle_character_animation(app_state);
 
                 // 检查执行结果
                 if let ExecuteResult::Error(e) = result {
@@ -1426,17 +1494,17 @@ fn draw(app_state: &mut AppState) {
         }
         AppMode::InGame => {
             // 渲染游戏画面
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest, &app_state.animation_system);
         }
         AppMode::InGameMenu => {
             // 先渲染游戏画面，再渲染菜单覆盖层
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest, &app_state.animation_system);
             app_state.ingame_menu.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
         AppMode::SaveLoad => {
             // 如果是从游戏内打开，先渲染游戏画面
             if app_state.vn_runtime.is_some() {
-                app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
+                app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest, &app_state.animation_system);
             }
             app_state.save_load_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
@@ -1445,7 +1513,7 @@ fn draw(app_state: &mut AppState) {
         }
         AppMode::History => {
             // 先渲染游戏画面，再渲染历史覆盖层
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest, &app_state.animation_system);
             app_state.history_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
     }

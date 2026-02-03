@@ -12,18 +12,32 @@
 use macroquad::prelude::*;
 use vn_runtime::command::Position;
 
-use crate::resources::ResourceManager;
 use crate::manifest::Manifest;
+use crate::resources::ResourceManager;
 
+pub mod animation;
+pub mod character_animation;
 pub mod render_state;
+mod image_dissolve;
 mod text_renderer;
 mod transition;
-mod image_dissolve;
 
-pub use render_state::{RenderState, CharacterSprite, DialogueState, ChoiceItem, ChoicesState, SceneMaskState, SceneMaskType};
-pub use text_renderer::TextRenderer;
-pub use transition::{TransitionManager, TransitionType, TransitionPhase};
+pub use animation::{
+    Animation, AnimationEvent, AnimationId, AnimationState, AnimationSystem, AnimationTarget,
+    EasingFunction, PropertyKey, Transform, Vec2 as AnimVec2,
+};
+// Trait-based 动画系统新 API
+pub use animation::{
+    Animatable, AnimPropertyKey, ObjectId, PropertyAccessor, SimplePropertyAccessor,
+};
+pub use character_animation::{AnimatableCharacter, CharacterAnimData};
 pub use image_dissolve::ImageDissolve;
+pub use render_state::{
+    CharacterSprite, ChoiceItem, ChoicesState, DialogueState, RenderState, SceneMaskState,
+    SceneMaskType,
+};
+pub use text_renderer::TextRenderer;
+pub use transition::{TransitionManager, TransitionPhase, TransitionType};
 
 /// 渲染器
 ///
@@ -59,28 +73,37 @@ impl Renderer {
     pub async fn init(&mut self, font_path: &str) -> Result<(), String> {
         // 初始化字体
         self.text_renderer.load_font(font_path).await?;
-        
+
         // 初始化 ImageDissolve shader
         if let Err(e) = self.image_dissolve.init() {
-            eprintln!("⚠️ ImageDissolve shader 初始化失败，将使用降级方案: {}", e);
+            eprintln!(
+                "⚠️ ImageDissolve shader 初始化失败，将使用降级方案: {}",
+                e
+            );
             // 不返回错误，因为有降级方案
         }
-        
+
         Ok(())
     }
 
     /// 渲染完整画面
     ///
     /// 纹理从 `resource_manager` 缓存中获取（使用 `peek_texture` 不更新 LRU）。
-    pub fn render(&mut self, state: &RenderState, resource_manager: &ResourceManager, manifest: &Manifest) {
+    pub fn render(
+        &mut self,
+        state: &RenderState,
+        resource_manager: &ResourceManager,
+        manifest: &Manifest,
+        animation_system: &AnimationSystem,
+    ) {
         // 清空屏幕
         clear_background(BLACK);
 
         // 1. 渲染背景（带过渡效果）
         self.render_background_with_transition(state, resource_manager);
 
-        // 2. 渲染角色
-        self.render_characters(state, resource_manager, manifest);
+        // 2. 渲染角色（从 AnimationSystem 获取变换）
+        self.render_characters(state, resource_manager, manifest, animation_system);
 
         // 3-5. 渲染 UI 层（仅当 ui_visible 为 true）
         if state.ui_visible {
@@ -99,9 +122,6 @@ impl Renderer {
 
         // 6. 渲染场景遮罩（changeScene 的 Fade/FadeWhite/Rule 效果）
         self.render_scene_mask(state, resource_manager);
-
-        // 7. 渲染过渡效果遮罩（普通 Fade 效果）
-        self.transition.render_overlay();
     }
 
     /// 更新过渡效果
@@ -116,7 +136,7 @@ impl Renderer {
         transition: Option<&vn_runtime::command::Transition>,
     ) {
         self.old_background = old_bg;
-        
+
         if let Some(trans) = transition {
             self.transition.start_from_command(trans);
         } else {
@@ -132,7 +152,11 @@ impl Renderer {
     }
 
     /// 渲染背景（带过渡效果）
-    fn render_background_with_transition(&self, state: &RenderState, resource_manager: &ResourceManager) {
+    fn render_background_with_transition(
+        &self,
+        state: &RenderState,
+        resource_manager: &ResourceManager,
+    ) {
         // 渲染旧背景（如果正在过渡中）
         if self.transition.is_active() {
             if let Some(ref old_bg_path) = self.old_background {
@@ -169,48 +193,67 @@ impl Renderer {
     /// 使用 manifest 配置的 anchor + pre_scale + preset 进行布局：
     /// 1. 从 manifest 获取立绘组的 anchor 和 pre_scale
     /// 2. 从 manifest 获取站位预设的 x, y, scale
-    /// 3. 计算最终位置和尺寸
-    fn render_characters(&self, state: &RenderState, resource_manager: &ResourceManager, manifest: &Manifest) {
-        // 按 z_order 排序渲染
-        let mut characters: Vec<_> = state.visible_characters.values().collect();
-        characters.sort_by_key(|c| c.z_order);
+    /// 3. 从 AnimationSystem 获取动画变换（透明度等）
+    /// 4. 计算最终位置和尺寸
+    fn render_characters(
+        &self,
+        state: &RenderState,
+        resource_manager: &ResourceManager,
+        manifest: &Manifest,
+        animation_system: &AnimationSystem,
+    ) {
+        // 按 z_order 排序渲染，同时收集 alias
+        let mut characters: Vec<_> = state.visible_characters.iter().collect();
+        characters.sort_by_key(|(_, c)| c.z_order);
 
         let screen_w = screen_width();
         let screen_h = screen_height();
         let base_scale = self.get_scale_factor();
 
-        for character in characters {
+        for (alias, character) in characters {
             // 从 ResourceManager 缓存获取纹理
             if let Some(texture) = resource_manager.peek_texture(&character.texture_path) {
                 // 获取立绘组配置
                 let group_config = manifest.get_group_config(&character.texture_path);
-                
+
                 // 获取站位预设
                 let position_name = Self::position_to_preset_name(character.position);
                 let preset = manifest.get_preset(&position_name);
-                
-                // 计算最终缩放：基础缩放 * 预处理缩放 * 站位缩放
-                let final_scale = base_scale * group_config.pre_scale * preset.scale;
-                
+
+                // 从 AnimationSystem 获取角色属性
+                let alpha = animation_system.get_character_alpha(alias);
+                let position_x = animation_system
+                    .get_value(&PropertyKey::character_position_x(alias))
+                    .unwrap_or(0.0);
+                let position_y = animation_system
+                    .get_value(&PropertyKey::character_position_y(alias))
+                    .unwrap_or(0.0);
+                let scale_x = animation_system
+                    .get_value(&PropertyKey::character_scale_x(alias))
+                    .unwrap_or(1.0);
+
+                // 计算最终缩放：基础缩放 * 预处理缩放 * 站位缩放 * 动画缩放
+                let final_scale = base_scale * group_config.pre_scale * preset.scale * scale_x;
+
                 // 计算渲染尺寸
                 let dest_w = texture.width() * final_scale;
                 let dest_h = texture.height() * final_scale;
-                
-                // 计算屏幕目标点（预设位置）
-                let target_x = screen_w * preset.x;
-                let target_y = screen_h * preset.y;
-                
+
+                // 计算屏幕目标点（预设位置 + 动画位置偏移）
+                let target_x = screen_w * preset.x + position_x;
+                let target_y = screen_h * preset.y + position_y;
+
                 // 计算立绘锚点在纹理中的像素位置
                 let anchor_px_x = dest_w * group_config.anchor.x;
                 let anchor_px_y = dest_h * group_config.anchor.y;
-                
+
                 // 最终位置：目标点 - 锚点偏移
                 let x = target_x - anchor_px_x;
                 let y = target_y - anchor_px_y;
-                
-                // 应用透明度
-                let color = Color::new(1.0, 1.0, 1.0, character.alpha);
-                
+
+                // 应用透明度（从动画系统获取）
+                let color = Color::new(1.0, 1.0, 1.0, alpha);
+
                 draw_texture_ex(
                     &texture,
                     x,
@@ -224,7 +267,7 @@ impl Renderer {
             }
         }
     }
-    
+
     /// 将 Position 枚举转换为预设名称
     fn position_to_preset_name(position: Position) -> &'static str {
         match position {
@@ -257,10 +300,8 @@ impl Renderer {
         if let Some(ref chapter) = state.chapter_mark {
             // 章节标记有自己的 alpha，与 UI alpha 相乘
             let effective_alpha = chapter.alpha * alpha;
-            self.text_renderer.render_chapter_title(
-                &chapter.title,
-                effective_alpha,
-            );
+            self.text_renderer
+                .render_chapter_title(&chapter.title, effective_alpha);
         }
     }
 
@@ -289,8 +330,10 @@ impl Renderer {
                     // 绘制黑色遮罩
                     if mask.alpha > 0.0 {
                         draw_rectangle(
-                            0.0, 0.0,
-                            screen_width(), screen_height(),
+                            0.0,
+                            0.0,
+                            screen_width(),
+                            screen_height(),
                             Color::new(0.0, 0.0, 0.0, mask.alpha),
                         );
                     }
@@ -299,8 +342,10 @@ impl Renderer {
                     // 绘制白色遮罩
                     if mask.alpha > 0.0 {
                         draw_rectangle(
-                            0.0, 0.0,
-                            screen_width(), screen_height(),
+                            0.0,
+                            0.0,
+                            screen_width(),
+                            screen_height(),
                             Color::new(1.0, 1.0, 1.0, mask.alpha),
                         );
                     }
@@ -308,7 +353,8 @@ impl Renderer {
                 SceneMaskType::Rule { mask_path, reversed } => {
                     // Rule 遮罩：使用 ImageDissolve shader 实现
                     // 三阶段：phase 0: 旧背景→黑屏，phase 1: 黑屏停顿，phase 2: 黑屏→新背景
-                    let mask_texture = resource_manager.peek_texture(mask_path)
+                    let mask_texture = resource_manager
+                        .peek_texture(mask_path)
                         .unwrap_or_else(|| panic!("Rule 遮罩纹理未找到: {}", mask_path));
 
                     if !self.image_dissolve.is_initialized() {
@@ -316,23 +362,29 @@ impl Renderer {
                     }
 
                     let progress = mask.dissolve_progress;
-                    let black_texture = resource_manager.peek_texture("backgrounds/black.png")
+                    let black_texture = resource_manager
+                        .peek_texture("backgrounds/black.png")
                         .unwrap_or_else(|| panic!("缺少黑色背景纹理: backgrounds/black.png"));
 
                     match mask.phase {
                         0 => {
                             // phase 0: 旧背景 → 黑屏
-                            let old_bg_path = state.current_background.as_ref()
+                            let old_bg_path = state
+                                .current_background
+                                .as_ref()
                                 .unwrap_or_else(|| panic!("Rule 遮罩缺少当前背景"));
-                            let old_bg_texture = resource_manager.peek_texture(old_bg_path)
-                                .unwrap_or_else(|| panic!("Rule 旧背景纹理未找到: {}", old_bg_path));
+                            let old_bg_texture = resource_manager
+                                .peek_texture(old_bg_path)
+                                .unwrap_or_else(|| {
+                                    panic!("Rule 旧背景纹理未找到: {}", old_bg_path)
+                                });
 
                             let (dest_w, dest_h, x, y) =
                                 self.calculate_draw_rect(&old_bg_texture, DrawMode::Cover);
                             // 从旧背景溶解到黑色
                             self.image_dissolve.draw(
-                                &black_texture,      // 目标：黑色
-                                &old_bg_texture,     // 源：旧背景
+                                &black_texture,  // 目标：黑色
+                                &old_bg_texture, // 源：旧背景
                                 &mask_texture,
                                 progress,
                                 *reversed,
@@ -342,28 +394,34 @@ impl Renderer {
                         1 => {
                             // phase 1: 黑屏停顿 - 绘制纯黑屏
                             draw_rectangle(
-                                0.0, 0.0,
-                                screen_width(), screen_height(),
+                                0.0,
+                                0.0,
+                                screen_width(),
+                                screen_height(),
                                 Color::new(0.0, 0.0, 0.0, 1.0),
                             );
                         }
                         2 => {
                             // phase 2: 黑屏 → 新背景
                             // 注意：此时 pending_background 已在 is_at_midpoint() 时被 take 并设置到 current_background
-                            let new_bg_path = state.current_background.as_ref()
-                                .unwrap_or_else(|| panic!("Rule 遮罩缺少新背景（current_background）"));
-                            let new_bg_texture = resource_manager.peek_texture(new_bg_path)
-                                .unwrap_or_else(|| panic!("Rule 新背景纹理未找到: {}", new_bg_path));
+                            let new_bg_path = state.current_background.as_ref().unwrap_or_else(|| {
+                                panic!("Rule 遮罩缺少新背景（current_background）")
+                            });
+                            let new_bg_texture = resource_manager
+                                .peek_texture(new_bg_path)
+                                .unwrap_or_else(|| {
+                                    panic!("Rule 新背景纹理未找到: {}", new_bg_path)
+                                });
 
                             let (dest_w, dest_h, x, y) =
                                 self.calculate_draw_rect(&new_bg_texture, DrawMode::Cover);
                             // 从黑色溶解到新背景（反向溶解）
                             self.image_dissolve.draw(
-                                &new_bg_texture,     // 目标：新背景
-                                &black_texture,      // 源：黑色
+                                &new_bg_texture, // 目标：新背景
+                                &black_texture,  // 源：黑色
                                 &mask_texture,
                                 progress,
-                                !*reversed,         // 反向，让效果对称
+                                !*reversed, // 反向，让效果对称
                                 (x, y, dest_w, dest_h),
                             );
                         }

@@ -28,9 +28,12 @@ pub mod screens;
 
 pub use state::HostState;
 pub use resources::{ResourceManager, ResourceError, ResourceSource, FsSource, ZipSource, TextureCache, CacheStats};
-pub use renderer::{Renderer, RenderState, DrawMode, TransitionManager, TransitionType};
+pub use renderer::{Renderer, RenderState, DrawMode, TransitionManager, TransitionType, AnimationSystem, PropertyKey};
+// Trait-based 动画系统新 API
+pub use renderer::{Animatable, AnimPropertyKey, ObjectId, PropertyAccessor, SimplePropertyAccessor};
+pub use renderer::{AnimatableCharacter, CharacterAnimData};
 pub use input::InputManager;
-pub use command_executor::{CommandExecutor, ExecuteResult, TransitionInfo, AudioCommand, CommandOutput};
+pub use command_executor::{CommandExecutor, ExecuteResult, TransitionInfo, AudioCommand, CommandOutput, CharacterAnimationCommand};
 pub use audio::AudioManager;
 pub use manifest::Manifest;
 pub use save_manager::SaveManager;

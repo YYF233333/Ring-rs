@@ -336,109 +336,48 @@ impl RenderState {
         self.current_background = None;
     }
 
-    /// 显示角色（带可选的过渡效果）
+    /// 显示角色
+    ///
+    /// 注意：动画效果由 AnimationSystem 管理，这里只创建角色数据。
     pub fn show_character(&mut self, alias: String, texture_path: String, position: Position) {
-        self.show_character_with_transition(alias, texture_path, position, None);
-    }
-
-    /// 显示角色（带过渡效果）
-    pub fn show_character_with_transition(
-        &mut self,
-        alias: String,
-        texture_path: String,
-        position: Position,
-        transition_duration: Option<f32>,
-    ) {
         let z_order = self.visible_characters.len() as i32;
-        let transition = if let Some(duration) = transition_duration {
-            CharacterTransition::FadeIn {
-                progress: 0.0,
-                duration: duration.max(0.01),
-            }
-        } else {
-            CharacterTransition::None
-        };
-
-        let alpha = if transition != CharacterTransition::None {
-            0.0  // 淡入时从 0 开始
-        } else {
-            1.0  // 无过渡时直接显示
-        };
 
         self.visible_characters.insert(
             alias,
             CharacterSprite {
                 texture_path,
                 position,
-                alpha,
                 z_order,
-                transition,
+                fading_out: false,
             },
         );
     }
 
-    /// 隐藏角色（带可选的过渡效果）
+    /// 隐藏角色（立即移除）
     pub fn hide_character(&mut self, alias: &str) {
-        self.hide_character_with_transition(alias, None);
+        self.visible_characters.remove(alias);
     }
 
-    /// 隐藏角色（带过渡效果）
-    pub fn hide_character_with_transition(&mut self, alias: &str, transition_duration: Option<f32>) {
+    /// 标记角色为淡出状态
+    ///
+    /// 角色会在动画完成后被 `remove_fading_out_characters` 移除。
+    pub fn mark_character_fading_out(&mut self, alias: &str) {
         if let Some(character) = self.visible_characters.get_mut(alias) {
-            if let Some(duration) = transition_duration {
-                // 开始淡出
-                character.transition = CharacterTransition::FadeOut {
-                    progress: 0.0,
-                    duration: duration.max(0.01),
-                };
-            } else {
-                // 无过渡，立即移除
-                self.visible_characters.remove(alias);
-            }
+            character.fading_out = true;
         }
     }
 
-    /// 更新角色过渡效果
-    /// 返回是否有角色被移除（淡出完成）
-    pub fn update_character_transitions(&mut self, dt: f32) -> bool {
-        let mut removed_any = false;
-        let mut to_remove = Vec::new();
-
-        for (alias, character) in &mut self.visible_characters {
-            match &mut character.transition {
-                CharacterTransition::FadeIn { progress, duration } => {
-                    *progress += dt / *duration;
-                    if *progress >= 1.0 {
-                        *progress = 1.0;
-                        character.alpha = 1.0;
-                        character.transition = CharacterTransition::None;
-                    } else {
-                        character.alpha = *progress;
-                    }
-                }
-                CharacterTransition::FadeOut { progress, duration } => {
-                    *progress += dt / *duration;
-                    if *progress >= 1.0 {
-                        *progress = 1.0;
-                        // 淡出完成，标记为移除
-                        to_remove.push(alias.clone());
-                        removed_any = true;
-                    } else {
-                        character.alpha = 1.0 - *progress;
-                    }
-                }
-                CharacterTransition::None => {
-                    // 无过渡，保持当前 alpha
+    /// 移除所有标记为淡出且动画已完成的角色
+    ///
+    /// 应在动画系统更新后调用，传入已完成淡出的角色列表。
+    pub fn remove_fading_out_characters(&mut self, completed_aliases: &[String]) {
+        for alias in completed_aliases {
+            if let Some(character) = self.visible_characters.get(alias) {
+                if character.fading_out {
+                    self.visible_characters.remove(alias);
                 }
             }
         }
-
-        // 移除淡出完成的角色
-        for alias in to_remove {
-            self.visible_characters.remove(&alias);
-        }
-
-        removed_any
     }
 
     /// 隐藏所有角色
@@ -529,30 +468,19 @@ impl RenderState {
     }
 }
 
-/// 角色过渡状态
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum CharacterTransition {
-    /// 无过渡
-    None,
-    /// 正在淡入
-    FadeIn { progress: f32, duration: f32 },
-    /// 正在淡出
-    FadeOut { progress: f32, duration: f32 },
-}
-
 /// 角色立绘状态
+///
+/// 存储角色立绘的基本信息。动画（透明度、位置等）由 AnimationSystem 统一管理。
 #[derive(Debug, Clone)]
 pub struct CharacterSprite {
     /// 纹理路径
     pub texture_path: String,
-    /// 位置
+    /// 位置预设
     pub position: Position,
-    /// 透明度 (0.0 - 1.0)
-    pub alpha: f32,
     /// 渲染顺序（越大越靠前）
     pub z_order: i32,
-    /// 过渡状态
-    transition: CharacterTransition,
+    /// 是否正在淡出（淡出完成后将被移除）
+    pub fading_out: bool,
 }
 
 /// 对话状态

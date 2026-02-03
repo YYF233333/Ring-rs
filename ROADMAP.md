@@ -100,7 +100,68 @@
 
 ## 下一步开发方向
 
-### 阶段 19：脚本语法扩展（变量系统 + 条件分支）🟦 计划中
+### 阶段 19：动画体系重构 ✅ 已完成
+
+> **主题**：统一动画系统架构，扩展动画类型，提升演出表现力。
+
+**架构概述**：
+
+已建立统一的 `AnimationSystem`，采用渐进式迁移策略：
+
+- **核心设计**：动画系统只负责时间轴管理（f32 值从 A 到 B 的时间变化），不假设对象类型
+- **功能特性**：支持 Alpha/Position/Scale/Rotation 动画，30+ 种缓动函数，动画延迟、进度管理
+- **迁移状态**：
+  - ✅ 角色动画：完全迁移到 `AnimationSystem`
+  - ✅ 背景过渡：`TransitionManager` 内部使用 `AnimationSystem`
+  - ⏸️ 场景切换：`SceneMaskState` 保持独立（多阶段状态机 + shader 效果）
+
+**架构决策**：
+- ✅ 简单变换动画 → 使用 `AnimationSystem`
+- ⏸️ 复杂状态机/特殊渲染 → 保持独立
+
+**当前实现**：基于 `PropertyKey` 字符串标识符的通用动画系统
+- 使用字符串键（如 `"character:alice.alpha"`）唯一标识属性
+- 动画系统维护 `HashMap<PropertyKey, f32>` 存储当前值
+- 对象通过查询系统获取当前值并应用
+
+**关键文件**：`host/src/renderer/animation/`
+
+**基于 Trait 的动画系统** ✅ 已实现
+
+> **核心思想**：对象通过实现 `Animatable` trait 声明可动画属性，由 `AnimationSystem` 统一分配对象标识符，支持直接设置对象属性值。
+
+**双模式支持**：
+
+系统同时支持两种使用模式：
+
+1. **值缓存模式（旧 API）**：通过 `PropertyKey` 查询当前值
+   ```rust
+   system.animate(PropertyKey::character_alpha("alice"), 0.0, 1.0, 0.3);
+   let alpha = system.get_value(&PropertyKey::character_alpha("alice"));
+   ```
+
+2. **Trait-based 模式（新 API）**：直接操作对象属性
+   ```rust
+   let obj_id = system.register(character);
+   system.animate_object::<Character>(obj_id, "alpha", 0.0, 1.0, 0.3)?;
+   // 值自动应用到对象，无需手动查询
+   ```
+
+**核心类型**：
+
+- **`ObjectId`**：系统分配的唯一对象标识符（`u64` 内部计数器）
+- **`Animatable` trait**：可动画对象接口，提供 `get_property/set_property`
+- **`AnimPropertyKey`**：`TypeId + ObjectId + property_id` 组合键
+
+**优势**：
+1. **类型安全**：泛型方法 `animate_object::<T>()` 提供编译期类型检查
+2. **唯一性保证**：系统统一分配 `ObjectId`，避免 ID 冲突
+3. **简化对象实现**：对象无需管理标识符，只需实现 `Animatable` trait
+4. **内部可变性**：使用 `Rc<RefCell<T>>` 支持同时动画多个属性
+
+**示例实现**：`AnimatableCharacter`（`host/src/renderer/character_animation.rs`）
+
+### 阶段 20：脚本语法扩展（变量系统 + 条件分支）🟦 计划中
 
 > **主题**：扩展脚本语言，支持变量、条件分支、循环等编程特性，使脚本更灵活。
 
@@ -129,7 +190,7 @@
 - 变量随存档持久化
 - 现有脚本无需修改即可运行
 
-### 阶段 20：演出效果增强 🟦 计划中
+### 阶段 21：演出效果增强 🟦 计划中
 
 > **主题**：增强演出效果，支持立绘动画、对话框动画、更丰富的过渡效果。
 
@@ -143,16 +204,6 @@
 - `host/src/renderer/animation.rs`：动画系统
 - `host/src/renderer/character.rs`：立绘动画
 - `host/src/renderer/dialogue.rs`：对话框动画
-
-### 阶段 21：性能优化 + 跨平台支持 🟦 计划中
-
-> **主题**：性能优化（异步加载、多线程）和跨平台支持（Linux、macOS）。
-
-**目标**：
-- **异步资源加载**：后台线程加载资源，避免阻塞主线程
-- **多线程渲染**：纹理解码在后台线程完成
-- **跨平台支持**：Linux、macOS 构建和测试
-- **性能分析**：集成性能分析工具
 
 ### 阶段 22：编辑器工具 🟦 计划中
 
