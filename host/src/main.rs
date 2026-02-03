@@ -5,7 +5,7 @@
 use macroquad::prelude::*;
 use host::HostState;
 use host::resources::ResourceManager;
-use host::renderer::{Renderer, RenderState, SceneMaskType, AnimationSystem, PropertyKey};
+use host::renderer::{Renderer, RenderState, AnimationSystem, AnimatableCharacter, ObjectId};
 use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager, AppConfig, AssetSourceType};
 use host::{AppMode, NavigationStack, SaveLoadTab, UserSettings};
 use host::ZipSource;
@@ -83,6 +83,8 @@ struct AppState {
     // ===== 阶段19新增：动画系统 =====
     /// 统一动画系统
     animation_system: AnimationSystem,
+    /// 角色别名到动画系统 ObjectId 的映射
+    character_object_ids: std::collections::HashMap<String, ObjectId>,
 }
 
 impl AppState {
@@ -229,6 +231,7 @@ impl AppState {
             
             // 动画系统
             animation_system: AnimationSystem::new(),
+            character_object_ids: std::collections::HashMap::new(),
         }
     }
 }
@@ -412,12 +415,12 @@ async fn ensure_render_resources(app_state: &mut AppState) {
         }
     }
 
-    // 检查场景遮罩（Rule 效果需要遮罩纹理）
-    if let Some(ref mask) = app_state.render_state.scene_mask {
-        if let SceneMaskType::Rule { mask_path, .. } = &mask.mask_type {
-            if !app_state.resource_manager.has_texture(mask_path) {
-                paths_to_load.push(mask_path.clone());
-            }
+    // 检查场景过渡（Rule 效果需要遮罩纹理）
+    if let Some(host::renderer::SceneTransitionType::Rule { mask_path, .. }) = 
+        app_state.renderer.scene_transition.transition_type() 
+    {
+        if !app_state.resource_manager.has_texture(mask_path) {
+            paths_to_load.push(mask_path.clone());
         }
     }
 
@@ -688,51 +691,36 @@ fn window_conf() -> Conf {
     }
 }
 
-/// 更新场景遮罩状态
+/// 更新场景过渡状态（基于 AnimationSystem）
 ///
-/// 三阶段流程：
-/// 1. phase 0: 遮罩淡入（UI 隐藏）
-/// 2. phase 1: 遮罩淡出（UI 仍隐藏）
-/// 3. phase 2: UI 淡入（0.2s dissolve）
-fn update_scene_mask(render_state: &mut host::renderer::RenderState, dt: f32) {
-    let mut pending_background: Option<String> = None;
-    let mut should_show_ui = false;
-    let mut completed = false;
+/// 多阶段流程由 SceneTransitionManager 管理：
+/// - Fade/FadeWhite: FadeIn → FadeOut → UIFadeIn → Completed
+/// - Rule: FadeIn → Blackout → FadeOut → UIFadeIn → Completed
+fn update_scene_transition(renderer: &mut Renderer, render_state: &mut host::renderer::RenderState, dt: f32) {
+    // 记录过渡开始前的状态
+    let was_active = renderer.is_scene_transition_active();
+    
+    if !was_active {
+        return;
+    }
 
-    if let Some(ref mut mask) = render_state.scene_mask {
-        completed = mask.update(dt);
+    // 更新场景过渡
+    renderer.update_scene_transition(dt);
 
-        // 在遮罩中点时切换背景
-        // Fade/FadeWhite: phase 1 开始时（遮罩全覆盖后）
-        // Rule: phase 2 开始时（黑屏停顿结束后，即将从黑屏溶解到新背景）
-        if mask.is_at_midpoint() {
-            pending_background = mask.pending_background.take();
-        }
-
-        // 当进入 UI 淡入阶段时，恢复 UI 可见性
-        // Fade/FadeWhite: phase 2
-        // Rule: phase 3
-        if mask.is_ui_fading_in() && !render_state.ui_visible {
-            should_show_ui = true;
+    // 在中间点时切换背景
+    if renderer.is_scene_transition_at_midpoint() {
+        if let Some(path) = renderer.take_pending_background() {
+            render_state.set_background(path);
         }
     }
 
-    if let Some(path) = pending_background {
-        render_state.set_background(path);
-    }
-
-    if should_show_ui {
+    // 当进入 UI 淡入阶段时，恢复 UI 可见性
+    if renderer.is_scene_transition_ui_fading_in() && !render_state.ui_visible {
         render_state.ui_visible = true;
     }
 
-    if completed {
-        // 遮罩完成，清除状态
-        if let Some(ref mut mask) = render_state.scene_mask {
-            if let Some(path) = mask.pending_background.take() {
-                render_state.set_background(path);
-            }
-        }
-        render_state.scene_mask = None;
+    // 过渡完成时恢复 UI（包括被跳过的情况）
+    if !renderer.is_scene_transition_active() {
         render_state.ui_visible = true;
     }
 }
@@ -770,32 +758,33 @@ fn update(app_state: &mut AppState) {
         app_state.command_executor.update_transition(dt);
         app_state.renderer.update_transition(dt);
 
-        // 更新场景遮罩状态
-        update_scene_mask(&mut app_state.render_state, dt);
+        // 更新场景过渡状态（基于动画系统）
+        update_scene_transition(&mut app_state.renderer, &mut app_state.render_state, dt);
 
         // 更新动画系统
-        let events = app_state.animation_system.update(dt);
+        let _events = app_state.animation_system.update(dt);
         
-        // 处理动画完成事件，移除淡出完成的角色
-        let completed_fadeouts: Vec<String> = events
+        // 检测淡出完成的角色并移除
+        let completed_fadeouts: Vec<String> = app_state.render_state.visible_characters
             .iter()
-            .filter_map(|event| {
-                if let host::renderer::AnimationEvent::Completed(id) | host::renderer::AnimationEvent::Skipped(id) = event {
-                    // 检查是否是角色淡出动画（通过 PropertyKey 判断）
-                    if let Some(anim) = app_state.animation_system.get_animation(*id) {
-                        // 检查是否是角色 alpha 属性
-                        if let Some(alias) = anim.key.character_alias() {
-                            if app_state.render_state.visible_characters.get(alias).map(|c| c.fading_out).unwrap_or(false) {
-                                return Some(alias.to_string());
-                            }
-                        }
-                    }
+            .filter(|(_alias, char)| {
+                // 检查角色是否标记为淡出且透明度已降到 0
+                if char.fading_out {
+                    let alpha = char.anim.alpha();
+                    alpha <= 0.01
+                } else {
+                    false
                 }
-                None
             })
+            .map(|(alias, _)| alias.clone())
             .collect();
         
-        // 移除淡出完成的角色
+        // 移除淡出完成的角色，并从动画系统注销
+        for alias in &completed_fadeouts {
+            if let Some(object_id) = app_state.character_object_ids.remove(alias) {
+                app_state.animation_system.unregister(object_id);
+            }
+        }
         app_state.render_state.remove_fading_out_characters(&completed_fadeouts);
     }
 
@@ -1140,23 +1129,69 @@ fn handle_audio_command(app_state: &mut AppState) {
     }
 }
 
+/// 处理场景切换命令
+fn handle_scene_transition(app_state: &mut AppState) {
+    use host::command_executor::SceneTransitionCommand;
+    
+    let scene_cmd = app_state.command_executor.last_output.scene_transition.clone();
+    
+    if let Some(cmd) = scene_cmd {
+        match cmd {
+            SceneTransitionCommand::Fade { duration, pending_background } => {
+                app_state.renderer.start_scene_fade(duration, pending_background);
+            }
+            SceneTransitionCommand::FadeWhite { duration, pending_background } => {
+                app_state.renderer.start_scene_fade_white(duration, pending_background);
+            }
+            SceneTransitionCommand::Rule { duration, pending_background, mask_path, reversed } => {
+                app_state.renderer.start_scene_rule(duration, pending_background, mask_path, reversed);
+            }
+        }
+    }
+}
+
 /// 处理角色动画命令
 fn handle_character_animation(app_state: &mut AppState) {
     use host::command_executor::CharacterAnimationCommand;
+    use std::rc::Rc;
     
     let anim_cmd = app_state.command_executor.last_output.character_animation.clone();
     
     if let Some(cmd) = anim_cmd {
         match cmd {
             CharacterAnimationCommand::Show { alias, duration } => {
-                // 启动淡入动画（使用 PropertyKey）
-                app_state.animation_system.character_fade_in(&alias, duration);
-                println!("🎭 角色淡入动画: {} ({}s)", alias, duration);
+                // 获取角色的动画对象并注册到动画系统
+                if let Some(character) = app_state.render_state.get_character_anim(&alias) {
+                    // 如果角色还没注册到动画系统，先注册
+                    let object_id = if let Some(&id) = app_state.character_object_ids.get(&alias) {
+                        id
+                    } else {
+                        // 注册角色到动画系统
+                        let id = app_state.animation_system.register(Rc::new(character.clone()));
+                        app_state.character_object_ids.insert(alias.clone(), id);
+                        id
+                    };
+                    
+                    // 启动淡入动画
+                    if let Err(e) = app_state.animation_system.animate_object::<AnimatableCharacter>(
+                        object_id, "alpha", 0.0, 1.0, duration
+                    ) {
+                        eprintln!("⚠️ 启动角色淡入动画失败: {}", e);
+                    }
+                    println!("🎭 角色淡入动画: {} ({}s)", alias, duration);
+                }
             }
             CharacterAnimationCommand::Hide { alias, duration } => {
-                // 启动淡出动画（使用 PropertyKey）
-                app_state.animation_system.character_fade_out(&alias, duration);
-                println!("🎭 角色淡出动画: {} ({}s)", alias, duration);
+                // 获取角色的动画对象
+                if let Some(&object_id) = app_state.character_object_ids.get(&alias) {
+                    // 启动淡出动画
+                    if let Err(e) = app_state.animation_system.animate_object::<AnimatableCharacter>(
+                        object_id, "alpha", 1.0, 0.0, duration
+                    ) {
+                        eprintln!("⚠️ 启动角色淡出动画失败: {}", e);
+                    }
+                    println!("🎭 角色淡出动画: {} ({}s)", alias, duration);
+                }
             }
         }
     }
@@ -1305,15 +1340,20 @@ fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::SaveD
 
     // 恢复渲染状态
     app_state.render_state = RenderState::new();
+    app_state.character_object_ids.clear(); // 清除旧的对象 ID 映射
     app_state.render_state.current_background = save_data.render.background;
     for char_snap in save_data.render.characters {
         // 尝试解析 position（简化处理，默认 Center）
         let position = vn_runtime::Position::Center;
         app_state.render_state.show_character(
-            char_snap.alias,
+            char_snap.alias.clone(),
             char_snap.texture_path,
             position,
         );
+        // 恢复角色时设置为完全不透明（存档的角色应该是可见的）
+        if let Some(anim) = app_state.render_state.get_character_anim(&char_snap.alias) {
+            anim.set_alpha(1.0);
+        }
     }
 
     // 恢复音频状态
@@ -1361,13 +1401,22 @@ fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
     // 如果有动画正在进行，跳过所有动画
     if app_state.animation_system.has_active_animations() {
         app_state.animation_system.skip_all();
-        // 应用最终状态并清理淡出完成的角色
+        // 应用最终状态
         let _ = app_state.animation_system.update(0.0);
+        
+        // 清理淡出完成的角色
         let fading_out: Vec<String> = app_state.render_state.visible_characters
             .iter()
             .filter(|(_, c)| c.fading_out)
             .map(|(alias, _)| alias.clone())
             .collect();
+        
+        // 从动画系统注销并移除
+        for alias in &fading_out {
+            if let Some(object_id) = app_state.character_object_ids.remove(alias) {
+                app_state.animation_system.unregister(object_id);
+            }
+        }
         app_state.render_state.remove_fading_out_characters(&fading_out);
         return;
     }
@@ -1379,13 +1428,21 @@ fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
         return;
     }
 
-    // 如果场景遮罩正在进行（changeScene），允许输入用于跳过转场
-    if let Some(ref mut mask) = app_state.render_state.scene_mask {
-        if !mask.is_mask_complete() {
-            // 跳过当前阶段的转场动画
-            mask.skip_current_phase();
-            return;
+    // 如果场景过渡正在进行（changeScene），允许输入用于跳过转场
+    if app_state.renderer.is_scene_transition_active() {
+        // 跳过当前阶段的转场动画
+        app_state.renderer.skip_scene_transition_phase();
+        
+        // 如果跳过后过渡完成，立即恢复 UI 和切换背景
+        if !app_state.renderer.is_scene_transition_active() {
+            // 切换待处理的背景（如果有）
+            if let Some(path) = app_state.renderer.take_pending_background() {
+                app_state.render_state.set_background(path);
+            }
+            // 恢复 UI 可见性
+            app_state.render_state.ui_visible = true;
         }
+        return;
     }
 
     // 如果对话正在打字，先完成打字
@@ -1448,6 +1505,9 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                 
                 // 处理角色动画命令
                 handle_character_animation(app_state);
+                
+                // 处理场景切换命令
+                handle_scene_transition(app_state);
 
                 // 检查执行结果
                 if let ExecuteResult::Error(e) = result {
@@ -1494,17 +1554,17 @@ fn draw(app_state: &mut AppState) {
         }
         AppMode::InGame => {
             // 渲染游戏画面
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest, &app_state.animation_system);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
         }
         AppMode::InGameMenu => {
             // 先渲染游戏画面，再渲染菜单覆盖层
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest, &app_state.animation_system);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
             app_state.ingame_menu.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
         AppMode::SaveLoad => {
             // 如果是从游戏内打开，先渲染游戏画面
             if app_state.vn_runtime.is_some() {
-                app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest, &app_state.animation_system);
+                app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
             }
             app_state.save_load_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
@@ -1513,7 +1573,7 @@ fn draw(app_state: &mut AppState) {
         }
         AppMode::History => {
             // 先渲染游戏画面，再渲染历史覆盖层
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest, &app_state.animation_system);
+            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
             app_state.history_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
     }

@@ -17,116 +17,6 @@ impl AnimationId {
     }
 }
 
-/// 属性键
-///
-/// 唯一标识一个可动画的属性。格式：`"target.property"` 或 `"target:id.property"`
-///
-/// 例如：
-/// - `"background.alpha"` - 背景透明度
-/// - `"character:alice.alpha"` - alice 角色的透明度
-/// - `"scene_mask.dissolve_progress"` - 场景遮罩的溶解进度
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PropertyKey(pub String);
-
-impl PropertyKey {
-    /// 创建属性键
-    pub fn new(key: impl Into<String>) -> Self {
-        Self(key.into())
-    }
-
-    /// 背景透明度
-    pub fn background_alpha() -> Self {
-        Self::new("background.alpha")
-    }
-
-    /// 旧背景透明度（用于过渡）
-    pub fn old_background_alpha() -> Self {
-        Self::new("_old_background.alpha")
-    }
-
-    /// 角色透明度
-    pub fn character_alpha(alias: &str) -> Self {
-        Self::new(format!("character:{}.alpha", alias))
-    }
-
-    /// 角色位置 X
-    pub fn character_position_x(alias: &str) -> Self {
-        Self::new(format!("character:{}.position.x", alias))
-    }
-
-    /// 角色位置 Y
-    pub fn character_position_y(alias: &str) -> Self {
-        Self::new(format!("character:{}.position.y", alias))
-    }
-
-    /// 角色缩放 X
-    pub fn character_scale_x(alias: &str) -> Self {
-        Self::new(format!("character:{}.scale.x", alias))
-    }
-
-    /// 角色缩放 Y
-    pub fn character_scale_y(alias: &str) -> Self {
-        Self::new(format!("character:{}.scale.y", alias))
-    }
-
-    /// 角色旋转
-    pub fn character_rotation(alias: &str) -> Self {
-        Self::new(format!("character:{}.rotation", alias))
-    }
-
-    /// 场景遮罩透明度
-    pub fn scene_mask_alpha() -> Self {
-        Self::new("scene_mask.alpha")
-    }
-
-    /// 场景遮罩溶解进度
-    pub fn scene_mask_dissolve_progress() -> Self {
-        Self::new("scene_mask.dissolve_progress")
-    }
-
-    /// 场景遮罩 UI 透明度
-    pub fn scene_mask_ui_alpha() -> Self {
-        Self::new("scene_mask.ui_alpha")
-    }
-
-    /// UI 元素透明度
-    pub fn ui_alpha(id: &str) -> Self {
-        Self::new(format!("ui:{}.alpha", id))
-    }
-
-    /// 自定义属性
-    pub fn custom(key: impl Into<String>) -> Self {
-        Self::new(key)
-    }
-
-    /// 获取键字符串
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// 检查是否是角色相关的属性
-    pub fn is_character(&self) -> bool {
-        self.0.starts_with("character:")
-    }
-
-    /// 获取角色别名（如果是角色属性）
-    pub fn character_alias(&self) -> Option<&str> {
-        if self.0.starts_with("character:") {
-            self.0
-                .strip_prefix("character:")
-                .and_then(|s| s.split('.').next())
-        } else {
-            None
-        }
-    }
-}
-
-impl std::fmt::Display for PropertyKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 /// 动画状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AnimationState {
@@ -162,8 +52,6 @@ impl AnimationState {
 pub struct Animation {
     /// 动画 ID
     pub id: AnimationId,
-    /// 属性键
-    pub key: PropertyKey,
     /// 起始值
     pub from: f32,
     /// 目标值
@@ -185,8 +73,8 @@ pub struct Animation {
 }
 
 impl Animation {
-    /// 创建新的动画
-    pub fn new(id: AnimationId, key: PropertyKey, from: f32, to: f32, duration: f32) -> Self {
+    /// 创建新的动画（内部使用）
+    pub fn new_internal(id: AnimationId, from: f32, to: f32, duration: f32) -> Self {
         let state = if duration <= 0.0 {
             AnimationState::Completed
         } else {
@@ -195,7 +83,6 @@ impl Animation {
 
         Self {
             id,
-            key,
             from,
             to,
             duration: duration.max(0.0),
@@ -335,13 +222,7 @@ mod tests {
     use super::*;
 
     fn create_test_animation() -> Animation {
-        Animation::new(
-            AnimationId::new(1),
-            PropertyKey::character_alpha("test"),
-            0.0,
-            1.0,
-            1.0,
-        )
+        Animation::new_internal(AnimationId::new(1), 0.0, 1.0, 1.0)
     }
 
     #[test]
@@ -404,24 +285,7 @@ mod tests {
 
     #[test]
     fn test_zero_duration() {
-        let anim = Animation::new(
-            AnimationId::new(1),
-            PropertyKey::background_alpha(),
-            0.0,
-            1.0,
-            0.0,
-        );
+        let anim = Animation::new_internal(AnimationId::new(1), 0.0, 1.0, 0.0);
         assert_eq!(anim.state, AnimationState::Completed);
-    }
-
-    #[test]
-    fn test_property_key() {
-        let key = PropertyKey::character_alpha("alice");
-        assert!(key.is_character());
-        assert_eq!(key.character_alias(), Some("alice"));
-
-        let key2 = PropertyKey::background_alpha();
-        assert!(!key2.is_character());
-        assert_eq!(key2.character_alias(), None);
     }
 }

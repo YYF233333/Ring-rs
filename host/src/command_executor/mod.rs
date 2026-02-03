@@ -7,9 +7,10 @@
 //! - `CommandExecutor` 接收 `Command`，更新 `RenderState` 和控制音频
 //! - 执行器不直接渲染，只更新状态，渲染由 `Renderer` 负责
 //! - 角色动画通过 `CharacterAnimationCommand` 传递给主循环，由 AnimationSystem 处理
+//! - 场景切换通过 `SceneTransitionCommand` 传递给主循环，由 SceneTransitionManager 处理
 
 use vn_runtime::command::{Command, Choice, Position, Transition, TransitionArg};
-use crate::renderer::{RenderState, ChoiceItem, SceneMaskState, SceneMaskType};
+use crate::renderer::{RenderState, ChoiceItem};
 use crate::resources::ResourceManager;
 
 /// Command 执行结果
@@ -74,6 +75,30 @@ pub enum CharacterAnimationCommand {
     },
 }
 
+/// 场景切换命令
+///
+/// 由 main.rs 调用 `Renderer.start_scene_*()` 方法处理
+#[derive(Debug, Clone)]
+pub enum SceneTransitionCommand {
+    /// Fade（黑屏）过渡
+    Fade {
+        duration: f32,
+        pending_background: String,
+    },
+    /// FadeWhite（白屏）过渡
+    FadeWhite {
+        duration: f32,
+        pending_background: String,
+    },
+    /// Rule（图片遮罩）过渡
+    Rule {
+        duration: f32,
+        pending_background: String,
+        mask_path: String,
+        reversed: bool,
+    },
+}
+
 /// 命令执行输出
 #[derive(Debug, Clone, Default)]
 pub struct CommandOutput {
@@ -85,6 +110,8 @@ pub struct CommandOutput {
     pub audio_command: Option<AudioCommand>,
     /// 角色动画命令（如果有）
     pub character_animation: Option<CharacterAnimationCommand>,
+    /// 场景切换命令（如果有）
+    pub scene_transition: Option<SceneTransitionCommand>,
 }
 
 impl Default for ExecuteResult {
@@ -237,8 +264,7 @@ impl CommandExecutor {
     /// 与 ShowBackground 不同，ChangeScene 会：
     /// 1. 隐藏 UI
     /// 2. 清除所有立绘
-    /// 3. 使用遮罩过渡效果切换背景
-    /// 4. 恢复 UI
+    /// 3. 发出场景切换命令（由 Renderer.SceneTransitionManager 处理）
     fn execute_change_scene(
         &mut self,
         path: &str,
@@ -255,30 +281,26 @@ impl CommandExecutor {
         // 2. 清除所有立绘
         render_state.hide_all_characters();
 
-        // 3. 根据 transition 类型设置遮罩/过渡
+        // 3. 根据 transition 类型发出场景切换命令
         if let Some(ref trans) = transition {
             let name_lower = trans.name.to_lowercase();
             let duration = trans.get_duration().unwrap_or(0.5) as f32;
 
             match name_lower.as_str() {
                 "fade" => {
-                    // 黑屏遮罩
-                    let mut mask = SceneMaskState::new(
-                        SceneMaskType::SolidBlack,
+                    // 黑屏遮罩 - 发出 Fade 命令
+                    self.last_output.scene_transition = Some(SceneTransitionCommand::Fade {
                         duration,
-                    );
-                    mask.set_pending_background(path.to_string());
-                    render_state.scene_mask = Some(mask);
+                        pending_background: path.to_string(),
+                    });
                     println!("🎬 changeScene: Fade 黑屏过渡 ({}s)", duration);
                 }
                 "fadewhite" => {
-                    // 白屏遮罩
-                    let mut mask = SceneMaskState::new(
-                        SceneMaskType::SolidWhite,
+                    // 白屏遮罩 - 发出 FadeWhite 命令
+                    self.last_output.scene_transition = Some(SceneTransitionCommand::FadeWhite {
                         duration,
-                    );
-                    mask.set_pending_background(path.to_string());
-                    render_state.scene_mask = Some(mask);
+                        pending_background: path.to_string(),
+                    });
                     println!("🎬 changeScene: FadeWhite 白屏过渡 ({}s)", duration);
                 }
                 "rule" => {
@@ -293,18 +315,17 @@ impl CommandExecutor {
                         })
                         .unwrap_or_default();
                     
-                    // 规范化路径：相对路径需要基于脚本目录解析
-                    // 注意：这里的 raw_mask_path 是相对于脚本文件的路径
-                    // 需要与背景路径 path 使用相同的基准目录
+                    // 规范化路径
                     let normalized_mask_path = resource_manager.resolve_path(&raw_mask_path);
                     let reversed = trans.get_reversed().unwrap_or(false);
                     
-                    let mut mask = SceneMaskState::new(
-                        SceneMaskType::Rule { mask_path: normalized_mask_path.clone(), reversed },
+                    // 发出 Rule 命令
+                    self.last_output.scene_transition = Some(SceneTransitionCommand::Rule {
                         duration,
-                    );
-                    mask.set_pending_background(path.to_string());
-                    render_state.scene_mask = Some(mask);
+                        pending_background: path.to_string(),
+                        mask_path: normalized_mask_path.clone(),
+                        reversed,
+                    });
                     println!("🎬 changeScene: Rule 遮罩过渡 ({}, {}s, reversed={})", normalized_mask_path, duration, reversed);
                 }
                 "dissolve" => {
@@ -339,9 +360,6 @@ impl CommandExecutor {
             render_state.ui_visible = true;
         }
 
-        // 注意：对于 Fade/FadeWhite/Rule 效果，不设置 has_background_transition
-        // 因为这些效果使用 SceneMaskState 处理，而不是 TransitionManager
-
         ExecuteResult::Ok
     }
 
@@ -374,6 +392,11 @@ impl CommandExecutor {
                 alias: alias.to_string(),
                 duration,
             });
+        } else {
+            // 无过渡效果：直接设置角色为完全可见
+            if let Some(anim) = render_state.get_character_anim(alias) {
+                anim.set_alpha(1.0);
+            }
         }
 
         ExecuteResult::Ok

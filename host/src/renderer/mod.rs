@@ -16,25 +16,30 @@ use crate::manifest::Manifest;
 use crate::resources::ResourceManager;
 
 pub mod animation;
+pub mod background_transition;
 pub mod character_animation;
 pub mod render_state;
+pub mod scene_transition;
 mod image_dissolve;
 mod text_renderer;
 mod transition;
 
 pub use animation::{
     Animation, AnimationEvent, AnimationId, AnimationState, AnimationSystem, AnimationTarget,
-    EasingFunction, PropertyKey, Transform, Vec2 as AnimVec2,
+    EasingFunction, Transform, Vec2 as AnimVec2,
 };
-// Trait-based 动画系统新 API
+// Trait-based 动画系统 API
 pub use animation::{
     Animatable, AnimPropertyKey, ObjectId, PropertyAccessor, SimplePropertyAccessor,
 };
+pub use background_transition::{AnimatableBackgroundTransition, BackgroundTransitionData};
 pub use character_animation::{AnimatableCharacter, CharacterAnimData};
 pub use image_dissolve::ImageDissolve;
 pub use render_state::{
-    CharacterSprite, ChoiceItem, ChoicesState, DialogueState, RenderState, SceneMaskState,
-    SceneMaskType,
+    CharacterSprite, ChoiceItem, ChoicesState, DialogueState, RenderState,
+};
+pub use scene_transition::{
+    AnimatableSceneTransition, SceneTransitionManager, SceneTransitionPhase, SceneTransitionType,
 };
 pub use text_renderer::TextRenderer;
 pub use transition::{TransitionManager, TransitionPhase, TransitionType};
@@ -45,8 +50,10 @@ pub use transition::{TransitionManager, TransitionPhase, TransitionType};
 pub struct Renderer {
     /// 文本渲染器
     pub text_renderer: TextRenderer,
-    /// 过渡效果管理器
+    /// 过渡效果管理器（用于背景 dissolve 过渡）
     pub transition: TransitionManager,
+    /// 场景过渡管理器（用于 changeScene 的 Fade/FadeWhite/Rule 效果）
+    pub scene_transition: SceneTransitionManager,
     /// ImageDissolve 效果器（用于 Rule 过渡）
     pub image_dissolve: ImageDissolve,
     /// 设计分辨率（用于坐标计算）
@@ -62,6 +69,7 @@ impl Renderer {
         Self {
             text_renderer: TextRenderer::new(),
             transition: TransitionManager::new(),
+            scene_transition: SceneTransitionManager::new(),
             image_dissolve: ImageDissolve::new(),
             design_width,
             design_height,
@@ -94,7 +102,6 @@ impl Renderer {
         state: &RenderState,
         resource_manager: &ResourceManager,
         manifest: &Manifest,
-        animation_system: &AnimationSystem,
     ) {
         // 清空屏幕
         clear_background(BLACK);
@@ -102,13 +109,13 @@ impl Renderer {
         // 1. 渲染背景（带过渡效果）
         self.render_background_with_transition(state, resource_manager);
 
-        // 2. 渲染角色（从 AnimationSystem 获取变换）
-        self.render_characters(state, resource_manager, manifest, animation_system);
+        // 2. 渲染角色（从角色自身的动画状态获取变换）
+        self.render_characters(state, resource_manager, manifest);
 
         // 3-5. 渲染 UI 层（仅当 ui_visible 为 true）
         if state.ui_visible {
             // 获取 UI 透明度（用于 changeScene 后的 UI 淡入效果）
-            let ui_alpha = state.get_effective_ui_alpha();
+            let ui_alpha = self.get_scene_transition_ui_alpha();
 
             // 3. 渲染对话框
             self.render_dialogue_with_alpha(state, ui_alpha);
@@ -149,6 +156,76 @@ impl Renderer {
     pub fn skip_transition(&mut self) {
         self.transition.skip();
         self.old_background = None;
+    }
+
+    // ========== 场景过渡管理 (基于动画系统) ==========
+
+    /// 开始 Fade（黑屏）场景过渡
+    ///
+    /// # 参数
+    /// - `duration`: 每个淡入/淡出阶段的时长（秒）
+    /// - `pending_background`: 待切换的新背景路径
+    pub fn start_scene_fade(&mut self, duration: f32, pending_background: String) {
+        self.scene_transition.start_fade(duration, pending_background);
+    }
+
+    /// 开始 FadeWhite（白屏）场景过渡
+    pub fn start_scene_fade_white(&mut self, duration: f32, pending_background: String) {
+        self.scene_transition.start_fade_white(duration, pending_background);
+    }
+
+    /// 开始 Rule（图片遮罩）场景过渡
+    pub fn start_scene_rule(
+        &mut self,
+        duration: f32,
+        pending_background: String,
+        mask_path: String,
+        reversed: bool,
+    ) {
+        self.scene_transition.start_rule(duration, pending_background, mask_path, reversed);
+    }
+
+    /// 更新场景过渡
+    ///
+    /// # 返回
+    /// - `true`: 过渡仍在进行中
+    /// - `false`: 过渡已完成或处于空闲状态
+    pub fn update_scene_transition(&mut self, dt: f32) -> bool {
+        self.scene_transition.update(dt)
+    }
+
+    /// 检查场景过渡是否处于中间点（可以进行背景切换）
+    pub fn is_scene_transition_at_midpoint(&self) -> bool {
+        self.scene_transition.is_at_midpoint()
+    }
+
+    /// 获取并清除待切换的背景
+    pub fn take_pending_background(&mut self) -> Option<String> {
+        self.scene_transition.take_pending_background()
+    }
+
+    /// 获取场景过渡的 UI 透明度
+    pub fn get_scene_transition_ui_alpha(&self) -> f32 {
+        if self.scene_transition.is_active() {
+            self.scene_transition.ui_alpha()
+        } else {
+            1.0
+        }
+    }
+
+    /// 跳过场景过渡的当前阶段
+    pub fn skip_scene_transition_phase(&mut self) {
+        self.scene_transition.skip_current_phase();
+    }
+
+    /// 检查场景过渡是否正在进行
+    pub fn is_scene_transition_active(&self) -> bool {
+        self.scene_transition.is_active()
+    }
+
+    /// 检查场景过渡是否正在 UI 淡入阶段
+    pub fn is_scene_transition_ui_fading_in(&self) -> bool {
+        self.scene_transition.is_ui_fading_in()
     }
 
     /// 渲染背景（带过渡效果）
@@ -193,16 +270,15 @@ impl Renderer {
     /// 使用 manifest 配置的 anchor + pre_scale + preset 进行布局：
     /// 1. 从 manifest 获取立绘组的 anchor 和 pre_scale
     /// 2. 从 manifest 获取站位预设的 x, y, scale
-    /// 3. 从 AnimationSystem 获取动画变换（透明度等）
+    /// 3. 从角色的 AnimatableCharacter 获取动画变换（透明度等）
     /// 4. 计算最终位置和尺寸
     fn render_characters(
         &self,
         state: &RenderState,
         resource_manager: &ResourceManager,
         manifest: &Manifest,
-        animation_system: &AnimationSystem,
     ) {
-        // 按 z_order 排序渲染，同时收集 alias
+        // 按 z_order 排序渲染
         let mut characters: Vec<_> = state.visible_characters.iter().collect();
         characters.sort_by_key(|(_, c)| c.z_order);
 
@@ -210,7 +286,7 @@ impl Renderer {
         let screen_h = screen_height();
         let base_scale = self.get_scale_factor();
 
-        for (alias, character) in characters {
+        for (_alias, character) in characters {
             // 从 ResourceManager 缓存获取纹理
             if let Some(texture) = resource_manager.peek_texture(&character.texture_path) {
                 // 获取立绘组配置
@@ -220,17 +296,10 @@ impl Renderer {
                 let position_name = Self::position_to_preset_name(character.position);
                 let preset = manifest.get_preset(&position_name);
 
-                // 从 AnimationSystem 获取角色属性
-                let alpha = animation_system.get_character_alpha(alias);
-                let position_x = animation_system
-                    .get_value(&PropertyKey::character_position_x(alias))
-                    .unwrap_or(0.0);
-                let position_y = animation_system
-                    .get_value(&PropertyKey::character_position_y(alias))
-                    .unwrap_or(0.0);
-                let scale_x = animation_system
-                    .get_value(&PropertyKey::character_scale_x(alias))
-                    .unwrap_or(1.0);
+                // 从角色动画状态获取属性
+                let alpha = character.anim.alpha();
+                let (position_x, position_y) = character.anim.position();
+                let (scale_x, _scale_y) = character.anim.scale();
 
                 // 计算最终缩放：基础缩放 * 预处理缩放 * 站位缩放 * 动画缩放
                 let final_scale = base_scale * group_config.pre_scale * preset.scale * scale_x;
@@ -251,7 +320,7 @@ impl Renderer {
                 let x = target_x - anchor_px_x;
                 let y = target_y - anchor_px_y;
 
-                // 应用透明度（从动画系统获取）
+                // 应用透明度
                 let color = Color::new(1.0, 1.0, 1.0, alpha);
 
                 draw_texture_ex(
@@ -318,117 +387,121 @@ impl Renderer {
     }
 
     /// 渲染场景遮罩（用于 changeScene 的 Fade/FadeWhite/Rule 效果）
+    ///
+    /// 基于 AnimationSystem 驱动 shader 变量实现场景过渡。
     fn render_scene_mask(&mut self, state: &RenderState, resource_manager: &ResourceManager) {
-        if let Some(ref mask) = state.scene_mask {
-            // 遮罩已完成，不需要渲染
-            if mask.is_mask_complete() {
-                return;
+        // 遮罩已完成，不需要渲染
+        if self.scene_transition.is_mask_complete() {
+            return;
+        }
+
+        match self.scene_transition.transition_type() {
+            Some(SceneTransitionType::Fade) => {
+                // 绘制黑色遮罩
+                let alpha = self.scene_transition.mask_alpha();
+                if alpha > 0.0 {
+                    draw_rectangle(
+                        0.0,
+                        0.0,
+                        screen_width(),
+                        screen_height(),
+                        Color::new(0.0, 0.0, 0.0, alpha),
+                    );
+                }
             }
-
-            match &mask.mask_type {
-                SceneMaskType::SolidBlack => {
-                    // 绘制黑色遮罩
-                    if mask.alpha > 0.0 {
-                        draw_rectangle(
-                            0.0,
-                            0.0,
-                            screen_width(),
-                            screen_height(),
-                            Color::new(0.0, 0.0, 0.0, mask.alpha),
-                        );
-                    }
+            Some(SceneTransitionType::FadeWhite) => {
+                // 绘制白色遮罩
+                let alpha = self.scene_transition.mask_alpha();
+                if alpha > 0.0 {
+                    draw_rectangle(
+                        0.0,
+                        0.0,
+                        screen_width(),
+                        screen_height(),
+                        Color::new(1.0, 1.0, 1.0, alpha),
+                    );
                 }
-                SceneMaskType::SolidWhite => {
-                    // 绘制白色遮罩
-                    if mask.alpha > 0.0 {
-                        draw_rectangle(
-                            0.0,
-                            0.0,
-                            screen_width(),
-                            screen_height(),
-                            Color::new(1.0, 1.0, 1.0, mask.alpha),
-                        );
-                    }
+            }
+            Some(SceneTransitionType::Rule { mask_path, reversed }) => {
+                // Rule 遮罩：使用 ImageDissolve shader 实现
+                let mask_texture = resource_manager
+                    .peek_texture(mask_path)
+                    .unwrap_or_else(|| panic!("Rule 遮罩纹理未找到: {}", mask_path));
+
+                if !self.image_dissolve.is_initialized() {
+                    panic!("ImageDissolve shader 未初始化，无法使用 rule 过渡");
                 }
-                SceneMaskType::Rule { mask_path, reversed } => {
-                    // Rule 遮罩：使用 ImageDissolve shader 实现
-                    // 三阶段：phase 0: 旧背景→黑屏，phase 1: 黑屏停顿，phase 2: 黑屏→新背景
-                    let mask_texture = resource_manager
-                        .peek_texture(mask_path)
-                        .unwrap_or_else(|| panic!("Rule 遮罩纹理未找到: {}", mask_path));
 
-                    if !self.image_dissolve.is_initialized() {
-                        panic!("ImageDissolve shader 未初始化，无法使用 rule 过渡");
-                    }
+                let progress = self.scene_transition.progress();
+                let black_texture = resource_manager
+                    .peek_texture("backgrounds/black.png")
+                    .unwrap_or_else(|| panic!("缺少黑色背景纹理: backgrounds/black.png"));
 
-                    let progress = mask.dissolve_progress;
-                    let black_texture = resource_manager
-                        .peek_texture("backgrounds/black.png")
-                        .unwrap_or_else(|| panic!("缺少黑色背景纹理: backgrounds/black.png"));
+                let phase = self.scene_transition.phase();
+                let reversed = *reversed;
 
-                    match mask.phase {
-                        0 => {
-                            // phase 0: 旧背景 → 黑屏
-                            let old_bg_path = state
-                                .current_background
-                                .as_ref()
-                                .unwrap_or_else(|| panic!("Rule 遮罩缺少当前背景"));
-                            let old_bg_texture = resource_manager
-                                .peek_texture(old_bg_path)
-                                .unwrap_or_else(|| {
-                                    panic!("Rule 旧背景纹理未找到: {}", old_bg_path)
-                                });
-
-                            let (dest_w, dest_h, x, y) =
-                                self.calculate_draw_rect(&old_bg_texture, DrawMode::Cover);
-                            // 从旧背景溶解到黑色
-                            self.image_dissolve.draw(
-                                &black_texture,  // 目标：黑色
-                                &old_bg_texture, // 源：旧背景
-                                &mask_texture,
-                                progress,
-                                *reversed,
-                                (x, y, dest_w, dest_h),
-                            );
-                        }
-                        1 => {
-                            // phase 1: 黑屏停顿 - 绘制纯黑屏
-                            draw_rectangle(
-                                0.0,
-                                0.0,
-                                screen_width(),
-                                screen_height(),
-                                Color::new(0.0, 0.0, 0.0, 1.0),
-                            );
-                        }
-                        2 => {
-                            // phase 2: 黑屏 → 新背景
-                            // 注意：此时 pending_background 已在 is_at_midpoint() 时被 take 并设置到 current_background
-                            let new_bg_path = state.current_background.as_ref().unwrap_or_else(|| {
-                                panic!("Rule 遮罩缺少新背景（current_background）")
+                match phase {
+                    SceneTransitionPhase::FadeIn => {
+                        // phase FadeIn: 旧背景 → 黑屏
+                        let old_bg_path = state
+                            .current_background
+                            .as_ref()
+                            .unwrap_or_else(|| panic!("Rule 遮罩缺少当前背景"));
+                        let old_bg_texture = resource_manager
+                            .peek_texture(old_bg_path)
+                            .unwrap_or_else(|| {
+                                panic!("Rule 旧背景纹理未找到: {}", old_bg_path)
                             });
-                            let new_bg_texture = resource_manager
-                                .peek_texture(new_bg_path)
-                                .unwrap_or_else(|| {
-                                    panic!("Rule 新背景纹理未找到: {}", new_bg_path)
-                                });
 
-                            let (dest_w, dest_h, x, y) =
-                                self.calculate_draw_rect(&new_bg_texture, DrawMode::Cover);
-                            // 从黑色溶解到新背景（反向溶解）
-                            self.image_dissolve.draw(
-                                &new_bg_texture, // 目标：新背景
-                                &black_texture,  // 源：黑色
-                                &mask_texture,
-                                progress,
-                                !*reversed, // 反向，让效果对称
-                                (x, y, dest_w, dest_h),
-                            );
-                        }
-                        _ => {}
+                        let (dest_w, dest_h, x, y) =
+                            self.calculate_draw_rect(&old_bg_texture, DrawMode::Cover);
+                        // 从旧背景溶解到黑色
+                        self.image_dissolve.draw(
+                            &black_texture,  // 目标：黑色
+                            &old_bg_texture, // 源：旧背景
+                            &mask_texture,
+                            progress,
+                            reversed,
+                            (x, y, dest_w, dest_h),
+                        );
                     }
+                    SceneTransitionPhase::Blackout => {
+                        // phase Blackout: 黑屏停顿 - 绘制纯黑屏
+                        draw_rectangle(
+                            0.0,
+                            0.0,
+                            screen_width(),
+                            screen_height(),
+                            Color::new(0.0, 0.0, 0.0, 1.0),
+                        );
+                    }
+                    SceneTransitionPhase::FadeOut => {
+                        // phase FadeOut: 黑屏 → 新背景
+                        let new_bg_path = state.current_background.as_ref().unwrap_or_else(|| {
+                            panic!("Rule 遮罩缺少新背景（current_background）")
+                        });
+                        let new_bg_texture = resource_manager
+                            .peek_texture(new_bg_path)
+                            .unwrap_or_else(|| {
+                                panic!("Rule 新背景纹理未找到: {}", new_bg_path)
+                            });
+
+                        let (dest_w, dest_h, x, y) =
+                            self.calculate_draw_rect(&new_bg_texture, DrawMode::Cover);
+                        // 从黑色溶解到新背景（反向溶解）
+                        self.image_dissolve.draw(
+                            &new_bg_texture, // 目标：新背景
+                            &black_texture,  // 源：黑色
+                            &mask_texture,
+                            progress,
+                            !reversed, // 反向，让效果对称
+                            (x, y, dest_w, dest_h),
+                        );
+                    }
+                    _ => {}
                 }
             }
+            None => {}
         }
     }
 

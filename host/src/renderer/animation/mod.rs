@@ -43,11 +43,11 @@ mod traits;
 mod transform;
 
 // 核心类型
-pub use animation::{Animation, AnimationId, AnimationState, PropertyKey};
+pub use animation::{Animation, AnimationId, AnimationState};
 pub use easing::EasingFunction;
 pub use system::AnimationSystem;
 
-// Trait-based 动画系统（新 API）
+// Trait-based 动画系统 API
 pub use traits::{Animatable, AnimPropertyKey, ObjectId, PropertyAccessor, SimplePropertyAccessor};
 
 // 辅助类型（保留以便需要时使用）

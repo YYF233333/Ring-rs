@@ -5,267 +5,6 @@
 use std::collections::HashMap;
 use vn_runtime::command::Position;
 
-/// 遮罩类型
-#[derive(Debug, Clone)]
-pub enum SceneMaskType {
-    /// 纯色遮罩（黑色）
-    SolidBlack,
-    /// 纯色遮罩（白色）
-    SolidWhite,
-    /// 图片遮罩（rule-based）
-    Rule {
-        /// 遮罩图片路径
-        mask_path: String,
-        /// 是否反向
-        reversed: bool,
-    },
-}
-
-/// UI 淡入时长（秒）
-const UI_FADE_DURATION: f32 = 0.2;
-
-/// Rule 效果黑屏停顿时长（秒）
-const RULE_BLACKOUT_DURATION: f32 = 0.2;
-
-/// 场景遮罩状态
-#[derive(Debug, Clone)]
-pub struct SceneMaskState {
-    /// 遮罩类型
-    pub mask_type: SceneMaskType,
-    /// 遮罩透明度（0.0 = 完全透明，1.0 = 完全不透明）
-    pub alpha: f32,
-    /// 等待切换的新背景（在遮罩中点时切换）
-    pub pending_background: Option<String>,
-    /// UI 透明度（0.0 = 完全透明，1.0 = 完全不透明）
-    pub ui_alpha: f32,
-    /// 过渡阶段（0 = 淡入遮罩，1 = 淡出遮罩，2 = UI 淡入）
-    pub phase: u8,
-    /// 遮罩过渡时长（秒）
-    pub duration: f32,
-    /// 当前计时器
-    pub timer: f32,
-    /// ImageDissolve 进度（用于 rule 效果，0.0 - 1.0）
-    pub dissolve_progress: f32,
-}
-
-impl SceneMaskState {
-    pub fn new(mask_type: SceneMaskType, duration: f32) -> Self {
-        Self {
-            mask_type,
-            alpha: 0.0,
-            pending_background: None,
-            ui_alpha: 0.0,
-            phase: 0,
-            duration: duration.max(0.01),
-            timer: 0.0,
-            dissolve_progress: 0.0,
-        }
-    }
-
-    /// 设置待切换背景（在遮罩中点切换）
-    pub fn set_pending_background(&mut self, path: String) {
-        self.pending_background = Some(path);
-    }
-
-    /// 更新遮罩状态，返回是否完成
-    /// 
-    /// Rule 效果的 phase 流程：
-    /// - phase 0: 旧背景 → 黑屏
-    /// - phase 1: 黑屏停顿（0.2s）
-    /// - phase 2: 黑屏 → 新背景
-    /// - phase 3: UI 淡入
-    /// 
-    /// Fade/FadeWhite 效果的 phase 流程：
-    /// - phase 0: 淡入遮罩
-    /// - phase 1: 淡出遮罩
-    /// - phase 2: UI 淡入
-    pub fn update(&mut self, dt: f32) -> bool {
-        self.timer += dt;
-
-        match self.phase {
-            0 => {
-                // 阶段 0: 淡入遮罩（旧背景 → 遮罩）
-                let progress = (self.timer / self.duration).min(1.0);
-                self.alpha = progress;
-                self.dissolve_progress = progress;
-                if progress >= 1.0 {
-                    // Rule 进入黑屏停顿阶段，其他直接进入淡出阶段
-                    self.phase = match self.mask_type {
-                        SceneMaskType::Rule { .. } => 1,  // 黑屏停顿
-                        _ => 1,  // 淡出遮罩
-                    };
-                    self.timer = 0.0;
-                    // 保持遮罩完全覆盖
-                    self.alpha = 1.0;
-                    self.dissolve_progress = 1.0;
-                }
-                false
-            }
-            1 => {
-                match self.mask_type {
-                    SceneMaskType::Rule { .. } => {
-                        // Rule: 阶段 1 是黑屏停顿
-                        // 保持全黑，不更新 dissolve_progress
-                        self.alpha = 1.0;
-                        self.dissolve_progress = 1.0;  // 保持全黑
-                        if self.timer >= RULE_BLACKOUT_DURATION {
-                            self.phase = 2;  // 进入黑屏→新背景阶段
-                            self.timer = 0.0;
-                            self.dissolve_progress = 0.0;  // 重置为 0，准备从黑屏溶解到新背景
-                        }
-                        false
-                    }
-                    _ => {
-                        // Fade/FadeWhite: 阶段 1 是淡出遮罩
-                        let progress = (self.timer / self.duration).min(1.0);
-                        self.alpha = 1.0 - progress;
-                        self.dissolve_progress = 1.0 - progress;
-                        if progress >= 1.0 {
-                            self.phase = 2;  // UI 淡入
-                            self.timer = 0.0;
-                        }
-                        false
-                    }
-                }
-            }
-            2 => {
-                match self.mask_type {
-                    SceneMaskType::Rule { .. } => {
-                        // Rule: 阶段 2 是黑屏 → 新背景
-                        let progress = (self.timer / self.duration).min(1.0);
-                        self.dissolve_progress = progress;
-                        if progress >= 1.0 {
-                            self.phase = 3;  // UI 淡入
-                            self.timer = 0.0;
-                        }
-                        false
-                    }
-                    _ => {
-                        // Fade/FadeWhite: 阶段 2 是 UI 淡入
-                        let progress = (self.timer / UI_FADE_DURATION).min(1.0);
-                        self.ui_alpha = progress;
-                        progress >= 1.0
-                    }
-                }
-            }
-            3 => {
-                // Rule: 阶段 3 是 UI 淡入
-                let progress = (self.timer / UI_FADE_DURATION).min(1.0);
-                self.ui_alpha = progress;
-                progress >= 1.0
-            }
-            _ => true,
-        }
-    }
-
-    /// 判断是否处于中间状态（可以进行场景切换）
-    /// 对于 Fade/FadeWhite：phase 1 刚开始时
-    /// 对于 Rule：phase 2 刚开始时（黑屏停顿结束后）
-    pub fn is_at_midpoint(&self) -> bool {
-        match self.mask_type {
-            SceneMaskType::Rule { .. } => self.phase == 2 && self.timer < 0.01,
-            _ => self.phase == 1 && self.timer < 0.01,
-        }
-    }
-
-    /// 判断是否正在进行 UI 淡入
-    /// 对于 Fade/FadeWhite：phase 2
-    /// 对于 Rule：phase 3
-    pub fn is_ui_fading_in(&self) -> bool {
-        match self.mask_type {
-            SceneMaskType::Rule { .. } => self.phase == 3,
-            _ => self.phase == 2,
-        }
-    }
-
-    /// 判断遮罩是否已完成（不再需要渲染）
-    pub fn is_mask_complete(&self) -> bool {
-        match self.mask_type {
-            SceneMaskType::Rule { .. } => self.phase >= 3,
-            _ => self.phase >= 2,
-        }
-    }
-
-    /// 跳过当前阶段的转场动画
-    /// 
-    /// - phase 0（遮罩淡入）：立刻跳到遮罩完全显现的状态
-    ///   - Rule: 跳到 phase 2 开始（黑屏停顿结束，准备显示新背景）
-    ///   - Fade/FadeWhite: 跳到 phase 1 开始（遮罩完全显现，准备淡出）
-    /// - phase 1（遮罩淡出/黑屏停顿）：立刻完成整个转场（phase 2/3 结束）
-    /// - phase 2（黑屏→新背景/UI淡入）：立刻完成整个转场
-    pub fn skip_current_phase(&mut self) {
-        match self.phase {
-            0 => {
-                // phase 0: 遮罩淡入 → 立刻跳到遮罩完全显现
-                match self.mask_type {
-                    SceneMaskType::Rule { .. } => {
-                        // Rule: 跳到 phase 2 开始（黑屏停顿结束，准备显示新背景）
-                        // 这样背景会在 is_at_midpoint() 时切换
-                        self.phase = 2;
-                        self.alpha = 1.0;
-                        self.dissolve_progress = 0.0;  // 准备从黑屏溶解到新背景
-                        self.timer = 0.0;
-                    }
-                    _ => {
-                        // Fade/FadeWhite: 跳到 phase 1 开始（遮罩完全显现，准备淡出）
-                        // 这样背景会在 is_at_midpoint() 时切换
-                        self.phase = 1;
-                        self.alpha = 1.0;  // 遮罩完全显现
-                        self.dissolve_progress = 1.0;
-                        self.timer = 0.0;
-                    }
-                }
-            }
-            1 => {
-                // phase 1: 遮罩淡出/黑屏停顿 → 立刻完成整个转场
-                match self.mask_type {
-                    SceneMaskType::Rule { .. } => {
-                        // Rule: 跳到 phase 3（UI淡入）的结束状态
-                        self.phase = 3;
-                        self.alpha = 0.0;
-                        self.dissolve_progress = 1.0;  // 新背景完全显示
-                        self.ui_alpha = 1.0;
-                        self.timer = 0.0;
-                    }
-                    _ => {
-                        // Fade/FadeWhite: 跳到 phase 2（UI淡入）的结束状态
-                        self.phase = 2;
-                        self.alpha = 0.0;
-                        self.dissolve_progress = 0.0;
-                        self.ui_alpha = 1.0;
-                        self.timer = 0.0;
-                    }
-                }
-            }
-            2 => {
-                // phase 2: 黑屏→新背景/UI淡入 → 立刻完成
-                match self.mask_type {
-                    SceneMaskType::Rule { .. } => {
-                        // Rule: 跳到 phase 3（UI淡入）的结束状态
-                        self.phase = 3;
-                        self.dissolve_progress = 1.0;
-                        self.ui_alpha = 1.0;
-                        self.timer = 0.0;
-                    }
-                    _ => {
-                        // Fade/FadeWhite: 已经是 phase 2（UI淡入），直接完成
-                        self.ui_alpha = 1.0;
-                        self.timer = 0.0;
-                    }
-                }
-            }
-            _ => {
-                // phase 3 或更高，已经完成，无需处理
-            }
-        }
-    }
-
-    /// 获取当前 UI 透明度
-    pub fn get_ui_alpha(&self) -> f32 {
-        self.ui_alpha
-    }
-}
-
 /// 渲染状态
 ///
 /// 存储当前帧需要渲染的所有元素状态。
@@ -288,9 +27,6 @@ pub struct RenderState {
 
     /// UI 是否可见（用于 changeScene 时隐藏 UI）
     pub ui_visible: bool,
-
-    /// 场景遮罩状态（用于 changeScene 过渡）
-    pub scene_mask: Option<SceneMaskState>,
 }
 
 impl Default for RenderState {
@@ -302,7 +38,6 @@ impl Default for RenderState {
             chapter_mark: None,
             choices: None,
             ui_visible: true,
-            scene_mask: None,
         }
     }
 }
@@ -311,19 +46,6 @@ impl RenderState {
     /// 创建空的渲染状态
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// 获取有效的 UI 透明度
-    ///
-    /// 如果有场景遮罩且处于 UI 淡入阶段，返回遮罩的 ui_alpha；
-    /// 否则返回 1.0（完全不透明）。
-    pub fn get_effective_ui_alpha(&self) -> f32 {
-        if let Some(ref mask) = self.scene_mask {
-            if mask.is_ui_fading_in() {
-                return mask.get_ui_alpha();
-            }
-        }
-        1.0
     }
 
     /// 设置背景
@@ -338,19 +60,35 @@ impl RenderState {
 
     /// 显示角色
     ///
-    /// 注意：动画效果由 AnimationSystem 管理，这里只创建角色数据。
-    pub fn show_character(&mut self, alias: String, texture_path: String, position: Position) {
+    /// 创建角色数据和动画状态。初始透明度为 0，需要通过动画系统淡入。
+    /// 
+    /// # 返回
+    /// 返回角色的动画状态引用，可用于注册到动画系统
+    pub fn show_character(&mut self, alias: String, texture_path: String, position: Position) -> &AnimatableCharacter {
         let z_order = self.visible_characters.len() as i32;
 
         self.visible_characters.insert(
-            alias,
+            alias.clone(),
             CharacterSprite {
                 texture_path,
                 position,
                 z_order,
                 fading_out: false,
+                anim: AnimatableCharacter::transparent(&alias), // 初始透明，等待淡入
             },
         );
+        
+        &self.visible_characters.get(&alias).unwrap().anim
+    }
+    
+    /// 获取角色的动画状态
+    pub fn get_character_anim(&self, alias: &str) -> Option<&AnimatableCharacter> {
+        self.visible_characters.get(alias).map(|c| &c.anim)
+    }
+    
+    /// 获取角色的动画状态（可变）
+    pub fn get_character_anim_mut(&mut self, alias: &str) -> Option<&mut AnimatableCharacter> {
+        self.visible_characters.get_mut(alias).map(|c| &mut c.anim)
     }
 
     /// 隐藏角色（立即移除）
@@ -468,9 +206,11 @@ impl RenderState {
     }
 }
 
+use super::character_animation::AnimatableCharacter;
+
 /// 角色立绘状态
 ///
-/// 存储角色立绘的基本信息。动画（透明度、位置等）由 AnimationSystem 统一管理。
+/// 存储角色立绘的基本信息和动画状态。
 #[derive(Debug, Clone)]
 pub struct CharacterSprite {
     /// 纹理路径
@@ -481,6 +221,8 @@ pub struct CharacterSprite {
     pub z_order: i32,
     /// 是否正在淡出（淡出完成后将被移除）
     pub fading_out: bool,
+    /// 动画状态（透明度、位置、缩放等）
+    pub anim: AnimatableCharacter,
 }
 
 /// 对话状态
