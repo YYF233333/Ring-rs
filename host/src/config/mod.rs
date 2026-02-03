@@ -44,14 +44,14 @@ pub struct AppConfig {
     pub manifest_path: String,
 
     /// 默认字体路径（相对于 assets_root）
-    /// 
+    ///
     /// 默认值为 `"fonts/simhei.ttf"`，支持中文显示。
     /// 可以指定其他字体文件路径（如 `"fonts/custom.ttf"`）。
     #[serde(default = "default_font_path")]
     pub default_font: String,
 
     /// **入口脚本路径**（相对于 assets_root）
-    /// 
+    ///
     /// 必须配置，未配置将 panic。
     pub start_script_path: String,
 
@@ -317,9 +317,7 @@ impl AppConfig {
             AssetSourceType::Zip => {
                 // 检查 ZIP 路径配置
                 let zip_path = self.zip_path.as_ref().ok_or_else(|| {
-                    ConfigError::ValidationFailed(
-                        "Zip 模式必须配置 zip_path".to_string(),
-                    )
+                    ConfigError::ValidationFailed("Zip 模式必须配置 zip_path".to_string())
                 })?;
 
                 // 检查 ZIP 文件存在
@@ -406,7 +404,7 @@ mod tests {
     fn test_config_serialization() {
         let config = AppConfig::default();
         let json = serde_json::to_string_pretty(&config).unwrap();
-        
+
         // 反序列化
         let loaded: AppConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.window.width, config.window.width);
@@ -415,7 +413,7 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let mut config = AppConfig::default();
-        
+
         // 无效音量
         config.audio.master_volume = 2.0;
         assert!(config.validate().is_err());

@@ -2,8 +2,8 @@
 //!
 //! 资源管理系统，负责图片和音频资源的加载、缓存和管理。
 
-use macroquad::prelude::*;
 use macroquad::audio::{Sound, load_sound};
+use macroquad::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -12,17 +12,19 @@ mod error;
 pub mod path;
 mod source;
 
-pub use cache::{TextureCache, CacheStats, DEFAULT_TEXTURE_BUDGET_MB};
+pub use cache::{CacheStats, DEFAULT_TEXTURE_BUDGET_MB, TextureCache};
 pub use error::ResourceError;
-pub use path::{normalize_logical_path, resolve_relative_path, extract_script_id, extract_base_dir};
-pub use source::{ResourceSource, FsSource, ZipSource};
+pub use path::{
+    extract_base_dir, extract_script_id, normalize_logical_path, resolve_relative_path,
+};
+pub use source::{FsSource, ResourceSource, ZipSource};
 
 /// 从字节数据加载图片并转换为 Texture2D
 /// 支持 JPEG、PNG 等格式
 fn load_texture_from_bytes(bytes: &[u8], path: &str) -> Result<Texture2D, String> {
     // 使用 image crate 解码
-    let img = image::load_from_memory(bytes)
-        .map_err(|e| format!("无法解码图片 {}: {}", path, e))?;
+    let img =
+        image::load_from_memory(bytes).map_err(|e| format!("无法解码图片 {}: {}", path, e))?;
 
     // 转换为 RGBA8
     let rgba = img.to_rgba8();
@@ -73,7 +75,11 @@ impl ResourceManager {
     /// - `base_path`: 资源基础路径（用于路径解析）
     /// - `source`: 资源来源实现
     /// - `texture_cache_size_mb`: 纹理缓存大小（MB）
-    pub fn with_source(base_path: impl Into<String>, source: Arc<dyn ResourceSource>, texture_cache_size_mb: usize) -> Self {
+    pub fn with_source(
+        base_path: impl Into<String>,
+        source: Arc<dyn ResourceSource>,
+        texture_cache_size_mb: usize,
+    ) -> Self {
         Self {
             texture_cache: TextureCache::new(texture_cache_size_mb),
             sounds: HashMap::new(),
@@ -103,19 +109,19 @@ impl ResourceManager {
     /// 使用 std::path 处理路径规范化，支持 `..` 等相对路径
     pub fn resolve_path(&self, path: &str) -> String {
         use std::path::{Path, PathBuf};
-        
+
         let path_obj = Path::new(path);
-        
+
         // 如果是绝对路径，直接规范化并返回
         if path_obj.is_absolute() {
             return Self::normalize_path_components(path_obj);
         }
-        
+
         // 检查是否已经包含 base_path
         if path.contains(&self.base_path) {
             return Self::normalize_path_components(path_obj);
         }
-        
+
         // 拼接 base_path 和相对路径
         let full_path: PathBuf = [&self.base_path, path].iter().collect();
         Self::normalize_path_components(&full_path)
@@ -124,9 +130,9 @@ impl ResourceManager {
     /// 使用 std::path 规范化路径，处理 `..` 和 `.`
     fn normalize_path_components(path: &std::path::Path) -> String {
         use std::path::Component;
-        
+
         let mut components: Vec<String> = Vec::new();
-        
+
         for component in path.components() {
             match component {
                 Component::Prefix(p) => {
@@ -145,7 +151,9 @@ impl ResourceManager {
                 Component::ParentDir => {
                     // .. 父目录，弹出上一级
                     // 但要保留盘符
-                    if components.len() > 1 || (components.len() == 1 && !components[0].contains(':')) {
+                    if components.len() > 1
+                        || (components.len() == 1 && !components[0].contains(':'))
+                    {
                         components.pop();
                     }
                 }
@@ -154,12 +162,12 @@ impl ResourceManager {
                 }
             }
         }
-        
+
         // 用 / 连接（跨平台统一使用 /）
         if components.is_empty() {
             return String::new();
         }
-        
+
         // 处理 Windows 盘符的情况
         if components.len() >= 2 && components[0].contains(':') {
             // 第一个是盘符如 "F:"，第二个开始是路径
@@ -199,13 +207,12 @@ impl ResourceManager {
         let bytes = self.source.read(path)?;
 
         // 统一使用 image crate 解码（支持 PNG/JPEG/GIF/WebP 等）
-        let texture = load_texture_from_bytes(&bytes, &full_path).map_err(|e| {
-            ResourceError::LoadFailed {
+        let texture =
+            load_texture_from_bytes(&bytes, &full_path).map_err(|e| ResourceError::LoadFailed {
                 path: full_path.clone(),
                 kind: "texture".to_string(),
                 message: e,
-            }
-        })?;
+            })?;
 
         // 设置纹理过滤模式（平滑缩放）
         texture.set_filter(FilterMode::Linear);
@@ -419,11 +426,11 @@ mod tests {
     #[test]
     fn test_resolve_path() {
         let manager = ResourceManager::new("assets", 256);
-        
+
         // 相对路径
         let path = manager.resolve_path("bg.png");
         assert_eq!(path, "assets/bg.png");
-        
+
         // 绝对路径（包含 assets）
         let path = manager.resolve_path("assets/bg.png");
         assert_eq!(path, "assets/bg.png");

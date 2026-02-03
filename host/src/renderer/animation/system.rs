@@ -13,7 +13,7 @@ use std::any::TypeId;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::traits::{Animatable, AnimPropertyKey, ObjectId};
+use super::traits::{AnimPropertyKey, Animatable, ObjectId};
 use super::{Animation, AnimationEvent, AnimationId, AnimationState, EasingFunction};
 
 /// 已注册的可动画对象
@@ -122,8 +122,7 @@ impl AnimationSystem {
     pub fn unregister(&mut self, object_id: ObjectId) {
         self.objects.remove(&object_id);
         // 移除该对象的所有动画
-        self.animations
-            .retain(|key, _| key.object_id != object_id);
+        self.animations.retain(|key, _| key.object_id != object_id);
     }
 
     /// 检查对象是否已注册

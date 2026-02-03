@@ -72,7 +72,7 @@ enum Commands {
     },
 
     /// 创建完整发行版
-    /// 
+    ///
     /// 将 assets 打包成 ZIP，编译 release 版本的 host 二进制，
     /// 并将所有文件打包到发行版目录。
     Release {
@@ -215,7 +215,12 @@ fn list_zip(zip_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         total_size += size;
         compressed_size += comp_size;
 
-        println!("{:<60} {:>12} {:>12}", name, format_size(size), format_size(comp_size));
+        println!(
+            "{:<60} {:>12} {:>12}",
+            name,
+            format_size(size),
+            format_size(comp_size)
+        );
     }
 
     println!("{}", "-".repeat(86));
@@ -337,7 +342,7 @@ fn create_release(
 
     // 4. 创建发行版目录并复制文件
     println!("📁 步骤 4/4: 创建发行版目录...");
-    
+
     // 创建输出目录
     if release_dir.exists() {
         println!("⚠️  发行版目录已存在，将清空: {:?}", release_dir);
@@ -358,14 +363,20 @@ fn create_release(
     };
     let binary_dest = release_dir.join(&binary_filename);
     std::fs::copy(&host_binary, &binary_dest)?;
-    println!("  ✅ 复制二进制: {:?} -> {:?} (重命名为: {})", host_binary, binary_dest, binary_filename);
+    println!(
+        "  ✅ 复制二进制: {:?} -> {:?} (重命名为: {})",
+        host_binary, binary_dest, binary_filename
+    );
 
     let config_dest = release_dir.join("config.json");
     std::fs::copy(&config_path, &config_dest)?;
     println!("  ✅ 复制配置: {:?} -> {:?}", config_path, config_dest);
 
     // 更新 config.json 以使用 ZIP 模式
-    update_config_for_release(&config_dest, zip_output.file_name().unwrap().to_string_lossy().as_ref())?;
+    update_config_for_release(
+        &config_dest,
+        zip_output.file_name().unwrap().to_string_lossy().as_ref(),
+    )?;
     println!("  ✅ 更新配置以使用 ZIP 模式");
 
     println!();
@@ -382,7 +393,10 @@ fn create_release(
         println!("📦 打包发行版为 ZIP...");
         // 使用游戏名称作为 ZIP 文件名
         let release_zip_name = format!("{}.zip", game_name);
-        let release_zip = release_dir.parent().unwrap_or(Path::new(".")).join(&release_zip_name);
+        let release_zip = release_dir
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(&release_zip_name);
         pack_directory(release_dir, &release_zip, compression_level)?;
         println!("✅ 发行版 ZIP 创建完成: {:?}", release_zip);
     }
@@ -435,7 +449,10 @@ fn get_game_name(config_path: &Path) -> Result<String, Box<dyn std::error::Error
 }
 
 /// 更新配置文件以使用 ZIP 模式
-fn update_config_for_release(config_path: &Path, zip_filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn update_config_for_release(
+    config_path: &Path,
+    zip_filename: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut content = String::new();
     let mut file = File::open(config_path)?;
     file.read_to_string(&mut content)?;
@@ -445,8 +462,14 @@ fn update_config_for_release(config_path: &Path, zip_filename: &str) -> Result<(
 
     // 更新 asset_source 为 "zip"
     if let Some(obj) = config.as_object_mut() {
-        obj.insert("asset_source".to_string(), serde_json::Value::String("zip".to_string()));
-        obj.insert("zip_path".to_string(), serde_json::Value::String(zip_filename.to_string()));
+        obj.insert(
+            "asset_source".to_string(),
+            serde_json::Value::String("zip".to_string()),
+        );
+        obj.insert(
+            "zip_path".to_string(),
+            serde_json::Value::String(zip_filename.to_string()),
+        );
     }
 
     // 写回文件
@@ -458,7 +481,11 @@ fn update_config_for_release(config_path: &Path, zip_filename: &str) -> Result<(
 }
 
 /// 打包目录到 ZIP 文件
-fn pack_directory(input: &Path, output: &Path, level: u32) -> Result<(), Box<dyn std::error::Error>> {
+fn pack_directory(
+    input: &Path,
+    output: &Path,
+    level: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::create(output)?;
     let mut zip = ZipWriter::new(file);
 

@@ -1,7 +1,7 @@
 //! # 列表组件
 
-use macroquad::prelude::*;
 use super::{UiContext, draw_rounded_rect};
+use macroquad::prelude::*;
 
 /// 列表项
 #[derive(Debug, Clone)]
@@ -72,7 +72,11 @@ impl ListView {
         // 保持选中索引有效
         if let Some(idx) = self.selected_index {
             if idx >= self.items.len() {
-                self.selected_index = if self.items.is_empty() { None } else { Some(self.items.len() - 1) };
+                self.selected_index = if self.items.is_empty() {
+                    None
+                } else {
+                    Some(self.items.len() - 1)
+                };
             }
         }
     }
@@ -152,7 +156,8 @@ impl ListView {
         let scroll = mouse_wheel().1;
         if scroll != 0.0 {
             self.scroll_offset -= scroll * self.item_height * 0.5;
-            self.scroll_offset = self.scroll_offset
+            self.scroll_offset = self
+                .scroll_offset
                 .max(0.0)
                 .min((self.total_height() - self.rect.h).max(0.0));
         }
@@ -160,10 +165,10 @@ impl ListView {
         // 计算悬停项
         let relative_y = ctx.mouse_pos.y - self.rect.y + self.scroll_offset;
         let hover_idx = (relative_y / self.item_height).floor() as usize;
-        
+
         if hover_idx < self.items.len() && !self.items[hover_idx].disabled {
             self.hovered_index = Some(hover_idx);
-            
+
             // 检查点击
             if ctx.mouse_just_released {
                 self.selected_index = Some(hover_idx);
@@ -199,20 +204,24 @@ impl ListView {
             // 选中/悬停背景
             let is_selected = self.selected_index == Some(idx);
             let is_hovered = self.hovered_index == Some(idx);
-            
+
             if is_selected {
                 draw_rounded_rect(
-                    self.rect.x, item_y,
-                    self.rect.w, self.item_height - 2.0,
+                    self.rect.x,
+                    item_y,
+                    self.rect.w,
+                    self.item_height - 2.0,
                     theme.corner_radius / 2.0,
-                    theme.accent
+                    theme.accent,
                 );
             } else if is_hovered && !item.disabled {
                 draw_rounded_rect(
-                    self.rect.x, item_y,
-                    self.rect.w, self.item_height - 2.0,
+                    self.rect.x,
+                    item_y,
+                    self.rect.w,
+                    self.item_height - 2.0,
                     theme.corner_radius / 2.0,
-                    theme.button_hover
+                    theme.button_hover,
                 );
             }
 
@@ -228,7 +237,12 @@ impl ListView {
             let secondary_color = if item.disabled {
                 theme.text_disabled
             } else if is_selected {
-                Color::new(theme.bg_primary.r, theme.bg_primary.g, theme.bg_primary.b, 0.8)
+                Color::new(
+                    theme.bg_primary.r,
+                    theme.bg_primary.g,
+                    theme.bg_primary.b,
+                    0.8,
+                )
             } else {
                 theme.text_secondary
             };
@@ -245,7 +259,7 @@ impl ListView {
                 self.rect.x + theme.spacing,
                 text_y,
                 theme.font_size_normal,
-                text_color
+                text_color,
             );
 
             // 绘制次要文本
@@ -255,7 +269,7 @@ impl ListView {
                     self.rect.x + theme.spacing,
                     item_y + self.item_height * 0.7,
                     theme.font_size_small,
-                    secondary_color
+                    secondary_color,
                 );
             }
         }
@@ -263,8 +277,9 @@ impl ListView {
         // 绘制滚动条（如果需要）
         if self.can_scroll() {
             let scrollbar_height = (self.rect.h / self.total_height()) * self.rect.h;
-            let scrollbar_y = self.rect.y + 
-                (self.scroll_offset / (self.total_height() - self.rect.h)) * (self.rect.h - scrollbar_height);
+            let scrollbar_y = self.rect.y
+                + (self.scroll_offset / (self.total_height() - self.rect.h))
+                    * (self.rect.h - scrollbar_height);
 
             draw_rounded_rect(
                 self.rect.x + self.rect.w - 6.0,
@@ -272,7 +287,12 @@ impl ListView {
                 4.0,
                 scrollbar_height,
                 2.0,
-                Color::new(theme.text_secondary.r, theme.text_secondary.g, theme.text_secondary.b, 0.5)
+                Color::new(
+                    theme.text_secondary.r,
+                    theme.text_secondary.g,
+                    theme.text_secondary.b,
+                    0.5,
+                ),
             );
         }
     }

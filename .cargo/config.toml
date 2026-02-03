@@ -3,3 +3,17 @@ linker = "rust-lld.exe"
 
 [alias]
 pack = "run -p asset-packer --"
+
+# -------- Local quality gates (single-developer workflow) --------
+# Fast, composable building blocks:
+fmt-check = "fmt --all -- --check"
+fmt-all = "fmt --all"
+clippy-all = "clippy --workspace --all-targets"
+clippy-deny = "clippy --workspace --all-targets -- -D warnings"
+test-all = "test --workspace"
+test-runtime = "test -p vn-runtime"
+test-host-lib = "test -p host --lib"
+
+# One-command local gate (Windows PowerShell).
+# Runs: fmt --check -> clippy -> tests
+check-all = "!powershell -NoProfile -ExecutionPolicy Bypass -Command \"cargo fmt --all -- --check; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cargo clippy --workspace --all-targets; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cargo test --workspace\""

@@ -2,18 +2,18 @@
 //!
 //! 提供统一的 UI 组件库，用于主菜单、存档界面、设置界面等。
 
-pub mod theme;
 pub mod button;
-pub mod panel;
 pub mod list;
 pub mod modal;
+pub mod panel;
+pub mod theme;
 pub mod toast;
 
-pub use theme::Theme;
 pub use button::{Button, ButtonState, ButtonStyle};
-pub use panel::Panel;
 pub use list::{ListItem, ListView};
 pub use modal::{Modal, ModalResult};
+pub use panel::Panel;
+pub use theme::Theme;
 pub use toast::{Toast, ToastManager, ToastType};
 
 use macroquad::prelude::*;
@@ -61,8 +61,10 @@ impl UiContext {
 
     /// 检查点是否在矩形内
     pub fn point_in_rect(&self, point: Vec2, rect: Rect) -> bool {
-        point.x >= rect.x && point.x <= rect.x + rect.w &&
-        point.y >= rect.y && point.y <= rect.y + rect.h
+        point.x >= rect.x
+            && point.x <= rect.x + rect.w
+            && point.y >= rect.y
+            && point.y <= rect.y + rect.h
     }
 
     /// 检查鼠标是否在矩形内
@@ -74,13 +76,13 @@ impl UiContext {
 /// 绘制圆角矩形（简化版，用四个圆角近似）
 pub fn draw_rounded_rect(x: f32, y: f32, w: f32, h: f32, radius: f32, color: Color) {
     let r = radius.min(w / 2.0).min(h / 2.0);
-    
+
     // 中心矩形
     draw_rectangle(x + r, y, w - 2.0 * r, h, color);
     // 左右矩形
     draw_rectangle(x, y + r, r, h - 2.0 * r, color);
     draw_rectangle(x + w - r, y + r, r, h - 2.0 * r, color);
-    
+
     // 四个角（用圆形近似）
     draw_circle(x + r, y + r, r, color);
     draw_circle(x + w - r, y + r, r, color);
@@ -89,28 +91,41 @@ pub fn draw_rounded_rect(x: f32, y: f32, w: f32, h: f32, radius: f32, color: Col
 }
 
 /// 绘制圆角矩形边框
-pub fn draw_rounded_rect_lines(x: f32, y: f32, w: f32, h: f32, radius: f32, thickness: f32, color: Color) {
+pub fn draw_rounded_rect_lines(
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    radius: f32,
+    thickness: f32,
+    color: Color,
+) {
     let r = radius.min(w / 2.0).min(h / 2.0);
-    
+
     // 上下边
     draw_line(x + r, y, x + w - r, y, thickness, color);
     draw_line(x + r, y + h, x + w - r, y + h, thickness, color);
     // 左右边
     draw_line(x, y + r, x, y + h - r, thickness, color);
     draw_line(x + w, y + r, x + w, y + h - r, thickness, color);
-    
+
     // 四个角（用弧线，这里简化为直角连接点）
     // macroquad 没有直接的 arc 函数，用短线段近似
     let steps = 8;
     for i in 0..steps {
-        let a1 = std::f32::consts::PI * 1.5 + (i as f32 / steps as f32) * std::f32::consts::FRAC_PI_2;
-        let a2 = std::f32::consts::PI * 1.5 + ((i + 1) as f32 / steps as f32) * std::f32::consts::FRAC_PI_2;
-        
+        let a1 =
+            std::f32::consts::PI * 1.5 + (i as f32 / steps as f32) * std::f32::consts::FRAC_PI_2;
+        let a2 = std::f32::consts::PI * 1.5
+            + ((i + 1) as f32 / steps as f32) * std::f32::consts::FRAC_PI_2;
+
         // 左上角
         draw_line(
-            x + r + r * a1.cos(), y + r + r * a1.sin(),
-            x + r + r * a2.cos(), y + r + r * a2.sin(),
-            thickness, color
+            x + r + r * a1.cos(),
+            y + r + r * a1.sin(),
+            x + r + r * a2.cos(),
+            y + r + r * a2.sin(),
+            thickness,
+            color,
         );
         // 右上角
         draw_line(
@@ -118,7 +133,8 @@ pub fn draw_rounded_rect_lines(x: f32, y: f32, w: f32, h: f32, radius: f32, thic
             y + r + r * (a1 + std::f32::consts::FRAC_PI_2).sin(),
             x + w - r + r * (a2 + std::f32::consts::FRAC_PI_2).cos(),
             y + r + r * (a2 + std::f32::consts::FRAC_PI_2).sin(),
-            thickness, color
+            thickness,
+            color,
         );
         // 右下角
         draw_line(
@@ -126,7 +142,8 @@ pub fn draw_rounded_rect_lines(x: f32, y: f32, w: f32, h: f32, radius: f32, thic
             y + h - r + r * (a1 + std::f32::consts::PI).sin(),
             x + w - r + r * (a2 + std::f32::consts::PI).cos(),
             y + h - r + r * (a2 + std::f32::consts::PI).sin(),
-            thickness, color
+            thickness,
+            color,
         );
         // 左下角
         draw_line(
@@ -134,7 +151,8 @@ pub fn draw_rounded_rect_lines(x: f32, y: f32, w: f32, h: f32, radius: f32, thic
             y + h - r + r * (a1 - std::f32::consts::FRAC_PI_2).sin(),
             x + r + r * (a2 - std::f32::consts::FRAC_PI_2).cos(),
             y + h - r + r * (a2 - std::f32::consts::FRAC_PI_2).sin(),
-            thickness, color
+            thickness,
+            color,
         );
     }
 }

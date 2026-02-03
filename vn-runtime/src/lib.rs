@@ -79,7 +79,9 @@ pub use error::{ParseError, RuntimeError, VnError, VnResult};
 pub use history::{History, HistoryEvent};
 pub use input::{RuntimeInput, SignalId};
 pub use runtime::VNRuntime;
-pub use save::{SaveData, SaveError, SaveMetadata, SaveVersion, AudioState, RenderSnapshot, CharacterSnapshot};
+pub use save::{
+    AudioState, CharacterSnapshot, RenderSnapshot, SaveData, SaveError, SaveMetadata, SaveVersion,
+};
 pub use script::{ChoiceOption, Parser, Script, ScriptNode};
 pub use state::{RuntimeState, ScriptPosition, VarValue, WaitingReason};
 

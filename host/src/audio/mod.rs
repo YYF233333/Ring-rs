@@ -79,8 +79,8 @@ enum FadeState {
 impl AudioManager {
     /// 创建新的音频管理器（文件系统模式）
     pub fn new(base_path: &str) -> Result<Self, String> {
-        let (stream, stream_handle) = OutputStream::try_default()
-            .map_err(|e| format!("无法初始化音频输出: {}", e))?;
+        let (stream, stream_handle) =
+            OutputStream::try_default().map_err(|e| format!("无法初始化音频输出: {}", e))?;
 
         Ok(Self {
             _stream: stream,
@@ -99,8 +99,8 @@ impl AudioManager {
 
     /// 创建 ZIP 模式的音频管理器
     pub fn new_zip_mode(base_path: &str) -> Result<Self, String> {
-        let (stream, stream_handle) = OutputStream::try_default()
-            .map_err(|e| format!("无法初始化音频输出: {}", e))?;
+        let (stream, stream_handle) =
+            OutputStream::try_default().map_err(|e| format!("无法初始化音频输出: {}", e))?;
 
         Ok(Self {
             _stream: stream,
@@ -118,7 +118,7 @@ impl AudioManager {
     }
 
     /// 预加载音频字节数据（用于 ZIP 模式）
-    /// 
+    ///
     /// 在 ZIP 模式下，需要先通过 ResourceManager 读取音频字节，
     /// 然后调用此方法缓存数据。
     pub fn cache_audio_bytes(&mut self, logical_path: &str, bytes: Vec<u8>) {
@@ -128,10 +128,10 @@ impl AudioManager {
     /// 解析音频路径到完整文件系统路径（仅文件系统模式使用）
     fn resolve_fs_path(&self, logical_path: &str) -> PathBuf {
         use crate::resources::normalize_logical_path;
-        
+
         // 规范化逻辑路径
         let normalized = normalize_logical_path(logical_path);
-        
+
         // 拼接 base_path
         self.base_path.join(&normalized)
     }
@@ -145,7 +145,7 @@ impl AudioManager {
     /// - `fade_in`: 淡入时长（秒），None 表示立即播放
     pub fn play_bgm(&mut self, path: &str, looping: bool, fade_in: Option<f32>) {
         use crate::resources::normalize_logical_path;
-        
+
         // 如果当前有 BGM 在播放，先停止
         if let Some(ref sink) = self.bgm_sink {
             sink.stop();
@@ -160,11 +160,14 @@ impl AudioManager {
             let bytes = match self.audio_cache.get(&logical_path) {
                 Some(b) => b.clone(),
                 None => {
-                    eprintln!("❌ 音频未缓存: {} (请先调用 cache_audio_bytes)", logical_path);
+                    eprintln!(
+                        "❌ 音频未缓存: {} (请先调用 cache_audio_bytes)",
+                        logical_path
+                    );
                     return;
                 }
             };
-            
+
             let cursor = Cursor::new(bytes);
             match Decoder::new(cursor) {
                 Ok(s) => Box::new(s.convert_samples::<i16>()),
@@ -176,7 +179,7 @@ impl AudioManager {
         } else {
             // 文件系统模式：直接读取文件
             let full_path = self.resolve_fs_path(&logical_path);
-            
+
             let file = match File::open(&full_path) {
                 Ok(f) => f,
                 Err(e) => {
@@ -204,7 +207,11 @@ impl AudioManager {
         };
 
         // 设置初始音量
-        let initial_volume = if fade_in.is_some() { 0.0 } else { self.get_effective_bgm_volume() };
+        let initial_volume = if fade_in.is_some() {
+            0.0
+        } else {
+            self.get_effective_bgm_volume()
+        };
         sink.set_volume(initial_volume);
 
         // 添加音源（循环或单次）
@@ -228,7 +235,10 @@ impl AudioManager {
             }
         }
 
-        println!("🎵 开始播放 BGM: {} (循环: {}, 淡入: {:?})", logical_path, looping, fade_in);
+        println!(
+            "🎵 开始播放 BGM: {} (循环: {}, 淡入: {:?})",
+            logical_path, looping, fade_in
+        );
     }
 
     /// 停止 BGM
@@ -243,10 +253,12 @@ impl AudioManager {
 
         if let Some(duration) = fade_out {
             if duration > 0.0 {
-                let current_volume = self.bgm_sink.as_ref()
+                let current_volume = self
+                    .bgm_sink
+                    .as_ref()
                     .map(|s| s.volume())
                     .unwrap_or(self.get_effective_bgm_volume());
-                
+
                 self.fade_state = FadeState::FadeOut {
                     current_volume,
                     rate: current_volume / duration,
@@ -283,7 +295,9 @@ impl AudioManager {
         }
 
         // 设置淡出状态，并记录要播放的新 BGM
-        let current_volume = self.bgm_sink.as_ref()
+        let current_volume = self
+            .bgm_sink
+            .as_ref()
             .map(|s| s.volume())
             .unwrap_or(self.get_effective_bgm_volume());
 
@@ -304,7 +318,7 @@ impl AudioManager {
     /// - `path`: 音效逻辑路径（相对于 assets_root，如 `sfx/click.mp3`）
     pub fn play_sfx(&self, path: &str) {
         use crate::resources::normalize_logical_path;
-        
+
         if self.muted {
             return;
         }
@@ -318,11 +332,14 @@ impl AudioManager {
             let bytes = match self.audio_cache.get(&logical_path) {
                 Some(b) => b.clone(),
                 None => {
-                    eprintln!("❌ 音效未缓存: {} (请先调用 cache_audio_bytes)", logical_path);
+                    eprintln!(
+                        "❌ 音效未缓存: {} (请先调用 cache_audio_bytes)",
+                        logical_path
+                    );
                     return;
                 }
             };
-            
+
             let cursor = Cursor::new(bytes);
             match Decoder::new(cursor) {
                 Ok(s) => Box::new(s.convert_samples::<i16>()),
@@ -334,7 +351,7 @@ impl AudioManager {
         } else {
             // 文件系统模式：直接读取文件
             let full_path = self.resolve_fs_path(&logical_path);
-            
+
             let file = match File::open(&full_path) {
                 Ok(f) => f,
                 Err(e) => {
@@ -374,7 +391,11 @@ impl AudioManager {
 
         match &mut self.fade_state {
             FadeState::None => {}
-            FadeState::FadeIn { target_volume, current_volume, rate } => {
+            FadeState::FadeIn {
+                target_volume,
+                current_volume,
+                rate,
+            } => {
                 *current_volume += *rate * dt;
                 if *current_volume >= *target_volume {
                     // 淡入完成
@@ -390,7 +411,12 @@ impl AudioManager {
                     }
                 }
             }
-            FadeState::FadeOut { current_volume, rate, stop_after, next_bgm } => {
+            FadeState::FadeOut {
+                current_volume,
+                rate,
+                stop_after,
+                next_bgm,
+            } => {
                 *current_volume -= *rate * dt;
                 if *current_volume <= 0.0 {
                     // 淡出完成
@@ -412,7 +438,7 @@ impl AudioManager {
         // 在 match 结束后执行延后操作
         if fade_completed {
             self.fade_state = FadeState::None;
-            
+
             if should_stop {
                 if let Some(ref sink) = self.bgm_sink {
                     sink.stop();
@@ -430,7 +456,7 @@ impl AudioManager {
             }
             self.bgm_sink = None;
             self.current_bgm_path = None;
-            
+
             // 播放新 BGM（带淡入）
             self.play_bgm(&path, looping, Some(duration));
         }
@@ -439,7 +465,7 @@ impl AudioManager {
     /// 设置 BGM 音量
     pub fn set_bgm_volume(&mut self, volume: f32) {
         self.bgm_volume = volume.clamp(0.0, 1.0);
-        
+
         // 更新当前 BGM 的音量
         if let Some(ref sink) = self.bgm_sink {
             let effective_volume = if self.muted { 0.0 } else { self.bgm_volume };
@@ -465,7 +491,7 @@ impl AudioManager {
     /// 设置静音状态
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
-        
+
         // 更新当前 BGM 的音量
         if let Some(ref sink) = self.bgm_sink {
             let effective_volume = if muted { 0.0 } else { self.bgm_volume };
@@ -525,14 +551,14 @@ mod tests {
         if let Ok(mut manager) = AudioManager::new("assets") {
             manager.set_bgm_volume(0.5);
             assert_eq!(manager.bgm_volume(), 0.5);
-            
+
             manager.set_sfx_volume(0.7);
             assert_eq!(manager.sfx_volume(), 0.7);
-            
+
             // 测试音量限制
             manager.set_bgm_volume(1.5);
             assert_eq!(manager.bgm_volume(), 1.0);
-            
+
             manager.set_bgm_volume(-0.5);
             assert_eq!(manager.bgm_volume(), 0.0);
         }

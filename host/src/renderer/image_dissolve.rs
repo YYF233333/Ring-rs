@@ -26,7 +26,7 @@ void main() {
 "#;
 
 /// ImageDissolve 片段 shader
-/// 
+///
 /// 根据灰度遮罩图的像素亮度控制溶解顺序：
 /// - progress: 过渡进度 (0.0 - 1.0)
 /// - ramp: 渐变带宽，控制边缘柔和度
@@ -110,10 +110,7 @@ impl ImageDissolve {
                     UniformDesc::new("_ramp", UniformType::Float1),
                     UniformDesc::new("_reversed", UniformType::Float1),
                 ],
-                textures: vec![
-                    "_mask_texture".to_string(),
-                    "_old_texture".to_string(),
-                ],
+                textures: vec!["_mask_texture".to_string(), "_old_texture".to_string()],
                 ..Default::default()
             },
         ) {

@@ -48,7 +48,7 @@ pub use easing::EasingFunction;
 pub use system::AnimationSystem;
 
 // Trait-based 动画系统 API
-pub use traits::{Animatable, AnimPropertyKey, ObjectId, PropertyAccessor, SimplePropertyAccessor};
+pub use traits::{AnimPropertyKey, Animatable, ObjectId, PropertyAccessor, SimplePropertyAccessor};
 
 // 辅助类型（保留以便需要时使用）
 pub use target::AnimationTarget;

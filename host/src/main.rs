@@ -2,25 +2,28 @@
 //!
 //! Visual Novel Engine 的宿主层入口。
 
-use macroquad::prelude::*;
 use host::HostState;
-use host::resources::ResourceManager;
-use host::renderer::{Renderer, RenderState, AnimationSystem, AnimatableCharacter, ObjectId};
-use host::{InputManager, CommandExecutor, ExecuteResult, AudioCommand, AudioManager, AppConfig, AssetSourceType};
-use host::{AppMode, NavigationStack, SaveLoadTab, UserSettings};
 use host::ZipSource;
-use std::sync::Arc;
-use host::ui::{UiContext, Theme, ToastManager};
-use host::screens::{TitleScreen, InGameMenuScreen, SaveLoadScreen, SettingsScreen, HistoryScreen};
-use host::screens::title::TitleAction;
+use host::renderer::{AnimatableCharacter, AnimationSystem, ObjectId, RenderState, Renderer};
+use host::resources::ResourceManager;
+use host::screens::history::HistoryAction;
 use host::screens::ingame_menu::InGameMenuAction;
 use host::screens::save_load::SaveLoadAction;
 use host::screens::settings::SettingsAction;
-use host::screens::history::HistoryAction;
-use vn_runtime::state::WaitingReason;
-use vn_runtime::input::RuntimeInput;
-use vn_runtime::{VNRuntime, Parser};
+use host::screens::title::TitleAction;
+use host::screens::{HistoryScreen, InGameMenuScreen, SaveLoadScreen, SettingsScreen, TitleScreen};
+use host::ui::{Theme, ToastManager, UiContext};
+use host::{
+    AppConfig, AssetSourceType, AudioCommand, AudioManager, CommandExecutor, ExecuteResult,
+    InputManager,
+};
+use host::{AppMode, NavigationStack, SaveLoadTab, UserSettings};
+use macroquad::prelude::*;
 use std::path::PathBuf;
+use std::sync::Arc;
+use vn_runtime::input::RuntimeInput;
+use vn_runtime::state::WaitingReason;
+use vn_runtime::{Parser, VNRuntime};
 
 /// 配置文件路径
 const CONFIG_PATH: &str = "config.json";
@@ -57,7 +60,7 @@ struct AppState {
     scripts: Vec<(String, PathBuf)>,
     /// 游戏开始时间（用于计算游戏时长）
     play_start_time: std::time::Instant,
-    
+
     // ===== 阶段16新增：UI 系统 =====
     /// 导航栈（管理界面切换和返回）
     navigation: NavigationStack,
@@ -67,7 +70,7 @@ struct AppState {
     user_settings: UserSettings,
     /// Toast 提示管理器
     toast_manager: ToastManager,
-    
+
     // ===== 各界面状态 =====
     /// 主标题界面
     title_screen: TitleScreen,
@@ -79,7 +82,7 @@ struct AppState {
     settings_screen: SettingsScreen,
     /// 历史界面
     history_screen: HistoryScreen,
-    
+
     // ===== 阶段19新增：动画系统 =====
     /// 统一动画系统
     animation_system: AnimationSystem,
@@ -91,7 +94,7 @@ impl AppState {
     fn new(config: AppConfig) -> Self {
         let assets_root = config.assets_root.to_string_lossy().to_string();
         let saves_dir = config.saves_dir.to_string_lossy().to_string();
-        
+
         // 根据配置选择资源来源
         let resource_manager = match config.asset_source {
             AssetSourceType::Fs => {
@@ -99,8 +102,7 @@ impl AppState {
                 ResourceManager::new(&assets_root, config.resources.texture_cache_size_mb)
             }
             AssetSourceType::Zip => {
-                let zip_path = config.zip_path.as_ref()
-                    .expect("Zip 模式必须配置 zip_path");
+                let zip_path = config.zip_path.as_ref().expect("Zip 模式必须配置 zip_path");
                 println!("📦 资源来源: ZIP 文件 ({})", zip_path);
                 ResourceManager::with_source(
                     &assets_root,
@@ -112,30 +114,26 @@ impl AppState {
 
         // 初始化音频管理器（根据资源来源选择模式）
         let audio_manager = match config.asset_source {
-            AssetSourceType::Fs => {
-                match AudioManager::new(&assets_root) {
-                    Ok(am) => {
-                        println!("✅ 音频系统初始化成功");
-                        Some(am)
-                    }
-                    Err(e) => {
-                        eprintln!("⚠️ 音频系统初始化失败: {}", e);
-                        None
-                    }
+            AssetSourceType::Fs => match AudioManager::new(&assets_root) {
+                Ok(am) => {
+                    println!("✅ 音频系统初始化成功");
+                    Some(am)
                 }
-            }
-            AssetSourceType::Zip => {
-                match AudioManager::new_zip_mode(&assets_root) {
-                    Ok(am) => {
-                        println!("✅ 音频系统初始化成功 (ZIP 模式)");
-                        Some(am)
-                    }
-                    Err(e) => {
-                        eprintln!("⚠️ 音频系统初始化失败: {}", e);
-                        None
-                    }
+                Err(e) => {
+                    eprintln!("⚠️ 音频系统初始化失败: {}", e);
+                    None
                 }
-            }
+            },
+            AssetSourceType::Zip => match AudioManager::new_zip_mode(&assets_root) {
+                Ok(am) => {
+                    println!("✅ 音频系统初始化成功 (ZIP 模式)");
+                    Some(am)
+                }
+                Err(e) => {
+                    eprintln!("⚠️ 音频系统初始化失败: {}", e);
+                    None
+                }
+            },
         };
 
         // 加载资源清单（立绘配置）
@@ -215,20 +213,20 @@ impl AppState {
             current_save_slot: 1,
             scripts,
             play_start_time: std::time::Instant::now(),
-            
+
             // UI 系统
             navigation: NavigationStack::new(),
             ui_context: UiContext::new(Theme::dark()),
             user_settings,
             toast_manager: ToastManager::new(),
-            
+
             // 界面状态
             title_screen: TitleScreen::new(),
             ingame_menu: InGameMenuScreen::new(),
             save_load_screen: SaveLoadScreen::new(),
             settings_screen: SettingsScreen::new(),
             history_screen: HistoryScreen::new(),
-            
+
             // 动画系统
             animation_system: AnimationSystem::new(),
             character_object_ids: std::collections::HashMap::new(),
@@ -293,7 +291,7 @@ async fn main() {
         // 等待下一帧
         next_frame().await;
     }
-    
+
     // 退出前保存 Continue 存档
     save_continue(&mut app_state);
 }
@@ -305,49 +303,72 @@ async fn load_resources(app_state: &mut AppState) {
     // 加载字体（使用配置中的字体路径）
     match app_state.config.asset_source {
         AssetSourceType::Fs => {
-            let font_path = app_state.config.assets_root.join(&app_state.config.default_font);
+            let font_path = app_state
+                .config
+                .assets_root
+                .join(&app_state.config.default_font);
             println!("✅ 加载字体: {:?}", font_path);
             if let Err(e) = app_state.renderer.init(&font_path.to_string_lossy()).await {
-                eprintln!("⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}", e);
+                eprintln!(
+                    "⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}",
+                    e
+                );
             }
         }
         AssetSourceType::Zip => {
             // ZIP 模式：需要将字体文件写入临时文件
             // 因为 macroquad 的 load_ttf_font 只接受文件路径
-            let font_bytes = match app_state.resource_manager.read_bytes(&app_state.config.default_font) {
+            let font_bytes = match app_state
+                .resource_manager
+                .read_bytes(&app_state.config.default_font)
+            {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    eprintln!("⚠️ 无法从 ZIP 读取字体文件: {} - {}", app_state.config.default_font, e);
+                    eprintln!(
+                        "⚠️ 无法从 ZIP 读取字体文件: {} - {}",
+                        app_state.config.default_font, e
+                    );
                     eprintln!("⚠️ 回退到 macroquad 默认字体（仅支持 ASCII）");
                     return;
                 }
             };
-            
+
             // 创建临时文件
             let temp_dir = std::env::temp_dir();
             let temp_font_path = temp_dir.join(format!("ring_font_{}.ttf", std::process::id()));
-            
+
             if let Err(e) = std::fs::write(&temp_font_path, &font_bytes) {
-                eprintln!("⚠️ 无法写入临时字体文件: {} - {}", temp_font_path.display(), e);
+                eprintln!(
+                    "⚠️ 无法写入临时字体文件: {} - {}",
+                    temp_font_path.display(),
+                    e
+                );
                 eprintln!("⚠️ 回退到 macroquad 默认字体（仅支持 ASCII）");
                 return;
             }
-            
-            println!("✅ 加载字体: {} (临时文件: {:?})", app_state.config.default_font, temp_font_path);
-            if let Err(e) = app_state.renderer.init(&temp_font_path.to_string_lossy()).await {
-                eprintln!("⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}", e);
+
+            println!(
+                "✅ 加载字体: {} (临时文件: {:?})",
+                app_state.config.default_font, temp_font_path
+            );
+            if let Err(e) = app_state
+                .renderer
+                .init(&temp_font_path.to_string_lossy())
+                .await
+            {
+                eprintln!(
+                    "⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}",
+                    e
+                );
             }
-            
+
             // 注意：临时文件会在程序退出时自动清理（操作系统负责）
         }
     }
 
     // 预加载必需的 UI 纹理（用于过渡效果）
     // 其他资源改为按需加载（由 TextureCache 管理）
-    let essential_textures = [
-        "backgrounds/black.png",
-        "backgrounds/white.png",
-    ];
+    let essential_textures = ["backgrounds/black.png", "backgrounds/white.png"];
     for path in &essential_textures {
         match app_state.resource_manager.load_texture(path).await {
             Ok(_) => println!("✅ 预加载: {}", path),
@@ -365,8 +386,8 @@ async fn load_resources(app_state: &mut AppState) {
 
 /// 从命令列表中收集需要预取的资源路径
 fn collect_prefetch_paths(commands: &[vn_runtime::Command]) -> Vec<String> {
-    use vn_runtime::command::TransitionArg;
     use vn_runtime::Command;
+    use vn_runtime::command::TransitionArg;
 
     let mut paths = Vec::new();
 
@@ -410,14 +431,17 @@ async fn ensure_render_resources(app_state: &mut AppState) {
 
     // 检查可见角色
     for character in app_state.render_state.visible_characters.values() {
-        if !app_state.resource_manager.has_texture(&character.texture_path) {
+        if !app_state
+            .resource_manager
+            .has_texture(&character.texture_path)
+        {
             paths_to_load.push(character.texture_path.clone());
         }
     }
 
     // 检查场景过渡（Rule 效果需要遮罩纹理）
-    if let Some(host::renderer::SceneTransitionType::Rule { mask_path, .. }) = 
-        app_state.renderer.scene_transition.transition_type() 
+    if let Some(host::renderer::SceneTransitionType::Rule { mask_path, .. }) =
+        app_state.renderer.scene_transition.transition_type()
     {
         if !app_state.resource_manager.has_texture(mask_path) {
             paths_to_load.push(mask_path.clone());
@@ -436,10 +460,10 @@ async fn ensure_render_resources(app_state: &mut AppState) {
 /// 从 ZIP 扫描脚本文件
 fn scan_scripts_from_zip(resource_manager: &ResourceManager) -> Vec<(String, PathBuf)> {
     let mut scripts = Vec::new();
-    
+
     // 通过 ResourceManager 列出 scripts 目录下的文件
     let files = resource_manager.list_files("scripts");
-    
+
     for file_path in files {
         // 只处理 .md 文件
         if file_path.ends_with(".md") {
@@ -451,30 +475,30 @@ fn scan_scripts_from_zip(resource_manager: &ResourceManager) -> Vec<(String, Pat
             }
         }
     }
-    
+
     // 按文件名排序，确保顺序稳定
     scripts.sort_by(|a, b| a.0.cmp(&b.0));
     scripts
 }
 
 /// 从逻辑路径加载脚本
-/// 
+///
 /// # 参数
 /// - `logical_path`: 逻辑路径（相对于 assets_root，如 `scripts/test.md`）
-/// 
+///
 /// # 返回
 /// 是否加载成功
 fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &str) -> bool {
-    use host::resources::{normalize_logical_path, extract_script_id, extract_base_dir};
-    
+    use host::resources::{extract_base_dir, extract_script_id, normalize_logical_path};
+
     // 规范化路径
     let normalized_path = normalize_logical_path(logical_path);
     let script_id = extract_script_id(&normalized_path);
     let base_dir = extract_base_dir(&normalized_path);
-    
+
     println!("📜 加载脚本: {} (路径: {})", script_id, normalized_path);
     println!("📁 脚本目录: {}", base_dir);
-    
+
     // 通过 ResourceManager 读取（统一处理 FS 和 ZIP 模式）
     let script_text = match app_state.resource_manager.read_text(&normalized_path) {
         Ok(text) => text,
@@ -483,17 +507,17 @@ fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &str) -
             return false;
         }
     };
-    
+
     let mut parser = Parser::new();
     match parser.parse_with_base_path(&script_id, &script_text, &base_dir) {
         Ok(script) => {
             println!("✅ 脚本解析成功！节点数: {}", script.len());
-            
+
             // 打印警告
             for warning in parser.warnings() {
                 println!("⚠️ 解析警告: {}", warning);
             }
-            
+
             // 创建 VNRuntime 并设置脚本路径
             let mut runtime = VNRuntime::new(script);
             runtime.state_mut().position.set_path(&normalized_path);
@@ -510,11 +534,11 @@ fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &str) -
 /// 从 PathBuf 加载脚本（兼容旧接口）
 fn load_script_from_path(app_state: &mut AppState, script_path: &PathBuf) -> bool {
     use host::resources::normalize_logical_path;
-    
+
     // 将 PathBuf 转换为逻辑路径
     let path_str = script_path.to_string_lossy().replace('\\', "/");
     let logical_path = normalize_logical_path(&path_str);
-    
+
     load_script_from_logical_path(app_state, &logical_path)
 }
 
@@ -526,17 +550,17 @@ fn load_script_from_path_legacy(app_state: &mut AppState, script_path: &PathBuf)
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
-    
+
     println!("📜 加载脚本: {} ({:?})", script_id, script_path);
-    
+
     // 提取脚本所在目录作为 base_path（用于解析相对路径）
     let base_path = script_path
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
-    
+
     println!("📁 脚本目录: {}", base_path);
-    
+
     // 根据资源来源类型选择读取方式
     let script_text = match app_state.config.asset_source {
         AssetSourceType::Fs => {
@@ -556,7 +580,7 @@ fn load_script_from_path_legacy(app_state: &mut AppState, script_path: &PathBuf)
                 Ok(stripped) => stripped.to_string_lossy().replace('\\', "/"),
                 Err(_) => script_path.to_string_lossy().replace('\\', "/"),
             };
-            
+
             match app_state.resource_manager.read_text(&relative_path) {
                 Ok(text) => text,
                 Err(e) => {
@@ -566,17 +590,17 @@ fn load_script_from_path_legacy(app_state: &mut AppState, script_path: &PathBuf)
             }
         }
     };
-    
+
     let mut parser = Parser::new();
     match parser.parse_with_base_path(&script_id, &script_text, &base_path) {
         Ok(script) => {
             println!("✅ 脚本解析成功！节点数: {}", script.len());
-            
+
             // 打印警告
             for warning in parser.warnings() {
                 println!("⚠️ 解析警告: {}", warning);
             }
-            
+
             // 创建 VNRuntime
             app_state.vn_runtime = Some(VNRuntime::new(script));
             true
@@ -589,7 +613,7 @@ fn load_script_from_path_legacy(app_state: &mut AppState, script_path: &PathBuf)
 }
 
 /// 根据脚本路径或 ID 加载脚本（用于存档恢复）
-/// 
+///
 /// 优先使用 script_path（如果非空），否则回退到 script_id。
 fn load_script_by_path_or_id(app_state: &mut AppState, script_path: &str, script_id: &str) -> bool {
     // 如果有脚本路径，直接使用
@@ -597,7 +621,7 @@ fn load_script_by_path_or_id(app_state: &mut AppState, script_path: &str, script
         println!("📜 从路径加载脚本: {}", script_path);
         return load_script_from_logical_path(app_state, script_path);
     }
-    
+
     // 否则从 ID 推断路径
     load_script_by_id(app_state, script_id)
 }
@@ -605,26 +629,29 @@ fn load_script_by_path_or_id(app_state: &mut AppState, script_path: &str, script
 /// 根据脚本 ID 加载脚本（兼容旧存档）
 fn load_script_by_id(app_state: &mut AppState, script_id: &str) -> bool {
     println!("📜 从 ID 推断脚本路径: {}", script_id);
-    
+
     // 在 scripts 列表中查找
     if let Some((_, path)) = app_state.scripts.iter().find(|(id, _)| id == script_id) {
         let path = path.clone();
         return load_script_from_path(app_state, &path);
     }
-    
+
     // 尝试常见的脚本位置
     let possible_paths = [
         format!("scripts/{}.md", script_id),
         format!("{}.md", script_id),
     ];
-    
+
     for path in &possible_paths {
         if app_state.resource_manager.resource_exists(path) {
             return load_script_from_logical_path(app_state, path);
         }
     }
-    
-    eprintln!("❌ 找不到脚本: {} (尝试过: {:?})", script_id, possible_paths);
+
+    eprintln!(
+        "❌ 找不到脚本: {} (尝试过: {:?})",
+        script_id, possible_paths
+    );
     false
 }
 
@@ -637,30 +664,35 @@ fn load_script(app_state: &mut AppState) {
 
     let script_count = app_state.scripts.len();
     let (script_id, script_path) = &app_state.scripts[app_state.script_index % script_count];
-    
-    println!("📜 加载脚本 [{}/{}]: {} ({:?})", 
-        app_state.script_index + 1, script_count, script_id, script_path);
-    
+
+    println!(
+        "📜 加载脚本 [{}/{}]: {} ({:?})",
+        app_state.script_index + 1,
+        script_count,
+        script_id,
+        script_path
+    );
+
     // 提取脚本所在目录作为 base_path（用于解析相对路径）
     let base_path = script_path
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
-    
+
     println!("📁 脚本目录: {}", base_path);
-    
+
     match std::fs::read_to_string(script_path) {
         Ok(script_text) => {
             let mut parser = Parser::new();
             match parser.parse_with_base_path(&script_id, &script_text, &base_path) {
                 Ok(script) => {
                     println!("✅ 脚本解析成功！节点数: {}", script.len());
-                    
+
                     // 打印警告
                     for warning in parser.warnings() {
                         println!("⚠️ 解析警告: {}", warning);
                     }
-                    
+
                     // 创建 VNRuntime
                     app_state.vn_runtime = Some(VNRuntime::new(script));
                     println!("✅ VNRuntime 创建成功！按 F3 切换到脚本模式，F4 切换脚本");
@@ -680,7 +712,7 @@ fn load_script(app_state: &mut AppState) {
 fn window_conf() -> Conf {
     // 在窗口创建前读取配置（此函数在 main 之前被 macroquad 调用）
     let config = AppConfig::load(CONFIG_PATH);
-    
+
     Conf {
         window_title: config.window.title,
         window_width: config.window.width as i32,
@@ -696,10 +728,14 @@ fn window_conf() -> Conf {
 /// 多阶段流程由 SceneTransitionManager 管理：
 /// - Fade/FadeWhite: FadeIn → FadeOut → UIFadeIn → Completed
 /// - Rule: FadeIn → Blackout → FadeOut → UIFadeIn → Completed
-fn update_scene_transition(renderer: &mut Renderer, render_state: &mut host::renderer::RenderState, dt: f32) {
+fn update_scene_transition(
+    renderer: &mut Renderer,
+    render_state: &mut host::renderer::RenderState,
+    dt: f32,
+) {
     // 记录过渡开始前的状态
     let was_active = renderer.is_scene_transition_active();
-    
+
     if !was_active {
         return;
     }
@@ -738,7 +774,14 @@ fn update(app_state: &mut AppState) {
     // 切换调试模式（全局可用）
     if is_key_pressed(KeyCode::F1) {
         app_state.host_state.debug_mode = !app_state.host_state.debug_mode;
-        println!("🔧 调试模式: {}", if app_state.host_state.debug_mode { "开启" } else { "关闭" });
+        println!(
+            "🔧 调试模式: {}",
+            if app_state.host_state.debug_mode {
+                "开启"
+            } else {
+                "关闭"
+            }
+        );
     }
 
     // 根据当前模式处理更新
@@ -763,9 +806,11 @@ fn update(app_state: &mut AppState) {
 
         // 更新动画系统
         let _events = app_state.animation_system.update(dt);
-        
+
         // 检测淡出完成的角色并移除
-        let completed_fadeouts: Vec<String> = app_state.render_state.visible_characters
+        let completed_fadeouts: Vec<String> = app_state
+            .render_state
+            .visible_characters
             .iter()
             .filter(|(_alias, char)| {
                 // 检查角色是否标记为淡出且透明度已降到 0
@@ -778,14 +823,16 @@ fn update(app_state: &mut AppState) {
             })
             .map(|(alias, _)| alias.clone())
             .collect();
-        
+
         // 移除淡出完成的角色，并从动画系统注销
         for alias in &completed_fadeouts {
             if let Some(object_id) = app_state.character_object_ids.remove(alias) {
                 app_state.animation_system.unregister(object_id);
             }
         }
-        app_state.render_state.remove_fading_out_characters(&completed_fadeouts);
+        app_state
+            .render_state
+            .remove_fading_out_characters(&completed_fadeouts);
     }
 
     // 更新音频状态（所有模式都需要）
@@ -856,7 +903,10 @@ fn update_ingame(app_state: &mut AppState, dt: f32) {
     }
 
     // 使用 InputManager 处理游戏输入（传入 dt 用于长按快进）
-    if let Some(input) = app_state.input_manager.update(&app_state.waiting_reason, dt) {
+    if let Some(input) = app_state
+        .input_manager
+        .update(&app_state.waiting_reason, dt)
+    {
         handle_script_mode_input(app_state, input);
     }
 
@@ -924,10 +974,14 @@ fn update_ingame_menu(app_state: &mut AppState) {
 /// 更新存档/读档界面
 fn update_save_load(app_state: &mut AppState) {
     if app_state.save_load_screen.needs_init() {
-        app_state.save_load_screen.init(&app_state.ui_context, &app_state.save_manager);
+        app_state
+            .save_load_screen
+            .init(&app_state.ui_context, &app_state.save_manager);
     }
     if app_state.save_load_screen.needs_refresh() {
-        app_state.save_load_screen.refresh_saves(&app_state.save_manager);
+        app_state
+            .save_load_screen
+            .refresh_saves(&app_state.save_manager);
     }
 
     match app_state.save_load_screen.update(&app_state.ui_context) {
@@ -937,17 +991,25 @@ fn update_save_load(app_state: &mut AppState) {
         SaveLoadAction::Save(slot) => {
             app_state.current_save_slot = slot;
             quick_save(app_state);
-            app_state.toast_manager.success(format!("已保存到槽位 {}", slot));
-            app_state.save_load_screen.refresh_saves(&app_state.save_manager);
+            app_state
+                .toast_manager
+                .success(format!("已保存到槽位 {}", slot));
+            app_state
+                .save_load_screen
+                .refresh_saves(&app_state.save_manager);
         }
         SaveLoadAction::Load(slot) => {
             load_game(app_state, slot);
-            app_state.toast_manager.success(format!("已读取槽位 {}", slot));
+            app_state
+                .toast_manager
+                .success(format!("已读取槽位 {}", slot));
         }
         SaveLoadAction::Delete(slot) => {
             if app_state.save_manager.delete(slot).is_ok() {
                 app_state.toast_manager.info(format!("已删除槽位 {}", slot));
-                app_state.save_load_screen.refresh_saves(&app_state.save_manager);
+                app_state
+                    .save_load_screen
+                    .refresh_saves(&app_state.save_manager);
             } else {
                 app_state.toast_manager.error("删除失败");
             }
@@ -959,7 +1021,9 @@ fn update_save_load(app_state: &mut AppState) {
 /// 更新设置界面
 fn update_settings(app_state: &mut AppState) {
     if app_state.settings_screen.needs_init() {
-        app_state.settings_screen.init(&app_state.ui_context, &app_state.user_settings);
+        app_state
+            .settings_screen
+            .init(&app_state.ui_context, &app_state.user_settings);
     }
 
     match app_state.settings_screen.update(&app_state.ui_context) {
@@ -969,7 +1033,7 @@ fn update_settings(app_state: &mut AppState) {
         SettingsAction::Apply => {
             // 应用设置
             app_state.user_settings = app_state.settings_screen.settings().clone();
-            
+
             // 应用音量
             if let Some(ref mut audio) = app_state.audio_manager {
                 audio.set_bgm_volume(app_state.user_settings.bgm_volume);
@@ -995,7 +1059,9 @@ fn update_settings(app_state: &mut AppState) {
 fn update_history(app_state: &mut AppState) {
     if app_state.history_screen.needs_init() {
         if let Some(ref runtime) = app_state.vn_runtime {
-            app_state.history_screen.init(&app_state.ui_context, runtime.history());
+            app_state
+                .history_screen
+                .init(&app_state.ui_context, runtime.history());
         }
     }
 
@@ -1011,15 +1077,15 @@ fn update_history(app_state: &mut AppState) {
 fn start_new_game(app_state: &mut AppState) {
     // 使用配置的入口脚本（逻辑路径）
     let script_path = app_state.config.start_script_path.clone();
-    
+
     if load_script_from_logical_path(app_state, &script_path) {
         app_state.render_state = RenderState::new();
         app_state.script_finished = false;
         app_state.play_start_time = std::time::Instant::now();
-        
+
         // 执行第一次 tick
         run_script_tick(app_state, None);
-        
+
         // 切换到游戏模式
         app_state.navigation.switch_to(AppMode::InGame);
         println!("🎮 开始新游戏: {}", script_path);
@@ -1057,7 +1123,6 @@ fn load_continue(app_state: &mut AppState) {
     }
 }
 
-
 //=============================================================================
 // 过渡效果处理
 //=============================================================================
@@ -1065,7 +1130,7 @@ fn load_continue(app_state: &mut AppState) {
 /// 应用过渡效果
 fn apply_transition_effect(app_state: &mut AppState) {
     let transition_info = &app_state.command_executor.last_output.transition_info;
-    
+
     if transition_info.has_background_transition {
         app_state.renderer.start_background_transition(
             transition_info.old_background.clone(),
@@ -1077,9 +1142,9 @@ fn apply_transition_effect(app_state: &mut AppState) {
 /// 处理音频命令
 fn handle_audio_command(app_state: &mut AppState) {
     use host::resources::normalize_logical_path;
-    
+
     let audio_cmd = app_state.command_executor.last_output.audio_command.clone();
-    
+
     if let Some(cmd) = audio_cmd {
         // ZIP 模式下需要先缓存音频字节
         if let AssetSourceType::Zip = app_state.config.asset_source {
@@ -1088,7 +1153,7 @@ fn handle_audio_command(app_state: &mut AppState) {
                 AudioCommand::PlaySfx { path } => Some(path.clone()),
                 AudioCommand::StopBgm { .. } => None,
             };
-            
+
             if let Some(path) = path_to_cache {
                 let logical_path = normalize_logical_path(&path);
                 // 读取音频字节并缓存
@@ -1105,10 +1170,14 @@ fn handle_audio_command(app_state: &mut AppState) {
                 }
             }
         }
-        
+
         if let Some(ref mut audio_manager) = app_state.audio_manager {
             match cmd {
-                AudioCommand::PlayBgm { path, looping, fade_in: _ } => {
+                AudioCommand::PlayBgm {
+                    path,
+                    looping,
+                    fade_in: _,
+                } => {
                     // BGM 切换自带交叉淡化效果（规范要求）
                     // 如果当前有 BGM 在播放，使用交叉淡化；否则直接播放（带淡入）
                     const CROSSFADE_DURATION: f32 = 1.0; // 交叉淡化时长
@@ -1132,19 +1201,43 @@ fn handle_audio_command(app_state: &mut AppState) {
 /// 处理场景切换命令
 fn handle_scene_transition(app_state: &mut AppState) {
     use host::command_executor::SceneTransitionCommand;
-    
-    let scene_cmd = app_state.command_executor.last_output.scene_transition.clone();
-    
+
+    let scene_cmd = app_state
+        .command_executor
+        .last_output
+        .scene_transition
+        .clone();
+
     if let Some(cmd) = scene_cmd {
         match cmd {
-            SceneTransitionCommand::Fade { duration, pending_background } => {
-                app_state.renderer.start_scene_fade(duration, pending_background);
+            SceneTransitionCommand::Fade {
+                duration,
+                pending_background,
+            } => {
+                app_state
+                    .renderer
+                    .start_scene_fade(duration, pending_background);
             }
-            SceneTransitionCommand::FadeWhite { duration, pending_background } => {
-                app_state.renderer.start_scene_fade_white(duration, pending_background);
+            SceneTransitionCommand::FadeWhite {
+                duration,
+                pending_background,
+            } => {
+                app_state
+                    .renderer
+                    .start_scene_fade_white(duration, pending_background);
             }
-            SceneTransitionCommand::Rule { duration, pending_background, mask_path, reversed } => {
-                app_state.renderer.start_scene_rule(duration, pending_background, mask_path, reversed);
+            SceneTransitionCommand::Rule {
+                duration,
+                pending_background,
+                mask_path,
+                reversed,
+            } => {
+                app_state.renderer.start_scene_rule(
+                    duration,
+                    pending_background,
+                    mask_path,
+                    reversed,
+                );
             }
         }
     }
@@ -1154,9 +1247,13 @@ fn handle_scene_transition(app_state: &mut AppState) {
 fn handle_character_animation(app_state: &mut AppState) {
     use host::command_executor::CharacterAnimationCommand;
     use std::rc::Rc;
-    
-    let anim_cmd = app_state.command_executor.last_output.character_animation.clone();
-    
+
+    let anim_cmd = app_state
+        .command_executor
+        .last_output
+        .character_animation
+        .clone();
+
     if let Some(cmd) = anim_cmd {
         match cmd {
             CharacterAnimationCommand::Show { alias, duration } => {
@@ -1167,15 +1264,20 @@ fn handle_character_animation(app_state: &mut AppState) {
                         id
                     } else {
                         // 注册角色到动画系统
-                        let id = app_state.animation_system.register(Rc::new(character.clone()));
+                        let id = app_state
+                            .animation_system
+                            .register(Rc::new(character.clone()));
                         app_state.character_object_ids.insert(alias.clone(), id);
                         id
                     };
-                    
+
                     // 启动淡入动画
-                    if let Err(e) = app_state.animation_system.animate_object::<AnimatableCharacter>(
-                        object_id, "alpha", 0.0, 1.0, duration
-                    ) {
+                    if let Err(e) = app_state
+                        .animation_system
+                        .animate_object::<AnimatableCharacter>(
+                            object_id, "alpha", 0.0, 1.0, duration,
+                        )
+                    {
                         eprintln!("⚠️ 启动角色淡入动画失败: {}", e);
                     }
                     println!("🎭 角色淡入动画: {} ({}s)", alias, duration);
@@ -1185,9 +1287,12 @@ fn handle_character_animation(app_state: &mut AppState) {
                 // 获取角色的动画对象
                 if let Some(&object_id) = app_state.character_object_ids.get(&alias) {
                     // 启动淡出动画
-                    if let Err(e) = app_state.animation_system.animate_object::<AnimatableCharacter>(
-                        object_id, "alpha", 1.0, 0.0, duration
-                    ) {
+                    if let Err(e) = app_state
+                        .animation_system
+                        .animate_object::<AnimatableCharacter>(
+                            object_id, "alpha", 1.0, 0.0, duration,
+                        )
+                    {
                         eprintln!("⚠️ 启动角色淡出动画失败: {}", e);
                     }
                     println!("🎭 角色淡出动画: {} ({}s)", alias, duration);
@@ -1229,7 +1334,9 @@ fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::SaveDa
     // 设置渲染快照
     let render_snapshot = vn_runtime::RenderSnapshot {
         background: app_state.render_state.current_background.clone(),
-        characters: app_state.render_state.visible_characters
+        characters: app_state
+            .render_state
+            .visible_characters
             .iter()
             .map(|(alias, sprite)| vn_runtime::CharacterSnapshot {
                 alias: alias.clone(),
@@ -1255,7 +1362,7 @@ fn quick_save(app_state: &mut AppState) {
     }
 
     let slot = app_state.current_save_slot;
-    
+
     let Some(save_data) = build_save_data(app_state, slot) else {
         println!("⚠️ 没有可保存的游戏状态");
         return;
@@ -1289,7 +1396,7 @@ fn save_continue(app_state: &mut AppState) {
 
 /// 从游戏状态返回主界面
 /// 用于脚本执行完毕或用户主动返回时清理状态并跳转到 Title
-/// 
+///
 /// # 参数
 /// - `should_save_continue`: 是否保存 Continue 存档。脚本执行完毕时应该为 `false`，用户主动返回时为 `true`
 fn return_to_title_from_game(app_state: &mut AppState, should_save_continue: bool) {
@@ -1298,17 +1405,17 @@ fn return_to_title_from_game(app_state: &mut AppState, should_save_continue: boo
     if should_save_continue {
         save_continue(app_state);
     }
-    
+
     // 停止音乐
     if let Some(ref mut audio) = app_state.audio_manager {
         audio.stop_bgm(Some(0.5));
     }
-    
+
     // 清理游戏状态
     app_state.vn_runtime = None;
     app_state.render_state = RenderState::new();
     app_state.script_finished = false;
-    
+
     // 返回标题
     app_state.navigation.return_to_title();
     app_state.title_screen.mark_needs_init();
@@ -1319,7 +1426,7 @@ fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::SaveD
     // 加载对应的脚本（优先使用 script_path，回退到 script_id）
     let script_path = &save_data.runtime_state.position.script_path;
     let script_id = &save_data.runtime_state.position.script_id;
-    
+
     println!("📜 尝试加载脚本: path={}, id={}", script_path, script_id);
     if !load_script_by_path_or_id(app_state, script_path, script_id) {
         eprintln!("❌ 找不到脚本");
@@ -1403,21 +1510,25 @@ fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
         app_state.animation_system.skip_all();
         // 应用最终状态
         let _ = app_state.animation_system.update(0.0);
-        
+
         // 清理淡出完成的角色
-        let fading_out: Vec<String> = app_state.render_state.visible_characters
+        let fading_out: Vec<String> = app_state
+            .render_state
+            .visible_characters
             .iter()
             .filter(|(_, c)| c.fading_out)
             .map(|(alias, _)| alias.clone())
             .collect();
-        
+
         // 从动画系统注销并移除
         for alias in &fading_out {
             if let Some(object_id) = app_state.character_object_ids.remove(alias) {
                 app_state.animation_system.unregister(object_id);
             }
         }
-        app_state.render_state.remove_fading_out_characters(&fading_out);
+        app_state
+            .render_state
+            .remove_fading_out_characters(&fading_out);
         return;
     }
 
@@ -1432,7 +1543,7 @@ fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
     if app_state.renderer.is_scene_transition_active() {
         // 跳过当前阶段的转场动画
         app_state.renderer.skip_scene_transition_phase();
-        
+
         // 如果跳过后过渡完成，立即恢复 UI 和切换背景
         if !app_state.renderer.is_scene_transition_active() {
             // 切换待处理的背景（如果有）
@@ -1480,7 +1591,11 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
     // 处理 tick 结果
     match tick_result {
         Ok((commands, waiting)) => {
-            println!("📜 tick 返回 {} 条命令, 等待状态: {:?}", commands.len(), waiting);
+            println!(
+                "📜 tick 返回 {} 条命令, 等待状态: {:?}",
+                commands.len(),
+                waiting
+            );
 
             // 收集命令中的资源路径（用于预取统计）
             let prefetch_paths = collect_prefetch_paths(&commands);
@@ -1502,10 +1617,10 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
 
                 // 处理音频命令
                 handle_audio_command(app_state);
-                
+
                 // 处理角色动画命令
                 handle_character_animation(app_state);
-                
+
                 // 处理场景切换命令
                 handle_scene_transition(app_state);
 
@@ -1524,7 +1639,9 @@ fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
             }
 
             // 检查脚本是否执行完毕
-            let is_finished = app_state.vn_runtime.as_ref()
+            let is_finished = app_state
+                .vn_runtime
+                .as_ref()
                 .map(|r| r.is_finished())
                 .unwrap_or(false);
             if is_finished && !app_state.script_finished {
@@ -1550,36 +1667,64 @@ fn draw(app_state: &mut AppState) {
     // 根据当前模式绘制
     match current_mode {
         AppMode::Title => {
-            app_state.title_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state
+                .title_screen
+                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
         AppMode::InGame => {
             // 渲染游戏画面
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
+            app_state.renderer.render(
+                &app_state.render_state,
+                &app_state.resource_manager,
+                &app_state.manifest,
+            );
         }
         AppMode::InGameMenu => {
             // 先渲染游戏画面，再渲染菜单覆盖层
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
-            app_state.ingame_menu.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state.renderer.render(
+                &app_state.render_state,
+                &app_state.resource_manager,
+                &app_state.manifest,
+            );
+            app_state
+                .ingame_menu
+                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
         AppMode::SaveLoad => {
             // 如果是从游戏内打开，先渲染游戏画面
             if app_state.vn_runtime.is_some() {
-                app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
+                app_state.renderer.render(
+                    &app_state.render_state,
+                    &app_state.resource_manager,
+                    &app_state.manifest,
+                );
             }
-            app_state.save_load_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state
+                .save_load_screen
+                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
         AppMode::Settings => {
-            app_state.settings_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state
+                .settings_screen
+                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
         AppMode::History => {
             // 先渲染游戏画面，再渲染历史覆盖层
-            app_state.renderer.render(&app_state.render_state, &app_state.resource_manager, &app_state.manifest);
-            app_state.history_screen.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state.renderer.render(
+                &app_state.render_state,
+                &app_state.resource_manager,
+                &app_state.manifest,
+            );
+            app_state
+                .history_screen
+                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
         }
     }
 
     // 绘制 Toast 提示（所有模式都可显示）
-    app_state.toast_manager.draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+    app_state
+        .toast_manager
+        .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
 
     // 显示调试信息
     if app_state.host_state.debug_mode {
@@ -1606,7 +1751,13 @@ fn draw_debug_info(app_state: &AppState) {
     let mut lines: Vec<(String, Color)> = vec![
         (format!("FPS: {}", fps), GREEN),
         (format!("模式: {:?}", current_mode), GREEN),
-        (format!("角色: {} | 背景: {} | 对话: {}", char_count, has_bg, has_dialogue), GREEN),
+        (
+            format!(
+                "角色: {} | 背景: {} | 对话: {}",
+                char_count, has_bg, has_dialogue
+            ),
+            GREEN,
+        ),
     ];
 
     // 缓存统计
@@ -1627,30 +1778,43 @@ fn draw_debug_info(app_state: &AppState) {
             cache_stats.hits,
             cache_stats.hits + cache_stats.misses
         ),
-        if cache_stats.hit_rate > 0.8_f64 { GREEN } else if cache_stats.hit_rate > 0.5_f64 { YELLOW } else { RED },
+        if cache_stats.hit_rate > 0.8_f64 {
+            GREEN
+        } else if cache_stats.hit_rate > 0.5_f64 {
+            YELLOW
+        } else {
+            RED
+        },
     ));
     lines.push((
         format!("驱逐次数: {}", cache_stats.evictions),
-        if cache_stats.evictions == 0 { GREEN } else { YELLOW },
+        if cache_stats.evictions == 0 {
+            GREEN
+        } else {
+            YELLOW
+        },
     ));
 
     // 资源来源
     let source_info = match app_state.config.asset_source {
         AssetSourceType::Fs => "文件系统".to_string(),
-        AssetSourceType::Zip => format!("ZIP: {}", app_state.config.zip_path.as_deref().unwrap_or("?")),
+        AssetSourceType::Zip => format!(
+            "ZIP: {}",
+            app_state.config.zip_path.as_deref().unwrap_or("?")
+        ),
     };
-    lines.push((format!("来源: {}", source_info), Color::new(0.7, 0.7, 0.7, 1.0))); // 灰色
+    lines.push((
+        format!("来源: {}", source_info),
+        Color::new(0.7, 0.7, 0.7, 1.0),
+    )); // 灰色
 
     // 绘制所有行
     for (i, (line, color)) in lines.iter().enumerate() {
         let y = 25.0 + i as f32 * 22.0;
         // 使用文本渲染器绘制（支持中文）
-        app_state.renderer.text_renderer.draw_ui_text(
-            line,
-            10.0,
-            y,
-            16.0,
-            *color,
-        );
+        app_state
+            .renderer
+            .text_renderer
+            .draw_ui_text(line, 10.0, y, 16.0, *color);
     }
 }

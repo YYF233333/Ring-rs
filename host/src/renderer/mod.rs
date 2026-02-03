@@ -18,9 +18,9 @@ use crate::resources::ResourceManager;
 pub mod animation;
 pub mod background_transition;
 pub mod character_animation;
+mod image_dissolve;
 pub mod render_state;
 pub mod scene_transition;
-mod image_dissolve;
 mod text_renderer;
 mod transition;
 
@@ -30,14 +30,12 @@ pub use animation::{
 };
 // Trait-based 动画系统 API
 pub use animation::{
-    Animatable, AnimPropertyKey, ObjectId, PropertyAccessor, SimplePropertyAccessor,
+    AnimPropertyKey, Animatable, ObjectId, PropertyAccessor, SimplePropertyAccessor,
 };
 pub use background_transition::{AnimatableBackgroundTransition, BackgroundTransitionData};
 pub use character_animation::{AnimatableCharacter, CharacterAnimData};
 pub use image_dissolve::ImageDissolve;
-pub use render_state::{
-    CharacterSprite, ChoiceItem, ChoicesState, DialogueState, RenderState,
-};
+pub use render_state::{CharacterSprite, ChoiceItem, ChoicesState, DialogueState, RenderState};
 pub use scene_transition::{
     AnimatableSceneTransition, SceneTransitionManager, SceneTransitionPhase, SceneTransitionType,
 };
@@ -84,10 +82,7 @@ impl Renderer {
 
         // 初始化 ImageDissolve shader
         if let Err(e) = self.image_dissolve.init() {
-            eprintln!(
-                "⚠️ ImageDissolve shader 初始化失败，将使用降级方案: {}",
-                e
-            );
+            eprintln!("⚠️ ImageDissolve shader 初始化失败，将使用降级方案: {}", e);
             // 不返回错误，因为有降级方案
         }
 
@@ -166,12 +161,14 @@ impl Renderer {
     /// - `duration`: 每个淡入/淡出阶段的时长（秒）
     /// - `pending_background`: 待切换的新背景路径
     pub fn start_scene_fade(&mut self, duration: f32, pending_background: String) {
-        self.scene_transition.start_fade(duration, pending_background);
+        self.scene_transition
+            .start_fade(duration, pending_background);
     }
 
     /// 开始 FadeWhite（白屏）场景过渡
     pub fn start_scene_fade_white(&mut self, duration: f32, pending_background: String) {
-        self.scene_transition.start_fade_white(duration, pending_background);
+        self.scene_transition
+            .start_fade_white(duration, pending_background);
     }
 
     /// 开始 Rule（图片遮罩）场景过渡
@@ -182,7 +179,8 @@ impl Renderer {
         mask_path: String,
         reversed: bool,
     ) {
-        self.scene_transition.start_rule(duration, pending_background, mask_path, reversed);
+        self.scene_transition
+            .start_rule(duration, pending_background, mask_path, reversed);
     }
 
     /// 更新场景过渡
@@ -422,7 +420,10 @@ impl Renderer {
                     );
                 }
             }
-            Some(SceneTransitionType::Rule { mask_path, reversed }) => {
+            Some(SceneTransitionType::Rule {
+                mask_path,
+                reversed,
+            }) => {
                 // Rule 遮罩：使用 ImageDissolve shader 实现
                 let mask_texture = resource_manager
                     .peek_texture(mask_path)
@@ -449,9 +450,7 @@ impl Renderer {
                             .unwrap_or_else(|| panic!("Rule 遮罩缺少当前背景"));
                         let old_bg_texture = resource_manager
                             .peek_texture(old_bg_path)
-                            .unwrap_or_else(|| {
-                                panic!("Rule 旧背景纹理未找到: {}", old_bg_path)
-                            });
+                            .unwrap_or_else(|| panic!("Rule 旧背景纹理未找到: {}", old_bg_path));
 
                         let (dest_w, dest_h, x, y) =
                             self.calculate_draw_rect(&old_bg_texture, DrawMode::Cover);
@@ -477,14 +476,13 @@ impl Renderer {
                     }
                     SceneTransitionPhase::FadeOut => {
                         // phase FadeOut: 黑屏 → 新背景
-                        let new_bg_path = state.current_background.as_ref().unwrap_or_else(|| {
-                            panic!("Rule 遮罩缺少新背景（current_background）")
-                        });
+                        let new_bg_path = state
+                            .current_background
+                            .as_ref()
+                            .unwrap_or_else(|| panic!("Rule 遮罩缺少新背景（current_background）"));
                         let new_bg_texture = resource_manager
                             .peek_texture(new_bg_path)
-                            .unwrap_or_else(|| {
-                                panic!("Rule 新背景纹理未找到: {}", new_bg_path)
-                            });
+                            .unwrap_or_else(|| panic!("Rule 新背景纹理未找到: {}", new_bg_path));
 
                         let (dest_w, dest_h, x, y) =
                             self.calculate_draw_rect(&new_bg_texture, DrawMode::Cover);

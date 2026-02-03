@@ -12,16 +12,16 @@ use vn_runtime::command::Position;
 pub struct RenderState {
     /// 当前背景图片路径
     pub current_background: Option<String>,
-    
+
     /// 可见角色列表（alias -> CharacterSprite）
     pub visible_characters: HashMap<String, CharacterSprite>,
-    
+
     /// 当前对话状态
     pub dialogue: Option<DialogueState>,
-    
+
     /// 当前章节标记（用于显示章节过渡）
     pub chapter_mark: Option<ChapterMarkState>,
-    
+
     /// 当前选择界面状态
     pub choices: Option<ChoicesState>,
 
@@ -61,10 +61,15 @@ impl RenderState {
     /// 显示角色
     ///
     /// 创建角色数据和动画状态。初始透明度为 0，需要通过动画系统淡入。
-    /// 
+    ///
     /// # 返回
     /// 返回角色的动画状态引用，可用于注册到动画系统
-    pub fn show_character(&mut self, alias: String, texture_path: String, position: Position) -> &AnimatableCharacter {
+    pub fn show_character(
+        &mut self,
+        alias: String,
+        texture_path: String,
+        position: Position,
+    ) -> &AnimatableCharacter {
         let z_order = self.visible_characters.len() as i32;
 
         self.visible_characters.insert(
@@ -77,15 +82,15 @@ impl RenderState {
                 anim: AnimatableCharacter::transparent(&alias), // 初始透明，等待淡入
             },
         );
-        
+
         &self.visible_characters.get(&alias).unwrap().anim
     }
-    
+
     /// 获取角色的动画状态
     pub fn get_character_anim(&self, alias: &str) -> Option<&AnimatableCharacter> {
         self.visible_characters.get(alias).map(|c| &c.anim)
     }
-    
+
     /// 获取角色的动画状态（可变）
     pub fn get_character_anim_mut(&mut self, alias: &str) -> Option<&mut AnimatableCharacter> {
         self.visible_characters.get_mut(alias).map(|c| &mut c.anim)

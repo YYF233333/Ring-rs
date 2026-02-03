@@ -65,7 +65,7 @@ impl TextRenderer {
     pub fn is_initialized(&self) -> bool {
         self.initialized
     }
-    
+
     /// 检查是否使用自定义字体
     pub fn has_custom_font(&self) -> bool {
         self.use_custom_font && self.font.is_some()
@@ -77,12 +77,7 @@ impl TextRenderer {
     }
 
     /// 渲染对话框
-    pub fn render_dialogue_box(
-        &self,
-        speaker: Option<&str>,
-        content: &str,
-        visible_chars: usize,
-    ) {
+    pub fn render_dialogue_box(&self, speaker: Option<&str>, content: &str, visible_chars: usize) {
         let screen_w = screen_width();
         let screen_h = screen_height();
 
@@ -94,9 +89,16 @@ impl TextRenderer {
 
         // 绘制对话框背景
         draw_rectangle(box_x, box_y, box_w, box_h, DIALOGUE_BOX_COLOR);
-        
+
         // 绘制对话框边框
-        draw_rectangle_lines(box_x, box_y, box_w, box_h, 2.0, Color::new(0.5, 0.5, 0.6, 0.8));
+        draw_rectangle_lines(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            2.0,
+            Color::new(0.5, 0.5, 0.6, 0.8),
+        );
 
         // 绘制说话者名称
         let mut text_y = box_y + DIALOGUE_BOX_PADDING;
@@ -159,9 +161,16 @@ impl TextRenderer {
             DIALOGUE_BOX_COLOR.a * alpha,
         );
         draw_rectangle(box_x, box_y, box_w, box_h, bg_color);
-        
+
         // 绘制对话框边框（带 alpha）
-        draw_rectangle_lines(box_x, box_y, box_w, box_h, 2.0, Color::new(0.5, 0.5, 0.6, 0.8 * alpha));
+        draw_rectangle_lines(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            2.0,
+            Color::new(0.5, 0.5, 0.6, 0.8 * alpha),
+        );
 
         // 绘制说话者名称
         let mut text_y = box_y + DIALOGUE_BOX_PADDING;
@@ -205,7 +214,11 @@ impl TextRenderer {
 
         // 绘制继续提示（如果文本已完全显示且 alpha > 0.5）
         if visible_chars >= content.chars().count() && alpha > 0.5 {
-            self.draw_continue_indicator_with_alpha(box_x + box_w - 40.0, box_y + box_h - 30.0, alpha);
+            self.draw_continue_indicator_with_alpha(
+                box_x + box_w - 40.0,
+                box_y + box_h - 30.0,
+                alpha,
+            );
         }
     }
 
@@ -259,7 +272,7 @@ impl TextRenderer {
     }
 
     /// 计算选择框的矩形区域
-    /// 
+    ///
     /// 返回每个选项的 (x, y, width, height) 元组数组
     pub fn get_choice_rects(&self, choice_count: usize) -> Vec<(f32, f32, f32, f32)> {
         let screen_w = screen_width();
@@ -282,7 +295,7 @@ impl TextRenderer {
     }
 
     /// 渲染选择界面
-    /// 
+    ///
     /// # 参数
     /// - `choices`: 选项列表
     /// - `selected_index`: 当前选中的索引
@@ -358,13 +371,7 @@ impl TextRenderer {
                 Color::new(0.8, 0.8, 0.8, 1.0)
             };
 
-            self.draw_text(
-                &choice.text,
-                text_x,
-                text_y,
-                CONTENT_FONT_SIZE,
-                text_color,
-            );
+            self.draw_text(&choice.text, text_x, text_y, CONTENT_FONT_SIZE, text_color);
 
             // 选中指示器
             if is_selected {
@@ -455,13 +462,7 @@ impl TextRenderer {
                 Color::new(0.8, 0.8, 0.8, alpha)
             };
 
-            self.draw_text(
-                &choice.text,
-                text_x,
-                text_y,
-                CONTENT_FONT_SIZE,
-                text_color,
-            );
+            self.draw_text(&choice.text, text_x, text_y, CONTENT_FONT_SIZE, text_color);
 
             // 选中指示器（带 alpha）
             if is_selected {

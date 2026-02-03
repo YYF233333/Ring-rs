@@ -339,6 +339,9 @@ mod tests {
     #[test]
     fn test_default_budget() {
         let cache = TextureCache::with_default_budget();
-        assert_eq!(cache.budget_bytes(), DEFAULT_TEXTURE_BUDGET_MB * 1024 * 1024);
+        assert_eq!(
+            cache.budget_bytes(),
+            DEFAULT_TEXTURE_BUDGET_MB * 1024 * 1024
+        );
     }
 }

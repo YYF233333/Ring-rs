@@ -109,9 +109,9 @@ fn extract_keyword_value<'a>(s: &'a str, keyword: &str) -> Option<&'a str> {
 
     // 尝试多种模式查找关键字
     let patterns = [
-        format!(" {} ", keyword_lower),   // 标准：空格包围
-        format!(">{} ", keyword_lower),   // 紧跟 >：如 />as
-        format!(" {}", keyword_lower),    // 只有前空格
+        format!(" {} ", keyword_lower), // 标准：空格包围
+        format!(">{} ", keyword_lower), // 紧跟 >：如 />as
+        format!(" {}", keyword_lower),  // 只有前空格
     ];
 
     let mut best_pos = None;
@@ -150,11 +150,7 @@ fn extract_keyword_value<'a>(s: &'a str, keyword: &str) -> Option<&'a str> {
     }
 
     let value = remaining[..end_pos].trim();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
+    if value.is_empty() { None } else { Some(value) }
 }
 
 /// 解析过渡效果表达式
@@ -415,8 +411,8 @@ fn extract_quoted_content(s: &str) -> Option<&str> {
     let s = s.trim();
 
     // 定义引号字符
-    const ASCII_QUOTE: char = '"';       // U+0022
-    const CN_LEFT_QUOTE: char = '\u{201C}';  // 中文左双引号
+    const ASCII_QUOTE: char = '"'; // U+0022
+    const CN_LEFT_QUOTE: char = '\u{201C}'; // 中文左双引号
     const CN_RIGHT_QUOTE: char = '\u{201D}'; // 中文右双引号
 
     // 获取第一个字符
@@ -451,7 +447,10 @@ enum Block {
     /// 单行内容
     SingleLine { line: String, line_number: usize },
     /// 表格块（选择分支）
-    Table { lines: Vec<String>, start_line: usize },
+    Table {
+        lines: Vec<String>,
+        start_line: usize,
+    },
 }
 
 //=============================================================================
@@ -712,7 +711,11 @@ impl Parser {
                     message: format!(
                         "changeBG 不再支持 '{}' 效果。请使用 changeScene with {}(...) 替代",
                         t.name,
-                        if name_lower == "fade" { "Fade" } else { "FadeWhite" }
+                        if name_lower == "fade" {
+                            "Fade"
+                        } else {
+                            "FadeWhite"
+                        }
                     ),
                 });
             }
@@ -775,7 +778,7 @@ impl Parser {
     }
 
     /// 解析 show 指令
-    /// 
+    ///
     /// 支持两种格式：
     /// - `show <img src="..."> as alias at position` - 显示新立绘并绑定别名
     /// - `show alias at position` - 使用已绑定的别名改变位置
@@ -788,28 +791,34 @@ impl Parser {
         // 如果没有 <img src>，别名就是 "show" 后面的第一个词
         let alias: String = if path.is_some() {
             // 标准格式：show <img src="..."> as alias at position
-            extract_keyword_value(line, "as").ok_or_else(|| ParseError::MissingParameter {
-                line: line_number,
-                command: "show".to_string(),
-                param: "as (别名)".to_string(),
-            })?.to_string()
+            extract_keyword_value(line, "as")
+                .ok_or_else(|| ParseError::MissingParameter {
+                    line: line_number,
+                    command: "show".to_string(),
+                    param: "as (别名)".to_string(),
+                })?
+                .to_string()
         } else {
             // 简化格式：show alias at position
             // 提取 "show" 后面的第一个词（到 "at" 之前）
             let line_lower = line.to_lowercase();
-            let show_pos = line_lower.find("show").ok_or_else(|| ParseError::InvalidLine {
-                line: line_number,
-                message: "无法找到 'show' 关键字".to_string(),
-            })?;
+            let show_pos = line_lower
+                .find("show")
+                .ok_or_else(|| ParseError::InvalidLine {
+                    line: line_number,
+                    message: "无法找到 'show' 关键字".to_string(),
+                })?;
             let after_show = &line[show_pos + 4..].trim_start();
-            
+
             // 查找 "at" 的位置
-            let at_pos = after_show.to_lowercase().find(" at ").ok_or_else(|| ParseError::MissingParameter {
-                line: line_number,
-                command: "show".to_string(),
-                param: "at (位置)".to_string(),
+            let at_pos = after_show.to_lowercase().find(" at ").ok_or_else(|| {
+                ParseError::MissingParameter {
+                    line: line_number,
+                    command: "show".to_string(),
+                    param: "at (位置)".to_string(),
+                }
             })?;
-            
+
             after_show[..at_pos].trim().to_string()
         };
 
@@ -884,11 +893,7 @@ impl Parser {
     /// 解析 goto 指令
     ///
     /// 语法: `goto **label**`
-    fn parse_goto(
-        &self,
-        line: &str,
-        line_number: usize,
-    ) -> Result<Option<ScriptNode>, ParseError> {
+    fn parse_goto(&self, line: &str, line_number: usize) -> Result<Option<ScriptNode>, ParseError> {
         // 跳过 "goto" 前缀
         let content = line
             .get(4..)
@@ -901,12 +906,13 @@ impl Parser {
             })?;
 
         // 提取 **label** 中的 label
-        let target_label = if content.starts_with("**") && content.ends_with("**") && content.len() > 4 {
-            content[2..content.len() - 2].trim().to_string()
-        } else {
-            // 也支持不带 ** 的格式
-            content.to_string()
-        };
+        let target_label =
+            if content.starts_with("**") && content.ends_with("**") && content.len() > 4 {
+                content[2..content.len() - 2].trim().to_string()
+            } else {
+                // 也支持不带 ** 的格式
+                content.to_string()
+            };
 
         if target_label.is_empty() {
             return Err(ParseError::MissingParameter {
@@ -921,7 +927,7 @@ impl Parser {
 
     /// 解析 audio 标签
     ///
-    /// 语法: 
+    /// 语法:
     /// - `<audio src="path/to/audio.mp3"></audio>` - SFX（播放一次）
     /// - `<audio src="path/to/audio.mp3"></audio> loop` - BGM（循环播放）
     fn parse_audio(
@@ -966,7 +972,7 @@ impl Parser {
         let with_pos = lower
             .rfind(" with ")
             .or_else(|| lower.rfind(">with "))
-            .or_else(|| lower.rfind(" with`"))  // 行内代码格式
+            .or_else(|| lower.rfind(" with`")) // 行内代码格式
             .or_else(|| lower.rfind(">with`"))?;
 
         // 计算实际的过渡文本起始位置
@@ -994,7 +1000,8 @@ impl Parser {
         }
 
         // 处理行内代码格式: `Dissolve(2.0, 0.5)`
-        let transition_text = if transition_text.starts_with('`') && transition_text.ends_with('`') {
+        let transition_text = if transition_text.starts_with('`') && transition_text.ends_with('`')
+        {
             &transition_text[1..transition_text.len() - 1]
         } else if transition_text.starts_with('`') {
             // 只有开始反引号，查找结束
@@ -1013,10 +1020,15 @@ impl Parser {
     /// 从 rule-based effect 文本中提取参数
     ///
     /// 输入格式: `<img src="rule.png" .../> (duration: 1, reversed: true)`
-    fn extract_rule_args(&self, text: &str, mask_path: &str) -> Vec<(Option<String>, TransitionArg)> {
-        let mut args = vec![
-            (Some("mask".to_string()), TransitionArg::String(mask_path.to_string())),
-        ];
+    fn extract_rule_args(
+        &self,
+        text: &str,
+        mask_path: &str,
+    ) -> Vec<(Option<String>, TransitionArg)> {
+        let mut args = vec![(
+            Some("mask".to_string()),
+            TransitionArg::String(mask_path.to_string()),
+        )];
 
         // 查找 /> 后面的括号参数
         if let Some(img_end) = text.find("/>") {
@@ -1076,10 +1088,8 @@ impl Parser {
 
             // 选项行需要至少两个单元格
             if cells.len() < 2 {
-                self.warnings.push(format!(
-                    "第 {} 行：表格行格式不完整，已跳过",
-                    line_number
-                ));
+                self.warnings
+                    .push(format!("第 {} 行：表格行格式不完整，已跳过", line_number));
                 continue;
             }
 
@@ -1169,14 +1179,18 @@ mod tests {
         let t = parse_transition("Dissolve(duration: 1.5)").unwrap();
         assert_eq!(t.name, "Dissolve");
         assert_eq!(t.args.len(), 1);
-        assert!(matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 1.5).abs() < 0.001));
+        assert!(
+            matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 1.5).abs() < 0.001)
+        );
         assert!(t.is_all_named());
 
         // 多个命名参数
         let t = parse_transition("Fade(duration: 2.0, reversed: true)").unwrap();
         assert_eq!(t.name, "Fade");
         assert_eq!(t.args.len(), 2);
-        assert!(matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 2.0).abs() < 0.001));
+        assert!(
+            matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 2.0).abs() < 0.001)
+        );
         assert!(matches!(&t.args[1], (Some(key), TransitionArg::Bool(true)) if key == "reversed"));
 
         // 辅助方法测试
@@ -1348,12 +1362,7 @@ mod tests {
     #[test]
     fn test_parse_show_character_without_path() {
         let mut parser = Parser::new();
-        let script = parser
-            .parse(
-                "test",
-                r#"show beifeng at left"#,
-            )
-            .unwrap();
+        let script = parser.parse("test", r#"show beifeng at left"#).unwrap();
 
         assert!(matches!(
             &script.nodes[0],
@@ -1409,7 +1418,9 @@ mod tests {
         {
             assert_eq!(t.name, "Dissolve");
             assert_eq!(t.args.len(), 1);
-            assert!(matches!(&t.args[0], (None, TransitionArg::Number(n)) if (*n - 1.5).abs() < 0.001));
+            assert!(
+                matches!(&t.args[0], (None, TransitionArg::Number(n)) if (*n - 1.5).abs() < 0.001)
+            );
         } else {
             panic!("Expected ChangeBG node");
         }
@@ -1432,7 +1443,9 @@ mod tests {
         {
             assert_eq!(t.name, "Dissolve");
             assert_eq!(t.args.len(), 1);
-            assert!(matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 2.0).abs() < 0.001));
+            assert!(
+                matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 2.0).abs() < 0.001)
+            );
             assert_eq!(t.get_duration(), Some(2.0));
         } else {
             panic!("Expected ChangeBG node");
@@ -1525,10 +1538,7 @@ hide protagonist with fade
 
         // 无空格格式
         let script = parser
-            .parse(
-                "test",
-                r#"show<img src="assets/bg2.jpg" />as 红叶 at left"#,
-            )
+            .parse("test", r#"show<img src="assets/bg2.jpg" />as 红叶 at left"#)
             .unwrap();
         assert!(matches!(
             &script.nodes[0],
@@ -1579,7 +1589,11 @@ hide protagonist with fade
             )
             .unwrap();
 
-        if let ScriptNode::ShowCharacter { transition: Some(t), .. } = &script.nodes[0] {
+        if let ScriptNode::ShowCharacter {
+            transition: Some(t),
+            ..
+        } = &script.nodes[0]
+        {
             // 行内代码格式的 effect 应该被解析（去掉反引号）
             assert!(t.name.contains("Dissolve") || t.name == "`Dissolve(2.0, 0.5)`");
         } else {
@@ -1605,10 +1619,7 @@ hide protagonist with fade
     fn test_parse_change_bg_without_effect() {
         let mut parser = Parser::new();
         let script = parser
-            .parse(
-                "test",
-                r#"changeBG <img src="assets/bg2.jpg" />"#,
-            )
+            .parse("test", r#"changeBG <img src="assets/bg2.jpg" />"#)
             .unwrap();
 
         assert!(matches!(
@@ -1661,7 +1672,11 @@ hide protagonist with fade
             )
             .unwrap();
 
-        if let ScriptNode::ChangeBG { transition: Some(t), .. } = &script.nodes[0] {
+        if let ScriptNode::ChangeBG {
+            transition: Some(t),
+            ..
+        } = &script.nodes[0]
+        {
             // 行内代码格式应该被解析
             assert!(!t.name.is_empty());
         } else {
@@ -1790,7 +1805,13 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
         ));
 
         // 验证 show
-        if let ScriptNode::ShowCharacter { path: Some(path), alias, position: _, transition } = &script.nodes[3] {
+        if let ScriptNode::ShowCharacter {
+            path: Some(path),
+            alias,
+            position: _,
+            transition,
+        } = &script.nodes[3]
+        {
             assert_eq!(path.as_str(), "assets/chara.png");
             assert_eq!(alias, "红叶");
             assert!(transition.is_some());
@@ -1849,7 +1870,9 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
     #[test]
     fn test_parse_audio_sfx() {
         let mut parser = Parser::new();
-        let script = parser.parse("test", r#"<audio src="sfx/ding.mp3"></audio>"#).unwrap();
+        let script = parser
+            .parse("test", r#"<audio src="sfx/ding.mp3"></audio>"#)
+            .unwrap();
         assert_eq!(script.nodes.len(), 1);
         assert!(matches!(
             &script.nodes[0],
@@ -1861,7 +1884,9 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
     #[test]
     fn test_parse_audio_bgm() {
         let mut parser = Parser::new();
-        let script = parser.parse("test", r#"<audio src="bgm/Signal.mp3"></audio> loop"#).unwrap();
+        let script = parser
+            .parse("test", r#"<audio src="bgm/Signal.mp3"></audio> loop"#)
+            .unwrap();
         assert_eq!(script.nodes.len(), 1);
         assert!(matches!(
             &script.nodes[0],
@@ -1873,7 +1898,9 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
     #[test]
     fn test_parse_audio_relative_path() {
         let mut parser = Parser::new();
-        let script = parser.parse("test", r#"<audio src="../bgm/music.mp3"></audio> loop"#).unwrap();
+        let script = parser
+            .parse("test", r#"<audio src="../bgm/music.mp3"></audio> loop"#)
+            .unwrap();
         assert_eq!(script.nodes.len(), 1);
         assert!(matches!(
             &script.nodes[0],
@@ -1898,10 +1925,12 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
     #[test]
     fn test_parse_change_bg_relative_path() {
         let mut parser = Parser::new();
-        let script = parser.parse(
-            "test",
-            r#"changeBG <img src="../backgrounds/bg.jpg" /> with `dissolve`"#
-        ).unwrap();
+        let script = parser
+            .parse(
+                "test",
+                r#"changeBG <img src="../backgrounds/bg.jpg" /> with `dissolve`"#,
+            )
+            .unwrap();
         assert_eq!(script.nodes.len(), 1);
         assert!(matches!(
             &script.nodes[0],
@@ -1913,14 +1942,16 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
     #[test]
     fn test_parse_show_relative_path() {
         let mut parser = Parser::new();
-        let script = parser.parse(
-            "test",
-            r#"show <img src="../characters/北风.png" /> as beifeng at center"#
-        ).unwrap();
+        let script = parser
+            .parse(
+                "test",
+                r#"show <img src="../characters/北风.png" /> as beifeng at center"#,
+            )
+            .unwrap();
         assert_eq!(script.nodes.len(), 1);
         assert!(matches!(
             &script.nodes[0],
-            ScriptNode::ShowCharacter { path: Some(path), alias, .. } 
+            ScriptNode::ShowCharacter { path: Some(path), alias, .. }
             if path.as_str() == "../characters/北风.png" && alias == "beifeng"
         ));
     }
@@ -1959,13 +1990,25 @@ stopBGM
 "#;
 
         let script = parser.parse("test", text).unwrap();
-        
+
         // 验证关键节点
-        let has_audio = script.nodes.iter().any(|n| matches!(n, ScriptNode::PlayAudio { is_bgm: true, .. }));
-        let has_goto = script.nodes.iter().any(|n| matches!(n, ScriptNode::Goto { .. }));
-        let has_stop_bgm = script.nodes.iter().any(|n| matches!(n, ScriptNode::StopBgm));
-        let has_choice = script.nodes.iter().any(|n| matches!(n, ScriptNode::Choice { .. }));
-        
+        let has_audio = script
+            .nodes
+            .iter()
+            .any(|n| matches!(n, ScriptNode::PlayAudio { is_bgm: true, .. }));
+        let has_goto = script
+            .nodes
+            .iter()
+            .any(|n| matches!(n, ScriptNode::Goto { .. }));
+        let has_stop_bgm = script
+            .nodes
+            .iter()
+            .any(|n| matches!(n, ScriptNode::StopBgm));
+        let has_choice = script
+            .nodes
+            .iter()
+            .any(|n| matches!(n, ScriptNode::Choice { .. }));
+
         assert!(has_audio, "应该有 BGM 播放");
         assert!(has_goto, "应该有 goto 指令");
         assert!(has_stop_bgm, "应该有 stopBGM 指令");
@@ -1980,10 +2023,7 @@ stopBGM
     #[test]
     fn test_parse_change_bg_fade_deprecated() {
         let mut parser = Parser::new();
-        let result = parser.parse(
-            "test",
-            r#"changeBG <img src="bg.jpg" /> with fade"#
-        );
+        let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with fade"#);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(format!("{:?}", err).contains("fade") || format!("{:?}", err).contains("Fade"));
@@ -1993,10 +2033,7 @@ stopBGM
     #[test]
     fn test_parse_change_bg_fadewhite_deprecated() {
         let mut parser = Parser::new();
-        let result = parser.parse(
-            "test",
-            r#"changeBG <img src="bg.jpg" /> with fadewhite"#
-        );
+        let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with fadewhite"#);
         assert!(result.is_err());
     }
 
@@ -2004,15 +2041,18 @@ stopBGM
     #[test]
     fn test_parse_change_bg_only_dissolve() {
         let mut parser = Parser::new();
-        
+
         // dissolve 允许
         let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with dissolve"#);
         assert!(result.is_ok());
-        
+
         // Dissolve(duration) 允许
-        let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with Dissolve(1.5)"#);
+        let result = parser.parse(
+            "test",
+            r#"changeBG <img src="bg.jpg" /> with Dissolve(1.5)"#,
+        );
         assert!(result.is_ok());
-        
+
         // 其他效果不允许
         let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with rule"#);
         assert!(result.is_err());
@@ -2022,10 +2062,7 @@ stopBGM
     #[test]
     fn test_parse_change_scene_requires_with() {
         let mut parser = Parser::new();
-        let result = parser.parse(
-            "test",
-            r#"changeScene <img src="bg.jpg" />"#
-        );
+        let result = parser.parse("test", r#"changeScene <img src="bg.jpg" />"#);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(format!("{:?}", err).contains("with"));
@@ -2035,12 +2072,18 @@ stopBGM
     #[test]
     fn test_parse_change_scene_dissolve() {
         let mut parser = Parser::new();
-        let script = parser.parse(
-            "test",
-            r#"changeScene <img src="bg.jpg" /> with Dissolve(duration: 1)"#
-        ).unwrap();
-        
-        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+        let script = parser
+            .parse(
+                "test",
+                r#"changeScene <img src="bg.jpg" /> with Dissolve(duration: 1)"#,
+            )
+            .unwrap();
+
+        if let ScriptNode::ChangeScene {
+            path,
+            transition: Some(t),
+        } = &script.nodes[0]
+        {
             assert_eq!(path, "bg.jpg");
             assert_eq!(t.name, "Dissolve");
             assert_eq!(t.get_duration(), Some(1.0));
@@ -2053,12 +2096,18 @@ stopBGM
     #[test]
     fn test_parse_change_scene_fade() {
         let mut parser = Parser::new();
-        let script = parser.parse(
-            "test",
-            r#"changeScene <img src="bg.jpg" /> with Fade(duration: 1.5)"#
-        ).unwrap();
-        
-        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+        let script = parser
+            .parse(
+                "test",
+                r#"changeScene <img src="bg.jpg" /> with Fade(duration: 1.5)"#,
+            )
+            .unwrap();
+
+        if let ScriptNode::ChangeScene {
+            path,
+            transition: Some(t),
+        } = &script.nodes[0]
+        {
             assert_eq!(path, "bg.jpg");
             assert_eq!(t.name, "Fade");
             assert_eq!(t.get_duration(), Some(1.5));
@@ -2071,12 +2120,18 @@ stopBGM
     #[test]
     fn test_parse_change_scene_fade_white() {
         let mut parser = Parser::new();
-        let script = parser.parse(
-            "test",
-            r#"changeScene <img src="bg.jpg" /> with FadeWhite(duration: 2)"#
-        ).unwrap();
-        
-        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+        let script = parser
+            .parse(
+                "test",
+                r#"changeScene <img src="bg.jpg" /> with FadeWhite(duration: 2)"#,
+            )
+            .unwrap();
+
+        if let ScriptNode::ChangeScene {
+            path,
+            transition: Some(t),
+        } = &script.nodes[0]
+        {
             assert_eq!(path, "bg.jpg");
             assert_eq!(t.name, "FadeWhite");
             assert_eq!(t.get_duration(), Some(2.0));
@@ -2093,12 +2148,19 @@ stopBGM
             "test",
             r#"changeScene <img src="bg.jpg" /> with <img src="rule_10.png" /> (duration: 1, reversed: true)"#
         ).unwrap();
-        
-        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+
+        if let ScriptNode::ChangeScene {
+            path,
+            transition: Some(t),
+        } = &script.nodes[0]
+        {
             assert_eq!(path, "bg.jpg");
             assert_eq!(t.name, "rule");
             // 检查参数
-            assert_eq!(t.get_named("mask"), Some(&TransitionArg::String("rule_10.png".to_string())));
+            assert_eq!(
+                t.get_named("mask"),
+                Some(&TransitionArg::String("rule_10.png".to_string()))
+            );
             assert_eq!(t.get_duration(), Some(1.0));
             assert_eq!(t.get_reversed(), Some(true));
         } else {
@@ -2110,15 +2172,24 @@ stopBGM
     #[test]
     fn test_parse_change_scene_rule_no_params() {
         let mut parser = Parser::new();
-        let script = parser.parse(
-            "test",
-            r#"changeScene <img src="bg.jpg" /> with <img src="mask.png" />"#
-        ).unwrap();
-        
-        if let ScriptNode::ChangeScene { path, transition: Some(t) } = &script.nodes[0] {
+        let script = parser
+            .parse(
+                "test",
+                r#"changeScene <img src="bg.jpg" /> with <img src="mask.png" />"#,
+            )
+            .unwrap();
+
+        if let ScriptNode::ChangeScene {
+            path,
+            transition: Some(t),
+        } = &script.nodes[0]
+        {
             assert_eq!(path, "bg.jpg");
             assert_eq!(t.name, "rule");
-            assert_eq!(t.get_named("mask"), Some(&TransitionArg::String("mask.png".to_string())));
+            assert_eq!(
+                t.get_named("mask"),
+                Some(&TransitionArg::String("mask.png".to_string()))
+            );
         } else {
             panic!("Expected ChangeScene node");
         }

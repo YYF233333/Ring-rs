@@ -1,7 +1,7 @@
 //! # 模态对话框组件
 
+use super::{Button, ButtonStyle, Panel, UiContext};
 use macroquad::prelude::*;
-use super::{UiContext, Panel, Button, ButtonStyle};
 
 /// 模态对话框结果
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,7 +83,7 @@ impl Modal {
     /// 更新并返回结果
     pub fn update(&mut self, ctx: &UiContext) -> ModalResult {
         let theme = &ctx.theme;
-        
+
         // 计算对话框尺寸和位置
         let modal_width = 400.0;
         let modal_height = 200.0;
@@ -100,17 +100,39 @@ impl Modal {
             let cancel_x = modal_x + modal_width / 2.0 + theme.spacing_small;
 
             if self.confirm_button.is_none() {
-                let mut btn = Button::new(&self.confirm_text, confirm_x, button_y, button_width, button_height);
-                btn.style = if self.is_danger { ButtonStyle::Danger } else { ButtonStyle::Primary };
+                let mut btn = Button::new(
+                    &self.confirm_text,
+                    confirm_x,
+                    button_y,
+                    button_width,
+                    button_height,
+                );
+                btn.style = if self.is_danger {
+                    ButtonStyle::Danger
+                } else {
+                    ButtonStyle::Primary
+                };
                 self.confirm_button = Some(btn);
             }
             if self.cancel_button.is_none() {
-                self.cancel_button = Some(Button::new(&self.cancel_text, cancel_x, button_y, button_width, button_height));
+                self.cancel_button = Some(Button::new(
+                    &self.cancel_text,
+                    cancel_x,
+                    button_y,
+                    button_width,
+                    button_height,
+                ));
             }
         } else {
             let confirm_x = modal_x + (modal_width - button_width) / 2.0;
             if self.confirm_button.is_none() {
-                let mut btn = Button::new(&self.confirm_text, confirm_x, button_y, button_width, button_height);
+                let mut btn = Button::new(
+                    &self.confirm_text,
+                    confirm_x,
+                    button_y,
+                    button_width,
+                    button_height,
+                );
                 btn.style = ButtonStyle::Primary;
                 self.confirm_button = Some(btn);
             }
@@ -146,7 +168,13 @@ impl Modal {
         let theme = &ctx.theme;
 
         // 绘制覆盖层
-        draw_rectangle(0.0, 0.0, ctx.screen_width, ctx.screen_height, theme.bg_overlay);
+        draw_rectangle(
+            0.0,
+            0.0,
+            ctx.screen_width,
+            ctx.screen_height,
+            theme.bg_overlay,
+        );
 
         // 计算对话框尺寸
         let modal_width = 400.0;
@@ -155,8 +183,7 @@ impl Modal {
         let modal_y = (ctx.screen_height - modal_height) / 2.0;
 
         // 绘制面板
-        let panel = Panel::new(modal_x, modal_y, modal_width, modal_height)
-            .with_title(&self.title);
+        let panel = Panel::new(modal_x, modal_y, modal_width, modal_height).with_title(&self.title);
         panel.draw(ctx, text_renderer);
 
         // 绘制消息
@@ -166,7 +193,7 @@ impl Modal {
             content_rect.x,
             content_rect.y + theme.font_size_normal,
             theme.font_size_normal,
-            theme.text_primary
+            theme.text_primary,
         );
 
         // 绘制按钮

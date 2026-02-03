@@ -1,8 +1,8 @@
 //! # 游戏内系统菜单
 
-use macroquad::prelude::*;
-use crate::ui::{UiContext, Button, ButtonStyle, Panel, Modal, ModalResult};
 use crate::renderer::TextRenderer;
+use crate::ui::{Button, ButtonStyle, Modal, ModalResult, Panel, UiContext};
+use macroquad::prelude::*;
 
 /// 菜单操作
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,7 +39,7 @@ impl InGameMenuScreen {
     /// 初始化界面
     pub fn init(&mut self, ctx: &UiContext) {
         let theme = &ctx.theme;
-        
+
         self.buttons.clear();
         self.confirm_modal = None;
 
@@ -52,37 +52,94 @@ impl InGameMenuScreen {
         let button_width = panel_width - theme.padding * 2.0;
         let button_height = theme.button_height;
         let spacing = theme.spacing_small;
-        
+
         let mut y = panel_y + theme.padding + theme.font_size_large + theme.spacing;
 
         // 继续游戏
-        let mut resume_btn = Button::new("继续游戏", panel_x + theme.padding, y, button_width, button_height);
+        let mut resume_btn = Button::new(
+            "继续游戏",
+            panel_x + theme.padding,
+            y,
+            button_width,
+            button_height,
+        );
         resume_btn.style = ButtonStyle::Primary;
         self.buttons.push((InGameMenuAction::Resume, resume_btn));
         y += button_height + spacing;
 
         // 存档
-        self.buttons.push((InGameMenuAction::Save, Button::new("存档", panel_x + theme.padding, y, button_width, button_height)));
+        self.buttons.push((
+            InGameMenuAction::Save,
+            Button::new(
+                "存档",
+                panel_x + theme.padding,
+                y,
+                button_width,
+                button_height,
+            ),
+        ));
         y += button_height + spacing;
 
         // 读档
-        self.buttons.push((InGameMenuAction::Load, Button::new("读档", panel_x + theme.padding, y, button_width, button_height)));
+        self.buttons.push((
+            InGameMenuAction::Load,
+            Button::new(
+                "读档",
+                panel_x + theme.padding,
+                y,
+                button_width,
+                button_height,
+            ),
+        ));
         y += button_height + spacing;
 
         // 设置
-        self.buttons.push((InGameMenuAction::Settings, Button::new("设置", panel_x + theme.padding, y, button_width, button_height)));
+        self.buttons.push((
+            InGameMenuAction::Settings,
+            Button::new(
+                "设置",
+                panel_x + theme.padding,
+                y,
+                button_width,
+                button_height,
+            ),
+        ));
         y += button_height + spacing;
 
         // 历史
-        self.buttons.push((InGameMenuAction::History, Button::new("历史记录", panel_x + theme.padding, y, button_width, button_height)));
+        self.buttons.push((
+            InGameMenuAction::History,
+            Button::new(
+                "历史记录",
+                panel_x + theme.padding,
+                y,
+                button_width,
+                button_height,
+            ),
+        ));
         y += button_height + spacing * 2.0;
 
         // 返回标题
-        self.buttons.push((InGameMenuAction::ReturnToTitle, Button::new("返回标题", panel_x + theme.padding, y, button_width, button_height)));
+        self.buttons.push((
+            InGameMenuAction::ReturnToTitle,
+            Button::new(
+                "返回标题",
+                panel_x + theme.padding,
+                y,
+                button_width,
+                button_height,
+            ),
+        ));
         y += button_height + spacing;
 
         // 退出
-        let mut exit_btn = Button::new("退出游戏", panel_x + theme.padding, y, button_width, button_height);
+        let mut exit_btn = Button::new(
+            "退出游戏",
+            panel_x + theme.padding,
+            y,
+            button_width,
+            button_height,
+        );
         exit_btn.style = ButtonStyle::Danger;
         self.buttons.push((InGameMenuAction::Exit, exit_btn));
 
@@ -119,14 +176,20 @@ impl InGameMenuScreen {
                 match action {
                     InGameMenuAction::ReturnToTitle => {
                         // 显示确认对话框
-                        let modal = Modal::confirm("返回标题", "确定要返回标题界面吗？\n当前进度将不会自动保存。")
-                            .with_danger(true);
+                        let modal = Modal::confirm(
+                            "返回标题",
+                            "确定要返回标题界面吗？\n当前进度将不会自动保存。",
+                        )
+                        .with_danger(true);
                         self.confirm_modal = Some((*action, modal));
                         return InGameMenuAction::None;
                     }
                     InGameMenuAction::Exit => {
-                        let modal = Modal::confirm("退出游戏", "确定要退出游戏吗？\n当前进度将不会自动保存。")
-                            .with_danger(true);
+                        let modal = Modal::confirm(
+                            "退出游戏",
+                            "确定要退出游戏吗？\n当前进度将不会自动保存。",
+                        )
+                        .with_danger(true);
                         self.confirm_modal = Some((*action, modal));
                         return InGameMenuAction::None;
                     }
@@ -143,13 +206,24 @@ impl InGameMenuScreen {
         let theme = &ctx.theme;
 
         // 绘制半透明覆盖层
-        draw_rectangle(0.0, 0.0, ctx.screen_width, ctx.screen_height, theme.bg_overlay);
+        draw_rectangle(
+            0.0,
+            0.0,
+            ctx.screen_width,
+            ctx.screen_height,
+            theme.bg_overlay,
+        );
 
         // 面板
         let panel_width = 300.0;
         let panel_height = 420.0;
-        let panel = Panel::centered(panel_width, panel_height, ctx.screen_width, ctx.screen_height)
-            .with_title("系统菜单");
+        let panel = Panel::centered(
+            panel_width,
+            panel_height,
+            ctx.screen_width,
+            ctx.screen_height,
+        )
+        .with_title("系统菜单");
         panel.draw(ctx, text_renderer);
 
         // 绘制按钮

@@ -78,4 +78,3 @@ pub enum VnError {
 
 /// Result 类型别名
 pub type VnResult<T> = Result<T, VnError>;
-

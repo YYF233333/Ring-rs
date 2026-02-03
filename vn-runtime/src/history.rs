@@ -225,7 +225,10 @@ mod tests {
         let mut history = History::new();
         assert!(history.is_empty());
 
-        history.push(HistoryEvent::dialogue(Some("角色A".to_string()), "你好".to_string()));
+        history.push(HistoryEvent::dialogue(
+            Some("角色A".to_string()),
+            "你好".to_string(),
+        ));
         history.push(HistoryEvent::dialogue(None, "旁白文本".to_string()));
         history.push(HistoryEvent::chapter_mark("第一章".to_string()));
 
@@ -264,7 +267,10 @@ mod tests {
     #[test]
     fn test_history_serialization() {
         let mut history = History::new();
-        history.push(HistoryEvent::dialogue(Some("A".to_string()), "内容".to_string()));
+        history.push(HistoryEvent::dialogue(
+            Some("A".to_string()),
+            "内容".to_string(),
+        ));
         history.push(HistoryEvent::choice_made(
             vec!["选项1".to_string(), "选项2".to_string()],
             0,

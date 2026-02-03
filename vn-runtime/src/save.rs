@@ -14,7 +14,7 @@ use crate::history::History;
 use crate::state::RuntimeState;
 
 /// 存档格式版本
-/// 
+///
 /// 版本号含义：
 /// - MAJOR: 不兼容的格式变更
 /// - MINOR: 向后兼容的新字段
@@ -38,7 +38,7 @@ impl SaveVersion {
     }
 
     /// 检查是否兼容
-    /// 
+    ///
     /// 兼容规则：
     /// - major 必须相同
     /// - minor 可以不同（向后兼容）
@@ -105,7 +105,7 @@ pub struct AudioState {
 }
 
 /// 渲染状态快照（用于恢复）
-/// 
+///
 /// 只保存必要的恢复信息，不保存临时状态（如过渡动画进度）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderSnapshot {
@@ -124,7 +124,7 @@ pub struct CharacterSnapshot {
 }
 
 /// 存档数据
-/// 
+///
 /// 包含恢复游戏状态所需的所有信息。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveData {
@@ -225,8 +225,15 @@ impl std::fmt::Display for SaveError {
         match self {
             SaveError::SerializationFailed(e) => write!(f, "序列化失败: {}", e),
             SaveError::DeserializationFailed(e) => write!(f, "反序列化失败: {}", e),
-            SaveError::IncompatibleVersion { save_version, current_version } => {
-                write!(f, "存档版本不兼容: 存档版本 {} vs 当前版本 {}", save_version, current_version)
+            SaveError::IncompatibleVersion {
+                save_version,
+                current_version,
+            } => {
+                write!(
+                    f,
+                    "存档版本不兼容: 存档版本 {} vs 当前版本 {}",
+                    save_version, current_version
+                )
             }
             SaveError::IoError(e) => write!(f, "文件操作失败: {}", e),
             SaveError::NotFound(path) => write!(f, "存档不存在: {}", path),
@@ -237,15 +244,15 @@ impl std::fmt::Display for SaveError {
 impl std::error::Error for SaveError {}
 
 /// 获取当前时间的 ISO 8601 格式字符串
-/// 
+///
 /// 简单实现，不依赖 chrono 库
 fn chrono_now_iso8601() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    
+
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    
+
     // 简单格式化为 Unix 时间戳（后续可替换为真正的 ISO 8601）
     format!("{}", duration.as_secs())
 }

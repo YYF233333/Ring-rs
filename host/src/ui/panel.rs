@@ -1,7 +1,7 @@
 //! # 面板组件
 
-use macroquad::prelude::*;
 use super::{UiContext, draw_rounded_rect, draw_rounded_rect_lines};
+use macroquad::prelude::*;
 
 /// 面板组件
 pub struct Panel {
@@ -71,33 +71,39 @@ impl Panel {
 
         // 绘制背景
         draw_rounded_rect(
-            self.rect.x, self.rect.y,
-            self.rect.w, self.rect.h,
+            self.rect.x,
+            self.rect.y,
+            self.rect.w,
+            self.rect.h,
             theme.corner_radius,
-            theme.bg_panel
+            theme.bg_panel,
         );
 
         // 绘制边框
         if self.show_border {
             draw_rounded_rect_lines(
-                self.rect.x, self.rect.y,
-                self.rect.w, self.rect.h,
+                self.rect.x,
+                self.rect.y,
+                self.rect.w,
+                self.rect.h,
                 theme.corner_radius,
                 2.0,
-                theme.accent
+                theme.accent,
             );
         }
 
         // 绘制标题栏
         if self.show_title_bar {
             let title_height = theme.font_size_large + theme.padding;
-            
+
             // 标题栏背景
             draw_rounded_rect(
-                self.rect.x + 2.0, self.rect.y + 2.0,
-                self.rect.w - 4.0, title_height,
+                self.rect.x + 2.0,
+                self.rect.y + 2.0,
+                self.rect.w - 4.0,
+                title_height,
                 theme.corner_radius - 2.0,
-                theme.bg_secondary
+                theme.bg_secondary,
             );
 
             // 分隔线
@@ -107,7 +113,7 @@ impl Panel {
                 self.rect.x + self.rect.w - theme.padding,
                 self.rect.y + title_height,
                 1.0,
-                Color::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.3)
+                Color::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.3),
             );
 
             // 标题文字
@@ -117,7 +123,7 @@ impl Panel {
                     self.rect.x + theme.padding,
                     self.rect.y + theme.padding + theme.font_size_large * 0.8,
                     theme.font_size_large,
-                    theme.text_primary
+                    theme.text_primary,
                 );
             }
         }
@@ -127,8 +133,10 @@ impl Panel {
 /// 全屏覆盖层（半透明背景）
 pub fn draw_overlay(ctx: &UiContext) {
     draw_rectangle(
-        0.0, 0.0,
-        ctx.screen_width, ctx.screen_height,
-        ctx.theme.bg_overlay
+        0.0,
+        0.0,
+        ctx.screen_width,
+        ctx.screen_height,
+        ctx.theme.bg_overlay,
     );
 }

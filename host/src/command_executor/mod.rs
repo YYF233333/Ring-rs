@@ -9,9 +9,9 @@
 //! - 角色动画通过 `CharacterAnimationCommand` 传递给主循环，由 AnimationSystem 处理
 //! - 场景切换通过 `SceneTransitionCommand` 传递给主循环，由 SceneTransitionManager 处理
 
-use vn_runtime::command::{Command, Choice, Position, Transition, TransitionArg};
-use crate::renderer::{RenderState, ChoiceItem};
+use crate::renderer::{ChoiceItem, RenderState};
 use crate::resources::ResourceManager;
+use vn_runtime::command::{Choice, Command, Position, Transition, TransitionArg};
 
 /// Command 执行结果
 #[derive(Debug, Clone, PartialEq)]
@@ -40,13 +40,9 @@ pub enum AudioCommand {
         fade_in: Option<f32>,
     },
     /// 停止 BGM
-    StopBgm {
-        fade_out: Option<f32>,
-    },
+    StopBgm { fade_out: Option<f32> },
     /// 播放 SFX
-    PlaySfx {
-        path: String,
-    },
+    PlaySfx { path: String },
 }
 
 /// 过渡效果信息
@@ -64,15 +60,9 @@ pub struct TransitionInfo {
 #[derive(Debug, Clone)]
 pub enum CharacterAnimationCommand {
     /// 显示角色（淡入）
-    Show {
-        alias: String,
-        duration: f32,
-    },
+    Show { alias: String, duration: f32 },
     /// 隐藏角色（淡出）
-    Hide {
-        alias: String,
-        duration: f32,
-    },
+    Hide { alias: String, duration: f32 },
 }
 
 /// 场景切换命令
@@ -167,9 +157,12 @@ impl CommandExecutor {
                 // ChangeScene 是复合场景切换，包含：清立绘、换背景、遮罩过渡
                 self.execute_change_scene(path, transition.clone(), render_state, _resource_manager)
             }
-            Command::ShowCharacter { path, alias, position, transition } => {
-                self.execute_show_character(path, alias, *position, transition, render_state)
-            }
+            Command::ShowCharacter {
+                path,
+                alias,
+                position,
+                transition,
+            } => self.execute_show_character(path, alias, *position, transition, render_state),
             Command::HideCharacter { alias, transition } => {
                 self.execute_hide_character(alias, transition, render_state)
             }
@@ -182,18 +175,10 @@ impl CommandExecutor {
             Command::ChapterMark { title, level } => {
                 self.execute_chapter_mark(title, *level, render_state)
             }
-            Command::PlayBgm { path, looping } => {
-                self.execute_play_bgm(path, *looping)
-            }
-            Command::StopBgm { fade_out } => {
-                self.execute_stop_bgm(*fade_out)
-            }
-            Command::PlaySfx { path } => {
-                self.execute_play_sfx(path)
-            }
-            Command::UIAnimation { effect } => {
-                self.execute_ui_animation(effect)
-            }
+            Command::PlayBgm { path, looping } => self.execute_play_bgm(path, *looping),
+            Command::StopBgm { fade_out } => self.execute_stop_bgm(*fade_out),
+            Command::PlaySfx { path } => self.execute_play_sfx(path),
+            Command::UIAnimation { effect } => self.execute_ui_animation(effect),
         };
 
         self.last_output.result = result.clone();
@@ -213,7 +198,7 @@ impl CommandExecutor {
 
         for command in commands {
             let result = self.execute(command, render_state, resource_manager);
-            
+
             // 记录需要等待的结果
             match &result {
                 ExecuteResult::WaitForClick
@@ -305,7 +290,8 @@ impl CommandExecutor {
                 }
                 "rule" => {
                     // 图片遮罩 - 使用 resource_manager 规范化路径
-                    let raw_mask_path = trans.get_named("mask")
+                    let raw_mask_path = trans
+                        .get_named("mask")
                         .and_then(|arg| {
                             if let TransitionArg::String(s) = arg {
                                 Some(s.clone())
@@ -314,11 +300,11 @@ impl CommandExecutor {
                             }
                         })
                         .unwrap_or_default();
-                    
+
                     // 规范化路径
                     let normalized_mask_path = resource_manager.resolve_path(&raw_mask_path);
                     let reversed = trans.get_reversed().unwrap_or(false);
-                    
+
                     // 发出 Rule 命令
                     self.last_output.scene_transition = Some(SceneTransitionCommand::Rule {
                         duration,
@@ -326,7 +312,10 @@ impl CommandExecutor {
                         mask_path: normalized_mask_path.clone(),
                         reversed,
                     });
-                    println!("🎬 changeScene: Rule 遮罩过渡 ({}, {}s, reversed={})", normalized_mask_path, duration, reversed);
+                    println!(
+                        "🎬 changeScene: Rule 遮罩过渡 ({}, {}s, reversed={})",
+                        normalized_mask_path, duration, reversed
+                    );
                 }
                 "dissolve" => {
                     // Dissolve 使用 TransitionManager 处理背景过渡
@@ -374,14 +363,17 @@ impl CommandExecutor {
     ) -> ExecuteResult {
         // 解析过渡效果持续时间
         // 如果 transition 存在且是 dissolve/fade，使用指定的 duration 或默认 0.3 秒
-        let duration = transition.as_ref().and_then(|t| {
-            let name_lower = t.name.to_lowercase();
-            if name_lower == "dissolve" || name_lower == "fade" {
-                Some(t.get_duration().map(|d| d as f32).unwrap_or(0.3))
-            } else {
-                None
-            }
-        }).unwrap_or(0.0); // 无过渡效果时立即显示
+        let duration = transition
+            .as_ref()
+            .and_then(|t| {
+                let name_lower = t.name.to_lowercase();
+                if name_lower == "dissolve" || name_lower == "fade" {
+                    Some(t.get_duration().map(|d| d as f32).unwrap_or(0.3))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0.0); // 无过渡效果时立即显示
 
         // 在 RenderState 中创建角色数据
         render_state.show_character(alias.to_string(), path.to_string(), position);
@@ -410,14 +402,17 @@ impl CommandExecutor {
         render_state: &mut RenderState,
     ) -> ExecuteResult {
         // 解析过渡效果持续时间
-        let duration = transition.as_ref().and_then(|t| {
-            let name_lower = t.name.to_lowercase();
-            if name_lower == "dissolve" || name_lower == "fade" {
-                Some(t.get_duration().map(|d| d as f32).unwrap_or(0.3))
-            } else {
-                None
-            }
-        }).unwrap_or(0.0);
+        let duration = transition
+            .as_ref()
+            .and_then(|t| {
+                let name_lower = t.name.to_lowercase();
+                if name_lower == "dissolve" || name_lower == "fade" {
+                    Some(t.get_duration().map(|d| d as f32).unwrap_or(0.3))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0.0);
 
         if duration > 0.0 {
             // 有过渡效果：标记为淡出，由 AnimationSystem 处理
@@ -549,7 +544,10 @@ impl CommandExecutor {
         // 从参数中提取时长，默认 0.3 秒（优先命名参数，回退位置参数）
         self.transition_duration = transition.get_duration().map(|d| d as f32).unwrap_or(0.3);
 
-        println!("🎬 开始过渡效果: {} ({}s)", transition.name, self.transition_duration);
+        println!(
+            "🎬 开始过渡效果: {} ({}s)",
+            transition.name, self.transition_duration
+        );
     }
 
     /// 更新过渡效果
@@ -626,8 +624,14 @@ mod tests {
         let cmd = Command::PresentChoices {
             style: None,
             choices: vec![
-                Choice { text: "选项1".to_string(), target_label: "label1".to_string() },
-                Choice { text: "选项2".to_string(), target_label: "label2".to_string() },
+                Choice {
+                    text: "选项1".to_string(),
+                    target_label: "label1".to_string(),
+                },
+                Choice {
+                    text: "选项2".to_string(),
+                    target_label: "label2".to_string(),
+                },
             ],
         };
 

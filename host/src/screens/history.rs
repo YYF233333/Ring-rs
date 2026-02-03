@@ -1,8 +1,8 @@
 //! # 历史回看界面
 
-use macroquad::prelude::*;
-use crate::ui::{UiContext, Button, Panel, ListView, ListItem};
 use crate::renderer::TextRenderer;
+use crate::ui::{Button, ListItem, ListView, Panel, UiContext};
+use macroquad::prelude::*;
 use vn_runtime::history::{History, HistoryEvent};
 
 /// 历史界面操作
@@ -45,47 +45,72 @@ impl HistoryScreen {
         let list_x = panel_x + theme.padding;
         let list_y = panel_y + theme.font_size_large + theme.padding * 2.0;
         let list_width = panel_width - theme.padding * 2.0;
-        let list_height = panel_height - (list_y - panel_y) - theme.padding - theme.button_height - theme.spacing;
+        let list_height =
+            panel_height - (list_y - panel_y) - theme.padding - theme.button_height - theme.spacing;
         self.history_list = ListView::new(Rect::new(list_x, list_y, list_width, list_height), 80.0);
 
         // 转换历史事件为列表项
-        let items: Vec<ListItem> = history.events().iter().rev().enumerate().map(|(i, event)| {
-            let (text, secondary) = match event {
-                HistoryEvent::Dialogue { speaker, content, .. } => {
-                    let speaker_text = speaker.as_deref().unwrap_or("旁白");
-                    (format!("【{}】", speaker_text), content.clone())
-                }
-                HistoryEvent::ChapterMark { title, .. } => {
-                    (format!("📖 {}", title), String::new())
-                }
-                HistoryEvent::ChoiceMade { options, selected_index, .. } => {
-                    let selected = options.get(*selected_index).map(|s| s.as_str()).unwrap_or("???");
-                    (format!("🔀 选择：{}", selected), format!("从 {} 个选项中选择", options.len()))
-                }
-                HistoryEvent::Jump { label, .. } => {
-                    (format!("➡️ 跳转"), format!("→ {}", label))
-                }
-                HistoryEvent::BackgroundChange { path, .. } => {
-                    (format!("🖼️ 背景切换"), path.clone())
-                }
-                HistoryEvent::BgmChange { path, .. } => {
-                    let path_text = path.as_deref().unwrap_or("停止");
-                    (format!("🎵 BGM"), path_text.to_string())
-                }
-            };
+        let items: Vec<ListItem> = history
+            .events()
+            .iter()
+            .rev()
+            .enumerate()
+            .map(|(i, event)| {
+                let (text, secondary) = match event {
+                    HistoryEvent::Dialogue {
+                        speaker, content, ..
+                    } => {
+                        let speaker_text = speaker.as_deref().unwrap_or("旁白");
+                        (format!("【{}】", speaker_text), content.clone())
+                    }
+                    HistoryEvent::ChapterMark { title, .. } => {
+                        (format!("📖 {}", title), String::new())
+                    }
+                    HistoryEvent::ChoiceMade {
+                        options,
+                        selected_index,
+                        ..
+                    } => {
+                        let selected = options
+                            .get(*selected_index)
+                            .map(|s| s.as_str())
+                            .unwrap_or("???");
+                        (
+                            format!("🔀 选择：{}", selected),
+                            format!("从 {} 个选项中选择", options.len()),
+                        )
+                    }
+                    HistoryEvent::Jump { label, .. } => {
+                        (format!("➡️ 跳转"), format!("→ {}", label))
+                    }
+                    HistoryEvent::BackgroundChange { path, .. } => {
+                        (format!("🖼️ 背景切换"), path.clone())
+                    }
+                    HistoryEvent::BgmChange { path, .. } => {
+                        let path_text = path.as_deref().unwrap_or("停止");
+                        (format!("🎵 BGM"), path_text.to_string())
+                    }
+                };
 
-            let mut item = ListItem::new(text, i.to_string());
-            if !secondary.is_empty() {
-                item = item.with_secondary(secondary);
-            }
-            item
-        }).collect();
+                let mut item = ListItem::new(text, i.to_string());
+                if !secondary.is_empty() {
+                    item = item.with_secondary(secondary);
+                }
+                item
+            })
+            .collect();
 
         self.history_list.set_items(items);
 
         // 返回按钮
         let btn_y = panel_y + panel_height - theme.padding - theme.button_height;
-        self.back_button = Some(Button::new("返回", panel_x + theme.padding, btn_y, 100.0, theme.button_height));
+        self.back_button = Some(Button::new(
+            "返回",
+            panel_x + theme.padding,
+            btn_y,
+            100.0,
+            theme.button_height,
+        ));
 
         self.needs_init = false;
     }
@@ -123,13 +148,24 @@ impl HistoryScreen {
         let theme = &ctx.theme;
 
         // 半透明覆盖层
-        draw_rectangle(0.0, 0.0, ctx.screen_width, ctx.screen_height, theme.bg_overlay);
+        draw_rectangle(
+            0.0,
+            0.0,
+            ctx.screen_width,
+            ctx.screen_height,
+            theme.bg_overlay,
+        );
 
         // 面板
         let panel_width = 700.0;
         let panel_height = 550.0;
-        let panel = Panel::centered(panel_width, panel_height, ctx.screen_width, ctx.screen_height)
-            .with_title("历史记录");
+        let panel = Panel::centered(
+            panel_width,
+            panel_height,
+            ctx.screen_width,
+            ctx.screen_height,
+        )
+        .with_title("历史记录");
         panel.draw(ctx, text_renderer);
 
         // 列表
@@ -146,7 +182,7 @@ impl HistoryScreen {
             (ctx.screen_width - 200.0) / 2.0,
             ctx.screen_height - theme.spacing * 2.0,
             theme.font_size_small,
-            theme.text_disabled
+            theme.text_disabled,
         );
     }
 

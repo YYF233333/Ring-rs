@@ -30,14 +30,14 @@
 pub fn normalize_logical_path(path: &str) -> String {
     // 统一使用 / 分隔符
     let normalized = path.replace('\\', "/");
-    
+
     // 移除开头的 ./
     let path = if normalized.starts_with("./") {
         &normalized[2..]
     } else {
         &normalized
     };
-    
+
     // 处理路径组件
     let mut components = Vec::new();
     for component in path.split('/') {
@@ -57,10 +57,10 @@ pub fn normalize_logical_path(path: &str) -> String {
             }
         }
     }
-    
+
     // 重新组合路径
     let result = components.join("/");
-    
+
     // 移除 assets/ 前缀（如果存在）
     if result.starts_with("assets/") {
         result[7..].to_string()
@@ -102,15 +102,15 @@ pub fn resolve_relative_path(base_dir: &str, relative_path: &str) -> String {
     if relative_path.starts_with('/') || relative_path.starts_with("http") {
         return normalize_logical_path(relative_path);
     }
-    
+
     // 规范化基础目录（移除 assets 前缀等）
     let base = normalize_logical_path(base_dir);
-    
+
     // 如果基础目录为空，直接规范化相对路径
     if base.is_empty() {
         return normalize_logical_path(relative_path);
     }
-    
+
     // 拼接路径并规范化
     let combined = format!("{}/{}", base, relative_path);
     normalize_logical_path(&combined)
@@ -130,13 +130,10 @@ pub fn resolve_relative_path(base_dir: &str, relative_path: &str) -> String {
 /// ```
 pub fn extract_script_id(path: &str) -> String {
     let normalized = normalize_logical_path(path);
-    
+
     // 提取文件名
-    let filename = normalized
-        .rsplit('/')
-        .next()
-        .unwrap_or(&normalized);
-    
+    let filename = normalized.rsplit('/').next().unwrap_or(&normalized);
+
     // 移除扩展名
     if let Some(dot_pos) = filename.rfind('.') {
         filename[..dot_pos].to_string()
@@ -160,7 +157,7 @@ pub fn extract_script_id(path: &str) -> String {
 /// ```
 pub fn extract_base_dir(path: &str) -> String {
     let normalized = normalize_logical_path(path);
-    
+
     if let Some(last_slash) = normalized.rfind('/') {
         normalized[..last_slash].to_string()
     } else {
@@ -174,22 +171,43 @@ mod tests {
 
     #[test]
     fn test_normalize_basic() {
-        assert_eq!(normalize_logical_path("backgrounds/bg.png"), "backgrounds/bg.png");
-        assert_eq!(normalize_logical_path("./backgrounds/bg.png"), "backgrounds/bg.png");
-        assert_eq!(normalize_logical_path("backgrounds\\bg.png"), "backgrounds/bg.png");
+        assert_eq!(
+            normalize_logical_path("backgrounds/bg.png"),
+            "backgrounds/bg.png"
+        );
+        assert_eq!(
+            normalize_logical_path("./backgrounds/bg.png"),
+            "backgrounds/bg.png"
+        );
+        assert_eq!(
+            normalize_logical_path("backgrounds\\bg.png"),
+            "backgrounds/bg.png"
+        );
     }
 
     #[test]
     fn test_normalize_with_dotdot() {
-        assert_eq!(normalize_logical_path("scripts/../backgrounds/bg.png"), "backgrounds/bg.png");
+        assert_eq!(
+            normalize_logical_path("scripts/../backgrounds/bg.png"),
+            "backgrounds/bg.png"
+        );
         assert_eq!(normalize_logical_path("a/b/../../c/d.png"), "c/d.png");
-        assert_eq!(normalize_logical_path("../backgrounds/bg.png"), "backgrounds/bg.png");
+        assert_eq!(
+            normalize_logical_path("../backgrounds/bg.png"),
+            "backgrounds/bg.png"
+        );
     }
 
     #[test]
     fn test_normalize_removes_assets_prefix() {
-        assert_eq!(normalize_logical_path("assets/backgrounds/bg.png"), "backgrounds/bg.png");
-        assert_eq!(normalize_logical_path("assets\\scripts\\test.md"), "scripts/test.md");
+        assert_eq!(
+            normalize_logical_path("assets/backgrounds/bg.png"),
+            "backgrounds/bg.png"
+        );
+        assert_eq!(
+            normalize_logical_path("assets\\scripts\\test.md"),
+            "scripts/test.md"
+        );
     }
 
     #[test]
@@ -227,7 +245,10 @@ mod tests {
     #[test]
     fn test_extract_base_dir() {
         assert_eq!(extract_base_dir("scripts/test.md"), "scripts");
-        assert_eq!(extract_base_dir("scripts/chapter1/intro.md"), "scripts/chapter1");
+        assert_eq!(
+            extract_base_dir("scripts/chapter1/intro.md"),
+            "scripts/chapter1"
+        );
         assert_eq!(extract_base_dir("test.md"), "");
     }
 }

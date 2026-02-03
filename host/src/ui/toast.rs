@@ -1,7 +1,7 @@
 //! # Toast 提示组件
 
-use macroquad::prelude::*;
 use super::{UiContext, draw_rounded_rect};
+use macroquad::prelude::*;
 
 /// Toast 类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,7 +42,7 @@ impl Toast {
     /// 更新状态，返回是否应该移除
     pub fn update(&mut self, dt: f32) -> bool {
         self.remaining_time -= dt;
-        
+
         // 最后 0.3 秒开始淡出
         if self.remaining_time <= 0.3 {
             self.fade_progress = 1.0 - (self.remaining_time / 0.3).max(0.0);
@@ -96,7 +96,8 @@ impl ToastManager {
 
     /// 显示自定义类型消息
     pub fn show(&mut self, message: impl Into<String>, toast_type: ToastType) {
-        self.toasts.push(Toast::new(message, toast_type, self.default_duration));
+        self.toasts
+            .push(Toast::new(message, toast_type, self.default_duration));
     }
 
     /// 更新所有 Toast
@@ -115,7 +116,7 @@ impl ToastManager {
         for (i, toast) in self.toasts.iter().enumerate() {
             let y = start_y + i as f32 * (toast_height + margin);
             let x = ctx.screen_width - toast_width - margin;
-            
+
             // 根据类型选择颜色
             let base_color = match toast.toast_type {
                 ToastType::Info => theme.bg_secondary,
@@ -128,14 +129,21 @@ impl ToastManager {
             let alpha = 1.0 - toast.fade_progress;
             let bg_color = Color::new(base_color.r, base_color.g, base_color.b, 0.9 * alpha);
             let text_color = Color::new(
-                theme.text_primary.r, 
-                theme.text_primary.g, 
-                theme.text_primary.b, 
-                alpha
+                theme.text_primary.r,
+                theme.text_primary.g,
+                theme.text_primary.b,
+                alpha,
             );
 
             // 绘制背景
-            draw_rounded_rect(x, y, toast_width, toast_height, theme.corner_radius, bg_color);
+            draw_rounded_rect(
+                x,
+                y,
+                toast_width,
+                toast_height,
+                theme.corner_radius,
+                bg_color,
+            );
 
             // 绘制图标（简化为文字）
             let icon = match toast.toast_type {
@@ -149,7 +157,7 @@ impl ToastManager {
                 x + theme.spacing,
                 y + toast_height / 2.0 + theme.font_size_normal * 0.3,
                 theme.font_size_normal,
-                text_color
+                text_color,
             );
 
             // 绘制消息
@@ -158,7 +166,7 @@ impl ToastManager {
                 x + theme.spacing * 2.5,
                 y + toast_height / 2.0 + theme.font_size_small * 0.3,
                 theme.font_size_small,
-                text_color
+                text_color,
             );
         }
     }

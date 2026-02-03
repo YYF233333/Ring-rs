@@ -41,7 +41,7 @@ impl Default for SaveLoadTab {
 }
 
 /// 导航栈管理器
-/// 
+///
 /// 用于管理界面的返回逻辑，例如：
 /// - 从 InGameMenu 打开 SaveLoad，返回时回到 InGameMenu
 /// - 从 Title 打开 SaveLoad，返回时回到 Title
@@ -113,7 +113,7 @@ impl NavigationStack {
 }
 
 /// 输入捕获状态
-/// 
+///
 /// 控制不同模式下的输入行为，避免"双重消费"
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputCapture {
@@ -146,7 +146,10 @@ impl AppMode {
 
     /// 是否是游戏进行中（需要显示游戏内容）
     pub fn is_in_game(&self) -> bool {
-        matches!(self, AppMode::InGame | AppMode::InGameMenu | AppMode::History)
+        matches!(
+            self,
+            AppMode::InGame | AppMode::InGameMenu | AppMode::History
+        )
     }
 
     /// 是否是覆盖层界面（在游戏画面上方显示）
@@ -197,12 +200,10 @@ impl UserSettings {
     /// 从文件加载设置，如果失败则使用默认值
     pub fn load(path: &str) -> Self {
         match std::fs::read_to_string(path) {
-            Ok(content) => {
-                serde_json::from_str(&content).unwrap_or_else(|e| {
-                    eprintln!("⚠️ 解析用户设置失败，使用默认值: {}", e);
-                    Self::default()
-                })
-            }
+            Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
+                eprintln!("⚠️ 解析用户设置失败，使用默认值: {}", e);
+                Self::default()
+            }),
             Err(_) => {
                 println!("📝 用户设置文件不存在，使用默认值");
                 Self::default()
@@ -212,10 +213,9 @@ impl UserSettings {
 
     /// 保存设置到文件
     pub fn save(&self, path: &str) -> Result<(), String> {
-        let content = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("序列化失败: {}", e))?;
-        std::fs::write(path, content)
-            .map_err(|e| format!("写入失败: {}", e))?;
+        let content =
+            serde_json::to_string_pretty(self).map_err(|e| format!("序列化失败: {}", e))?;
+        std::fs::write(path, content).map_err(|e| format!("写入失败: {}", e))?;
         Ok(())
     }
 }
@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn test_navigation_stack_nested() {
         let mut nav = NavigationStack::new();
-        
+
         // Title -> InGame (switch, no stack)
         nav.switch_to(AppMode::InGame);
         assert_eq!(nav.current(), AppMode::InGame);
@@ -278,7 +278,10 @@ mod tests {
     fn test_input_capture() {
         assert_eq!(AppMode::Title.default_input_capture(), InputCapture::Menu);
         assert_eq!(AppMode::InGame.default_input_capture(), InputCapture::Game);
-        assert_eq!(AppMode::InGameMenu.default_input_capture(), InputCapture::Menu);
+        assert_eq!(
+            AppMode::InGameMenu.default_input_capture(),
+            InputCapture::Menu
+        );
     }
 
     #[test]

@@ -88,7 +88,7 @@ impl SaveManager {
             .map_err(|e| SaveError::IoError(format!("无法读取存档文件: {}", e)))?;
 
         let data = SaveData::from_json(&json)?;
-        
+
         println!("💾 存档读取成功: {:?}", path);
         Ok(data)
     }
@@ -150,7 +150,7 @@ impl SaveManager {
     /// 获取存档信息（不加载完整数据）
     pub fn get_save_info(&self, slot: u32) -> Option<SaveInfo> {
         let path = self.slot_path(slot);
-        
+
         if !path.exists() {
             return None;
         }
@@ -179,7 +179,7 @@ impl SaveManager {
     }
 
     /// 保存 Continue 存档
-    /// 
+    ///
     /// 在返回标题 / 退出游戏时调用，记录当前游戏位置。
     pub fn save_continue(&self, data: &SaveData) -> Result<(), SaveError> {
         self.ensure_dir()?;
@@ -213,7 +213,7 @@ impl SaveManager {
             .map_err(|e| SaveError::IoError(format!("无法读取 Continue 存档: {}", e)))?;
 
         let data = SaveData::from_json(&json)?;
-        
+
         println!("💾 Continue 存档读取成功");
         Ok(data)
     }
@@ -288,9 +288,9 @@ impl SaveInfo {
 /// 格式化 Unix 时间戳为可读格式
 fn format_unix_timestamp(secs: u64) -> String {
     use std::time::{Duration, UNIX_EPOCH};
-    
+
     let datetime = UNIX_EPOCH + Duration::from_secs(secs);
-    
+
     // 简单格式化（不依赖 chrono）
     if let Ok(since_epoch) = datetime.duration_since(UNIX_EPOCH) {
         let total_secs = since_epoch.as_secs();
@@ -299,14 +299,21 @@ fn format_unix_timestamp(secs: u64) -> String {
         let time_of_day = total_secs % 86400;
         let hours = time_of_day / 3600;
         let minutes = (time_of_day % 3600) / 60;
-        
+
         // 粗略计算年份（从 1970 开始）
         let years = 1970 + (days / 365);
         let remaining_days = days % 365;
         let month = remaining_days / 30 + 1;
         let day = remaining_days % 30 + 1;
-        
-        format!("{:04}-{:02}-{:02} {:02}:{:02}", years, month.min(12), day.min(31), hours, minutes)
+
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}",
+            years,
+            month.min(12),
+            day.min(31),
+            hours,
+            minutes
+        )
     } else {
         secs.to_string()
     }
@@ -317,7 +324,7 @@ fn format_play_time(secs: u64) -> String {
     let hours = secs / 3600;
     let minutes = (secs % 3600) / 60;
     let seconds = secs % 60;
-    
+
     if hours > 0 {
         format!("{}:{:02}:{:02}", hours, minutes, seconds)
     } else {
@@ -328,9 +335,9 @@ fn format_play_time(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vn_runtime::RuntimeState;
     use std::env;
     use std::sync::atomic::{AtomicU32, Ordering};
+    use vn_runtime::RuntimeState;
 
     static TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -347,8 +354,7 @@ mod tests {
         manager.ensure_dir().unwrap();
 
         let state = RuntimeState::new("test_script");
-        let save_data = SaveData::new(1, state)
-            .with_chapter("测试章节");
+        let save_data = SaveData::new(1, state).with_chapter("测试章节");
 
         // 保存
         manager.save(&save_data).unwrap();

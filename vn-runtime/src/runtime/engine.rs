@@ -122,7 +122,9 @@ impl VNRuntime {
             };
 
             // 执行当前节点
-            let result = self.executor.execute(&node, &mut self.state, &self.script)?;
+            let result = self
+                .executor
+                .execute(&node, &mut self.state, &self.script)?;
 
             // 记录历史事件
             for cmd in &result.commands {
@@ -176,15 +178,19 @@ impl VNRuntime {
                 // 跳转到对应标签
                 // 需要从当前节点获取选项信息
                 let current_index = self.state.position.node_index.saturating_sub(1);
-                if let Some(ScriptNode::Choice { options, .. }) = self.script.get_node(current_index)
+                if let Some(ScriptNode::Choice { options, .. }) =
+                    self.script.get_node(current_index)
                 {
                     // 记录选择事件到历史
-                    let option_texts: Vec<String> = options.iter().map(|o| o.text.clone()).collect();
-                    self.history.push(HistoryEvent::choice_made(option_texts, index));
+                    let option_texts: Vec<String> =
+                        options.iter().map(|o| o.text.clone()).collect();
+                    self.history
+                        .push(HistoryEvent::choice_made(option_texts, index));
 
                     if let Some(option) = options.get(index) {
                         // 记录跳转事件
-                        self.history.push(HistoryEvent::jump(option.target_label.clone()));
+                        self.history
+                            .push(HistoryEvent::jump(option.target_label.clone()));
 
                         let target_index = self.script.find_label(&option.target_label).ok_or(
                             RuntimeError::LabelNotFound {
@@ -232,7 +238,7 @@ impl VNRuntime {
     }
 
     /// 恢复状态（用于读档）
-    /// 
+    ///
     /// 将 Runtime 状态恢复到指定状态。
     /// 注意：调用方需要确保 state 中的 script_id 与当前加载的脚本匹配。
     pub fn restore_state(&mut self, state: RuntimeState) {
@@ -263,19 +269,19 @@ impl VNRuntime {
     fn record_history(&mut self, cmd: &Command) {
         match cmd {
             Command::ShowText { speaker, content } => {
-                self.history.push(HistoryEvent::dialogue(
-                    speaker.clone(),
-                    content.clone(),
-                ));
+                self.history
+                    .push(HistoryEvent::dialogue(speaker.clone(), content.clone()));
             }
             Command::ChapterMark { title, .. } => {
                 self.history.push(HistoryEvent::chapter_mark(title.clone()));
             }
             Command::ShowBackground { path, .. } => {
-                self.history.push(HistoryEvent::background_change(path.clone()));
+                self.history
+                    .push(HistoryEvent::background_change(path.clone()));
             }
             Command::PlayBgm { path, .. } => {
-                self.history.push(HistoryEvent::bgm_change(Some(path.clone())));
+                self.history
+                    .push(HistoryEvent::bgm_change(Some(path.clone())));
             }
             Command::StopBgm { .. } => {
                 self.history.push(HistoryEvent::bgm_change(None));
@@ -370,9 +376,18 @@ mod tests {
         let script = Script::new(
             "test",
             vec![
-                ScriptNode::Chapter { title: "第一章".to_string(), level: 1 },
-                ScriptNode::Dialogue { speaker: Some("角色".to_string()), content: "你好".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "旁白".to_string() },
+                ScriptNode::Chapter {
+                    title: "第一章".to_string(),
+                    level: 1,
+                },
+                ScriptNode::Dialogue {
+                    speaker: Some("角色".to_string()),
+                    content: "你好".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "旁白".to_string(),
+                },
             ],
             "",
         );
@@ -394,9 +409,18 @@ mod tests {
         let script = Script::new(
             "test",
             vec![
-                ScriptNode::Dialogue { speaker: None, content: "1".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "2".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "3".to_string() },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "1".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "2".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "3".to_string(),
+                },
             ],
             "",
         );
@@ -427,12 +451,27 @@ mod tests {
         let script = Script::new(
             "test",
             vec![
-                ScriptNode::Label { name: "start".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "开始".to_string() },
-                ScriptNode::Goto { target_label: "end".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "这句不应该执行".to_string() },
-                ScriptNode::Label { name: "end".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "结束".to_string() },
+                ScriptNode::Label {
+                    name: "start".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "开始".to_string(),
+                },
+                ScriptNode::Goto {
+                    target_label: "end".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "这句不应该执行".to_string(),
+                },
+                ScriptNode::Label {
+                    name: "end".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "结束".to_string(),
+                },
             ],
             "",
         );
@@ -455,21 +494,37 @@ mod tests {
     #[test]
     fn test_runtime_with_choice() {
         use crate::script::ChoiceOption;
-        
+
         let script = Script::new(
             "test",
             vec![
                 ScriptNode::Choice {
                     style: None,
                     options: vec![
-                        ChoiceOption { text: "选项A".to_string(), target_label: "a".to_string() },
-                        ChoiceOption { text: "选项B".to_string(), target_label: "b".to_string() },
+                        ChoiceOption {
+                            text: "选项A".to_string(),
+                            target_label: "a".to_string(),
+                        },
+                        ChoiceOption {
+                            text: "选项B".to_string(),
+                            target_label: "b".to_string(),
+                        },
                     ],
                 },
-                ScriptNode::Label { name: "a".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "选了A".to_string() },
-                ScriptNode::Label { name: "b".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "选了B".to_string() },
+                ScriptNode::Label {
+                    name: "a".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "选了A".to_string(),
+                },
+                ScriptNode::Label {
+                    name: "b".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "选了B".to_string(),
+                },
             ],
             "",
         );
@@ -478,14 +533,18 @@ mod tests {
         // 执行选择
         let (commands, waiting) = runtime.tick(None).unwrap();
         assert_eq!(commands.len(), 1);
-        assert!(matches!(waiting, WaitingReason::WaitForChoice { choice_count: 2 }));
+        assert!(matches!(
+            waiting,
+            WaitingReason::WaitForChoice { choice_count: 2 }
+        ));
 
         // 选择第二个选项（索引1）-> 跳转到 "b"
-        let (commands2, _) = runtime.tick(Some(RuntimeInput::ChoiceSelected { index: 1 })).unwrap();
-        
+        let (commands2, _) = runtime
+            .tick(Some(RuntimeInput::ChoiceSelected { index: 1 }))
+            .unwrap();
+
         // 应该跳转到 "b" 标签，执行 "选了B" 对话
         assert_eq!(commands2.len(), 1);
         assert!(matches!(&commands2[0], Command::ShowText { content, .. } if content == "选了B"));
     }
 }
-

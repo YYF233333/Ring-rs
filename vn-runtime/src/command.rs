@@ -65,7 +65,10 @@ impl Transition {
     }
 
     /// 创建带命名参数的过渡效果
-    pub fn with_named_args(name: impl Into<String>, args: Vec<(Option<String>, TransitionArg)>) -> Self {
+    pub fn with_named_args(
+        name: impl Into<String>,
+        args: Vec<(Option<String>, TransitionArg)>,
+    ) -> Self {
         Self {
             name: name.into(),
             args,
@@ -91,7 +94,8 @@ impl Transition {
 
     /// 获取参数值：优先命名参数，回退到位置参数
     pub fn get_arg(&self, key: &str, positional_index: usize) -> Option<&TransitionArg> {
-        self.get_named(key).or_else(|| self.get_positional(positional_index))
+        self.get_named(key)
+            .or_else(|| self.get_positional(positional_index))
     }
 
     /// 获取 duration 参数（常用辅助方法）
@@ -277,10 +281,7 @@ mod tests {
 
     #[test]
     fn test_transition_with_args() {
-        let t = Transition::with_args(
-            "Dissolve",
-            vec![TransitionArg::Number(1.5)],
-        );
+        let t = Transition::with_args("Dissolve", vec![TransitionArg::Number(1.5)]);
         assert_eq!(t.name, "Dissolve");
         assert_eq!(t.args.len(), 1);
     }
@@ -331,7 +332,7 @@ mod tests {
                 (Some("reversed".to_string()), TransitionArg::Bool(false)),
             ],
         );
-        
+
         // 按 key 获取命名参数
         assert_eq!(t.get_named("duration"), Some(&TransitionArg::Number(2.0)));
         assert_eq!(t.get_named("reversed"), Some(&TransitionArg::Bool(false)));
@@ -348,10 +349,13 @@ mod tests {
                 TransitionArg::Bool(true),
             ],
         );
-        
+
         // 按索引获取位置参数
         assert_eq!(t.get_positional(0), Some(&TransitionArg::Number(1.0)));
-        assert_eq!(t.get_positional(1), Some(&TransitionArg::String("test".to_string())));
+        assert_eq!(
+            t.get_positional(1),
+            Some(&TransitionArg::String("test".to_string()))
+        );
         assert_eq!(t.get_positional(2), Some(&TransitionArg::Bool(true)));
         assert_eq!(t.get_positional(3), None);
         assert!(t.is_all_positional());
@@ -401,15 +405,12 @@ mod tests {
     fn test_transition_serialization_with_named_args() {
         let t = Transition::with_named_args(
             "Dissolve",
-            vec![
-                (Some("duration".to_string()), TransitionArg::Number(1.5)),
-            ],
+            vec![(Some("duration".to_string()), TransitionArg::Number(1.5))],
         );
-        
+
         let json = serde_json::to_string(&t).unwrap();
         let deserialized: Transition = serde_json::from_str(&json).unwrap();
         assert_eq!(t, deserialized);
         assert_eq!(deserialized.get_duration(), Some(1.5));
     }
 }
-

@@ -187,7 +187,11 @@ impl Script {
     /// - `id`: 脚本标识符
     /// - `nodes`: 脚本节点列表
     /// - `base_path`: 脚本文件所在目录，用于解析相对路径
-    pub fn new(id: impl Into<String>, nodes: Vec<ScriptNode>, base_path: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        nodes: Vec<ScriptNode>,
+        base_path: impl Into<String>,
+    ) -> Self {
         let id = id.into();
         let base_path = base_path.into();
         let mut script = Self {
@@ -208,11 +212,11 @@ impl Script {
             // 绝对路径或 URL，直接返回
             return relative_path.to_string();
         }
-        
+
         if self.base_path.is_empty() {
             return relative_path.to_string();
         }
-        
+
         // 拼接脚本目录和相对路径
         format!("{}/{}", self.base_path, relative_path)
     }
@@ -311,18 +315,32 @@ mod tests {
     #[test]
     fn test_script_resolve_path() {
         let script = Script::new("test", vec![], "scripts");
-        
+
         // 相对路径
-        assert_eq!(script.resolve_path("../bgm/music.mp3"), "scripts/../bgm/music.mp3");
-        assert_eq!(script.resolve_path("images/bg.png"), "scripts/images/bg.png");
-        
+        assert_eq!(
+            script.resolve_path("../bgm/music.mp3"),
+            "scripts/../bgm/music.mp3"
+        );
+        assert_eq!(
+            script.resolve_path("images/bg.png"),
+            "scripts/images/bg.png"
+        );
+
         // 绝对路径不变
-        assert_eq!(script.resolve_path("/absolute/path.png"), "/absolute/path.png");
-        assert_eq!(script.resolve_path("http://example.com/img.png"), "http://example.com/img.png");
-        
+        assert_eq!(
+            script.resolve_path("/absolute/path.png"),
+            "/absolute/path.png"
+        );
+        assert_eq!(
+            script.resolve_path("http://example.com/img.png"),
+            "http://example.com/img.png"
+        );
+
         // 空 base_path
         let script_no_base = Script::new("test", vec![], "");
-        assert_eq!(script_no_base.resolve_path("images/bg.png"), "images/bg.png");
+        assert_eq!(
+            script_no_base.resolve_path("images/bg.png"),
+            "images/bg.png"
+        );
     }
 }
-

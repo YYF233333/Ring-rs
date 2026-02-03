@@ -1,7 +1,7 @@
 //! # 按钮组件
 
-use macroquad::prelude::*;
 use super::{UiContext, draw_rounded_rect};
+use macroquad::prelude::*;
 
 /// 按钮状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,37 +92,61 @@ impl Button {
     /// 绘制按钮
     pub fn draw(&self, ctx: &UiContext, text_renderer: &crate::renderer::TextRenderer) {
         let theme = &ctx.theme;
-        
+
         // 根据样式和状态选择颜色
         let (bg_color, text_color) = match (self.style, self.state) {
             (_, ButtonState::Disabled) => (theme.button_disabled, theme.text_disabled),
             (ButtonStyle::Primary, ButtonState::Normal) => (theme.accent, theme.bg_primary),
             (ButtonStyle::Primary, ButtonState::Hovered) => (theme.accent_hover, theme.bg_primary),
-            (ButtonStyle::Primary, ButtonState::Pressed) => (theme.accent_pressed, theme.bg_primary),
+            (ButtonStyle::Primary, ButtonState::Pressed) => {
+                (theme.accent_pressed, theme.bg_primary)
+            }
             (ButtonStyle::Secondary, ButtonState::Normal) => (theme.button_bg, theme.text_primary),
-            (ButtonStyle::Secondary, ButtonState::Hovered) => (theme.button_hover, theme.text_primary),
-            (ButtonStyle::Secondary, ButtonState::Pressed) => (theme.button_pressed, theme.text_primary),
+            (ButtonStyle::Secondary, ButtonState::Hovered) => {
+                (theme.button_hover, theme.text_primary)
+            }
+            (ButtonStyle::Secondary, ButtonState::Pressed) => {
+                (theme.button_pressed, theme.text_primary)
+            }
             (ButtonStyle::Danger, ButtonState::Normal) => (theme.danger, theme.text_primary),
             (ButtonStyle::Danger, ButtonState::Hovered) => (
-                Color::new(theme.danger.r * 1.2, theme.danger.g * 1.2, theme.danger.b * 1.2, 1.0),
-                theme.text_primary
+                Color::new(
+                    theme.danger.r * 1.2,
+                    theme.danger.g * 1.2,
+                    theme.danger.b * 1.2,
+                    1.0,
+                ),
+                theme.text_primary,
             ),
             (ButtonStyle::Danger, ButtonState::Pressed) => (
-                Color::new(theme.danger.r * 0.8, theme.danger.g * 0.8, theme.danger.b * 0.8, 1.0),
-                theme.text_primary
+                Color::new(
+                    theme.danger.r * 0.8,
+                    theme.danger.g * 0.8,
+                    theme.danger.b * 0.8,
+                    1.0,
+                ),
+                theme.text_primary,
             ),
-            (ButtonStyle::Text, ButtonState::Normal) => (Color::new(0.0, 0.0, 0.0, 0.0), theme.text_primary),
-            (ButtonStyle::Text, ButtonState::Hovered) => (Color::new(1.0, 1.0, 1.0, 0.1), theme.accent),
-            (ButtonStyle::Text, ButtonState::Pressed) => (Color::new(0.0, 0.0, 0.0, 0.1), theme.accent_pressed),
+            (ButtonStyle::Text, ButtonState::Normal) => {
+                (Color::new(0.0, 0.0, 0.0, 0.0), theme.text_primary)
+            }
+            (ButtonStyle::Text, ButtonState::Hovered) => {
+                (Color::new(1.0, 1.0, 1.0, 0.1), theme.accent)
+            }
+            (ButtonStyle::Text, ButtonState::Pressed) => {
+                (Color::new(0.0, 0.0, 0.0, 0.1), theme.accent_pressed)
+            }
         };
 
         // 绘制背景
         if self.style != ButtonStyle::Text || self.state != ButtonState::Normal {
             draw_rounded_rect(
-                self.rect.x, self.rect.y,
-                self.rect.w, self.rect.h,
+                self.rect.x,
+                self.rect.y,
+                self.rect.w,
+                self.rect.h,
                 theme.corner_radius,
-                bg_color
+                bg_color,
             );
         }
 
@@ -143,7 +167,12 @@ impl Button {
 }
 
 /// 创建居中的按钮
-pub fn centered_button(text: impl Into<String>, y: f32, screen_width: f32, theme: &super::Theme) -> Button {
+pub fn centered_button(
+    text: impl Into<String>,
+    y: f32,
+    screen_width: f32,
+    theme: &super::Theme,
+) -> Button {
     let w = theme.button_min_width;
     let h = theme.button_height;
     let x = (screen_width - w) / 2.0;
@@ -155,7 +184,7 @@ pub fn menu_button_layout(
     labels: &[&str],
     start_y: f32,
     screen_width: f32,
-    theme: &super::Theme
+    theme: &super::Theme,
 ) -> Vec<Button> {
     let spacing = theme.spacing;
     let mut buttons = Vec::new();

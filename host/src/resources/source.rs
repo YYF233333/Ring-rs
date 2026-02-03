@@ -8,8 +8,8 @@
 //! - 加载时由具体实现决定如何解析到实际路径
 //! - 使用 `super::path` 模块进行统一的路径规范化
 
-use super::path::normalize_logical_path;
 use super::ResourceError;
+use super::path::normalize_logical_path;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -80,7 +80,7 @@ impl FsSource {
     fn resolve(&self, logical_path: &str) -> PathBuf {
         // 先规范化逻辑路径
         let normalized = normalize_logical_path(logical_path);
-        
+
         // 拼接 base_path
         self.base_path.join(&normalized)
     }
@@ -108,7 +108,7 @@ impl ResourceSource for FsSource {
 
     fn list_files(&self, dir_path: &str) -> Vec<String> {
         let full_dir = self.resolve(dir_path);
-        
+
         let mut files = Vec::new();
         if let Ok(entries) = std::fs::read_dir(&full_dir) {
             for entry in entries.flatten() {
@@ -184,19 +184,20 @@ impl ZipSource {
         }
         Ok(cache.as_ref().unwrap().clone())
     }
-
 }
 
 impl ResourceSource for ZipSource {
     fn read(&self, path: &str) -> Result<Vec<u8>, ResourceError> {
         // 使用统一的路径规范化（会移除 assets/ 前缀）
         let zip_path = normalize_logical_path(path);
-        
+
         let index = self.get_index()?;
 
-        let file_index = index.get(&zip_path).ok_or_else(|| ResourceError::NotFound {
-            path: zip_path.clone(),
-        })?;
+        let file_index = index
+            .get(&zip_path)
+            .ok_or_else(|| ResourceError::NotFound {
+                path: zip_path.clone(),
+            })?;
 
         let file = File::open(&self.zip_path).map_err(|e| ResourceError::LoadFailed {
             path: self.zip_path.to_string_lossy().to_string(),
@@ -210,29 +211,30 @@ impl ResourceSource for ZipSource {
             message: format!("无法读取 ZIP 文件: {}", e),
         })?;
 
-        let mut zip_file = archive.by_index(*file_index).map_err(|e| {
-            ResourceError::LoadFailed {
-                path: zip_path.clone(),
-                kind: "zip_entry".to_string(),
-                message: format!("无法读取 ZIP 条目: {}", e),
-            }
-        })?;
+        let mut zip_file =
+            archive
+                .by_index(*file_index)
+                .map_err(|e| ResourceError::LoadFailed {
+                    path: zip_path.clone(),
+                    kind: "zip_entry".to_string(),
+                    message: format!("无法读取 ZIP 条目: {}", e),
+                })?;
 
         let mut buffer = Vec::new();
-        zip_file.read_to_end(&mut buffer).map_err(|e| {
-            ResourceError::LoadFailed {
+        zip_file
+            .read_to_end(&mut buffer)
+            .map_err(|e| ResourceError::LoadFailed {
                 path: zip_path.clone(),
                 kind: "zip_read".to_string(),
                 message: format!("读取 ZIP 条目失败: {}", e),
-            }
-        })?;
+            })?;
 
         Ok(buffer)
     }
 
     fn exists(&self, path: &str) -> bool {
         let zip_path = normalize_logical_path(path);
-        
+
         self.get_index()
             .map(|index| index.contains_key(&zip_path))
             .unwrap_or(false)
@@ -246,14 +248,14 @@ impl ResourceSource for ZipSource {
     fn list_files(&self, dir_path: &str) -> Vec<String> {
         // 规范化目录路径
         let zip_dir = normalize_logical_path(dir_path);
-        
+
         // 确保目录路径以 / 结尾（用于前缀匹配）
         let dir_prefix = if zip_dir.ends_with('/') || zip_dir.is_empty() {
             zip_dir.clone()
         } else {
             format!("{}/", zip_dir)
         };
-        
+
         let mut files = Vec::new();
         if let Ok(index) = self.get_index() {
             for (path, _) in index.iter() {
@@ -285,20 +287,20 @@ mod tests {
     #[test]
     fn test_fs_source_resolve() {
         let source = FsSource::new("assets");
-        
+
         // 相对路径
         assert_eq!(source.resolve("bg.png"), PathBuf::from("assets/bg.png"));
         assert_eq!(
             source.resolve("backgrounds/bg.png"),
             PathBuf::from("assets/backgrounds/bg.png")
         );
-        
+
         // 带 .. 的路径
         assert_eq!(
             source.resolve("scripts/../backgrounds/bg.png"),
             PathBuf::from("assets/backgrounds/bg.png")
         );
-        
+
         // 已包含 assets 前缀的路径（会被规范化移除再重新加上）
         assert_eq!(
             source.resolve("assets/bg.png"),
@@ -311,13 +313,22 @@ mod tests {
         // 基本规范化
         assert_eq!(normalize_logical_path("bg.png"), "bg.png");
         assert_eq!(normalize_logical_path("./bg.png"), "bg.png");
-        assert_eq!(normalize_logical_path("backgrounds\\bg.png"), "backgrounds/bg.png");
-        
+        assert_eq!(
+            normalize_logical_path("backgrounds\\bg.png"),
+            "backgrounds/bg.png"
+        );
+
         // 处理 ..
-        assert_eq!(normalize_logical_path("scripts/../backgrounds/bg.png"), "backgrounds/bg.png");
+        assert_eq!(
+            normalize_logical_path("scripts/../backgrounds/bg.png"),
+            "backgrounds/bg.png"
+        );
         assert_eq!(normalize_logical_path("a/b/../../c/d.png"), "c/d.png");
-        
+
         // 移除 assets/ 前缀
-        assert_eq!(normalize_logical_path("assets/backgrounds/bg.png"), "backgrounds/bg.png");
+        assert_eq!(
+            normalize_logical_path("assets/backgrounds/bg.png"),
+            "backgrounds/bg.png"
+        );
     }
 }

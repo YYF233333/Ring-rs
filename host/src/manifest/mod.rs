@@ -105,7 +105,10 @@ pub enum ManifestWarning {
     /// 预设位置超出范围
     InvalidPresetPosition { context: String, value: f32 },
     /// 引用了不存在的组
-    UnknownGroup { sprite_path: String, group_id: String },
+    UnknownGroup {
+        sprite_path: String,
+        group_id: String,
+    },
 }
 
 impl std::fmt::Display for ManifestWarning {
@@ -120,8 +123,15 @@ impl std::fmt::Display for ManifestWarning {
             ManifestWarning::InvalidPresetPosition { context, value } => {
                 write!(f, "{}: 位置 {} 超出范围 [0.0, 1.0]", context, value)
             }
-            ManifestWarning::UnknownGroup { sprite_path, group_id } => {
-                write!(f, "sprite '{}' 引用了不存在的组 '{}'", sprite_path, group_id)
+            ManifestWarning::UnknownGroup {
+                sprite_path,
+                group_id,
+            } => {
+                write!(
+                    f,
+                    "sprite '{}' 引用了不存在的组 '{}'",
+                    sprite_path, group_id
+                )
             }
         }
     }
@@ -146,34 +156,95 @@ impl Manifest {
     pub fn load(path: &str) -> Result<Self, String> {
         let content = fs::read_to_string(path)
             .map_err(|e| format!("无法读取 manifest 文件: {} - {}", path, e))?;
-        
-        serde_json::from_str(&content)
-            .map_err(|e| format!("无法解析 manifest JSON: {}", e))
+
+        serde_json::from_str(&content).map_err(|e| format!("无法解析 manifest JSON: {}", e))
     }
 
     /// 从字节数据加载 Manifest（ZIP 模式）
     pub fn load_from_bytes(bytes: &[u8]) -> Result<Self, String> {
         let content = String::from_utf8(bytes.to_vec())
             .map_err(|e| format!("无法将字节转换为 UTF-8 字符串: {}", e))?;
-        
-        serde_json::from_str(&content)
-            .map_err(|e| format!("无法解析 manifest JSON: {}", e))
+
+        serde_json::from_str(&content).map_err(|e| format!("无法解析 manifest JSON: {}", e))
     }
 
     /// 创建带默认预设的空 Manifest
     pub fn with_defaults() -> Self {
         let mut presets = HashMap::new();
-        
+
         // 默认的九宫格站位
-        presets.insert("left".to_string(), PositionPreset { x: 0.15, y: 0.95, scale: 1.0 });
-        presets.insert("nearleft".to_string(), PositionPreset { x: 0.25, y: 0.95, scale: 1.0 });
-        presets.insert("farleft".to_string(), PositionPreset { x: 0.08, y: 0.90, scale: 0.85 });
-        presets.insert("center".to_string(), PositionPreset { x: 0.50, y: 0.95, scale: 1.0 });
-        presets.insert("nearmiddle".to_string(), PositionPreset { x: 0.40, y: 0.95, scale: 1.0 });
-        presets.insert("farmiddle".to_string(), PositionPreset { x: 0.50, y: 0.90, scale: 0.85 });
-        presets.insert("right".to_string(), PositionPreset { x: 0.85, y: 0.95, scale: 1.0 });
-        presets.insert("nearright".to_string(), PositionPreset { x: 0.75, y: 0.95, scale: 1.0 });
-        presets.insert("farright".to_string(), PositionPreset { x: 0.92, y: 0.90, scale: 0.85 });
+        presets.insert(
+            "left".to_string(),
+            PositionPreset {
+                x: 0.15,
+                y: 0.95,
+                scale: 1.0,
+            },
+        );
+        presets.insert(
+            "nearleft".to_string(),
+            PositionPreset {
+                x: 0.25,
+                y: 0.95,
+                scale: 1.0,
+            },
+        );
+        presets.insert(
+            "farleft".to_string(),
+            PositionPreset {
+                x: 0.08,
+                y: 0.90,
+                scale: 0.85,
+            },
+        );
+        presets.insert(
+            "center".to_string(),
+            PositionPreset {
+                x: 0.50,
+                y: 0.95,
+                scale: 1.0,
+            },
+        );
+        presets.insert(
+            "nearmiddle".to_string(),
+            PositionPreset {
+                x: 0.40,
+                y: 0.95,
+                scale: 1.0,
+            },
+        );
+        presets.insert(
+            "farmiddle".to_string(),
+            PositionPreset {
+                x: 0.50,
+                y: 0.90,
+                scale: 0.85,
+            },
+        );
+        presets.insert(
+            "right".to_string(),
+            PositionPreset {
+                x: 0.85,
+                y: 0.95,
+                scale: 1.0,
+            },
+        );
+        presets.insert(
+            "nearright".to_string(),
+            PositionPreset {
+                x: 0.75,
+                y: 0.95,
+                scale: 1.0,
+            },
+        );
+        presets.insert(
+            "farright".to_string(),
+            PositionPreset {
+                x: 0.92,
+                y: 0.90,
+                scale: 0.85,
+            },
+        );
 
         Self {
             characters: CharactersConfig::default(),
@@ -183,7 +254,7 @@ impl Manifest {
     }
 
     /// 验证 Manifest 配置有效性
-    /// 
+    ///
     /// 返回所有验证警告/错误
     pub fn validate(&self) -> Vec<ManifestWarning> {
         let mut warnings = Vec::new();
@@ -217,7 +288,7 @@ impl Manifest {
         // 验证组配置
         for (group_id, config) in &self.characters.groups {
             let ctx = format!("characters.groups.{}", group_id);
-            
+
             if let Some(w) = validate_point(&config.anchor, &format!("{}.anchor", ctx)) {
                 warnings.push(w);
             }
@@ -272,7 +343,7 @@ impl Manifest {
     /// 加载并验证 Manifest，打印警告
     pub fn load_and_validate(path: &str) -> Result<Self, String> {
         let manifest = Self::load(path)?;
-        
+
         let warnings = manifest.validate();
         for warning in &warnings {
             eprintln!("⚠️ Manifest 警告: {}", warning);
@@ -316,13 +387,16 @@ impl Manifest {
     /// 2. 否则取文件名前缀（`-` 或 `_` 之前的部分）
     fn infer_group_id(&self, sprite_path: &str) -> String {
         let path = Path::new(sprite_path);
-        
+
         // 尝试从父目录推导
         if let Some(parent) = path.parent() {
             if let Some(parent_name) = parent.file_name() {
                 let parent_str = parent_name.to_string_lossy();
                 // 如果父目录不是通用目录名，使用它
-                if !matches!(parent_str.as_ref(), "characters" | "sprites" | "images" | "assets") {
+                if !matches!(
+                    parent_str.as_ref(),
+                    "characters" | "sprites" | "images" | "assets"
+                ) {
                     return parent_str.to_string();
                 }
             }
@@ -347,10 +421,7 @@ impl Manifest {
 
     /// 获取站位预设
     pub fn get_preset(&self, position_name: &str) -> PositionPreset {
-        self.presets
-            .get(position_name)
-            .cloned()
-            .unwrap_or_default()
+        self.presets.get(position_name).cloned().unwrap_or_default()
     }
 }
 
@@ -361,12 +432,15 @@ mod tests {
     #[test]
     fn test_infer_group_id() {
         let manifest = Manifest::with_defaults();
-        
+
         // 从文件名推导
-        assert_eq!(manifest.infer_group_id("characters/北风-日常服.png"), "北风");
+        assert_eq!(
+            manifest.infer_group_id("characters/北风-日常服.png"),
+            "北风"
+        );
         assert_eq!(manifest.infer_group_id("characters/路汐_笑颜.png"), "路汐");
         assert_eq!(manifest.infer_group_id("characters/测试.png"), "测试");
-        
+
         // 从目录推导
         assert_eq!(manifest.infer_group_id("北风/日常服.png"), "北风");
     }
@@ -374,7 +448,7 @@ mod tests {
     #[test]
     fn test_get_group_config_explicit() {
         let mut manifest = Manifest::with_defaults();
-        
+
         // 添加显式配置
         manifest.characters.groups.insert(
             "北风".to_string(),
@@ -383,10 +457,10 @@ mod tests {
                 pre_scale: 0.8,
             },
         );
-        manifest.characters.sprites.insert(
-            "characters/北风-日常服.png".to_string(),
-            "北风".to_string(),
-        );
+        manifest
+            .characters
+            .sprites
+            .insert("characters/北风-日常服.png".to_string(), "北风".to_string());
 
         let config = manifest.get_group_config("characters/北风-日常服.png");
         assert!((config.anchor.y - 0.9).abs() < 0.01);
@@ -396,7 +470,7 @@ mod tests {
     #[test]
     fn test_get_group_config_inferred() {
         let mut manifest = Manifest::with_defaults();
-        
+
         // 只添加组配置，不添加显式映射
         manifest.characters.groups.insert(
             "北风".to_string(),
@@ -414,7 +488,7 @@ mod tests {
     #[test]
     fn test_get_group_config_default() {
         let manifest = Manifest::with_defaults();
-        
+
         // 未配置的立绘应返回默认值
         let config = manifest.get_group_config("characters/未知角色.png");
         assert!((config.anchor.x - 0.5).abs() < 0.01);

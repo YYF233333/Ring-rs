@@ -246,7 +246,10 @@ impl SceneTransitionManager {
         reversed: bool,
     ) {
         self.start_internal(
-            SceneTransitionType::Rule { mask_path, reversed },
+            SceneTransitionType::Rule {
+                mask_path,
+                reversed,
+            },
             duration,
             pending_background,
         );
@@ -605,12 +608,7 @@ mod tests {
     #[test]
     fn test_rule_transition() {
         let mut manager = SceneTransitionManager::new();
-        manager.start_rule(
-            0.3,
-            "new_bg.png".to_string(),
-            "mask.png".to_string(),
-            false,
-        );
+        manager.start_rule(0.3, "new_bg.png".to_string(), "mask.png".to_string(), false);
 
         assert!(manager.is_active());
         assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);

@@ -1,9 +1,9 @@
 //! # 设置界面
 
-use macroquad::prelude::*;
-use crate::ui::{UiContext, Button, ButtonStyle, Panel, draw_rounded_rect};
 use crate::app_mode::UserSettings;
 use crate::renderer::TextRenderer;
+use crate::ui::{Button, ButtonStyle, Panel, UiContext, draw_rounded_rect};
+use macroquad::prelude::*;
 
 /// 设置界面操作
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,9 +56,21 @@ impl SettingsScreen {
 
         // 按钮
         let btn_y = panel_y + panel_height - theme.padding - theme.button_height;
-        self.back_button = Some(Button::new("返回", panel_x + theme.padding, btn_y, 100.0, theme.button_height));
-        
-        let mut apply_btn = Button::new("应用", panel_x + panel_width - theme.padding - 100.0, btn_y, 100.0, theme.button_height);
+        self.back_button = Some(Button::new(
+            "返回",
+            panel_x + theme.padding,
+            btn_y,
+            100.0,
+            theme.button_height,
+        ));
+
+        let mut apply_btn = Button::new(
+            "应用",
+            panel_x + panel_width - theme.padding - 100.0,
+            btn_y,
+            100.0,
+            theme.button_height,
+        );
         apply_btn.style = ButtonStyle::Primary;
         self.apply_button = Some(apply_btn);
 
@@ -96,12 +108,7 @@ impl SettingsScreen {
         }
 
         // BGM 音量滑块
-        let bgm_slider_rect = Rect::new(
-            content_x + 150.0,
-            content_y,
-            slider_width,
-            30.0
-        );
+        let bgm_slider_rect = Rect::new(content_x + 150.0, content_y, slider_width, 30.0);
         if ctx.mouse_in_rect(bgm_slider_rect) && ctx.mouse_just_pressed {
             self.dragging_slider = Some("bgm");
         }
@@ -111,12 +118,7 @@ impl SettingsScreen {
         }
 
         // SFX 音量滑块
-        let sfx_slider_rect = Rect::new(
-            content_x + 150.0,
-            content_y + 50.0,
-            slider_width,
-            30.0
-        );
+        let sfx_slider_rect = Rect::new(content_x + 150.0, content_y + 50.0, slider_width, 30.0);
         if ctx.mouse_in_rect(sfx_slider_rect) && ctx.mouse_just_pressed {
             self.dragging_slider = Some("sfx");
         }
@@ -126,12 +128,7 @@ impl SettingsScreen {
         }
 
         // 文字速度滑块
-        let text_speed_rect = Rect::new(
-            content_x + 150.0,
-            content_y + 100.0,
-            slider_width,
-            30.0
-        );
+        let text_speed_rect = Rect::new(content_x + 150.0, content_y + 100.0, slider_width, 30.0);
         if ctx.mouse_in_rect(text_speed_rect) && ctx.mouse_just_pressed {
             self.dragging_slider = Some("text_speed");
         }
@@ -176,13 +173,24 @@ impl SettingsScreen {
         let theme = &ctx.theme;
 
         // 背景
-        draw_rectangle(0.0, 0.0, ctx.screen_width, ctx.screen_height, theme.bg_primary);
+        draw_rectangle(
+            0.0,
+            0.0,
+            ctx.screen_width,
+            ctx.screen_height,
+            theme.bg_primary,
+        );
 
         // 面板
         let panel_width = 500.0;
         let panel_height = 400.0;
-        let panel = Panel::centered(panel_width, panel_height, ctx.screen_width, ctx.screen_height)
-            .with_title("设置");
+        let panel = Panel::centered(
+            panel_width,
+            panel_height,
+            ctx.screen_width,
+            ctx.screen_height,
+        )
+        .with_title("设置");
         panel.draw(ctx, text_renderer);
 
         let panel_x = (ctx.screen_width - panel_width) / 2.0;
@@ -192,32 +200,97 @@ impl SettingsScreen {
         let slider_width = panel_width - theme.padding * 2.0 - 150.0;
 
         // BGM 音量
-        text_renderer.draw_ui_text("BGM 音量", content_x, content_y + 20.0, theme.font_size_normal, theme.text_primary);
-        self.draw_slider(content_x + 150.0, content_y, slider_width, 30.0, self.settings.bgm_volume, theme);
+        text_renderer.draw_ui_text(
+            "BGM 音量",
+            content_x,
+            content_y + 20.0,
+            theme.font_size_normal,
+            theme.text_primary,
+        );
+        self.draw_slider(
+            content_x + 150.0,
+            content_y,
+            slider_width,
+            30.0,
+            self.settings.bgm_volume,
+            theme,
+        );
 
         // SFX 音量
-        text_renderer.draw_ui_text("音效音量", content_x, content_y + 70.0, theme.font_size_normal, theme.text_primary);
-        self.draw_slider(content_x + 150.0, content_y + 50.0, slider_width, 30.0, self.settings.sfx_volume, theme);
+        text_renderer.draw_ui_text(
+            "音效音量",
+            content_x,
+            content_y + 70.0,
+            theme.font_size_normal,
+            theme.text_primary,
+        );
+        self.draw_slider(
+            content_x + 150.0,
+            content_y + 50.0,
+            slider_width,
+            30.0,
+            self.settings.sfx_volume,
+            theme,
+        );
 
         // 文字速度
-        text_renderer.draw_ui_text("文字速度", content_x, content_y + 120.0, theme.font_size_normal, theme.text_primary);
+        text_renderer.draw_ui_text(
+            "文字速度",
+            content_x,
+            content_y + 120.0,
+            theme.font_size_normal,
+            theme.text_primary,
+        );
         let text_speed_value = (self.settings.text_speed - 10.0) / 90.0;
-        self.draw_slider(content_x + 150.0, content_y + 100.0, slider_width, 30.0, text_speed_value, theme);
+        self.draw_slider(
+            content_x + 150.0,
+            content_y + 100.0,
+            slider_width,
+            30.0,
+            text_speed_value,
+            theme,
+        );
         text_renderer.draw_ui_text(
             &format!("{:.0} 字/秒", self.settings.text_speed),
             content_x + 150.0 + slider_width + 10.0,
             content_y + 120.0,
             theme.font_size_small,
-            theme.text_secondary
+            theme.text_secondary,
         );
 
         // 静音
-        text_renderer.draw_ui_text("静音", content_x, content_y + 170.0, theme.font_size_normal, theme.text_primary);
-        self.draw_toggle(content_x + 150.0, content_y + 150.0, 100.0, 35.0, self.settings.muted, theme);
+        text_renderer.draw_ui_text(
+            "静音",
+            content_x,
+            content_y + 170.0,
+            theme.font_size_normal,
+            theme.text_primary,
+        );
+        self.draw_toggle(
+            content_x + 150.0,
+            content_y + 150.0,
+            100.0,
+            35.0,
+            self.settings.muted,
+            theme,
+        );
 
         // 全屏
-        text_renderer.draw_ui_text("全屏", content_x, content_y + 220.0, theme.font_size_normal, theme.text_primary);
-        self.draw_toggle(content_x + 150.0, content_y + 200.0, 100.0, 35.0, self.settings.fullscreen, theme);
+        text_renderer.draw_ui_text(
+            "全屏",
+            content_x,
+            content_y + 220.0,
+            theme.font_size_normal,
+            theme.text_primary,
+        );
+        self.draw_toggle(
+            content_x + 150.0,
+            content_y + 200.0,
+            100.0,
+            35.0,
+            self.settings.fullscreen,
+            theme,
+        );
 
         // 按钮
         if let Some(ref btn) = self.back_button {
@@ -242,11 +315,20 @@ impl SettingsScreen {
 
     /// 绘制开关
     fn draw_toggle(&self, x: f32, y: f32, w: f32, h: f32, value: bool, theme: &crate::ui::Theme) {
-        let bg_color = if value { theme.accent } else { theme.bg_secondary };
+        let bg_color = if value {
+            theme.accent
+        } else {
+            theme.bg_secondary
+        };
         draw_rounded_rect(x, y, w, h, h / 2.0, bg_color);
-        
+
         let knob_x = if value { x + w - h + 4.0 } else { x + 4.0 };
-        draw_circle(knob_x + (h - 8.0) / 2.0, y + h / 2.0, (h - 8.0) / 2.0, theme.text_primary);
+        draw_circle(
+            knob_x + (h - 8.0) / 2.0,
+            y + h / 2.0,
+            (h - 8.0) / 2.0,
+            theme.text_primary,
+        );
     }
 
     /// 标记需要重新初始化

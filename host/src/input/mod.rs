@@ -77,7 +77,7 @@ impl InputManager {
     ///
     /// 根据当前的 `WaitingReason` 采集相应的输入。
     /// 返回可能产生的 `RuntimeInput`。
-    /// 
+    ///
     /// # 参数
     /// - `waiting`: 当前的等待状态
     /// - `dt`: 帧时间（秒），用于长按快进计时
@@ -94,9 +94,7 @@ impl InputManager {
                 self.last_hold_trigger_time = 0.0;
                 None
             }
-            WaitingReason::WaitForClick => {
-                self.handle_click_input(dt)
-            }
+            WaitingReason::WaitForClick => self.handle_click_input(dt),
             WaitingReason::WaitForChoice { choice_count } => {
                 // 如果选项数量变化，重置选择
                 if self.choice_count != *choice_count {
@@ -139,7 +137,7 @@ impl InputManager {
             // 检查防抖
             if current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
                 self.last_click_time = current_time;
-                self.hold_timer = 0.0;  // 重置长按计时器
+                self.hold_timer = 0.0; // 重置长按计时器
                 self.last_hold_trigger_time = 0.0;
                 return Some(RuntimeInput::Click);
             }
@@ -205,9 +203,7 @@ impl InputManager {
                 if current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
                     self.last_click_time = current_time;
                     self.selected_index = hover_idx;
-                    return Some(RuntimeInput::ChoiceSelected {
-                        index: hover_idx,
-                    });
+                    return Some(RuntimeInput::ChoiceSelected { index: hover_idx });
                 }
             }
         }
@@ -299,7 +295,7 @@ mod tests {
     fn test_inject_input() {
         let mut manager = InputManager::new();
         manager.inject_input(RuntimeInput::Click);
-        
+
         // 模拟 update，应该返回注入的输入
         // 注意：这个测试需要 macroquad 环境，在单元测试中可能无法完全运行
         assert!(manager.pending_input.is_some());

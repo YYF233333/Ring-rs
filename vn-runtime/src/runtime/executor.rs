@@ -101,15 +101,13 @@ impl Executor {
                 Ok(ExecuteResult::empty())
             }
 
-            ScriptNode::Dialogue { speaker, content } => {
-                Ok(ExecuteResult::with_wait(
-                    vec![Command::ShowText {
-                        speaker: speaker.clone(),
-                        content: content.clone(),
-                    }],
-                    WaitingReason::WaitForClick,
-                ))
-            }
+            ScriptNode::Dialogue { speaker, content } => Ok(ExecuteResult::with_wait(
+                vec![Command::ShowText {
+                    speaker: speaker.clone(),
+                    content: content.clone(),
+                }],
+                WaitingReason::WaitForClick,
+            )),
 
             ScriptNode::ChangeBG { path, transition } => {
                 // 解析路径（相对于脚本目录）
@@ -117,10 +115,12 @@ impl Executor {
                 // 更新状态
                 state.current_background = Some(resolved_path.clone());
 
-                Ok(ExecuteResult::with_commands(vec![Command::ShowBackground {
-                    path: resolved_path,
-                    transition: transition.clone(),
-                }]))
+                Ok(ExecuteResult::with_commands(vec![
+                    Command::ShowBackground {
+                        path: resolved_path,
+                        transition: transition.clone(),
+                    },
+                ]))
             }
 
             ScriptNode::ChangeScene { path, transition } => {
@@ -133,17 +133,26 @@ impl Executor {
                 let resolved_transition = transition.as_ref().map(|t| {
                     let mut new_transition = t.clone();
                     // 遍历参数，解析路径类型的字符串
-                    new_transition.args = t.args.iter().map(|(key, arg)| {
-                        if let Some(k) = key {
-                            // 命名参数：mask 参数需要解析路径
-                            if k == "mask" {
-                                if let crate::command::TransitionArg::String(s) = arg {
-                                    return (Some(k.clone()), crate::command::TransitionArg::String(script.resolve_path(s)));
+                    new_transition.args = t
+                        .args
+                        .iter()
+                        .map(|(key, arg)| {
+                            if let Some(k) = key {
+                                // 命名参数：mask 参数需要解析路径
+                                if k == "mask" {
+                                    if let crate::command::TransitionArg::String(s) = arg {
+                                        return (
+                                            Some(k.clone()),
+                                            crate::command::TransitionArg::String(
+                                                script.resolve_path(s),
+                                            ),
+                                        );
+                                    }
                                 }
                             }
-                        }
-                        (key.clone(), arg.clone())
-                    }).collect();
+                            (key.clone(), arg.clone())
+                        })
+                        .collect();
                     new_transition
                 });
 
@@ -171,10 +180,11 @@ impl Executor {
                 } else {
                     // 无路径：从已绑定的别名中查找
                     // 先获取已绑定的路径（避免借用冲突）
-                    let existing_path = state.visible_characters
+                    let existing_path = state
+                        .visible_characters
                         .get(alias)
                         .map(|(path, _)| path.clone());
-                    
+
                     match existing_path {
                         Some(path) => {
                             // 找到已绑定的路径，更新位置
@@ -242,7 +252,7 @@ impl Executor {
             ScriptNode::PlayAudio { path, is_bgm } => {
                 // 解析路径（相对于脚本目录）
                 let resolved_path = script.resolve_path(path);
-                
+
                 if *is_bgm {
                     // BGM: 循环播放，有 loop 标识
                     Ok(ExecuteResult::with_commands(vec![Command::PlayBgm {
@@ -266,11 +276,12 @@ impl Executor {
 
             ScriptNode::Goto { target_label } => {
                 // 查找标签位置
-                let target_index = script.find_label(target_label).ok_or_else(|| {
-                    RuntimeError::LabelNotFound {
-                        label: target_label.clone(),
-                    }
-                })?;
+                let target_index =
+                    script
+                        .find_label(target_label)
+                        .ok_or_else(|| RuntimeError::LabelNotFound {
+                            label: target_label.clone(),
+                        })?;
 
                 Ok(ExecuteResult::with_jump(target_index))
             }
@@ -390,9 +401,16 @@ mod tests {
         let script = Script::new(
             "test",
             vec![
-                ScriptNode::Label { name: "start".to_string() },
-                ScriptNode::Dialogue { speaker: None, content: "Hello".to_string() },
-                ScriptNode::Label { name: "end".to_string() },
+                ScriptNode::Label {
+                    name: "start".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "Hello".to_string(),
+                },
+                ScriptNode::Label {
+                    name: "end".to_string(),
+                },
             ],
             "",
         );
@@ -489,4 +507,3 @@ mod tests {
         ));
     }
 }
-

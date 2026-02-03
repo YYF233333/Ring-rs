@@ -1,10 +1,10 @@
 //! # 存档/读档界面
 
-use macroquad::prelude::*;
-use crate::ui::{UiContext, Button, ButtonStyle, Panel, ListView, ListItem, Modal, ModalResult};
 use crate::app_mode::SaveLoadTab;
-use crate::save_manager::{SaveManager, SaveInfo, MAX_SAVE_SLOTS};
 use crate::renderer::TextRenderer;
+use crate::save_manager::{MAX_SAVE_SLOTS, SaveInfo, SaveManager};
+use crate::ui::{Button, ButtonStyle, ListItem, ListView, Modal, ModalResult, Panel, UiContext};
+use macroquad::prelude::*;
 use std::path::PathBuf;
 
 /// 存档界面操作
@@ -76,19 +76,40 @@ impl SaveLoadScreen {
         let tab_height = 40.0;
         let tab_y = panel_y + theme.padding;
 
-        let mut save_tab = Button::new("存档", panel_x + theme.padding, tab_y, tab_width, tab_height);
-        save_tab.style = if self.tab == SaveLoadTab::Save { ButtonStyle::Primary } else { ButtonStyle::Secondary };
+        let mut save_tab = Button::new(
+            "存档",
+            panel_x + theme.padding,
+            tab_y,
+            tab_width,
+            tab_height,
+        );
+        save_tab.style = if self.tab == SaveLoadTab::Save {
+            ButtonStyle::Primary
+        } else {
+            ButtonStyle::Secondary
+        };
         self.tab_buttons.push((SaveLoadTab::Save, save_tab));
 
-        let mut load_tab = Button::new("读档", panel_x + theme.padding + tab_width + theme.spacing_small, tab_y, tab_width, tab_height);
-        load_tab.style = if self.tab == SaveLoadTab::Load { ButtonStyle::Primary } else { ButtonStyle::Secondary };
+        let mut load_tab = Button::new(
+            "读档",
+            panel_x + theme.padding + tab_width + theme.spacing_small,
+            tab_y,
+            tab_width,
+            tab_height,
+        );
+        load_tab.style = if self.tab == SaveLoadTab::Load {
+            ButtonStyle::Primary
+        } else {
+            ButtonStyle::Secondary
+        };
         self.tab_buttons.push((SaveLoadTab::Load, load_tab));
 
         // 列表区域
         let list_x = panel_x + theme.padding;
         let list_y = tab_y + tab_height + theme.spacing;
         let list_width = panel_width - theme.padding * 2.0 - 120.0; // 留出右侧按钮空间
-        let list_height = panel_height - (list_y - panel_y) - theme.padding - theme.button_height - theme.spacing;
+        let list_height =
+            panel_height - (list_y - panel_y) - theme.padding - theme.button_height - theme.spacing;
         self.save_list = ListView::new(Rect::new(list_x, list_y, list_width, list_height), 70.0);
 
         // 操作按钮（右侧）
@@ -101,14 +122,29 @@ impl SaveLoadScreen {
             SaveLoadTab::Save => "保存",
             SaveLoadTab::Load => "读取",
         };
-        self.action_buttons.push((action_text.to_string(), Button::new(action_text, btn_x, list_y, btn_width, btn_height)));
-        
-        let mut del_btn = Button::new("删除", btn_x, list_y + btn_height + theme.spacing_small, btn_width, btn_height);
+        self.action_buttons.push((
+            action_text.to_string(),
+            Button::new(action_text, btn_x, list_y, btn_width, btn_height),
+        ));
+
+        let mut del_btn = Button::new(
+            "删除",
+            btn_x,
+            list_y + btn_height + theme.spacing_small,
+            btn_width,
+            btn_height,
+        );
         del_btn.style = ButtonStyle::Danger;
         self.action_buttons.push(("delete".to_string(), del_btn));
 
         // 返回按钮
-        self.back_button = Some(Button::new("返回", panel_x + theme.padding, panel_y + panel_height - theme.padding - theme.button_height, 100.0, theme.button_height));
+        self.back_button = Some(Button::new(
+            "返回",
+            panel_x + theme.padding,
+            panel_y + panel_height - theme.padding - theme.button_height,
+            100.0,
+            theme.button_height,
+        ));
 
         // 刷新存档列表
         self.refresh_saves(save_manager);
@@ -119,37 +155,37 @@ impl SaveLoadScreen {
     /// 刷新存档列表
     pub fn refresh_saves(&mut self, save_manager: &SaveManager) {
         self.saves_cache = save_manager.list_saves();
-        
+
         // 预加载所有存档信息（用于显示元数据）
-        let save_infos: std::collections::HashMap<u32, SaveInfo> = self.saves_cache
+        let save_infos: std::collections::HashMap<u32, SaveInfo> = self
+            .saves_cache
             .iter()
-            .filter_map(|(slot, _)| {
-                save_manager.get_save_info(*slot).map(|info| (*slot, info))
+            .filter_map(|(slot, _)| save_manager.get_save_info(*slot).map(|info| (*slot, info)))
+            .collect();
+
+        // 转换为列表项（支持 1-99 槽位）
+        let items: Vec<ListItem> = (1..=MAX_SAVE_SLOTS)
+            .map(|slot| {
+                if let Some(info) = save_infos.get(&slot) {
+                    // 有存档：显示详细信息
+                    let chapter = info.chapter_title.as_deref().unwrap_or("未知章节");
+                    let timestamp = info.formatted_timestamp();
+                    let play_time = info.formatted_play_time();
+
+                    ListItem::new(format!("槽位 {:02} - {}", slot, chapter), slot.to_string())
+                        .with_secondary(format!("{} | 游玩: {}", timestamp, play_time))
+                } else {
+                    // 空槽位
+                    let mut item =
+                        ListItem::new(format!("槽位 {:02} - 空", slot), slot.to_string());
+                    // 读档模式下，空槽位禁用
+                    if self.tab == SaveLoadTab::Load {
+                        item = item.with_disabled(true);
+                    }
+                    item
+                }
             })
             .collect();
-        
-        // 转换为列表项（支持 1-99 槽位）
-        let items: Vec<ListItem> = (1..=MAX_SAVE_SLOTS).map(|slot| {
-            if let Some(info) = save_infos.get(&slot) {
-                // 有存档：显示详细信息
-                let chapter = info.chapter_title.as_deref().unwrap_or("未知章节");
-                let timestamp = info.formatted_timestamp();
-                let play_time = info.formatted_play_time();
-                
-                ListItem::new(
-                    format!("槽位 {:02} - {}", slot, chapter),
-                    slot.to_string()
-                ).with_secondary(format!("{} | 游玩: {}", timestamp, play_time))
-            } else {
-                // 空槽位
-                let mut item = ListItem::new(format!("槽位 {:02} - 空", slot), slot.to_string());
-                // 读档模式下，空槽位禁用
-                if self.tab == SaveLoadTab::Load {
-                    item = item.with_disabled(true);
-                }
-                item
-            }
-        }).collect();
 
         self.save_list.set_items(items);
         self.needs_refresh = false;
@@ -231,15 +267,21 @@ impl SaveLoadScreen {
                 if button.update(ctx) {
                     match action_id.as_str() {
                         "delete" => {
-                            let modal = Modal::confirm("删除存档", format!("确定要删除槽位 {} 的存档吗？", slot))
-                                .with_danger(true);
+                            let modal = Modal::confirm(
+                                "删除存档",
+                                format!("确定要删除槽位 {} 的存档吗？", slot),
+                            )
+                            .with_danger(true);
                             self.confirm_modal = Some((SaveLoadAction::Delete(slot), modal));
                         }
                         _ => {
                             match self.tab {
                                 SaveLoadTab::Save if has_save => {
                                     // 覆盖确认
-                                    let modal = Modal::confirm("覆盖存档", format!("槽位 {} 已有存档，确定要覆盖吗？", slot));
+                                    let modal = Modal::confirm(
+                                        "覆盖存档",
+                                        format!("槽位 {} 已有存档，确定要覆盖吗？", slot),
+                                    );
                                     self.confirm_modal = Some((SaveLoadAction::Save(slot), modal));
                                 }
                                 SaveLoadTab::Save => {
@@ -258,7 +300,10 @@ impl SaveLoadScreen {
             if is_key_pressed(KeyCode::Enter) {
                 match self.tab {
                     SaveLoadTab::Save if has_save => {
-                        let modal = Modal::confirm("覆盖存档", format!("槽位 {} 已有存档，确定要覆盖吗？", slot));
+                        let modal = Modal::confirm(
+                            "覆盖存档",
+                            format!("槽位 {} 已有存档，确定要覆盖吗？", slot),
+                        );
                         self.confirm_modal = Some((SaveLoadAction::Save(slot), modal));
                     }
                     SaveLoadTab::Save => {
@@ -287,16 +332,27 @@ impl SaveLoadScreen {
         let theme = &ctx.theme;
 
         // 背景
-        draw_rectangle(0.0, 0.0, ctx.screen_width, ctx.screen_height, theme.bg_primary);
+        draw_rectangle(
+            0.0,
+            0.0,
+            ctx.screen_width,
+            ctx.screen_height,
+            theme.bg_primary,
+        );
 
         // 面板
         let panel_width = 600.0;
         let panel_height = 500.0;
-        let panel = Panel::centered(panel_width, panel_height, ctx.screen_width, ctx.screen_height)
-            .with_title(match self.tab {
-                SaveLoadTab::Save => "存档",
-                SaveLoadTab::Load => "读档",
-            });
+        let panel = Panel::centered(
+            panel_width,
+            panel_height,
+            ctx.screen_width,
+            ctx.screen_height,
+        )
+        .with_title(match self.tab {
+            SaveLoadTab::Save => "存档",
+            SaveLoadTab::Load => "读档",
+        });
         panel.draw(ctx, text_renderer);
 
         // 标签按钮
@@ -344,4 +400,3 @@ impl Default for SaveLoadScreen {
         Self::new()
     }
 }
-

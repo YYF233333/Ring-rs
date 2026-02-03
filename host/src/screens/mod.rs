@@ -2,14 +2,14 @@
 //!
 //! 各个 UI 界面的实现。
 
-pub mod title;
+pub mod history;
 pub mod ingame_menu;
 pub mod save_load;
 pub mod settings;
-pub mod history;
+pub mod title;
 
-pub use title::TitleScreen;
+pub use history::HistoryScreen;
 pub use ingame_menu::InGameMenuScreen;
 pub use save_load::SaveLoadScreen;
 pub use settings::SettingsScreen;
-pub use history::HistoryScreen;
+pub use title::TitleScreen;

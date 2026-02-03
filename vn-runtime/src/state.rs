@@ -107,9 +107,9 @@ pub struct ScriptPosition {
     /// 脚本标识符（文件名，不含路径和扩展名）
     pub script_id: String,
     /// 脚本完整路径（相对于 assets_root，用于加载脚本）
-    /// 
+    ///
     /// 例如：`scripts/chapter1/intro.md`
-    /// 
+    ///
     /// 注意：为了向后兼容，此字段可选。如果为空，则尝试从 `script_id` 推断路径。
     #[serde(default)]
     pub script_path: String,
@@ -129,7 +129,11 @@ impl ScriptPosition {
     }
 
     /// 创建带完整路径的脚本位置
-    pub fn with_path(script_id: impl Into<String>, script_path: impl Into<String>, node_index: usize) -> Self {
+    pub fn with_path(
+        script_id: impl Into<String>,
+        script_path: impl Into<String>,
+        node_index: usize,
+    ) -> Self {
         Self {
             script_id: script_id.into(),
             script_path: script_path.into(),
@@ -285,4 +289,3 @@ mod tests {
         assert_eq!(state, deserialized);
     }
 }
-

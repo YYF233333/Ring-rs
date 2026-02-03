@@ -1,9 +1,9 @@
 //! # 主标题界面
 
-use macroquad::prelude::*;
-use crate::ui::{UiContext, Button, ButtonStyle, Theme};
-use crate::save_manager::{SaveManager, SaveInfo};
 use crate::renderer::TextRenderer;
+use crate::save_manager::{SaveInfo, SaveManager};
+use crate::ui::{Button, ButtonStyle, Theme, UiContext};
+use macroquad::prelude::*;
 
 /// 主菜单项
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,14 +40,20 @@ impl TitleScreen {
     }
 
     /// 初始化界面（检查 Continue 存档状态）
-    pub fn init(&mut self, save_manager: &SaveManager, theme: &Theme, screen_width: f32, screen_height: f32) {
+    pub fn init(
+        &mut self,
+        save_manager: &SaveManager,
+        theme: &Theme,
+        screen_width: f32,
+        screen_height: f32,
+    ) {
         // 检查是否有 Continue 存档
         self.has_continue = save_manager.has_continue();
         self.continue_info = save_manager.get_continue_info();
 
         // 创建按钮
         self.buttons.clear();
-        
+
         let button_width = theme.button_min_width;
         let button_height = theme.button_height;
         let spacing = theme.spacing;
@@ -55,7 +61,7 @@ impl TitleScreen {
         let center_x = (screen_width - button_width) / 2.0;
 
         let mut y = start_y;
-        
+
         // 开始游戏
         let mut start_btn = Button::new("开始游戏", center_x, y, button_width, button_height);
         start_btn.style = ButtonStyle::Primary;
@@ -69,15 +75,24 @@ impl TitleScreen {
         y += button_height + spacing;
 
         // 读取存档
-        self.buttons.push((TitleAction::LoadGame, Button::new("读取存档", center_x, y, button_width, button_height)));
+        self.buttons.push((
+            TitleAction::LoadGame,
+            Button::new("读取存档", center_x, y, button_width, button_height),
+        ));
         y += button_height + spacing;
 
         // 设置
-        self.buttons.push((TitleAction::Settings, Button::new("设置", center_x, y, button_width, button_height)));
+        self.buttons.push((
+            TitleAction::Settings,
+            Button::new("设置", center_x, y, button_width, button_height),
+        ));
         y += button_height + spacing;
 
         // 退出
-        self.buttons.push((TitleAction::Exit, Button::new("退出游戏", center_x, y, button_width, button_height)));
+        self.buttons.push((
+            TitleAction::Exit,
+            Button::new("退出游戏", center_x, y, button_width, button_height),
+        ));
 
         self.needs_init = false;
     }
@@ -103,11 +118,11 @@ impl TitleScreen {
         for i in 0..10 {
             let alpha = 0.02 * (10 - i) as f32;
             draw_rectangle(
-                0.0, 
+                0.0,
                 ctx.screen_height * 0.3 + i as f32 * 20.0,
                 ctx.screen_width,
                 ctx.screen_height * 0.7 - i as f32 * 20.0,
-                Color::new(theme.accent.r, theme.accent.g, theme.accent.b, alpha)
+                Color::new(theme.accent.r, theme.accent.g, theme.accent.b, alpha),
             );
         }
 
@@ -125,16 +140,10 @@ impl TitleScreen {
             title_x + 3.0,
             title_y + 3.0,
             title_size,
-            Color::new(0.0, 0.0, 0.0, 0.5)
+            Color::new(0.0, 0.0, 0.0, 0.5),
         );
         // 标题
-        text_renderer.draw_ui_text(
-            title,
-            title_x,
-            title_y,
-            title_size,
-            theme.accent
-        );
+        text_renderer.draw_ui_text(title, title_x, title_y, title_size, theme.accent);
 
         // 副标题
         let subtitle = "Rust + macroquad";
@@ -145,7 +154,7 @@ impl TitleScreen {
             (ctx.screen_width - subtitle_width) / 2.0,
             title_y + title_size + theme.spacing_small,
             subtitle_size,
-            theme.text_secondary
+            theme.text_secondary,
         );
 
         // 绘制按钮
@@ -160,7 +169,7 @@ impl TitleScreen {
             theme.spacing,
             ctx.screen_height - theme.spacing,
             theme.font_size_small,
-            theme.text_disabled
+            theme.text_disabled,
         );
     }
 
