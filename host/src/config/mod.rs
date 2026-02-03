@@ -11,6 +11,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tracing::{info, warn};
 
 /// 资源来源类型
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -111,6 +112,18 @@ pub struct DebugConfig {
     /// - 检查结果只输出诊断，不阻塞启动
     #[serde(default = "default_script_check")]
     pub script_check: bool,
+
+    /// 日志等级（可选）
+    ///
+    /// 允许值（不区分大小写）：
+    /// - `trace` / `debug` / `info` / `warn` / `error` / `off`
+    ///
+    /// 优先级：
+    /// - `RUST_LOG` 环境变量（最高）
+    /// - `config.json` 的 `debug.log_level`
+    /// - 默认 `info`
+    #[serde(default)]
+    pub log_level: Option<String>,
 }
 
 /// 音频配置
@@ -232,6 +245,7 @@ impl Default for DebugConfig {
     fn default() -> Self {
         Self {
             script_check: default_script_check(),
+            log_level: None,
         }
     }
 }
@@ -255,23 +269,23 @@ impl AppConfig {
         let path = path.as_ref();
 
         if !path.exists() {
-            println!("⚠️ 配置文件不存在: {:?}，使用默认配置", path);
+            warn!(path = ?path, "配置文件不存在，使用默认配置");
             return Self::default();
         }
 
         match fs::read_to_string(path) {
             Ok(content) => match serde_json::from_str(&content) {
                 Ok(config) => {
-                    println!("✅ 配置文件加载成功: {:?}", path);
+                    info!(path = ?path, "配置文件加载成功");
                     config
                 }
                 Err(e) => {
-                    eprintln!("⚠️ 配置文件解析失败: {}，使用默认配置", e);
+                    warn!(path = ?path, error = %e, "配置文件解析失败，使用默认配置");
                     Self::default()
                 }
             },
             Err(e) => {
-                eprintln!("⚠️ 配置文件读取失败: {}，使用默认配置", e);
+                warn!(path = ?path, error = %e, "配置文件读取失败，使用默认配置");
                 Self::default()
             }
         }

@@ -5,6 +5,7 @@ use crate::command_executor::AudioCommand;
 use crate::resources::normalize_logical_path;
 
 use super::super::AppState;
+use tracing::error;
 
 /// 处理音频命令
 pub fn handle_audio_command(app_state: &mut AppState) {
@@ -29,7 +30,7 @@ pub fn handle_audio_command(app_state: &mut AppState) {
                         }
                     }
                     Err(e) => {
-                        eprintln!("❌ 无法读取音频文件: {} - {}", logical_path, e);
+                        error!(path = %logical_path, error = %e, "无法读取音频文件");
                         return;
                     }
                 }

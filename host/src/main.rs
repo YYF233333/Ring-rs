@@ -8,6 +8,9 @@
 use host::AppConfig;
 use host::app::{AppState, draw, ensure_render_resources, load_resources, save_continue, update};
 use macroquad::prelude::*;
+use tracing::info;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::EnvFilter;
 
 /// 配置文件路径
 const CONFIG_PATH: &str = "config.json";
@@ -30,12 +33,56 @@ fn window_conf() -> Conf {
 /// 主函数
 #[macroquad::main(window_conf)]
 async fn main() {
-    // 加载配置文件
+    // 先加载配置文件（用来决定 log level）
+    // 注意：这一步发生在 tracing 初始化之前，因此 AppConfig::load 内部的日志会被丢弃（这是预期行为）。
     let config = AppConfig::load(CONFIG_PATH);
-    println!("✅ 配置加载完成: {:?}", CONFIG_PATH);
-    println!("   assets_root: {:?}", config.assets_root);
-    println!("   saves_dir: {:?}", config.saves_dir);
-    println!("   start_script_path: {:?}", config.start_script_path);
+
+    // 初始化日志系统
+    // 优先级：RUST_LOG（最高） -> config.debug.log_level -> 默认 INFO
+    let env_filter = if std::env::var_os("RUST_LOG").is_some() {
+        EnvFilter::from_default_env()
+    } else {
+        let configured = config
+            .debug
+            .log_level
+            .as_deref()
+            .unwrap_or("info")
+            .trim()
+            .to_ascii_lowercase();
+
+        let level = match configured.as_str() {
+            "trace" => LevelFilter::TRACE,
+            "debug" => LevelFilter::DEBUG,
+            "info" => LevelFilter::INFO,
+            "warn" | "warning" => LevelFilter::WARN,
+            "error" => LevelFilter::ERROR,
+            "off" => LevelFilter::OFF,
+            other => {
+                eprintln!(
+                    "Invalid config debug.log_level: '{other}'. Allowed: trace/debug/info/warn/error/off. Fallback to info."
+                );
+                LevelFilter::INFO
+            }
+        };
+
+        EnvFilter::builder()
+            .with_default_directive(level.into())
+            .from_env_lossy()
+    };
+
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        // 更简洁的输出：不显示时间戳，使用紧凑格式，隐藏 target（模块路径）
+        // 输出示例：`INFO 配置加载完成 path="config.json"`
+        .without_time()
+        .compact()
+        .with_target(false)
+        .init();
+
+    info!(path = ?CONFIG_PATH, "配置加载完成");
+    info!(assets_root = %config.assets_root.display(), "资源根目录");
+    info!(saves_dir = %config.saves_dir.display(), "存档目录");
+    info!(start_script_path = %config.start_script_path, "启动脚本");
 
     // **验证配置（必须配置 start_script_path）**
     if let Err(e) = config.validate() {

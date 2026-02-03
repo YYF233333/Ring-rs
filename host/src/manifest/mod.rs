@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use tracing::warn;
 
 /// 2D 点（归一化坐标）
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -346,7 +347,7 @@ impl Manifest {
 
         let warnings = manifest.validate();
         for warning in &warnings {
-            eprintln!("⚠️ Manifest 警告: {}", warning);
+            warn!(warning = %warning, "Manifest 警告");
         }
 
         Ok(manifest)

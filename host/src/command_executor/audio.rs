@@ -4,6 +4,7 @@
 
 use super::CommandExecutor;
 use super::types::{AudioCommand, ExecuteResult};
+use tracing::debug;
 
 impl CommandExecutor {
     /// 执行 PlayBgm
@@ -14,7 +15,7 @@ impl CommandExecutor {
             looping,
             fade_in: Some(0.5), // 默认 0.5 秒淡入
         });
-        println!("🎵 命令：播放 BGM: {} (循环: {})", path, looping);
+        debug!(path = %path, looping = looping, "播放 BGM");
         ExecuteResult::Ok
     }
 
@@ -24,11 +25,7 @@ impl CommandExecutor {
         self.last_output.audio_command = Some(AudioCommand::StopBgm {
             fade_out: fade_out.map(|d| d as f32),
         });
-        if let Some(duration) = fade_out {
-            println!("🎵 命令：停止 BGM (淡出: {}s)", duration);
-        } else {
-            println!("🎵 命令：停止 BGM (立即)");
-        }
+        debug!(fade_out = ?fade_out, "停止 BGM");
         ExecuteResult::Ok
     }
 
@@ -38,7 +35,7 @@ impl CommandExecutor {
         self.last_output.audio_command = Some(AudioCommand::PlaySfx {
             path: path.to_string(),
         });
-        println!("🔊 命令：播放音效: {}", path);
+        debug!(path = %path, "播放音效");
         ExecuteResult::Ok
     }
 }

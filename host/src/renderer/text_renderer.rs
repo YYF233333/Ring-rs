@@ -3,6 +3,7 @@
 //! 文本渲染器，负责对话框、角色名、章节标题等文本的渲染。
 
 use macroquad::prelude::*;
+use tracing::{info, warn};
 
 /// 对话框配置
 const DIALOGUE_BOX_MARGIN: f32 = 40.0;
@@ -55,11 +56,11 @@ impl TextRenderer {
                 self.font = Some(font);
                 self.initialized = true;
                 self.use_custom_font = true;
-                println!("✅ 成功加载字体: {}", path);
+                info!(path = %path, "成功加载字体");
                 Ok(())
             }
             Err(e) => {
-                eprintln!("❌ 加载字体失败: {} - {}", path, e);
+                warn!(path = %path, error = %e, "加载字体失败");
                 self.initialized = true;
                 self.use_custom_font = false;
                 Err(format!("加载字体失败: {}", e))

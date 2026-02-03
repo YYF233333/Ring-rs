@@ -10,6 +10,7 @@
 //! 4. 覆盖层（章节标记、过渡效果等）
 
 use macroquad::prelude::*;
+use tracing::warn;
 use vn_runtime::command::Position;
 
 use crate::manifest::Manifest;
@@ -82,7 +83,7 @@ impl Renderer {
 
         // 初始化 ImageDissolve shader
         if let Err(e) = self.image_dissolve.init() {
-            eprintln!("⚠️ ImageDissolve shader 初始化失败，将使用降级方案: {}", e);
+            warn!(error = %e, "ImageDissolve shader 初始化失败，将使用降级方案");
             // 不返回错误，因为有降级方案
         }
 

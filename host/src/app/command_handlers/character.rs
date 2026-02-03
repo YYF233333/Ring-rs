@@ -5,6 +5,7 @@ use crate::renderer::AnimatableCharacter;
 use std::rc::Rc;
 
 use super::super::AppState;
+use tracing::{info, warn};
 
 /// 处理角色动画命令
 pub fn handle_character_animation(app_state: &mut AppState) {
@@ -38,9 +39,9 @@ pub fn handle_character_animation(app_state: &mut AppState) {
                             object_id, "alpha", 0.0, 1.0, duration,
                         )
                     {
-                        eprintln!("⚠️ 启动角色淡入动画失败: {}", e);
+                        warn!(error = %e, "启动角色淡入动画失败");
                     }
-                    println!("🎭 角色淡入动画: {} ({}s)", alias, duration);
+                    info!(alias = %alias, duration = %duration, "角色淡入动画");
                 }
             }
             CharacterAnimationCommand::Hide { alias, duration } => {
@@ -53,9 +54,9 @@ pub fn handle_character_animation(app_state: &mut AppState) {
                             object_id, "alpha", 1.0, 0.0, duration,
                         )
                     {
-                        eprintln!("⚠️ 启动角色淡出动画失败: {}", e);
+                        warn!(error = %e, "启动角色淡出动画失败");
                     }
-                    println!("🎭 角色淡出动画: {} ({}s)", alias, duration);
+                    info!(alias = %alias, duration = %duration, "角色淡出动画");
                 }
             }
         }

@@ -1,6 +1,7 @@
 //! 存档系统
 
 use crate::renderer::RenderState;
+use tracing::{error, info, warn};
 use vn_runtime::state::WaitingReason;
 
 use super::AppState;
@@ -57,21 +58,21 @@ pub fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::Sa
 pub fn quick_save(app_state: &mut AppState) {
     // 检查是否有游戏状态（允许从 SaveLoad 界面保存）
     if app_state.vn_runtime.is_none() {
-        println!("⚠️ 只能在游戏中保存");
+        warn!("只能在游戏中保存");
         return;
     }
 
     let slot = app_state.current_save_slot;
 
     let Some(save_data) = build_save_data(app_state, slot) else {
-        println!("⚠️ 没有可保存的游戏状态");
+        warn!("没有可保存的游戏状态");
         return;
     };
 
     // 保存
     match app_state.save_manager.save(&save_data) {
-        Ok(()) => println!("💾 快速保存成功 (槽位 {})", slot),
-        Err(e) => eprintln!("❌ 保存失败: {}", e),
+        Ok(()) => info!(slot = slot, "快速保存成功"),
+        Err(e) => error!(error = %e, "保存失败"),
     }
 }
 
@@ -89,8 +90,8 @@ pub fn save_continue(app_state: &mut AppState) {
 
     // 保存 Continue 存档
     match app_state.save_manager.save_continue(&save_data) {
-        Ok(()) => println!("💾 Continue 存档保存成功"),
-        Err(e) => eprintln!("⚠️ Continue 存档保存失败: {}", e),
+        Ok(()) => info!("Continue 存档保存成功"),
+        Err(e) => warn!(error = %e, "Continue 存档保存失败"),
     }
 }
 
@@ -100,14 +101,14 @@ pub fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::S
     let script_path = &save_data.runtime_state.position.script_path;
     let script_id = &save_data.runtime_state.position.script_id;
 
-    println!("📜 尝试加载脚本: path={}, id={}", script_path, script_id);
+    info!(path = %script_path, id = %script_id, "尝试加载脚本");
     if !load_script_by_path_or_id(app_state, script_path, script_id) {
-        eprintln!("❌ 找不到脚本");
+        error!("找不到脚本");
         // 尝试使用 start_script_path 作为后备
-        println!("📜 尝试使用 start_script_path 作为后备");
+        info!("尝试使用 start_script_path 作为后备");
         let start_path = app_state.config.start_script_path.clone();
         if !load_script_from_logical_path(app_state, &start_path) {
-            eprintln!("❌ 后备脚本加载也失败");
+            error!("后备脚本加载也失败");
             return false;
         }
     }
@@ -159,13 +160,13 @@ pub fn quick_load(app_state: &mut AppState) -> bool {
     let save_data = match app_state.save_manager.load(slot) {
         Ok(data) => data,
         Err(e) => {
-            eprintln!("❌ 读取失败: {}", e);
+            error!(slot = slot, error = %e, "读取失败");
             return false;
         }
     };
 
     if restore_from_save_data(app_state, save_data) {
-        println!("💾 快速读取成功 (槽位 {})", slot);
+        info!(slot = slot, "快速读取成功");
         true
     } else {
         false
@@ -217,7 +218,7 @@ pub fn start_new_game(app_state: &mut AppState) {
 
         // 切换到游戏模式
         app_state.navigation.switch_to(AppMode::InGame);
-        println!("🎮 开始新游戏: {}", script_path);
+        info!(script = %script_path, "开始新游戏");
     } else {
         app_state.toast_manager.error("无法加载入口脚本");
     }
@@ -242,7 +243,7 @@ pub fn load_continue(app_state: &mut AppState) {
     let save_data = match app_state.save_manager.load_continue() {
         Ok(data) => data,
         Err(e) => {
-            eprintln!("❌ Continue 读取失败: {}", e);
+            error!(error = %e, "Continue 读取失败");
             app_state.toast_manager.error("Continue 存档读取失败");
             return;
         }
@@ -252,6 +253,6 @@ pub fn load_continue(app_state: &mut AppState) {
     if restore_from_save_data(app_state, save_data) {
         // 成功读档后切换到游戏模式
         app_state.navigation.switch_to(AppMode::InGame);
-        println!("🎮 继续游戏");
+        info!("继续游戏");
     }
 }

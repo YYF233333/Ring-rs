@@ -4,6 +4,7 @@
 
 use crate::renderer::RenderState;
 use crate::resources::ResourceManager;
+use tracing::debug;
 use vn_runtime::command::{Transition, TransitionArg};
 
 use super::CommandExecutor;
@@ -72,7 +73,7 @@ impl CommandExecutor {
                         duration,
                         pending_background: path.to_string(),
                     });
-                    println!("🎬 changeScene: Fade 黑屏过渡 ({}s)", duration);
+                    debug!(duration = duration, "changeScene: Fade 黑屏过渡");
                 }
                 "fadewhite" => {
                     // 白屏遮罩 - 发出 FadeWhite 命令
@@ -80,7 +81,7 @@ impl CommandExecutor {
                         duration,
                         pending_background: path.to_string(),
                     });
-                    println!("🎬 changeScene: FadeWhite 白屏过渡 ({}s)", duration);
+                    debug!(duration = duration, "changeScene: FadeWhite 白屏过渡");
                 }
                 "rule" => {
                     // 图片遮罩 - 使用 resource_manager 规范化路径
@@ -106,9 +107,11 @@ impl CommandExecutor {
                         mask_path: normalized_mask_path.clone(),
                         reversed,
                     });
-                    println!(
-                        "🎬 changeScene: Rule 遮罩过渡 ({}, {}s, reversed={})",
-                        normalized_mask_path, duration, reversed
+                    debug!(
+                        mask = %normalized_mask_path,
+                        duration = duration,
+                        reversed = reversed,
+                        "changeScene: Rule 遮罩过渡"
                     );
                 }
                 "dissolve" => {
@@ -123,7 +126,7 @@ impl CommandExecutor {
                     render_state.set_background(path.to_string());
                     // 立即恢复 UI
                     render_state.ui_visible = true;
-                    println!("🎬 changeScene: Dissolve 过渡 ({}s)", duration);
+                    debug!(duration = duration, "changeScene: Dissolve 过渡");
                 }
                 _ => {
                     // 未知效果，使用默认 dissolve
@@ -134,7 +137,7 @@ impl CommandExecutor {
                     };
                     render_state.set_background(path.to_string());
                     render_state.ui_visible = true;
-                    println!("🎬 changeScene: 未知效果 '{}', 使用 dissolve", trans.name);
+                    debug!(name = %trans.name, "changeScene: 未知效果，使用 dissolve");
                 }
             }
         } else {

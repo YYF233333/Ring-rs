@@ -4,6 +4,7 @@
 //! 使用灰度遮罩图，根据像素亮度控制溶解顺序。
 
 use macroquad::prelude::*;
+use tracing::{debug, error};
 
 /// ImageDissolve 顶点 shader
 const VERTEX_SHADER: &str = r#"
@@ -116,11 +117,11 @@ impl ImageDissolve {
         ) {
             Ok(material) => {
                 self.material = Some(material);
-                println!("✅ ImageDissolve shader 初始化成功");
+                debug!("ImageDissolve shader 初始化成功");
                 Ok(())
             }
             Err(e) => {
-                eprintln!("❌ ImageDissolve shader 初始化失败: {}", e);
+                error!(error = %e, "ImageDissolve shader 初始化失败");
                 Err(format!("Shader 初始化失败: {}", e))
             }
         }

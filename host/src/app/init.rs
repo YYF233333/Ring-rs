@@ -10,6 +10,7 @@ use crate::save_manager::SaveManager;
 use crate::{AppConfig, AssetSourceType, AudioManager, UserSettings, ZipSource};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tracing::{error, info, warn};
 use vn_runtime::{Parser, analyze_script, extract_resource_references};
 
 use super::script_loader::{scan_scripts, scan_scripts_from_zip};
@@ -31,12 +32,12 @@ pub fn create_resource_manager(config: &AppConfig) -> ResourceManager {
 
     match config.asset_source {
         AssetSourceType::Fs => {
-            println!("📂 资源来源: 文件系统 ({})", assets_root);
+            info!(assets_root = %assets_root, "资源来源: 文件系统");
             ResourceManager::new(&assets_root, config.resources.texture_cache_size_mb)
         }
         AssetSourceType::Zip => {
             let zip_path = config.zip_path.as_ref().expect("Zip 模式必须配置 zip_path");
-            println!("📦 资源来源: ZIP 文件 ({})", zip_path);
+            info!(zip_path = %zip_path, "资源来源: ZIP 文件");
             ResourceManager::with_source(
                 &assets_root,
                 Arc::new(ZipSource::new(zip_path)),
@@ -52,21 +53,21 @@ pub fn create_audio_manager(config: &AppConfig) -> Option<AudioManager> {
     match config.asset_source {
         AssetSourceType::Fs => match AudioManager::new(&assets_root) {
             Ok(am) => {
-                println!("✅ 音频系统初始化成功");
+                info!("音频系统初始化成功");
                 Some(am)
             }
             Err(e) => {
-                eprintln!("⚠️ 音频系统初始化失败: {}", e);
+                warn!(error = %e, "音频系统初始化失败");
                 None
             }
         },
         AssetSourceType::Zip => match AudioManager::new_zip_mode(&assets_root) {
             Ok(am) => {
-                println!("✅ 音频系统初始化成功 (ZIP 模式)");
+                info!("音频系统初始化成功 (ZIP 模式)");
                 Some(am)
             }
             Err(e) => {
-                eprintln!("⚠️ 音频系统初始化失败: {}", e);
+                warn!(error = %e, "音频系统初始化失败");
                 None
             }
         },
@@ -79,11 +80,11 @@ pub fn load_manifest(config: &AppConfig, resource_manager: &ResourceManager) -> 
             let manifest_path = config.manifest_full_path();
             match Manifest::load(&manifest_path.to_string_lossy()) {
                 Ok(m) => {
-                    println!("✅ 资源清单加载成功: {:?}", manifest_path);
+                    info!(path = ?manifest_path, "资源清单加载成功");
                     m
                 }
                 Err(e) => {
-                    eprintln!("⚠️ 资源清单加载失败，使用默认配置: {}", e);
+                    warn!(path = ?manifest_path, error = %e, "资源清单加载失败，使用默认配置");
                     Manifest::with_defaults()
                 }
             }
@@ -94,16 +95,16 @@ pub fn load_manifest(config: &AppConfig, resource_manager: &ResourceManager) -> 
             match resource_manager.read_text(manifest_path) {
                 Ok(content) => match Manifest::load_from_bytes(content.as_bytes()) {
                     Ok(m) => {
-                        println!("✅ 资源清单加载成功: {}", manifest_path);
+                        info!(path = %manifest_path, "资源清单加载成功");
                         m
                     }
                     Err(e) => {
-                        eprintln!("⚠️ 资源清单解析失败，使用默认配置: {}", e);
+                        warn!(path = %manifest_path, error = %e, "资源清单解析失败，使用默认配置");
                         Manifest::with_defaults()
                     }
                 },
                 Err(e) => {
-                    eprintln!("⚠️ 资源清单加载失败，使用默认配置: {}", e);
+                    warn!(path = %manifest_path, error = %e, "资源清单加载失败，使用默认配置");
                     Manifest::with_defaults()
                 }
             }
@@ -114,7 +115,7 @@ pub fn load_manifest(config: &AppConfig, resource_manager: &ResourceManager) -> 
 pub fn create_save_manager(config: &AppConfig) -> SaveManager {
     let saves_dir = saves_dir_string(config);
     let save_manager = SaveManager::new(&saves_dir);
-    println!("✅ 存档管理器初始化成功: {}", saves_dir);
+    info!(saves_dir = %saves_dir, "存档管理器初始化成功");
     save_manager
 }
 
@@ -126,13 +127,13 @@ pub fn scan_script_list(
         AssetSourceType::Fs => scan_scripts(&config.assets_root),
         AssetSourceType::Zip => scan_scripts_from_zip(resource_manager),
     };
-    println!("📜 发现 {} 个脚本文件", scripts.len());
+    info!(count = scripts.len(), "发现脚本文件");
     scripts
 }
 
 pub fn load_user_settings(settings_path: &str) -> UserSettings {
     let settings = UserSettings::load(settings_path);
-    println!("✅ 用户设置加载完成");
+    info!("用户设置加载完成");
     settings
 }
 
@@ -154,7 +155,7 @@ pub fn run_script_check(
         return;
     }
 
-    println!("\n🔍 Dev Mode: 运行脚本检查...");
+    info!("Dev Mode: 运行脚本检查...");
 
     let mut total_errors = 0;
     let mut total_warnings = 0;
@@ -166,7 +167,7 @@ pub fn run_script_check(
         let content = match resource_manager.read_text(&logical_path) {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("  [WARN] {}: 无法读取 - {}", script_id, e);
+                warn!(script_id = %script_id, error = %e, "脚本无法读取");
                 total_warnings += 1;
                 continue;
             }
@@ -180,7 +181,7 @@ pub fn run_script_check(
         let script = match parser.parse_with_base_path(script_id, &content, &base_path) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("  [ERROR] {}: {}", script_id, e);
+                error!(script_id = %script_id, error = %e, "脚本解析失败");
                 total_errors += 1;
                 continue;
             }
@@ -188,25 +189,27 @@ pub fn run_script_check(
 
         // 输出解析警告
         for warning in parser.warnings() {
-            eprintln!("  [WARN] {}: {}", script_id, warning);
+            warn!(script_id = %script_id, warning = %warning, "解析警告");
             total_warnings += 1;
         }
 
         // 运行诊断分析
         let diag = analyze_script(&script);
         for d in &diag.diagnostics {
-            let level = if d.level == vn_runtime::DiagnosticLevel::Error {
+            if d.level == vn_runtime::DiagnosticLevel::Error {
                 total_errors += 1;
-                "ERROR"
+                if let Some(line) = d.line {
+                    error!(script_id = %script_id, line = line, message = %d.message, "诊断错误");
+                } else {
+                    error!(script_id = %script_id, message = %d.message, "诊断错误");
+                }
             } else {
                 total_warnings += 1;
-                "WARN"
-            };
-
-            if let Some(line) = d.line {
-                eprintln!("  [{}] {}:{}: {}", level, script_id, line, d.message);
-            } else {
-                eprintln!("  [{}] {}: {}", level, script_id, d.message);
+                if let Some(line) = d.line {
+                    warn!(script_id = %script_id, line = line, message = %d.message, "诊断警告");
+                } else {
+                    warn!(script_id = %script_id, message = %d.message, "诊断警告");
+                }
             }
         }
 
@@ -215,9 +218,11 @@ pub fn run_script_check(
         for r in refs {
             let resource_path = config.assets_root.join(&r.resolved_path);
             if !resource_path.exists() {
-                eprintln!(
-                    "  [WARN] {}: 资源不存在 [{}] {}",
-                    script_id, r.resource_type, r.resolved_path
+                warn!(
+                    script_id = %script_id,
+                    resource_type = %r.resource_type,
+                    path = %r.resolved_path,
+                    "资源不存在"
                 );
                 total_warnings += 1;
             }
@@ -228,15 +233,16 @@ pub fn run_script_check(
 
     // 输出汇总
     if total_errors > 0 || total_warnings > 0 {
-        eprintln!(
-            "🔍 脚本检查完成: {} 个脚本, {} 个错误, {} 个警告",
-            scripts_checked, total_errors, total_warnings
+        warn!(
+            scripts = scripts_checked,
+            errors = total_errors,
+            warnings = total_warnings,
+            "脚本检查完成"
         );
         if total_errors > 0 {
-            eprintln!("⚠️  发现错误，建议修复后再继续");
+            warn!("发现错误，建议修复后再继续");
         }
     } else {
-        println!("✅ 脚本检查通过: {} 个脚本", scripts_checked);
+        info!(scripts = scripts_checked, "脚本检查通过");
     }
-    println!();
 }

@@ -4,10 +4,11 @@
 
 use super::AppState;
 use crate::AssetSourceType;
+use tracing::{debug, error, info, warn};
 
 /// 加载启动阶段必需资源（字体、基础纹理等）
 pub async fn load_resources(app_state: &mut AppState) {
-    println!("📦 开始加载资源...");
+    info!("开始加载资源...");
 
     // 加载字体（使用配置中的字体路径）
     match app_state.config.asset_source {
@@ -16,11 +17,11 @@ pub async fn load_resources(app_state: &mut AppState) {
                 .config
                 .assets_root
                 .join(&app_state.config.default_font);
-            println!("✅ 加载字体: {:?}", font_path);
+            info!(path = ?font_path, "加载字体");
             if let Err(e) = app_state.renderer.init(&font_path.to_string_lossy()).await {
-                eprintln!(
-                    "⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}",
-                    e
+                warn!(
+                    error = %e,
+                    "字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）"
                 );
             }
         }
@@ -33,11 +34,11 @@ pub async fn load_resources(app_state: &mut AppState) {
             {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    eprintln!(
-                        "⚠️ 无法从 ZIP 读取字体文件: {} - {}",
-                        app_state.config.default_font, e
+                    warn!(
+                        font = %app_state.config.default_font,
+                        error = %e,
+                        "无法从 ZIP 读取字体文件，回退到 macroquad 默认字体（仅支持 ASCII）"
                     );
-                    eprintln!("⚠️ 回退到 macroquad 默认字体（仅支持 ASCII）");
                     return;
                 }
             };
@@ -47,27 +48,27 @@ pub async fn load_resources(app_state: &mut AppState) {
             let temp_font_path = temp_dir.join(format!("ring_font_{}.ttf", std::process::id()));
 
             if let Err(e) = std::fs::write(&temp_font_path, &font_bytes) {
-                eprintln!(
-                    "⚠️ 无法写入临时字体文件: {} - {}",
-                    temp_font_path.display(),
-                    e
+                warn!(
+                    path = %temp_font_path.display(),
+                    error = %e,
+                    "无法写入临时字体文件，回退到 macroquad 默认字体（仅支持 ASCII）"
                 );
-                eprintln!("⚠️ 回退到 macroquad 默认字体（仅支持 ASCII）");
                 return;
             }
 
-            println!(
-                "✅ 加载字体: {} (临时文件: {:?})",
-                app_state.config.default_font, temp_font_path
+            info!(
+                font = %app_state.config.default_font,
+                temp_path = ?temp_font_path,
+                "加载字体"
             );
             if let Err(e) = app_state
                 .renderer
                 .init(&temp_font_path.to_string_lossy())
                 .await
             {
-                eprintln!(
-                    "⚠️ 字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）: {}",
-                    e
+                warn!(
+                    error = %e,
+                    "字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）"
                 );
             }
 
@@ -80,14 +81,14 @@ pub async fn load_resources(app_state: &mut AppState) {
     let essential_textures = ["backgrounds/black.png", "backgrounds/white.png"];
     for path in &essential_textures {
         match app_state.resource_manager.load_texture(path).await {
-            Ok(_) => println!("✅ 预加载: {}", path),
-            Err(e) => eprintln!("⚠️ 预加载失败: {} - {}", path, e),
+            Ok(_) => debug!(path = %path, "预加载纹理"),
+            Err(e) => warn!(path = %path, error = %e, "预加载失败"),
         }
     }
 
     app_state.loading_complete = true;
     let stats = app_state.resource_manager.texture_cache_stats();
-    println!("📦 资源加载完成！{}", stats.format());
+    info!(stats = %stats.format(), "资源加载完成");
 }
 
 /// 确保渲染所需资源已加载（按需加载）
@@ -126,8 +127,8 @@ pub async fn ensure_render_resources(app_state: &mut AppState) {
     // 加载缺失的资源
     for path in paths_to_load {
         match app_state.resource_manager.load_texture(&path).await {
-            Ok(_) => println!("📦 按需加载: {}", path),
-            Err(e) => eprintln!("❌ 加载失败: {} - {}", path, e),
+            Ok(_) => debug!(path = %path, "按需加载纹理"),
+            Err(e) => error!(path = %path, error = %e, "加载失败"),
         }
     }
 }

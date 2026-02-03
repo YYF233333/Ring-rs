@@ -219,7 +219,7 @@ pub(super) fn update_settings(app_state: &mut AppState) {
 
             // 保存设置
             if let Err(e) = app_state.user_settings.save(USER_SETTINGS_PATH) {
-                eprintln!("⚠️ 保存用户设置失败: {}", e);
+                tracing::warn!(error = %e, "保存用户设置失败");
                 app_state.toast_manager.error("设置保存失败");
             } else {
                 app_state.toast_manager.success("设置已保存");

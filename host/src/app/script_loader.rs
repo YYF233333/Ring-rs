@@ -2,6 +2,7 @@
 
 use crate::resources::ResourceManager;
 use std::path::PathBuf;
+use tracing::{error, info, warn};
 use vn_runtime::{Parser, VNRuntime};
 
 use super::AppState;
@@ -67,14 +68,13 @@ pub fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &st
     let script_id = extract_script_id(&normalized_path);
     let base_dir = extract_base_dir(&normalized_path);
 
-    println!("📜 加载脚本: {} (路径: {})", script_id, normalized_path);
-    println!("📁 脚本目录: {}", base_dir);
+    info!(script_id = %script_id, path = %normalized_path, base_dir = %base_dir, "加载脚本");
 
     // 通过 ResourceManager 读取（统一处理 FS 和 ZIP 模式）
     let script_text = match app_state.resource_manager.read_text(&normalized_path) {
         Ok(text) => text,
         Err(e) => {
-            eprintln!("❌ 脚本文件加载失败: {} - {}", normalized_path, e);
+            error!(path = %normalized_path, error = %e, "脚本文件加载失败");
             return false;
         }
     };
@@ -82,11 +82,11 @@ pub fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &st
     let mut parser = Parser::new();
     match parser.parse_with_base_path(&script_id, &script_text, &base_dir) {
         Ok(script) => {
-            println!("✅ 脚本解析成功！节点数: {}", script.len());
+            info!(node_count = script.len(), "脚本解析成功");
 
             // 打印警告
             for warning in parser.warnings() {
-                println!("⚠️ 解析警告: {}", warning);
+                warn!(warning = %warning, "解析警告");
             }
 
             // 创建 VNRuntime 并设置脚本路径
@@ -96,7 +96,7 @@ pub fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &st
             true
         }
         Err(e) => {
-            eprintln!("❌ 脚本解析失败: {}", e);
+            error!(error = %e, "脚本解析失败");
             false
         }
     }
@@ -123,7 +123,7 @@ pub fn load_script_by_path_or_id(
 ) -> bool {
     // 如果有脚本路径，直接使用
     if !script_path.is_empty() {
-        println!("📜 从路径加载脚本: {}", script_path);
+        info!(path = %script_path, "从路径加载脚本");
         return load_script_from_logical_path(app_state, script_path);
     }
 
@@ -133,7 +133,7 @@ pub fn load_script_by_path_or_id(
 
 /// 根据脚本 ID 加载脚本（兼容旧存档）
 pub fn load_script_by_id(app_state: &mut AppState, script_id: &str) -> bool {
-    println!("📜 从 ID 推断脚本路径: {}", script_id);
+    info!(script_id = %script_id, "从 ID 推断脚本路径");
 
     // 在 scripts 列表中查找
     if let Some((_, path)) = app_state.scripts.iter().find(|(id, _)| id == script_id) {
@@ -153,9 +153,10 @@ pub fn load_script_by_id(app_state: &mut AppState, script_id: &str) -> bool {
         }
     }
 
-    eprintln!(
-        "❌ 找不到脚本: {} (尝试过: {:?})",
-        script_id, possible_paths
+    error!(
+        script_id = %script_id,
+        possible_paths = ?possible_paths,
+        "找不到脚本"
     );
     false
 }

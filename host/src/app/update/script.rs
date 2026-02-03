@@ -1,5 +1,6 @@
 //! 脚本模式输入与 VNRuntime tick
 
+use tracing::{debug, error, info};
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 
@@ -80,7 +81,7 @@ pub fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
 pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
     // 如果是选择输入，先清除选择界面
     if let Some(RuntimeInput::ChoiceSelected { index }) = &input {
-        println!("📜 用户选择了选项 {}", index + 1);
+        debug!(choice = index + 1, "用户选择了选项");
         app_state.render_state.clear_choices();
     }
 
@@ -89,7 +90,7 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
         let runtime = match app_state.vn_runtime.as_mut() {
             Some(r) => r,
             None => {
-                eprintln!("❌ VNRuntime 未初始化");
+                error!("VNRuntime 未初始化");
                 return;
             }
         };
@@ -99,21 +100,21 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
     // 处理 tick 结果
     match tick_result {
         Ok((commands, waiting)) => {
-            println!(
-                "📜 tick 返回 {} 条命令, 等待状态: {:?}",
-                commands.len(),
-                waiting
+            debug!(
+                commands = commands.len(),
+                waiting = ?waiting,
+                "tick 返回命令"
             );
 
             // 收集命令中的资源路径（用于预取统计）
             let prefetch_paths = collect_prefetch_paths(&commands);
             if !prefetch_paths.is_empty() {
-                println!("  📦 预取资源: {:?}", prefetch_paths);
+                debug!(paths = ?prefetch_paths, "预取资源");
             }
 
             // 执行所有命令
             for command in &commands {
-                println!("  ▶️ {:?}", command);
+                debug!(command = ?command, "执行命令");
                 let result = app_state.command_executor.execute(
                     command,
                     &mut app_state.render_state,
@@ -134,7 +135,7 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
 
                 // 检查执行结果
                 if let ExecuteResult::Error(e) = result {
-                    eprintln!("  ❌ 命令执行失败: {}", e);
+                    error!(error = %e, "命令执行失败");
                 }
             }
 
@@ -154,7 +155,7 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                 .unwrap_or(false);
             if is_finished && !app_state.script_finished {
                 app_state.script_finished = true;
-                println!("📜 脚本执行完毕，自动返回主界面");
+                info!("脚本执行完毕，自动返回主界面");
                 // 自动返回主界面，不保存 Continue 存档（避免下次 Continue 直接跳到末尾）
                 return_to_title_from_game(app_state, false);
             }
@@ -163,7 +164,7 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
             app_state.typewriter_timer = 0.0;
         }
         Err(e) => {
-            eprintln!("❌ Runtime tick 错误: {:?}", e);
+            error!(error = ?e, "Runtime tick 错误");
         }
     }
 }

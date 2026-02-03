@@ -12,6 +12,7 @@
 //! 不在本模块中实现。
 
 use std::rc::Rc;
+use tracing::warn;
 
 use super::animation::{AnimationId, AnimationSystem, EasingFunction, ObjectId};
 use super::background_transition::AnimatableBackgroundTransition;
@@ -132,15 +133,8 @@ impl TransitionManager {
         let transition_type = match name.as_str() {
             "dissolve" => TransitionType::Dissolve,
             "none" => TransitionType::None,
-            "fade" | "fadewhite" | "fade_white" => {
-                println!(
-                    "⚠️ {} 效果应由 changeScene 命令使用 SceneMaskState 处理，使用 dissolve 代替",
-                    name
-                );
-                TransitionType::Dissolve
-            }
             _ => {
-                println!("⚠️ 未知过渡效果: {}, 使用 dissolve", name);
+                warn!(name = ?name, "未知过渡效果, 使用 dissolve 代替");
                 TransitionType::Dissolve
             }
         };

@@ -1,6 +1,6 @@
 //! 更新逻辑（聚合入口）
 //!
-//! 目标：把之前的“巨型 update.rs”按职责拆分：
+//! 目标：把之前的"巨型 update.rs"按职责拆分：
 //! - `modes`: 各 AppMode 的更新逻辑（Title/InGame/Menu/SaveLoad/Settings/History）
 //! - `script`: VNRuntime tick 与脚本输入处理
 //! - `scene_transition`: changeScene 相关的多阶段过渡驱动
@@ -13,6 +13,7 @@ pub use scene_transition::update_scene_transition;
 pub use script::{handle_script_mode_input, run_script_tick};
 
 use macroquad::prelude::*;
+use tracing::debug;
 
 use super::AppState;
 use crate::AppMode;
@@ -30,14 +31,7 @@ pub fn update(app_state: &mut AppState) {
     // 切换调试模式（全局可用）
     if is_key_pressed(KeyCode::F1) {
         app_state.host_state.debug_mode = !app_state.host_state.debug_mode;
-        println!(
-            "🔧 调试模式: {}",
-            if app_state.host_state.debug_mode {
-                "开启"
-            } else {
-                "关闭"
-            }
-        );
+        debug!(enabled = app_state.host_state.debug_mode, "切换调试模式");
     }
 
     // 根据当前模式处理更新

@@ -12,7 +12,66 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use vn_runtime::{DiagnosticResult, Parser, analyze_script, extract_resource_references};
+use clap::{Args, Parser, Subcommand};
+use vn_runtime::{
+    DiagnosticResult, Parser as ScriptParser, analyze_script, extract_resource_references,
+};
+use walkdir::WalkDir;
+
+#[derive(Parser, Debug)]
+#[command(
+    name = "xtask",
+    about = "开发辅助工具（本地门禁/覆盖率/脚本静态检查）",
+    arg_required_else_help = true,
+    after_help = r#"ALIASES (in .cargo/config.toml):
+  cargo check-all     -> cargo run -p xtask -- check-all
+  cargo cov-runtime   -> cargo run -p xtask -- cov-runtime
+  cargo cov-workspace -> cargo run -p xtask -- cov-workspace
+  cargo script-check  -> cargo run -p xtask -- script-check
+"#
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: XtaskCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum XtaskCommand {
+    /// 运行 fmt、clippy、test（本地门禁）
+    CheckAll,
+
+    /// 运行 vn-runtime 覆盖率报告（HTML）
+    CovRuntime,
+
+    /// 运行 workspace 覆盖率报告（HTML；排除工具 crate）
+    CovWorkspace,
+
+    /// 检查脚本文件（语法、label、资源引用）
+    ScriptCheck(ScriptCheckArgs),
+}
+
+#[derive(Args, Debug)]
+#[command(after_help = r#"说明：
+  - 不带 path：检查 scripts_dir 下所有 .md
+  - 带 path：检查指定文件或目录
+
+检查内容：
+  - 脚本语法错误
+  - 未定义的跳转目标（goto/choice 引用的 label）
+  - 资源文件是否存在（背景/立绘/音频）
+"#)]
+struct ScriptCheckArgs {
+    /// 脚本文件或目录路径（可选）
+    path: Option<PathBuf>,
+
+    /// 默认脚本目录（当未提供 path 时使用）
+    #[arg(long, default_value = "assets/scripts")]
+    scripts_dir: PathBuf,
+
+    /// 资源根目录（用于验证资源引用是否存在）
+    #[arg(long, default_value = "assets")]
+    assets_root: PathBuf,
+}
 
 fn run(step: &str, cmd: &mut Command) -> anyhow::Result<()> {
     eprintln!("\n==> {step}");
@@ -48,11 +107,10 @@ fn main() -> ExitCode {
 }
 
 fn real_main() -> anyhow::Result<()> {
-    let mut args = std::env::args().skip(1);
-    let sub = args.next().unwrap_or_else(|| "help".to_string());
+    let cli = Cli::parse();
 
-    match sub.as_str() {
-        "check-all" => {
+    match cli.command {
+        XtaskCommand::CheckAll => {
             let mut fmt = Command::new("cargo");
             fmt.args(["fmt", "--all", "--", "--check"]);
             run("cargo fmt --all -- --check", &mut fmt)?;
@@ -65,7 +123,7 @@ fn real_main() -> anyhow::Result<()> {
             test.args(["test", "--workspace"]);
             run("cargo test --workspace", &mut test)?;
         }
-        "cov-runtime" => {
+        XtaskCommand::CovRuntime => {
             ensure_cargo_llvm_cov_available()?;
 
             let mut cov = Command::new("cargo");
@@ -77,7 +135,7 @@ fn real_main() -> anyhow::Result<()> {
 
             eprintln!("\nCoverage HTML: target/llvm-cov/html/index.html");
         }
-        "cov-workspace" => {
+        XtaskCommand::CovWorkspace => {
             ensure_cargo_llvm_cov_available()?;
 
             // 说明：
@@ -101,50 +159,12 @@ fn real_main() -> anyhow::Result<()> {
 
             eprintln!("\nCoverage HTML: target/llvm-cov/html/index.html");
         }
-        "script-check" => {
-            let path = args.next();
-            script_check(path.as_deref())?;
+        XtaskCommand::ScriptCheck(args) => {
+            script_check(args)?;
         }
-        "help" | "-h" | "--help" => {
-            print_help();
-        }
-        other => anyhow::bail!("unknown xtask subcommand: {other}"),
     }
 
     Ok(())
-}
-
-fn print_help() {
-    eprintln!(
-        r#"xtask - 开发辅助工具
-
-USAGE:
-  cargo xtask <command>
-
-COMMANDS:
-  check-all       运行 fmt、clippy、test 门禁检查
-  cov-runtime     运行 vn-runtime 覆盖率报告
-  cov-workspace   运行 workspace 覆盖率报告
-  script-check    检查脚本文件
-
-SCRIPT-CHECK:
-  cargo xtask script-check [path]
-
-  不带参数：检查 assets/scripts/ 下所有 .md 文件
-  带路径参数：检查指定文件或目录
-
-  检查内容：
-    - 脚本语法错误
-    - 未定义的跳转目标（goto/choice 引用的 label）
-    - 资源文件是否存在（背景/立绘/音频）
-
-ALIASES (in .cargo/config.toml):
-  cargo check-all     -> cargo xtask check-all
-  cargo cov-runtime   -> cargo xtask cov-runtime
-  cargo cov-workspace -> cargo xtask cov-workspace
-  cargo script-check  -> cargo xtask script-check
-"#
-    );
 }
 
 //=============================================================================
@@ -188,19 +208,21 @@ struct MissingResource {
 }
 
 /// 执行脚本检查
-fn script_check(path: Option<&str>) -> anyhow::Result<()> {
-    let config = ScriptCheckConfig::default();
+fn script_check(args: ScriptCheckArgs) -> anyhow::Result<()> {
+    let config = ScriptCheckConfig {
+        scripts_dir: args.scripts_dir,
+        assets_root: args.assets_root,
+    };
 
     // 确定要检查的文件
-    let files = match path {
+    let files = match args.path {
         Some(p) => {
-            let path = PathBuf::from(p);
-            if path.is_file() {
-                vec![path]
-            } else if path.is_dir() {
-                collect_script_files(&path)?
+            if p.is_file() {
+                vec![p]
+            } else if p.is_dir() {
+                collect_script_files(&p)?
             } else {
-                anyhow::bail!("路径不存在: {}", p);
+                anyhow::bail!("路径不存在: {}", p.display());
             }
         }
         None => {
@@ -247,23 +269,14 @@ fn script_check(path: Option<&str>) -> anyhow::Result<()> {
 /// 收集目录下的所有脚本文件
 fn collect_script_files(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
-    collect_script_files_recursive(dir, &mut files)?;
-    files.sort();
-    Ok(files)
-}
-
-fn collect_script_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> anyhow::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
+    for entry in WalkDir::new(dir).follow_links(false) {
         let entry = entry?;
-        let path = entry.path();
-
-        if path.is_dir() {
-            collect_script_files_recursive(&path, files)?;
-        } else if path.extension().is_some_and(|ext| ext == "md") {
-            files.push(path);
+        if entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "md") {
+            files.push(entry.path().to_path_buf());
         }
     }
-    Ok(())
+    files.sort();
+    Ok(files)
 }
 
 /// 检查单个脚本文件
@@ -289,7 +302,7 @@ fn check_script_file(
     let base_path = compute_base_path(file, &config.assets_root);
 
     // 解析脚本
-    let mut parser = Parser::new();
+    let mut parser = ScriptParser::new();
     let script = match parser.parse_with_base_path(&script_id, &content, &base_path) {
         Ok(s) => s,
         Err(e) => {

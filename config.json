@@ -12,7 +12,8 @@
     "fullscreen": false
   },
   "debug": {
-    "script_check": true
+    "script_check": true,
+    "log_level": "info"
   },
   "audio": {
     "master_volume": 1.0,

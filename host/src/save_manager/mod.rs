@@ -15,6 +15,7 @@
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use tracing::info;
 
 use vn_runtime::{SaveData, SaveError};
 
@@ -68,7 +69,7 @@ impl SaveManager {
         file.write_all(json.as_bytes())
             .map_err(|e| SaveError::IoError(format!("无法写入存档文件: {}", e)))?;
 
-        println!("💾 存档保存成功: {:?}", path);
+        info!(path = %path.display(), "存档保存成功");
         Ok(())
     }
 
@@ -89,7 +90,7 @@ impl SaveManager {
 
         let data = SaveData::from_json(&json)?;
 
-        println!("💾 存档读取成功: {:?}", path);
+        info!(path = %path.display(), "存档读取成功");
         Ok(data)
     }
 
@@ -100,7 +101,7 @@ impl SaveManager {
         if path.exists() {
             fs::remove_file(&path)
                 .map_err(|e| SaveError::IoError(format!("无法删除存档文件: {}", e)))?;
-            println!("💾 存档删除成功: {:?}", path);
+            info!(path = %path.display(), "存档删除成功");
         }
 
         Ok(())
@@ -193,7 +194,7 @@ impl SaveManager {
         file.write_all(json.as_bytes())
             .map_err(|e| SaveError::IoError(format!("无法写入 Continue 存档: {}", e)))?;
 
-        println!("💾 Continue 存档保存成功: {:?}", path);
+        info!(path = %path.display(), "Continue 存档保存成功");
         Ok(())
     }
 
@@ -214,7 +215,7 @@ impl SaveManager {
 
         let data = SaveData::from_json(&json)?;
 
-        println!("💾 Continue 存档读取成功");
+        info!(path = %path.display(), "Continue 存档读取成功");
         Ok(data)
     }
 
@@ -230,7 +231,7 @@ impl SaveManager {
         if path.exists() {
             fs::remove_file(&path)
                 .map_err(|e| SaveError::IoError(format!("无法删除 Continue 存档: {}", e)))?;
-            println!("💾 Continue 存档已删除");
+            info!(path = %path.display(), "Continue 存档已删除");
         }
 
         Ok(())

@@ -27,6 +27,7 @@ pub use types::*;
 
 use crate::renderer::RenderState;
 use crate::resources::ResourceManager;
+use tracing::debug;
 use vn_runtime::command::{Command, Transition};
 
 /// Command 执行器
@@ -142,9 +143,10 @@ impl CommandExecutor {
         // 从参数中提取时长，默认 0.3 秒（优先命名参数，回退位置参数）
         self.transition_duration = transition.get_duration().map(|d| d as f32).unwrap_or(0.3);
 
-        println!(
-            "🎬 开始过渡效果: {} ({}s)",
-            transition.name, self.transition_duration
+        debug!(
+            name = %transition.name,
+            duration = self.transition_duration,
+            "开始过渡效果"
         );
     }
 
@@ -160,7 +162,7 @@ impl CommandExecutor {
         if self.transition_timer >= self.transition_duration {
             self.transition_active = false;
             self.transition_timer = 0.0;
-            println!("🎬 过渡效果完成");
+            debug!("过渡效果完成");
             return false;
         }
 

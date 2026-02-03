@@ -19,6 +19,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::animation::{Animatable, AnimationSystem, EasingFunction, ObjectId};
+use tracing::info;
 
 /// 场景过渡类型
 #[derive(Debug, Clone)]
@@ -267,7 +268,7 @@ impl SceneTransitionManager {
         self.animation_system.update(0.0);
 
         // 保存参数
-        self.transition_type = Some(transition_type);
+        self.transition_type = Some(transition_type.clone());
         self.duration = duration.max(0.01);
         self.pending_background = Some(pending_background);
         self.phase_timer = 0.0;
@@ -279,10 +280,7 @@ impl SceneTransitionManager {
         self.phase = SceneTransitionPhase::FadeIn;
         self.start_fade_in_animations();
 
-        println!(
-            "🎬 SceneTransition: 开始 {:?} 过渡 ({}s)",
-            self.transition_type, self.duration
-        );
+        info!(transition_type = ?transition_type, duration = %duration, "SceneTransition: 开始过渡");
     }
 
     /// 启动 FadeIn 阶段的动画
@@ -421,7 +419,7 @@ impl SceneTransitionManager {
                     // UI 淡入完成，过渡结束
                     self.phase = SceneTransitionPhase::Completed;
                     self.transition_state.set_completed();
-                    println!("🎬 SceneTransition: 过渡完成");
+                    info!("SceneTransition: 过渡完成");
                 }
             }
             _ => {}

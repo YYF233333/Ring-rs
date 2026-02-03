@@ -104,7 +104,7 @@ Signal(signal_id)
 从脚本到画面的关键链路（常用入口）：
 
 - 规范：`docs/script_syntax_spec.md`
-- 解析：`vn-runtime/src/script/parser.rs`
+- 解析：`vn-runtime/src/script/parser/mod.rs`（模块目录：`vn-runtime/src/script/parser/`）
 - AST：`vn-runtime/src/script/ast.rs`
 - 表达式：`vn-runtime/src/script/expr.rs`
 - 执行：`vn-runtime/src/runtime/executor.rs`

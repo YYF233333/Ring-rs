@@ -3,6 +3,7 @@
 //! 管理应用的状态机、导航栈和输入捕获。
 
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 /// 应用模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -201,11 +202,11 @@ impl UserSettings {
     pub fn load(path: &str) -> Self {
         match std::fs::read_to_string(path) {
             Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
-                eprintln!("⚠️ 解析用户设置失败，使用默认值: {}", e);
+                warn!(error = %e, "解析用户设置失败，使用默认值");
                 Self::default()
             }),
             Err(_) => {
-                println!("📝 用户设置文件不存在，使用默认值");
+                warn!("用户设置文件不存在，使用默认值");
                 Self::default()
             }
         }

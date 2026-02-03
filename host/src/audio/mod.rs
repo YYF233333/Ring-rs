@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::PathBuf;
+use tracing::{debug, error};
 
 /// 音频管理器
 ///
@@ -160,9 +161,9 @@ impl AudioManager {
             let bytes = match self.audio_cache.get(&logical_path) {
                 Some(b) => b.clone(),
                 None => {
-                    eprintln!(
-                        "❌ 音频未缓存: {} (请先调用 cache_audio_bytes)",
-                        logical_path
+                    error!(
+                        path = %logical_path,
+                        "音频未缓存 (请先调用 cache_audio_bytes)"
                     );
                     return;
                 }
@@ -172,7 +173,7 @@ impl AudioManager {
             match Decoder::new(cursor) {
                 Ok(s) => Box::new(s.convert_samples::<i16>()),
                 Err(e) => {
-                    eprintln!("❌ 无法解码音频: {} - {}", logical_path, e);
+                    error!(path = %logical_path, error = %e, "无法解码音频");
                     return;
                 }
             }
@@ -183,7 +184,7 @@ impl AudioManager {
             let file = match File::open(&full_path) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("❌ 无法打开音频文件: {} - {}", full_path.display(), e);
+                    error!(path = %full_path.display(), error = %e, "无法打开音频文件");
                     return;
                 }
             };
@@ -191,7 +192,7 @@ impl AudioManager {
             match Decoder::new(BufReader::new(file)) {
                 Ok(s) => Box::new(s.convert_samples::<i16>()),
                 Err(e) => {
-                    eprintln!("❌ 无法解码音频文件: {} - {}", full_path.display(), e);
+                    error!(path = %full_path.display(), error = %e, "无法解码音频文件");
                     return;
                 }
             }
@@ -201,7 +202,7 @@ impl AudioManager {
         let sink = match Sink::try_new(&self.stream_handle) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("❌ 无法创建音频播放器: {}", e);
+                error!(error = %e, "无法创建音频播放器");
                 return;
             }
         };
@@ -235,9 +236,11 @@ impl AudioManager {
             }
         }
 
-        println!(
-            "🎵 开始播放 BGM: {} (循环: {}, 淡入: {:?})",
-            logical_path, looping, fade_in
+        debug!(
+            path = %logical_path,
+            looping = looping,
+            fade_in = ?fade_in,
+            "开始播放 BGM"
         );
     }
 
@@ -265,7 +268,7 @@ impl AudioManager {
                     stop_after: true,
                     next_bgm: None,
                 };
-                println!("🎵 BGM 淡出中 ({}s)", duration);
+                debug!(duration = duration, "BGM 淡出中");
                 return;
             }
         }
@@ -277,7 +280,7 @@ impl AudioManager {
         self.bgm_sink = None;
         self.current_bgm_path = None;
         self.fade_state = FadeState::None;
-        println!("🎵 BGM 已停止");
+        debug!("BGM 已停止");
     }
 
     /// 切换 BGM（带交叉淡入淡出）
@@ -308,7 +311,7 @@ impl AudioManager {
             next_bgm: Some((path.to_string(), looping)),
         };
 
-        println!("🎵 BGM 切换: 淡出中 ({}s)", fade_duration);
+        debug!(duration = fade_duration, "BGM 切换: 淡出中");
     }
 
     /// 播放音效
@@ -332,9 +335,9 @@ impl AudioManager {
             let bytes = match self.audio_cache.get(&logical_path) {
                 Some(b) => b.clone(),
                 None => {
-                    eprintln!(
-                        "❌ 音效未缓存: {} (请先调用 cache_audio_bytes)",
-                        logical_path
+                    error!(
+                        path = %logical_path,
+                        "音效未缓存 (请先调用 cache_audio_bytes)"
                     );
                     return;
                 }
@@ -344,7 +347,7 @@ impl AudioManager {
             match Decoder::new(cursor) {
                 Ok(s) => Box::new(s.convert_samples::<i16>()),
                 Err(e) => {
-                    eprintln!("❌ 无法解码音效: {} - {}", logical_path, e);
+                    error!(path = %logical_path, error = %e, "无法解码音效");
                     return;
                 }
             }
@@ -355,7 +358,7 @@ impl AudioManager {
             let file = match File::open(&full_path) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("❌ 无法打开音效文件: {} - {}", full_path.display(), e);
+                    error!(path = %full_path.display(), error = %e, "无法打开音效文件");
                     return;
                 }
             };
@@ -363,7 +366,7 @@ impl AudioManager {
             match Decoder::new(BufReader::new(file)) {
                 Ok(s) => Box::new(s.convert_samples::<i16>()),
                 Err(e) => {
-                    eprintln!("❌ 无法解码音效文件: {} - {}", full_path.display(), e);
+                    error!(path = %full_path.display(), error = %e, "无法解码音效文件");
                     return;
                 }
             }
@@ -374,7 +377,7 @@ impl AudioManager {
             sink.set_volume(self.sfx_volume);
             sink.append(source);
             sink.detach(); // 分离后自动播放完毕
-            println!("🔊 播放音效: {}", logical_path);
+            debug!(path = %logical_path, "播放音效");
         }
     }
 
@@ -403,7 +406,7 @@ impl AudioManager {
                         sink.set_volume(*target_volume);
                     }
                     fade_completed = true;
-                    println!("🎵 BGM 淡入完成");
+                    debug!("BGM 淡入完成");
                 } else {
                     // 更新音量
                     if let Some(ref sink) = self.bgm_sink {
@@ -445,7 +448,7 @@ impl AudioManager {
                 }
                 self.bgm_sink = None;
                 self.current_bgm_path = None;
-                println!("🎵 BGM 淡出完成，已停止");
+                debug!("BGM 淡出完成，已停止");
             }
         }
 
@@ -523,7 +526,7 @@ impl AudioManager {
     pub fn pause_bgm(&self) {
         if let Some(ref sink) = self.bgm_sink {
             sink.pause();
-            println!("🎵 BGM 已暂停");
+            debug!("BGM 已暂停");
         }
     }
 
@@ -531,7 +534,7 @@ impl AudioManager {
     pub fn resume_bgm(&self) {
         if let Some(ref sink) = self.bgm_sink {
             sink.play();
-            println!("🎵 BGM 已恢复");
+            debug!("BGM 已恢复");
         }
     }
 
