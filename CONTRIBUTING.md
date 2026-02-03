@@ -38,6 +38,10 @@
 - 报告位置：`target/llvm-cov/html/index.html`
 - 详情见：`docs/coverage.md`
 
+## 仓库导航地图（强烈建议先看）
+
+- `docs/navigation_map.md`：按“常见改动场景”索引到具体 crate/模块/文件，减少无效翻文件。
+
 ## 约定
 
 - 新增/修复逻辑时优先补单元测试；需要跨模块链路时补 `host/tests/` 集成测试（阶段 20 会补齐）。

@@ -241,6 +241,7 @@ stopBGM                                       # 停止 BGM（淡出）
 
 - [PLAN.md](PLAN.md) - 架构设计文档
 - [ROADMAP.md](ROADMAP.md) - 开发路线图
+- [docs/navigation_map.md](docs/navigation_map.md) - 仓库导航地图（从哪里改起/常见改动索引）
 
 ### 用户文档
 
