@@ -114,6 +114,36 @@
 
 ## 下一步开发方向
 
+### 仓库瘦身与上下文治理（2w+ LOC）🟦 计划中
+
+> **主题**：在不改变引擎行为的前提下，优先降低“单文件巨无霸 + 索引噪音”带来的协作/模型上下文成本；其次再评估用成熟库替换易碎的手写解析逻辑。
+
+**现状（数据）**：
+- Rust 代码约 **21k LOC**
+  - `host` ~13k（59 files）
+  - `vn-runtime` ~7k（15 files）
+- 最大文件：`vn-runtime/src/script/parser.rs` ~2.7k 行（上下文消耗主因）
+
+**短期（零行为改动 / 立刻见效）**：
+- **IDE/模型索引忽略**：新增 `.cursorignore`，忽略 `target/`、`dist/`、`assets/`、覆盖率产物、zip/exe/pdb 等（减少噪音与误读大文件）
+- **拆分大文件（结构瘦身）**：
+  - `vn-runtime/src/script/parser.rs` 拆成 `parser/*` 子模块（按“辅助函数/表达式/阶段1/阶段2/测试”分组），保持 `Parser` API 与测试不变
+  - `host/src/renderer/text_renderer.rs` 抽内部共享渲染函数，消除 `render_dialogue_box`/`_with_alpha` 的重复路径
+  - `host/src/command_executor/mod.rs` 按 command/feature 拆分文件（只搬代码，不改语义）
+
+**中期（可选：真正减少自研代码量）**：
+- **脚本解析**：
+  - Markdown：评估 `pulldown-cmark` / `comrak` 作为“块识别/表格/强调”等基础解析层，只保留“AST -> ScriptNode”的映射
+  - HTML 标签：评估 `tl` / `scraper` 来提取 `img/audio` 的 `src`（减少边界 case 与手写字符串解析代码）
+- **开发工具**：`tools/xtask` 评估 `clap`（子命令/帮助/参数校验）与 `walkdir`（文件遍历）
+- **日志治理**：`host` 逐步将 `println!/eprintln!` 收敛到 `tracing`/`log`（可控等级，减少输出污染）
+
+**验收标准（DoD）**：
+- “拆分大文件”不改变行为：`cargo test -p vn-runtime --lib` 通过
+- 新增/调整的忽略规则不影响打包与运行，但显著降低本地索引/上下文开销
+
+
+
 ### 阶段 24：演出与体验增强（基于现有动画系统渐进扩展）🟦 计划中
 
 > **主题**：在不破坏“命令驱动 + 显式状态”的前提下，围绕现有动画系统与转场体系，补齐最影响观感的演出能力。

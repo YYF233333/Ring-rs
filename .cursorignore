@@ -1,0 +1,15 @@
+target/
+dist/
+
+# 本地资源/大文件（通常不需要被索引）
+assets/
+*.zip
+*.exe
+*.pdb
+
+# 覆盖率/构建产物
+**/*.profraw
+**/*.profdata
+target/llvm-cov/
+target/doc/
+
