@@ -243,12 +243,6 @@ impl Executor {
                 ))
             }
 
-            ScriptNode::UIAnim { effect } => {
-                Ok(ExecuteResult::with_commands(vec![Command::UIAnimation {
-                    effect: effect.clone(),
-                }]))
-            }
-
             ScriptNode::PlayAudio { path, is_bgm } => {
                 // 解析路径（相对于脚本目录）
                 let resolved_path = script.resolve_path(path);
@@ -536,22 +530,6 @@ mod tests {
             &result.commands[0],
             Command::ChapterMark { title, level } if title == "第一章" && *level == 1
         ));
-    }
-
-    #[test]
-    fn test_execute_uianim() {
-        let mut executor = Executor::new();
-        let mut state = RuntimeState::new("test");
-        let script = Script::new("test", vec![], "");
-
-        let effect = Transition::with_named_args(
-            "fade",
-            vec![(Some("duration".to_string()), TransitionArg::Number(0.3))],
-        );
-        let node = ScriptNode::UIAnim { effect };
-
-        let result = executor.execute(&node, &mut state, &script).unwrap();
-        assert!(matches!(&result.commands[0], Command::UIAnimation { .. }));
     }
 
     #[test]

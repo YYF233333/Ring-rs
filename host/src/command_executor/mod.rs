@@ -85,7 +85,6 @@ impl CommandExecutor {
             Command::PlayBgm { path, looping } => self.execute_play_bgm(path, *looping),
             Command::StopBgm { fade_out } => self.execute_stop_bgm(*fade_out),
             Command::PlaySfx { path } => self.execute_play_sfx(path),
-            Command::UIAnimation { effect } => self.execute_ui_animation(effect),
         };
 
         self.last_output.result = result.clone();
@@ -432,14 +431,6 @@ impl CommandExecutor {
             path: path.to_string(),
         });
         println!("🔊 命令：播放音效: {}", path);
-        ExecuteResult::Ok
-    }
-
-    /// 执行 UIAnimation
-    fn execute_ui_animation(&mut self, effect: &Transition) -> ExecuteResult {
-        // TODO: 实现 UI 动画
-        println!("✨ UI 动画: {} {:?}", effect.name, effect.args);
-        self.start_transition(effect);
         ExecuteResult::Ok
     }
 

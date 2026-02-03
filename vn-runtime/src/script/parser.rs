@@ -636,9 +636,6 @@ impl Parser {
         if starts_with_ignore_case(line, "hide") {
             return self.parse_hide(line, line_number);
         }
-        if starts_with_ignore_case(line, "uianim") {
-            return self.parse_ui_anim(line, line_number);
-        }
         if starts_with_ignore_case(line, "goto") {
             return self.parse_goto(line, line_number);
         }
@@ -863,31 +860,6 @@ impl Parser {
         let transition = self.extract_transition_from_line(line);
 
         Ok(Some(ScriptNode::HideCharacter { alias, transition }))
-    }
-
-    /// 解析 UIAnim 指令
-    fn parse_ui_anim(
-        &self,
-        line: &str,
-        line_number: usize,
-    ) -> Result<Option<ScriptNode>, ParseError> {
-        // 跳过 "UIAnim" 前缀
-        let content = line
-            .get(6..)
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| ParseError::MissingParameter {
-                line: line_number,
-                command: "UIAnim".to_string(),
-                param: "效果".to_string(),
-            })?;
-
-        let effect = parse_transition(content).ok_or_else(|| ParseError::InvalidTransition {
-            line: line_number,
-            message: format!("无法解析过渡效果: {}", content),
-        })?;
-
-        Ok(Some(ScriptNode::UIAnim { effect }))
     }
 
     /// 解析 goto 指令
@@ -1756,34 +1728,6 @@ hide protagonist with fade
         }
     }
 
-    /// 测试 UIAnim 指令
-    #[test]
-    fn test_parse_uianim() {
-        let mut parser = Parser::new();
-
-        // 简单效果名
-        let script = parser.parse("test", "UIAnim dissolve").unwrap();
-        if let ScriptNode::UIAnim { effect } = &script.nodes[0] {
-            assert_eq!(effect.name, "dissolve");
-        } else {
-            panic!("Expected UIAnim node");
-        }
-    }
-
-    /// 测试 UIAnim 指令：带参数
-    #[test]
-    fn test_parse_uianim_with_args() {
-        let mut parser = Parser::new();
-        let script = parser.parse("test", "UIAnim Dissolve(2.0)").unwrap();
-
-        if let ScriptNode::UIAnim { effect } = &script.nodes[0] {
-            assert_eq!(effect.name, "Dissolve");
-            assert_eq!(effect.args.len(), 1);
-        } else {
-            panic!("Expected UIAnim node");
-        }
-    }
-
     /// 测试标签解析：中文标签名
     #[test]
     fn test_parse_label_chinese() {
@@ -2274,13 +2218,6 @@ stopBGM
     fn test_parse_hide_missing_alias() {
         let mut parser = Parser::new();
         let err = parser.parse("test", "hide").unwrap_err();
-        assert!(matches!(err, ParseError::MissingParameter { .. }));
-    }
-
-    #[test]
-    fn test_parse_uianim_missing_effect() {
-        let mut parser = Parser::new();
-        let err = parser.parse("test", "UIAnim").unwrap_err();
         assert!(matches!(err, ParseError::MissingParameter { .. }));
     }
 

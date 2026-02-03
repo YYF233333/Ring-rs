@@ -96,11 +96,7 @@ changeBG <img src="assets/black.png" alt="black" style="zoom:25%;" />with dissol
 
 :" "
 
-UIAnim fade
-
 ## Chapter 1-1
-
-UIAnim Dissolve(1.5)
 
 changeBG <img src="assets/曕摴嫶乮梉曽乯.jpg" alt="曕摴嫶乮梉曽乯" style="zoom:15%;" />with `Dissolve(1.5)`
 

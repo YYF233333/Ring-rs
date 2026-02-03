@@ -253,12 +253,6 @@ pub enum Command {
         path: String,
     },
 
-    /// 触发 UI 动画
-    UIAnimation {
-        /// 动画效果
-        effect: Transition,
-    },
-
     /// 章节标记（用于显示章节过渡动画）
     ChapterMark {
         /// 章节标题

@@ -107,14 +107,6 @@ pub enum ScriptNode {
         options: Vec<ChoiceOption>,
     },
 
-    /// UI 动画
-    ///
-    /// 对应 `UIAnim effect` 语法
-    UIAnim {
-        /// 动画效果
-        effect: Transition,
-    },
-
     /// 播放音频
     ///
     /// 对应 `<audio src="..."></audio>` 或 `<audio src="..."></audio> loop` 语法

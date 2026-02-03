@@ -172,58 +172,100 @@
 
 ## 下一步开发方向
 
-### 阶段 22：脚本语法扩展（变量系统 + 条件分支）🟦 计划中
+### 阶段 22：脚本逻辑系统（变量/表达式/条件）🟦 计划中
 
-> **主题**：扩展脚本语言，支持变量、条件分支、循环等编程特性，使脚本更灵活。
+> **主题**：在保持 Markdown 可读性的前提下，引入“可控、可测试、可存档”的脚本逻辑能力；严格遵循 `PLAN.md` 的确定性与显式状态约束。
 
-**目标**：
-- **变量系统**：支持数字、字符串、布尔类型；变量作用域（全局/局部）；变量持久化到存档
-- **条件分支**：`if/elseif/else` 语法，支持变量比较和逻辑运算
-- **循环**：`while` 循环，支持条件控制
-- **表达式求值**：支持算术、比较、逻辑运算
+**目标（按优先级）**：
+- **变量模型**：`Number/String/Bool` 三类即可；支持读写；**随存档持久化**
+- **表达式**：算术/比较/逻辑；无副作用；错误信息带行号/上下文
+- **条件分支**：最小可用 `if/elseif/else`
+- （可选）**循环**：如果确实需要，再做 `while`（必须有防死循环策略与错误提示）（不需要，我们已经有goto，配合ifelse可以实现循环）
 
-**核心设计**：
-- `RuntimeState` 扩展：添加 `variables: HashMap<String, Value>` 字段
-- AST 扩展：新增 `If`、`While`、`SetVariable` 节点
-- 表达式解析器：支持变量引用和运算（`$var_name` 语法）
-- 向后兼容：现有脚本无需修改即可运行
+**约束与取舍**：
+- Runtime 只做**结构解析 + 确定性求值**，不做 IO，不依赖真实时间
+- Host 不参与脚本逻辑（仍然只执行 Command）
+- 语法优先“写给编剧”，宁可少而稳，不做全语言化
 
-**关键文件**：
-- `vn-runtime/src/script/ast.rs`：扩展 AST 节点
-- `vn-runtime/src/script/parser.rs`：表达式解析
-- `vn-runtime/src/runtime/engine.rs`：变量作用域管理
-- `vn-runtime/src/state.rs`：RuntimeState 扩展
+**关键设计点（建议落地方向）**：
+- `RuntimeState` 增加 `variables: HashMap<String, Value>`
+- AST 增加最小集合：`SetVar`、`If`（以及表达式节点/字面量/变量引用）
+- Parser 增量扩展：保持两阶段块解析架构（见 `docs/script_syntax_spec.md`）
+- Executor/Engine：表达式求值与分支跳转必须可测试（拒绝隐式状态）
 
-**验收标准**：
-- 支持变量声明、赋值、引用
-- 支持 `if/elseif/else` 条件分支
-- 支持 `while` 循环
-- 变量随存档持久化
-- 现有脚本无需修改即可运行
-
-### 阶段 23：演出效果增强 🟦 计划中
-
-> **主题**：增强演出效果，支持立绘动画、对话框动画、更丰富的过渡效果。
-
-**目标**：
-- **立绘动画**：淡入/淡出、移动、缩放动画
-- **对话框动画**：显示/隐藏动画、样式切换
-- **过渡效果扩展**：更多内置过渡效果（wipe、slide 等）
-- **动画系统**：统一的时间轴和缓动函数（ease-in/out 等）
+**验收标准（DoD）**：
+- 新语法有**正式规范**（同步更新 `docs/script_syntax_spec.md`）
+- `vn-runtime` 有覆盖关键语义的测试（含错误路径与存档 roundtrip）
 
 **关键文件**：
-- `host/src/renderer/animation.rs`：动画系统
-- `host/src/renderer/character.rs`：立绘动画
-- `host/src/renderer/dialogue.rs`：对话框动画
+- `vn-runtime/src/{state.rs,save.rs,script/{ast.rs,parser.rs},runtime/{executor.rs,engine.rs}}`
+- `docs/script_syntax_spec.md`
 
-### 阶段 24：编辑器工具 🟦 计划中
+### 阶段 23：开发者工作流与内容校验（lint/资源引用检查/诊断）🟦 计划中
 
-> **主题**：开发可视化脚本编辑器，提升开发效率。
+> **主题**：仓库已经进入“功能迭代期”，下一阶段把编剧/制作过程里的问题前置：脚本/资源/manifest 的错误尽量在运行前就被发现。
 
 **目标**：
-- **脚本编辑器**：语法高亮、自动补全、实时预览
-- **资源管理器**：可视化资源浏览和管理
-- **调试工具**：断点、变量监视、执行流程可视化
+- **脚本静态检查**（不运行游戏也能做）：
+  - 未定义 label / 不可达 label
+  - choice 表格格式错误与目标缺失
+  - `changeScene` 缺 `with`、参数类型不匹配等（复用 parser 的错误信息）
+- **资源引用检查**：
+  - 脚本里的 `<img src>` / `<audio src>` 统一解析为逻辑路径后，检查资源是否存在
+  - Rule 遮罩/背景/立绘等引用路径统一规范化（与 `ResourceManager` 口径一致）
+- **诊断输出体验**：
+  - 报错格式统一：文件/行号/原始行/解释
+  - 可选生成一份汇总报告（便于长脚本批量修）
+
+**落地形态（建议）**：
+- 以 `tools/xtask` 子命令形式提供：例如 `cargo script-check`（或 `cargo run -p xtask -- script-check`）
+- 允许“只读扫描”：不触碰 macroquad/音频设备，避免环境依赖
+- **Dev Mode 自动诊断（强烈建议）**：在 **debug build**（`cfg(debug_assertions)`）或配置开启的 dev mode 下，**游戏启动时自动执行一次 script-check**，输出诊断摘要与可定位明细（避免“经常忘记跑”）
+
+**验收标准（DoD）**：
+- 对 `assets/scripts/` 可以一条命令跑完检查，失败时输出可定位的诊断
+- Dev Mode 启动时自动跑检查：默认 **只告警不阻塞启动**（除非显式配置为 hard-fail）
+- 文档补齐：`CONTRIBUTING.md`/`docs/*` 写清怎么用
+
+**关键文件**：
+- `tools/xtask/src/main.rs`
+- `vn-runtime/src/script/*`
+- `host/src/resources/{path.rs,mod.rs}`（路径规范化口径）
+
+### 阶段 24：演出与体验增强（基于现有动画系统渐进扩展）🟦 计划中
+
+> **主题**：在不破坏“命令驱动 + 显式状态”的前提下，围绕现有动画系统与转场体系，补齐最影响观感的演出能力。
+
+**目标（建议从小到大）**：
+- **立绘动效**：在已有 alpha 动画基础上扩展到移动/缩放/缓动（不追求全能，先做最常用）
+- **重构 changeScene 职责（给编剧操作空间）**：
+  - `changeScene` **只负责**：拉遮罩/蒙版过渡 + 切换背景（不再隐式隐藏 UI / 不再隐式清理立绘）
+  - 立绘由编剧显式控制：`hide alias ...` 或（可选新增）`clearCharacters` 一键清空
+  - UI 操作由**专门命令**承担：把“对话框显示/隐藏/清理”的语义做成显式命令（避免塞进 `changeScene`）
+- **移除 `UIAnim`**：
+  - `UIAnim` 命令本身要去掉（不再作为脚本语法/Runtime Command）（已经去掉了）
+  - 如需要 UI 动画，改为更明确的命令集合（先做最小集合，后续再扩展“动画”概念）
+- **新增 TextBox 命令（对话框显式控制）**：
+  - `textBoxHide`：隐藏对话框（不影响背景/立绘）
+  - `textBoxShow`：显示对话框
+  - `textBoxClear`：清理对话框内容（对话/choices 等按设计明确范围）
+- **修复与重定义 ChapterMark 语义（当前实现有问题，实际看不到）**：
+  - 语义明确：章节切换时，在**左上角异步显示**一个 mark（非阻塞），“固定持续时间”后自动消失
+  - 时间推进**不受用户快进/连续点击影响**（避免被瞬间跳过）
+  - 处理章节很短的情况：两个 chapter mark 不能乱叠，需要明确策略（覆盖/队列/延迟/合并）
+  - `chapter mark` 与章节强绑定：不需要专用脚本指令（由章节标题节点触发即可）
+- **更多过渡效果（可选）**：在现有 `Transition` 表达式之上新增 1-2 个简单效果（如 wipe/slide），并保持参数约定一致
+
+**验收标准（DoD）**：
+- 新增效果有最小文档说明（脚本写法 + 默认值）
+- `changeScene`/UI/立绘职责分离后，脚本语义更可控：同一段演出可以通过脚本组合出不同“先清 UI/先清立绘/先换背景”的流程
+- ChapterMark 可见且稳定：持续时间固定、不受快进影响、不会出现重叠导致的闪烁/不可读
+- 与资源系统/缓存系统兼容，不引入额外的全局隐式状态
+
+**关键文件**：
+- `host/src/renderer/animation/*`
+- `host/src/renderer/{transition.rs,scene_transition.rs,character_animation.rs}`
+- `host/src/app/command_handlers/*`
 
 ---
 

@@ -217,15 +217,6 @@ hide alias with transition
 hide royu with fade
 ```
 
-### 5.5 UI 动画 (UIAnim)
-
-```markdown
-UIAnim fade
-UIAnim Dissolve(1.5)
-```
-
-用于触发全局 UI 动画效果。
-
 ---
 
 ## 六、分支选择
@@ -536,7 +527,7 @@ enum Block {
 1. `#` 开头 → 章节标记
 2. `**...**` 格式 → 标签定义
 3. 指令关键字开头（大小写不敏感）→ 演出指令
-   - `changeBG`, `changeScene`, `show`, `hide`, `UIAnim`
+   - `changeBG`, `changeScene`, `show`, `hide`
 4. 包含 `：` 或 `:` → 对话/旁白
 5. 其他 → 未知行，记录警告但不中断解析
 

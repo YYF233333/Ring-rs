@@ -21,8 +21,8 @@
 ### 1. Runtime 与 Host 分离
 
 * VN Runtime 是**纯逻辑核心**
-* Host（Bevy）仅作为 IO / 渲染 / 音频宿主
-* Runtime **不得依赖 Bevy 或任何引擎 API**
+* Host 仅作为 IO / 渲染 / 音频宿主
+* Runtime **不得依赖任何引擎 API**
 
 ### 2. 显式状态、确定性执行
 
@@ -53,7 +53,7 @@
 
 * 不允许 IO
 * 不允许线程 / async runtime
-* 不允许使用 Bevy 类型
+* 不允许使用 macroquad 类型
 
 ---
 
@@ -189,7 +189,7 @@ PresentChoices
 
 ## 八、项目结构
 
-分两个crate实现完整项目，vn-runtime crate为核心运行时，不依赖bevy，host crate使用bevy处理和外界的交互，并作为最终二进制入口。两个crate间使用command通信。
+分两个crate实现完整项目，vn-runtime crate为核心运行时，不依赖macroquad，host crate使用macroquad处理和外界的交互，并作为最终二进制入口。两个crate间使用command通信。
 
 ## 九、质量与可维护性要求
 
