@@ -10,7 +10,7 @@
 
 use crate::command::{Choice, Command};
 use crate::error::RuntimeError;
-use crate::script::{Script, ScriptNode};
+use crate::script::{EvalError, Script, ScriptNode, evaluate, evaluate_to_bool};
 use crate::state::{RuntimeState, WaitingReason};
 
 /// 执行结果
@@ -279,7 +279,90 @@ impl Executor {
 
                 Ok(ExecuteResult::with_jump(target_index))
             }
+
+            ScriptNode::SetVar { name, value } => {
+                // 求值表达式
+                let val = evaluate(value, state).map_err(eval_error_to_runtime)?;
+                // 设置变量
+                state.set_var(name.clone(), val);
+                Ok(ExecuteResult::empty())
+            }
+
+            ScriptNode::Conditional { branches } => {
+                // 顺序求值每个分支条件，找到第一个为真的分支
+                self.execute_conditional(branches, state, script)
+            }
         }
+    }
+
+    /// 执行条件分支
+    ///
+    /// 返回需要执行的分支体产生的命令和等待状态
+    fn execute_conditional(
+        &mut self,
+        branches: &[crate::script::ast::ConditionalBranch],
+        state: &mut RuntimeState,
+        script: &Script,
+    ) -> Result<ExecuteResult, RuntimeError> {
+        // 找到第一个条件为真的分支
+        for branch in branches {
+            let should_execute = match &branch.condition {
+                Some(condition) => {
+                    evaluate_to_bool(condition, state).map_err(eval_error_to_runtime)?
+                }
+                None => true, // else 分支，无条件执行
+            };
+
+            if should_execute {
+                // 执行该分支体中的所有节点
+                return self.execute_branch_body(&branch.body, state, script);
+            }
+        }
+
+        // 没有分支被执行
+        Ok(ExecuteResult::empty())
+    }
+
+    /// 执行分支体
+    fn execute_branch_body(
+        &mut self,
+        body: &[ScriptNode],
+        state: &mut RuntimeState,
+        script: &Script,
+    ) -> Result<ExecuteResult, RuntimeError> {
+        let mut all_commands = Vec::new();
+
+        for node in body {
+            let result = self.execute(node, state, script)?;
+            all_commands.extend(result.commands);
+
+            // 如果遇到跳转，立即返回
+            if result.jump_to.is_some() {
+                return Ok(ExecuteResult {
+                    commands: all_commands,
+                    waiting: None,
+                    jump_to: result.jump_to,
+                });
+            }
+
+            // 如果遇到等待，返回当前状态
+            if result.waiting.is_some() {
+                return Ok(ExecuteResult {
+                    commands: all_commands,
+                    waiting: result.waiting,
+                    jump_to: None,
+                });
+            }
+        }
+
+        Ok(ExecuteResult::with_commands(all_commands))
+    }
+}
+
+/// 将 EvalError 转换为 RuntimeError
+fn eval_error_to_runtime(e: EvalError) -> RuntimeError {
+    RuntimeError::EvalError {
+        message: e.to_string(),
     }
 }
 
@@ -674,5 +757,343 @@ mod tests {
             Command::ShowBackground { path, .. }
             if path == "assets/scripts/../backgrounds/bg.jpg"
         ));
+    }
+
+    //=========================================================================
+    // SetVar 测试
+    //=========================================================================
+
+    #[test]
+    fn test_execute_set_var_string() {
+        use crate::script::Expr;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::SetVar {
+            name: "name".to_string(),
+            value: Expr::string("Alice"),
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        // SetVar 不产生命令
+        assert!(result.commands.is_empty());
+        assert!(result.waiting.is_none());
+
+        // 变量应该被设置
+        assert_eq!(
+            state.get_var("name"),
+            Some(&VarValue::String("Alice".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_execute_set_var_bool() {
+        use crate::script::Expr;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::SetVar {
+            name: "flag".to_string(),
+            value: Expr::bool(true),
+        };
+
+        executor.execute(&node, &mut state, &script).unwrap();
+        assert_eq!(state.get_var("flag"), Some(&VarValue::Bool(true)));
+    }
+
+    #[test]
+    fn test_execute_set_var_from_expression() {
+        use crate::script::Expr;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        state.set_var("a", VarValue::Bool(true));
+        state.set_var("b", VarValue::Bool(false));
+
+        let script = Script::new("test", vec![], "");
+
+        // 设置变量为表达式结果
+        let node = ScriptNode::SetVar {
+            name: "result".to_string(),
+            value: Expr::and(Expr::var("a"), Expr::bool(true)),
+        };
+
+        executor.execute(&node, &mut state, &script).unwrap();
+        assert_eq!(state.get_var("result"), Some(&VarValue::Bool(true)));
+    }
+
+    #[test]
+    fn test_execute_set_var_undefined_variable_error() {
+        use crate::script::Expr;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::SetVar {
+            name: "result".to_string(),
+            value: Expr::var("undefined"),
+        };
+
+        let result = executor.execute(&node, &mut state, &script);
+        assert!(matches!(
+            result,
+            Err(crate::error::RuntimeError::EvalError { .. })
+        ));
+    }
+
+    //=========================================================================
+    // Conditional 测试
+    //=========================================================================
+
+    #[test]
+    fn test_execute_conditional_true_branch() {
+        use crate::script::Expr;
+        use crate::script::ast::ConditionalBranch;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        state.set_var("flag", VarValue::Bool(true));
+
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::Conditional {
+            branches: vec![ConditionalBranch {
+                condition: Some(Expr::var("flag")),
+                body: vec![ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "条件为真".to_string(),
+                }],
+            }],
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        // 应该执行条件为真的分支体
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(
+            &result.commands[0],
+            Command::ShowText { content, .. } if content == "条件为真"
+        ));
+        assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
+    }
+
+    #[test]
+    fn test_execute_conditional_false_branch() {
+        use crate::script::Expr;
+        use crate::script::ast::ConditionalBranch;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        state.set_var("flag", VarValue::Bool(false));
+
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::Conditional {
+            branches: vec![ConditionalBranch {
+                condition: Some(Expr::var("flag")),
+                body: vec![ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "条件为真".to_string(),
+                }],
+            }],
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        // 条件为假，没有 else 分支，不执行任何内容
+        assert!(result.commands.is_empty());
+        assert!(result.waiting.is_none());
+    }
+
+    #[test]
+    fn test_execute_conditional_else_branch() {
+        use crate::script::Expr;
+        use crate::script::ast::ConditionalBranch;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        state.set_var("flag", VarValue::Bool(false));
+
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::Conditional {
+            branches: vec![
+                ConditionalBranch {
+                    condition: Some(Expr::var("flag")),
+                    body: vec![ScriptNode::Dialogue {
+                        speaker: None,
+                        content: "条件为真".to_string(),
+                    }],
+                },
+                ConditionalBranch {
+                    condition: None, // else 分支
+                    body: vec![ScriptNode::Dialogue {
+                        speaker: None,
+                        content: "条件为假".to_string(),
+                    }],
+                },
+            ],
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        // 应该执行 else 分支
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(
+            &result.commands[0],
+            Command::ShowText { content, .. } if content == "条件为假"
+        ));
+    }
+
+    #[test]
+    fn test_execute_conditional_elseif() {
+        use crate::script::Expr;
+        use crate::script::ast::ConditionalBranch;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        state.set_var("role", VarValue::String("user".to_string()));
+
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::Conditional {
+            branches: vec![
+                ConditionalBranch {
+                    condition: Some(Expr::eq(Expr::var("role"), Expr::string("admin"))),
+                    body: vec![ScriptNode::Dialogue {
+                        speaker: None,
+                        content: "管理员".to_string(),
+                    }],
+                },
+                ConditionalBranch {
+                    condition: Some(Expr::eq(Expr::var("role"), Expr::string("user"))),
+                    body: vec![ScriptNode::Dialogue {
+                        speaker: None,
+                        content: "用户".to_string(),
+                    }],
+                },
+                ConditionalBranch {
+                    condition: None,
+                    body: vec![ScriptNode::Dialogue {
+                        speaker: None,
+                        content: "访客".to_string(),
+                    }],
+                },
+            ],
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        // 应该执行第二个分支（elseif）
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(
+            &result.commands[0],
+            Command::ShowText { content, .. } if content == "用户"
+        ));
+    }
+
+    #[test]
+    fn test_execute_conditional_with_multiple_body_nodes() {
+        use crate::script::Expr;
+        use crate::script::ast::ConditionalBranch;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        state.set_var("flag", VarValue::Bool(true));
+
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::Conditional {
+            branches: vec![ConditionalBranch {
+                condition: Some(Expr::var("flag")),
+                body: vec![
+                    ScriptNode::ChangeBG {
+                        path: "bg.png".to_string(),
+                        transition: None,
+                    },
+                    ScriptNode::Dialogue {
+                        speaker: Some("角色".to_string()),
+                        content: "对话".to_string(),
+                    },
+                ],
+            }],
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        // ChangeBG 不等待，Dialogue 等待
+        // 应该返回两个命令和 WaitForClick
+        assert_eq!(result.commands.len(), 2);
+        assert!(matches!(
+            &result.commands[0],
+            Command::ShowBackground { .. }
+        ));
+        assert!(matches!(&result.commands[1], Command::ShowText { .. }));
+        assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
+    }
+
+    #[test]
+    fn test_execute_conditional_with_goto() {
+        use crate::script::Expr;
+        use crate::script::ast::ConditionalBranch;
+        use crate::state::VarValue;
+
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        state.set_var("flag", VarValue::Bool(true));
+
+        let script = Script::new(
+            "test",
+            vec![
+                ScriptNode::Label {
+                    name: "start".to_string(),
+                },
+                ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "开始".to_string(),
+                },
+                ScriptNode::Label {
+                    name: "end".to_string(),
+                },
+            ],
+            "",
+        );
+
+        let node = ScriptNode::Conditional {
+            branches: vec![ConditionalBranch {
+                condition: Some(Expr::var("flag")),
+                body: vec![
+                    ScriptNode::Goto {
+                        target_label: "end".to_string(),
+                    },
+                    // 这个不应该被执行
+                    ScriptNode::Dialogue {
+                        speaker: None,
+                        content: "不会执行".to_string(),
+                    },
+                ],
+            }],
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        // 应该跳转到 "end" 标签
+        assert!(result.commands.is_empty());
+        assert!(result.waiting.is_none());
+        assert_eq!(result.jump_to, Some(2)); // "end" 标签的索引
     }
 }

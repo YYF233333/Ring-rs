@@ -12,9 +12,7 @@
     "fullscreen": false
   },
   "debug": {
-    "enabled": false,
-    "show_fps": false,
-    "show_debug_info": false
+    "script_check": true
   },
   "audio": {
     "master_volume": 1.0,

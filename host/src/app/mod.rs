@@ -103,6 +103,9 @@ impl AppState {
         let (width, height) = init::window_size(&config);
         let user_settings = init::load_user_settings(USER_SETTINGS_PATH);
 
+        // Dev Mode: 运行脚本检查
+        init::run_script_check(&config, &scripts, &resource_manager);
+
         Self {
             config,
             host_state: HostState::new(),

@@ -62,6 +62,10 @@ pub enum RuntimeError {
     /// 无效的状态操作
     #[error("无效的状态操作: {message}")]
     InvalidState { message: String },
+
+    /// 表达式求值错误
+    #[error("表达式求值错误: {message}")]
+    EvalError { message: String },
 }
 
 /// vn-runtime 统一错误类型

@@ -65,6 +65,7 @@
 //! - [`runtime`]：执行引擎
 
 pub mod command;
+pub mod diagnostic;
 pub mod error;
 pub mod history;
 pub mod input;
@@ -75,6 +76,10 @@ pub mod state;
 
 // 重导出核心类型
 pub use command::{Choice, Command, Position, Transition, TransitionArg};
+pub use diagnostic::{
+    Diagnostic, DiagnosticLevel, DiagnosticResult, ResourceReference, ResourceType, analyze_script,
+    extract_resource_references, get_defined_labels, get_jump_targets,
+};
 pub use error::{ParseError, RuntimeError, VnError, VnResult};
 pub use history::{History, HistoryEvent};
 pub use input::{RuntimeInput, SignalId};

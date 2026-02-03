@@ -230,6 +230,15 @@ impl RuntimeState {
     }
 }
 
+/// 为 RuntimeState 实现 EvalContext trait
+///
+/// 这使得表达式求值器可以访问运行时变量
+impl crate::script::EvalContext for RuntimeState {
+    fn get_var(&self, name: &str) -> Option<&VarValue> {
+        self.variables.get(name)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

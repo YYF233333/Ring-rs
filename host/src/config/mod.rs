@@ -103,17 +103,14 @@ pub struct WindowConfig {
 /// 调试配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DebugConfig {
-    /// 是否启用调试模式
-    #[serde(default)]
-    pub enabled: bool,
-
     /// 是否显示 FPS
-    #[serde(default)]
-    pub show_fps: bool,
-
-    /// 是否显示调试信息
-    #[serde(default)]
-    pub show_debug_info: bool,
+    /// 启动时是否运行脚本检查
+    ///
+    /// - debug build（`cargo run`）默认开启（见 `default_script_check()`）
+    /// - release build 默认关闭，可在 `config.json` 显式设置打开/关闭
+    /// - 检查结果只输出诊断，不阻塞启动
+    #[serde(default = "default_script_check")]
+    pub script_check: bool,
 }
 
 /// 音频配置
@@ -197,6 +194,11 @@ fn default_font_path() -> String {
     "fonts/simhei.ttf".to_string()
 }
 
+fn default_script_check() -> bool {
+    // 在 debug build 时默认开启脚本检查
+    cfg!(debug_assertions)
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -229,9 +231,7 @@ impl Default for WindowConfig {
 impl Default for DebugConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            show_fps: false,
-            show_debug_info: false,
+            script_check: default_script_check(),
         }
     }
 }
@@ -397,7 +397,6 @@ mod tests {
         let config = AppConfig::default();
         assert_eq!(config.window.width, 1920);
         assert_eq!(config.window.height, 1080);
-        assert!(!config.debug.enabled);
     }
 
     #[test]

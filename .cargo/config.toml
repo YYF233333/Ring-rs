@@ -25,3 +25,7 @@ cov-runtime = "run -p xtask -- cov-runtime"
 
 # Secondary goal: workspace coverage (trend only; excludes tool crates).
 cov-workspace = "run -p xtask -- cov-workspace"
+
+# -------- Script checking --------
+# Static analysis for VN scripts: syntax, labels, resource references.
+script-check = "run -p xtask -- script-check"

@@ -69,6 +69,14 @@ Ring-rs/
 
 未配置 `start_script_path` 将导致程序 panic。
 
+### Dev Mode：启动时脚本自动检查（推荐）
+
+Host 启动时可自动运行脚本静态检查（语法 / 未定义 label / 资源存在性），默认 **debug build 开启、release build 关闭**。
+
+- **开启**：在 `config.json` 中设置 `debug.script_check = true`
+- **关闭**：在 `config.json` 中设置 `debug.script_check = false`
+- **命令行手动检查**：`cargo script-check`（不运行游戏）
+
 ### 运行
 
 ```bash

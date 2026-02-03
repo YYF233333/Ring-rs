@@ -1,9 +1,11 @@
 # VN Script 语法规范
 
-> 版本: 1.0.0  
+> 版本: 1.1.0  
 > 本文档定义了 Visual Novel Engine 脚本语言的正式语法规范。
 >
-> **实现状态**: ✅ 解析器已完成（手写递归下降，50 个测试用例）
+> **实现状态**: ✅ 解析器已完成（手写递归下降，176 个测试用例）
+>
+> **1.1.0 新增**: 变量系统（set）、条件分支（if/elseif/else/endif）、表达式求值
 
 ---
 
@@ -266,11 +268,97 @@ stopBGM
 
 ## 控制逻辑
 
-无条件跳转：
+### 无条件跳转
 
 ```markdown
 goto **label**
 ```
+
+### 变量设置
+
+使用 `set` 指令设置脚本变量：
+
+```markdown
+set $变量名 = 值
+```
+
+**支持的值类型**：
+
+| 类型 | 语法示例 | 说明 |
+|------|----------|------|
+| 字符串 | `"文本"` 或 `'文本'` | 用引号包围的文本 |
+| 布尔值 | `true` / `false` | 逻辑真/假 |
+| 整数 | `42` / `-1` | 整数数值 |
+| 变量引用 | `$other_var` | 引用另一个变量的值 |
+
+**示例**：
+
+```markdown
+set $player_name = "Alice"
+set $has_key = true
+set $score = 100
+set $is_ready = $completed
+```
+
+**变量命名规则**：
+
+- 变量名必须以 `$` 开头
+- 变量名只能包含字母、数字和下划线
+- 变量名区分大小写
+
+**注意**：变量会随存档持久化，读档后变量状态会被恢复。
+
+### 条件分支
+
+使用 `if/elseif/else/endif` 实现条件分支：
+
+```markdown
+if 条件表达式
+  内容...
+elseif 条件表达式
+  内容...
+else
+  内容...
+endif
+```
+
+**条件表达式语法**：
+
+| 语法 | 说明 | 示例 |
+|------|------|------|
+| `$var == 值` | 相等比较 | `$name == "Alice"` |
+| `$var != 值` | 不等比较 | `$role != "guest"` |
+| `表达式 and 表达式` | 逻辑与 | `$a == true and $b == true` |
+| `表达式 or 表达式` | 逻辑或 | `$x == 1 or $y == 2` |
+| `not 表达式` | 逻辑非 | `not $is_locked` |
+| `(表达式)` | 括号分组 | `($a == true) and ($b == false)` |
+
+**完整示例**：
+
+```markdown
+set $player_role = "user"
+
+if $player_role == "admin"
+  ："欢迎回来，管理员。"
+  show <img src="admin_badge.png" /> as badge at right
+elseif $player_role == "user"
+  ："欢迎回来，用户。"
+else
+  ："欢迎，访客。请先登录。"
+endif
+
+if $has_key == true and $door_unlocked == false
+  ："你用钥匙打开了门。"
+  set $door_unlocked = true
+endif
+```
+
+**设计约束**：
+
+- 条件分支必须以 `endif` 结束
+- `elseif` 和 `else` 是可选的
+- 条件表达式必须返回布尔值
+- 不支持嵌套条件（如需复杂逻辑，请使用标签和 goto）
 
 ## 七、过渡效果语法
 

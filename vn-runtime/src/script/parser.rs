@@ -16,7 +16,8 @@
 
 use crate::command::{Position, Transition, TransitionArg};
 use crate::error::ParseError;
-use crate::script::ast::{ChoiceOption, Script, ScriptNode};
+use crate::script::Expr;
+use crate::script::ast::{ChoiceOption, ConditionalBranch, Script, ScriptNode};
 
 //=============================================================================
 // 辅助解析函数
@@ -438,6 +439,304 @@ fn extract_quoted_content(s: &str) -> Option<&str> {
 }
 
 //=============================================================================
+// 表达式解析
+//=============================================================================
+
+/// 解析表达式字符串
+///
+/// 支持的语法:
+/// - 字面量: `"string"`, `true`, `false`
+/// - 变量: `$var_name`
+/// - 比较: `$var == "value"`, `$var != "value"`
+/// - 逻辑: `expr and expr`, `expr or expr`, `not expr`
+/// - 括号: `(expr)`
+fn parse_expression(input: &str, line_number: usize) -> Result<Expr, ParseError> {
+    let input = input.trim();
+    if input.is_empty() {
+        return Err(ParseError::InvalidLine {
+            line: line_number,
+            message: "空表达式".to_string(),
+        });
+    }
+
+    // 使用简单的递归下降解析器
+    let mut parser = ExprParser::new(input, line_number);
+    let expr = parser.parse_or()?;
+    parser.skip_whitespace();
+    if !parser.remaining().is_empty() {
+        return Err(ParseError::InvalidLine {
+            line: line_number,
+            message: format!("表达式末尾存在无法解析的内容: '{}'", parser.remaining()),
+        });
+    }
+    Ok(expr)
+}
+
+/// 表达式解析器
+struct ExprParser<'a> {
+    input: &'a str,
+    pos: usize,
+    line_number: usize,
+}
+
+impl<'a> ExprParser<'a> {
+    fn new(input: &'a str, line_number: usize) -> Self {
+        Self {
+            input,
+            pos: 0,
+            line_number,
+        }
+    }
+
+    fn remaining(&self) -> &str {
+        &self.input[self.pos..]
+    }
+
+    fn skip_whitespace(&mut self) {
+        while self.pos < self.input.len() {
+            let c = self.input[self.pos..].chars().next().unwrap();
+            if c.is_whitespace() {
+                self.pos += c.len_utf8();
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn peek_char(&self) -> Option<char> {
+        self.input[self.pos..].chars().next()
+    }
+
+    fn consume_char(&mut self) -> Option<char> {
+        let c = self.peek_char()?;
+        self.pos += c.len_utf8();
+        Some(c)
+    }
+
+    fn starts_with_keyword(&self, keyword: &str) -> bool {
+        let remaining = self.remaining().to_lowercase();
+        if remaining.starts_with(&keyword.to_lowercase()) {
+            // 确保后面是空白或结束
+            let after = &self.input[self.pos + keyword.len()..];
+            after.is_empty()
+                || after.starts_with(char::is_whitespace)
+                || after.starts_with('(')
+                || after.starts_with(')')
+        } else {
+            false
+        }
+    }
+
+    fn consume_keyword(&mut self, keyword: &str) {
+        self.pos += keyword.len();
+        self.skip_whitespace();
+    }
+
+    /// 解析 or 表达式（最低优先级）
+    fn parse_or(&mut self) -> Result<Expr, ParseError> {
+        let mut left = self.parse_and()?;
+
+        loop {
+            self.skip_whitespace();
+            if self.starts_with_keyword("or") {
+                self.consume_keyword("or");
+                let right = self.parse_and()?;
+                left = Expr::or(left, right);
+            } else {
+                break;
+            }
+        }
+
+        Ok(left)
+    }
+
+    /// 解析 and 表达式
+    fn parse_and(&mut self) -> Result<Expr, ParseError> {
+        let mut left = self.parse_not()?;
+
+        loop {
+            self.skip_whitespace();
+            if self.starts_with_keyword("and") {
+                self.consume_keyword("and");
+                let right = self.parse_not()?;
+                left = Expr::and(left, right);
+            } else {
+                break;
+            }
+        }
+
+        Ok(left)
+    }
+
+    /// 解析 not 表达式
+    fn parse_not(&mut self) -> Result<Expr, ParseError> {
+        self.skip_whitespace();
+        if self.starts_with_keyword("not") {
+            self.consume_keyword("not");
+            let expr = self.parse_not()?;
+            Ok(Expr::not(expr))
+        } else {
+            self.parse_comparison()
+        }
+    }
+
+    /// 解析比较表达式
+    fn parse_comparison(&mut self) -> Result<Expr, ParseError> {
+        let left = self.parse_primary()?;
+
+        self.skip_whitespace();
+
+        // 检查比较运算符
+        if self.remaining().starts_with("==") {
+            self.pos += 2;
+            self.skip_whitespace();
+            let right = self.parse_primary()?;
+            Ok(Expr::eq(left, right))
+        } else if self.remaining().starts_with("!=") {
+            self.pos += 2;
+            self.skip_whitespace();
+            let right = self.parse_primary()?;
+            Ok(Expr::not_eq(left, right))
+        } else {
+            Ok(left)
+        }
+    }
+
+    /// 解析基本表达式
+    fn parse_primary(&mut self) -> Result<Expr, ParseError> {
+        self.skip_whitespace();
+
+        let c = self.peek_char().ok_or_else(|| ParseError::InvalidLine {
+            line: self.line_number,
+            message: "表达式意外结束".to_string(),
+        })?;
+
+        match c {
+            // 括号
+            '(' => {
+                self.consume_char();
+                let expr = self.parse_or()?;
+                self.skip_whitespace();
+                if self.peek_char() != Some(')') {
+                    return Err(ParseError::InvalidLine {
+                        line: self.line_number,
+                        message: "缺少右括号 ')'".to_string(),
+                    });
+                }
+                self.consume_char();
+                Ok(expr)
+            }
+
+            // 变量
+            '$' => {
+                self.consume_char();
+                let name = self.parse_identifier()?;
+                Ok(Expr::var(name))
+            }
+
+            // 字符串字面量
+            '"' => {
+                let s = self.parse_string_literal('"')?;
+                Ok(Expr::string(s))
+            }
+            '\'' => {
+                let s = self.parse_string_literal('\'')?;
+                Ok(Expr::string(s))
+            }
+
+            // 布尔字面量或数字
+            _ => {
+                if self.starts_with_keyword("true") {
+                    self.consume_keyword("true");
+                    Ok(Expr::bool(true))
+                } else if self.starts_with_keyword("false") {
+                    self.consume_keyword("false");
+                    Ok(Expr::bool(false))
+                } else if c.is_ascii_digit() || c == '-' {
+                    // 尝试解析数字
+                    let num = self.parse_number()?;
+                    Ok(Expr::int(num))
+                } else {
+                    Err(ParseError::InvalidLine {
+                        line: self.line_number,
+                        message: format!("无法解析表达式，意外字符: '{}'", c),
+                    })
+                }
+            }
+        }
+    }
+
+    /// 解析标识符
+    fn parse_identifier(&mut self) -> Result<String, ParseError> {
+        let start = self.pos;
+
+        while self.pos < self.input.len() {
+            let c = self.input[self.pos..].chars().next().unwrap();
+            if c.is_alphanumeric() || c == '_' {
+                self.pos += c.len_utf8();
+            } else {
+                break;
+            }
+        }
+
+        if self.pos == start {
+            return Err(ParseError::InvalidLine {
+                line: self.line_number,
+                message: "期望标识符".to_string(),
+            });
+        }
+
+        Ok(self.input[start..self.pos].to_string())
+    }
+
+    /// 解析字符串字面量
+    fn parse_string_literal(&mut self, quote: char) -> Result<String, ParseError> {
+        self.consume_char(); // 消费开始引号
+        let start = self.pos;
+
+        while self.pos < self.input.len() {
+            let c = self.input[self.pos..].chars().next().unwrap();
+            if c == quote {
+                let s = self.input[start..self.pos].to_string();
+                self.consume_char(); // 消费结束引号
+                return Ok(s);
+            }
+            self.pos += c.len_utf8();
+        }
+
+        Err(ParseError::InvalidLine {
+            line: self.line_number,
+            message: format!("字符串字面量未闭合，缺少 '{}'", quote),
+        })
+    }
+
+    /// 解析数字
+    fn parse_number(&mut self) -> Result<i64, ParseError> {
+        let start = self.pos;
+
+        // 处理负号
+        if self.peek_char() == Some('-') {
+            self.consume_char();
+        }
+
+        while self.pos < self.input.len() {
+            let c = self.input[self.pos..].chars().next().unwrap();
+            if c.is_ascii_digit() {
+                self.pos += c.len_utf8();
+            } else {
+                break;
+            }
+        }
+
+        let num_str = &self.input[start..self.pos];
+        num_str.parse::<i64>().map_err(|_| ParseError::InvalidLine {
+            line: self.line_number,
+            message: format!("无法解析数字: '{}'", num_str),
+        })
+    }
+}
+
+//=============================================================================
 // 块类型定义
 //=============================================================================
 
@@ -451,6 +750,23 @@ enum Block {
         lines: Vec<String>,
         start_line: usize,
     },
+    /// 条件块（if/elseif/else/endif）
+    Conditional {
+        /// 原始行列表 (line, line_number)
+        lines: Vec<(String, usize)>,
+        start_line: usize,
+    },
+}
+
+impl Block {
+    /// 获取块的起始行号
+    fn start_line(&self) -> usize {
+        match self {
+            Block::SingleLine { line_number, .. } => *line_number,
+            Block::Table { start_line, .. } => *start_line,
+            Block::Conditional { start_line, .. } => *start_line,
+        }
+    }
 }
 
 //=============================================================================
@@ -512,17 +828,24 @@ impl Parser {
         // 阶段 1：块识别
         let blocks = self.recognize_blocks(text);
 
-        // 阶段 2：块解析
+        // 阶段 2：块解析（同时收集行号）
         let mut nodes = Vec::new();
+        let mut source_map = Vec::new();
         for block in blocks {
+            let line_number = block.start_line();
             match self.parse_block(block) {
-                Ok(Some(node)) => nodes.push(node),
+                Ok(Some(node)) => {
+                    nodes.push(node);
+                    source_map.push(line_number);
+                }
                 Ok(None) => {} // 跳过（如空内容）
                 Err(e) => return Err(e),
             }
         }
 
-        Ok(Script::new(script_id, nodes, base_path))
+        Ok(Script::with_source_map(
+            script_id, nodes, base_path, source_map,
+        ))
     }
 
     /// 获取解析过程中的警告
@@ -537,10 +860,55 @@ impl Parser {
     fn recognize_blocks(&self, text: &str) -> Vec<Block> {
         let mut blocks = Vec::new();
         let mut current_table: Option<(Vec<String>, usize)> = None;
+        let mut current_conditional: Option<(Vec<(String, usize)>, usize, usize)> = None; // (lines, start_line, depth)
 
         for (line_idx, line) in text.lines().enumerate() {
             let line_number = line_idx + 1;
             let trimmed = line.trim();
+
+            // 检查是否是条件语句
+            let is_if = starts_with_ignore_case(trimmed, "if ");
+            let is_endif = trimmed.eq_ignore_ascii_case("endif");
+
+            // 处理条件块
+            if let Some((ref mut lines, _start, ref mut depth)) = current_conditional {
+                // 嵌套 if
+                if is_if {
+                    *depth += 1;
+                }
+
+                lines.push((trimmed.to_string(), line_number));
+
+                // endif
+                if is_endif {
+                    if *depth > 0 {
+                        *depth -= 1;
+                    } else {
+                        // 条件块结束
+                        let (lines, start, _) = current_conditional.take().unwrap();
+                        blocks.push(Block::Conditional {
+                            lines,
+                            start_line: start,
+                        });
+                    }
+                }
+                continue;
+            }
+
+            // 开始新的条件块
+            if is_if {
+                // 先结束任何打开的表格块
+                if let Some((tbl_lines, tbl_start)) = current_table.take() {
+                    blocks.push(Block::Table {
+                        lines: tbl_lines,
+                        start_line: tbl_start,
+                    });
+                }
+
+                current_conditional =
+                    Some((vec![(trimmed.to_string(), line_number)], line_number, 0));
+                continue;
+            }
 
             // 空行：结束当前表格块
             if trimmed.is_empty() {
@@ -586,6 +954,14 @@ impl Parser {
             });
         }
 
+        // 处理未闭合的条件块（添加到 blocks 以便在 parse_block 阶段报错）
+        if let Some((lines, start, _depth)) = current_conditional {
+            blocks.push(Block::Conditional {
+                lines,
+                start_line: start,
+            });
+        }
+
         blocks
     }
 
@@ -597,6 +973,7 @@ impl Parser {
         match block {
             Block::SingleLine { line, line_number } => self.parse_single_line(&line, line_number),
             Block::Table { lines, start_line } => self.parse_table(&lines, start_line),
+            Block::Conditional { lines, start_line } => self.parse_conditional(&lines, start_line),
         }
     }
 
@@ -643,6 +1020,10 @@ impl Parser {
         if starts_with_ignore_case(line, "stopbgm") {
             return Ok(Some(ScriptNode::StopBgm));
         }
+        // set - 变量赋值
+        if starts_with_ignore_case(line, "set ") {
+            return self.parse_set_var(line, line_number);
+        }
 
         // 4. HTML 标签解析
         // <audio src="..."></audio> 或 <audio src="..."></audio> loop
@@ -680,6 +1061,192 @@ impl Parser {
             title: title.to_string(),
             level,
         }))
+    }
+
+    /// 解析 set 指令
+    ///
+    /// 语法: `set $var = value`
+    fn parse_set_var(
+        &self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        // 跳过 "set "
+        let content = line[4..].trim();
+
+        // 查找 = 号
+        let eq_pos = content
+            .find('=')
+            .ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "set".to_string(),
+                param: "赋值符号 '='".to_string(),
+            })?;
+
+        let var_part = content[..eq_pos].trim();
+        let value_part = content[eq_pos + 1..].trim();
+
+        // 变量名必须以 $ 开头
+        let var_name = var_part
+            .strip_prefix('$')
+            .ok_or_else(|| ParseError::InvalidLine {
+                line: line_number,
+                message: format!("变量名必须以 '$' 开头，实际: '{}'", var_part),
+            })?;
+
+        if var_name.is_empty() {
+            return Err(ParseError::MissingParameter {
+                line: line_number,
+                command: "set".to_string(),
+                param: "变量名".to_string(),
+            });
+        }
+
+        // 验证变量名格式
+        if !var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return Err(ParseError::InvalidLine {
+                line: line_number,
+                message: format!("变量名只能包含字母、数字和下划线，实际: '{}'", var_name),
+            });
+        }
+
+        // 解析表达式（允许完整表达式：==/!=/and/or/not/括号 等）
+        let value = parse_expression(value_part, line_number)?;
+
+        Ok(Some(ScriptNode::SetVar {
+            name: var_name.to_string(),
+            value,
+        }))
+    }
+
+    /// 解析条件块
+    ///
+    /// 条件块结构:
+    /// ```text
+    /// if <condition>
+    ///   <body>
+    /// elseif <condition>
+    ///   <body>
+    /// else
+    ///   <body>
+    /// endif
+    /// ```
+    fn parse_conditional(
+        &mut self,
+        lines: &[(String, usize)],
+        start_line: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        if lines.is_empty() {
+            return Ok(None);
+        }
+
+        // 检查最后一行是否是 endif
+        let last_line = lines.last().map(|(l, _)| l.as_str()).unwrap_or("");
+        if !last_line.eq_ignore_ascii_case("endif") {
+            return Err(ParseError::InvalidLine {
+                line: start_line,
+                message: "条件块未闭合，缺少 'endif'".to_string(),
+            });
+        }
+
+        let mut branches = Vec::new();
+        let mut current_body_lines: Vec<(String, usize)> = Vec::new();
+        let mut current_condition: Option<Expr> = None;
+        let mut is_first = true;
+
+        for (line, line_number) in lines.iter() {
+            let trimmed = line.trim();
+
+            if is_first {
+                // 第一行必须是 if
+                if !starts_with_ignore_case(trimmed, "if ") {
+                    return Err(ParseError::InvalidLine {
+                        line: *line_number,
+                        message: "条件块必须以 'if' 开头".to_string(),
+                    });
+                }
+
+                let condition_str = &trimmed[3..].trim();
+                current_condition = Some(parse_expression(condition_str, *line_number)?);
+                is_first = false;
+                continue;
+            }
+
+            // elseif
+            if starts_with_ignore_case(trimmed, "elseif ") {
+                // 保存前一个分支
+                let body = self.parse_body_lines(&current_body_lines)?;
+                branches.push(ConditionalBranch {
+                    condition: current_condition.take(),
+                    body,
+                });
+                current_body_lines.clear();
+
+                let condition_str = &trimmed[7..].trim();
+                current_condition = Some(parse_expression(condition_str, *line_number)?);
+                continue;
+            }
+
+            // else
+            if trimmed.eq_ignore_ascii_case("else") {
+                // 保存前一个分支
+                let body = self.parse_body_lines(&current_body_lines)?;
+                branches.push(ConditionalBranch {
+                    condition: current_condition.take(),
+                    body,
+                });
+                current_body_lines.clear();
+
+                // else 分支没有条件
+                current_condition = None;
+                continue;
+            }
+
+            // endif
+            if trimmed.eq_ignore_ascii_case("endif") {
+                // 保存最后一个分支
+                let body = self.parse_body_lines(&current_body_lines)?;
+                branches.push(ConditionalBranch {
+                    condition: current_condition.take(),
+                    body,
+                });
+                break;
+            }
+
+            // 普通内容行，添加到当前分支体
+            current_body_lines.push((trimmed.to_string(), *line_number));
+        }
+
+        if branches.is_empty() {
+            return Err(ParseError::InvalidLine {
+                line: start_line,
+                message: "条件块没有有效分支".to_string(),
+            });
+        }
+
+        Ok(Some(ScriptNode::Conditional { branches }))
+    }
+
+    /// 解析分支体内的行列表
+    fn parse_body_lines(
+        &mut self,
+        lines: &[(String, usize)],
+    ) -> Result<Vec<ScriptNode>, ParseError> {
+        let mut nodes = Vec::new();
+
+        for (line, line_number) in lines {
+            // 跳过空行
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            // 递归解析每一行
+            if let Some(node) = self.parse_single_line(line, *line_number)? {
+                nodes.push(node);
+            }
+        }
+
+        Ok(nodes)
     }
 
     /// 解析 changeBG 指令
@@ -2317,5 +2884,257 @@ stopBGM
         assert_eq!(t.name, "rule");
         assert!(t.get_named("mask").is_some());
         assert!(t.get_named("duration").is_none());
+    }
+
+    //=========================================================================
+    // set 指令测试
+    //=========================================================================
+
+    #[test]
+    fn test_parse_set_var_string() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", r#"set $name = "Alice""#).unwrap();
+
+        assert_eq!(script.len(), 1);
+        if let ScriptNode::SetVar { name, value } = &script.nodes[0] {
+            assert_eq!(name, "name");
+            assert!(
+                matches!(value, crate::script::Expr::Literal(crate::state::VarValue::String(s)) if s == "Alice")
+            );
+        } else {
+            panic!("Expected SetVar node");
+        }
+    }
+
+    #[test]
+    fn test_parse_set_var_bool() {
+        let mut parser = Parser::new();
+
+        let script = parser.parse("test", "set $is_active = true").unwrap();
+        if let ScriptNode::SetVar { name, value } = &script.nodes[0] {
+            assert_eq!(name, "is_active");
+            assert!(matches!(
+                value,
+                crate::script::Expr::Literal(crate::state::VarValue::Bool(true))
+            ));
+        } else {
+            panic!("Expected SetVar node");
+        }
+
+        let script = parser.parse("test", "set $is_done = false").unwrap();
+        if let ScriptNode::SetVar { name, value } = &script.nodes[0] {
+            assert_eq!(name, "is_done");
+            assert!(matches!(
+                value,
+                crate::script::Expr::Literal(crate::state::VarValue::Bool(false))
+            ));
+        } else {
+            panic!("Expected SetVar node");
+        }
+    }
+
+    #[test]
+    fn test_parse_set_var_int() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", "set $count = 42").unwrap();
+
+        if let ScriptNode::SetVar { name, value } = &script.nodes[0] {
+            assert_eq!(name, "count");
+            assert!(matches!(
+                value,
+                crate::script::Expr::Literal(crate::state::VarValue::Int(42))
+            ));
+        } else {
+            panic!("Expected SetVar node");
+        }
+    }
+
+    #[test]
+    fn test_parse_set_var_missing_dollar() {
+        let mut parser = Parser::new();
+        let err = parser.parse("test", "set name = 123").unwrap_err();
+        assert!(matches!(err, ParseError::InvalidLine { .. }));
+    }
+
+    #[test]
+    fn test_parse_set_var_missing_equals() {
+        let mut parser = Parser::new();
+        let err = parser.parse("test", "set $name 123").unwrap_err();
+        assert!(matches!(err, ParseError::MissingParameter { .. }));
+    }
+
+    //=========================================================================
+    // 条件分支测试
+    //=========================================================================
+
+    #[test]
+    fn test_parse_simple_if() {
+        let mut parser = Parser::new();
+        let text = r#"
+if $flag == true
+  ："条件为真"
+endif
+"#;
+        let script = parser.parse("test", text).unwrap();
+
+        assert_eq!(script.len(), 1);
+        if let ScriptNode::Conditional { branches } = &script.nodes[0] {
+            assert_eq!(branches.len(), 1);
+            assert!(branches[0].condition.is_some());
+            assert_eq!(branches[0].body.len(), 1);
+        } else {
+            panic!("Expected Conditional node");
+        }
+    }
+
+    #[test]
+    fn test_parse_if_else() {
+        let mut parser = Parser::new();
+        let text = r#"
+if $name == "Alice"
+  ："你好，Alice"
+else
+  ："你好，陌生人"
+endif
+"#;
+        let script = parser.parse("test", text).unwrap();
+
+        if let ScriptNode::Conditional { branches } = &script.nodes[0] {
+            assert_eq!(branches.len(), 2);
+            assert!(branches[0].condition.is_some()); // if 分支
+            assert!(branches[1].condition.is_none()); // else 分支
+        } else {
+            panic!("Expected Conditional node");
+        }
+    }
+
+    #[test]
+    fn test_parse_if_elseif_else() {
+        let mut parser = Parser::new();
+        let text = r#"
+if $role == "admin"
+  ："欢迎管理员"
+elseif $role == "user"
+  ："欢迎用户"
+else
+  ："欢迎访客"
+endif
+"#;
+        let script = parser.parse("test", text).unwrap();
+
+        if let ScriptNode::Conditional { branches } = &script.nodes[0] {
+            assert_eq!(branches.len(), 3);
+            assert!(branches[0].condition.is_some()); // if
+            assert!(branches[1].condition.is_some()); // elseif
+            assert!(branches[2].condition.is_none()); // else
+        } else {
+            panic!("Expected Conditional node");
+        }
+    }
+
+    #[test]
+    fn test_parse_if_with_logical_ops() {
+        let mut parser = Parser::new();
+        let text = r#"
+if $a == true and $b == false
+  ："复合条件"
+endif
+"#;
+        let script = parser.parse("test", text).unwrap();
+
+        if let ScriptNode::Conditional { branches } = &script.nodes[0] {
+            assert_eq!(branches.len(), 1);
+            // 条件应该是 And 表达式
+            if let Some(crate::script::Expr::And(_, _)) = &branches[0].condition {
+                // OK
+            } else {
+                panic!("Expected And expression");
+            }
+        } else {
+            panic!("Expected Conditional node");
+        }
+    }
+
+    #[test]
+    fn test_parse_if_missing_endif() {
+        let mut parser = Parser::new();
+        let text = r#"
+if $flag == true
+  ："没有 endif"
+"#;
+        // 未闭合的条件块会在 parse_conditional 阶段报错
+        let result = parser.parse("test", text);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseError::InvalidLine { .. }
+        ));
+    }
+
+    //=========================================================================
+    // 表达式解析测试
+    //=========================================================================
+
+    #[test]
+    fn test_parse_expression_variable() {
+        let expr = parse_expression("$foo == \"bar\"", 1).unwrap();
+        assert!(matches!(expr, crate::script::Expr::Eq(_, _)));
+    }
+
+    #[test]
+    fn test_parse_expression_bool_literal() {
+        let expr = parse_expression("true", 1).unwrap();
+        assert!(matches!(
+            expr,
+            crate::script::Expr::Literal(crate::state::VarValue::Bool(true))
+        ));
+
+        let expr = parse_expression("false", 1).unwrap();
+        assert!(matches!(
+            expr,
+            crate::script::Expr::Literal(crate::state::VarValue::Bool(false))
+        ));
+    }
+
+    #[test]
+    fn test_parse_expression_not() {
+        let expr = parse_expression("not $flag", 1).unwrap();
+        assert!(matches!(expr, crate::script::Expr::Not(_)));
+    }
+
+    #[test]
+    fn test_parse_expression_and_or() {
+        let expr = parse_expression("$a == true and $b == false", 1).unwrap();
+        assert!(matches!(expr, crate::script::Expr::And(_, _)));
+
+        let expr = parse_expression("$a == true or $b == false", 1).unwrap();
+        assert!(matches!(expr, crate::script::Expr::Or(_, _)));
+    }
+
+    #[test]
+    fn test_parse_expression_parentheses() {
+        let expr = parse_expression("($a == true)", 1).unwrap();
+        assert!(matches!(expr, crate::script::Expr::Eq(_, _)));
+
+        let expr = parse_expression("($a == true) and ($b == false)", 1).unwrap();
+        assert!(matches!(expr, crate::script::Expr::And(_, _)));
+    }
+
+    #[test]
+    fn test_parse_expression_not_equal() {
+        let expr = parse_expression("$name != \"Bob\"", 1).unwrap();
+        assert!(matches!(expr, crate::script::Expr::NotEq(_, _)));
+    }
+
+    #[test]
+    fn test_parse_expression_empty_error() {
+        let err = parse_expression("", 1).unwrap_err();
+        assert!(matches!(err, ParseError::InvalidLine { .. }));
+    }
+
+    #[test]
+    fn test_parse_expression_unclosed_paren() {
+        let err = parse_expression("($a == true", 1).unwrap_err();
+        assert!(matches!(err, ParseError::InvalidLine { .. }));
     }
 }

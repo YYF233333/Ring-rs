@@ -33,6 +33,7 @@
 - **执行器（AST → Command）**：`vn-runtime/src/runtime/executor.rs`
 - **脚本 AST**：`vn-runtime/src/script/ast.rs`
 - **脚本解析器**：`vn-runtime/src/script/parser.rs`
+- **脚本诊断（静态分析）**：`vn-runtime/src/diagnostic.rs`
 - **存档模型**：`vn-runtime/src/save.rs`
 - **历史记录**：`vn-runtime/src/history.rs`
 
@@ -84,6 +85,8 @@
 ## 开发工作流（质量门禁/覆盖率）
 
 - **一键门禁**：`cargo check-all`（由 `tools/xtask` 串行执行 fmt/clippy/test）
+- **脚本检查**：`cargo script-check`（检查脚本语法/label/资源引用）
+- **Dev Mode 自动脚本检查**：Host 启动时基于 `config.json` 的 `debug.script_check` 自动运行（debug build 默认开启）
 - **覆盖率**：
   - `cargo cov-runtime`（主看 `vn-runtime`）
   - `cargo cov-workspace`（趋势观察）

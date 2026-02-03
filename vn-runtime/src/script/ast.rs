@@ -10,6 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::command::{Position, Transition};
+use crate::script::Expr;
 
 /// 选择项（AST 级别）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -18,6 +19,15 @@ pub struct ChoiceOption {
     pub text: String,
     /// 跳转目标标签
     pub target_label: String,
+}
+
+/// 条件分支
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConditionalBranch {
+    /// 条件表达式（None 表示 else 分支）
+    pub condition: Option<Expr>,
+    /// 分支内的节点列表
+    pub body: Vec<ScriptNode>,
 }
 
 /// 脚本节点
@@ -131,6 +141,27 @@ pub enum ScriptNode {
         /// 跳转目标标签
         target_label: String,
     },
+
+    /// 设置变量
+    ///
+    /// 对应 `set $var = value` 语法
+    SetVar {
+        /// 变量名（不含 $ 前缀）
+        name: String,
+        /// 表达式
+        value: Expr,
+    },
+
+    /// 条件分支
+    ///
+    /// 对应 `if/elseif/else/endif` 语法
+    ///
+    /// 条件分支在解析阶段被展开为扁平结构，
+    /// 每个 IfBranch 包含条件和对应的节点列表。
+    Conditional {
+        /// 分支列表（if + elseif + else）
+        branches: Vec<ConditionalBranch>,
+    },
 }
 
 impl ScriptNode {
@@ -153,6 +184,14 @@ impl ScriptNode {
             _ => None,
         }
     }
+
+    /// 判断节点是否是控制流节点（不产生 Command）
+    pub fn is_control_flow(&self) -> bool {
+        matches!(
+            self,
+            Self::Label { .. } | Self::Goto { .. } | Self::SetVar { .. } | Self::Conditional { .. }
+        )
+    }
 }
 
 /// 解析后的脚本
@@ -170,6 +209,10 @@ pub struct Script {
     /// 标签到节点索引的映射
     #[serde(skip)]
     label_index: std::collections::HashMap<String, usize>,
+    /// 源码行号映射：source_map[node_index] = line_number
+    /// 用于诊断输出时定位问题行
+    #[serde(skip)]
+    source_map: Vec<usize>,
 }
 
 impl Script {
@@ -191,9 +234,48 @@ impl Script {
             nodes,
             base_path,
             label_index: std::collections::HashMap::new(),
+            source_map: Vec::new(),
         };
         script.build_label_index();
         script
+    }
+
+    /// 创建带源码映射的脚本
+    ///
+    /// # 参数
+    /// - `id`: 脚本标识符
+    /// - `nodes`: 脚本节点列表
+    /// - `base_path`: 脚本文件所在目录
+    /// - `source_map`: 节点索引到源码行号的映射
+    pub fn with_source_map(
+        id: impl Into<String>,
+        nodes: Vec<ScriptNode>,
+        base_path: impl Into<String>,
+        source_map: Vec<usize>,
+    ) -> Self {
+        let id = id.into();
+        let base_path = base_path.into();
+        let mut script = Self {
+            id,
+            nodes,
+            base_path,
+            label_index: std::collections::HashMap::new(),
+            source_map,
+        };
+        script.build_label_index();
+        script
+    }
+
+    /// 获取节点的源码行号
+    ///
+    /// 如果没有源码映射或索引越界，返回 None
+    pub fn get_source_line(&self, node_index: usize) -> Option<usize> {
+        self.source_map.get(node_index).copied()
+    }
+
+    /// 是否有源码映射
+    pub fn has_source_map(&self) -> bool {
+        !self.source_map.is_empty()
     }
 
     /// 解析相对于脚本的资源路径，返回完整路径

@@ -28,6 +28,33 @@
 
 - `cargo pack -- --help`
 
+### 脚本检查（Script Check）
+
+静态检查脚本文件，发现问题无需运行游戏：
+
+- `cargo script-check`：检查 `assets/scripts/` 下所有脚本
+- `cargo script-check <path>`：检查指定文件或目录
+
+检查内容：
+- 语法错误（解析失败）
+- 未定义的跳转目标（goto/choice 引用不存在的 label）
+- 资源文件是否存在（背景/立绘/音频）
+
+诊断输出包含精确行号，便于快速定位问题：
+```
+[ERROR] script.md:42: 未定义的跳转目标: **missing_label**
+```
+
+### Dev Mode 自动诊断
+
+在 **debug build**（`cargo run`）时 `debug.script_check` 默认值为 `true`，
+Host 启动会自动运行脚本检查并输出诊断结果；release build 默认值为 `false`。
+
+- 默认只输出警告，不阻塞启动
+- 可在 `config.json` 中配置开关：
+  - 开启：`"debug": { "script_check": true }`
+  - 关闭：`"debug": { "script_check": false }`
+
 ## 覆盖率（Coverage）
 
 本仓库的覆盖率目标以 **`vn-runtime` 接近 100%** 为主（`host` 不追求纯覆盖率数值，优先保证关键链路可回归、可 headless 测试）。
