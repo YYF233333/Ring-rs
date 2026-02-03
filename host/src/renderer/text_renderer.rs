@@ -20,6 +20,12 @@ const DIALOGUE_BOX_COLOR: Color = Color::new(0.1, 0.1, 0.15, DIALOGUE_BOX_ALPHA)
 const SPEAKER_NAME_COLOR: Color = Color::new(0.95, 0.85, 0.6, 1.0); // 金黄色
 const CONTENT_COLOR: Color = WHITE;
 
+/// 辅助函数：为颜色应用 alpha 系数
+#[inline]
+fn color_with_alpha(color: Color, alpha: f32) -> Color {
+    Color::new(color.r, color.g, color.b, color.a * alpha)
+}
+
 /// 文本渲染器
 #[derive(Debug)]
 pub struct TextRenderer {
@@ -78,60 +84,7 @@ impl TextRenderer {
 
     /// 渲染对话框
     pub fn render_dialogue_box(&self, speaker: Option<&str>, content: &str, visible_chars: usize) {
-        let screen_w = screen_width();
-        let screen_h = screen_height();
-
-        // 计算对话框位置和大小
-        let box_x = DIALOGUE_BOX_MARGIN;
-        let box_y = screen_h - DIALOGUE_BOX_HEIGHT - DIALOGUE_BOX_MARGIN;
-        let box_w = screen_w - DIALOGUE_BOX_MARGIN * 2.0;
-        let box_h = DIALOGUE_BOX_HEIGHT;
-
-        // 绘制对话框背景
-        draw_rectangle(box_x, box_y, box_w, box_h, DIALOGUE_BOX_COLOR);
-
-        // 绘制对话框边框
-        draw_rectangle_lines(
-            box_x,
-            box_y,
-            box_w,
-            box_h,
-            2.0,
-            Color::new(0.5, 0.5, 0.6, 0.8),
-        );
-
-        // 绘制说话者名称
-        let mut text_y = box_y + DIALOGUE_BOX_PADDING;
-        if let Some(name) = speaker {
-            self.draw_text(
-                name,
-                box_x + DIALOGUE_BOX_PADDING,
-                text_y + SPEAKER_FONT_SIZE,
-                SPEAKER_FONT_SIZE,
-                SPEAKER_NAME_COLOR,
-            );
-            text_y += SPEAKER_FONT_SIZE + 10.0;
-        }
-
-        // 绘制对话内容（支持打字机效果）
-        let visible_content: String = content.chars().take(visible_chars).collect();
-        let content_x = box_x + DIALOGUE_BOX_PADDING;
-        let content_y = text_y + CONTENT_FONT_SIZE + 5.0;
-        let max_width = box_w - DIALOGUE_BOX_PADDING * 2.0;
-
-        self.draw_text_wrapped(
-            &visible_content,
-            content_x,
-            content_y,
-            CONTENT_FONT_SIZE,
-            CONTENT_COLOR,
-            max_width,
-        );
-
-        // 绘制继续提示（如果文本已完全显示）
-        if visible_chars >= content.chars().count() {
-            self.draw_continue_indicator(box_x + box_w - 40.0, box_y + box_h - 30.0);
-        }
+        self.render_dialogue_box_with_alpha(speaker, content, visible_chars, 1.0);
     }
 
     /// 渲染对话框（带全局透明度）
@@ -153,40 +106,35 @@ impl TextRenderer {
         let box_w = screen_w - DIALOGUE_BOX_MARGIN * 2.0;
         let box_h = DIALOGUE_BOX_HEIGHT;
 
-        // 绘制对话框背景（带 alpha）
-        let bg_color = Color::new(
-            DIALOGUE_BOX_COLOR.r,
-            DIALOGUE_BOX_COLOR.g,
-            DIALOGUE_BOX_COLOR.b,
-            DIALOGUE_BOX_COLOR.a * alpha,
-        );
-        draw_rectangle(box_x, box_y, box_w, box_h, bg_color);
+        // 边框颜色常量
+        const BORDER_COLOR: Color = Color::new(0.5, 0.5, 0.6, 0.8);
 
-        // 绘制对话框边框（带 alpha）
+        // 绘制对话框背景和边框
+        draw_rectangle(
+            box_x,
+            box_y,
+            box_w,
+            box_h,
+            color_with_alpha(DIALOGUE_BOX_COLOR, alpha),
+        );
         draw_rectangle_lines(
             box_x,
             box_y,
             box_w,
             box_h,
             2.0,
-            Color::new(0.5, 0.5, 0.6, 0.8 * alpha),
+            color_with_alpha(BORDER_COLOR, alpha),
         );
 
         // 绘制说话者名称
         let mut text_y = box_y + DIALOGUE_BOX_PADDING;
         if let Some(name) = speaker {
-            let speaker_color = Color::new(
-                SPEAKER_NAME_COLOR.r,
-                SPEAKER_NAME_COLOR.g,
-                SPEAKER_NAME_COLOR.b,
-                SPEAKER_NAME_COLOR.a * alpha,
-            );
             self.draw_text(
                 name,
                 box_x + DIALOGUE_BOX_PADDING,
                 text_y + SPEAKER_FONT_SIZE,
                 SPEAKER_FONT_SIZE,
-                speaker_color,
+                color_with_alpha(SPEAKER_NAME_COLOR, alpha),
             );
             text_y += SPEAKER_FONT_SIZE + 10.0;
         }
@@ -197,43 +145,19 @@ impl TextRenderer {
         let content_y = text_y + CONTENT_FONT_SIZE + 5.0;
         let max_width = box_w - DIALOGUE_BOX_PADDING * 2.0;
 
-        let content_color = Color::new(
-            CONTENT_COLOR.r,
-            CONTENT_COLOR.g,
-            CONTENT_COLOR.b,
-            CONTENT_COLOR.a * alpha,
-        );
         self.draw_text_wrapped(
             &visible_content,
             content_x,
             content_y,
             CONTENT_FONT_SIZE,
-            content_color,
+            color_with_alpha(CONTENT_COLOR, alpha),
             max_width,
         );
 
         // 绘制继续提示（如果文本已完全显示且 alpha > 0.5）
         if visible_chars >= content.chars().count() && alpha > 0.5 {
-            self.draw_continue_indicator_with_alpha(
-                box_x + box_w - 40.0,
-                box_y + box_h - 30.0,
-                alpha,
-            );
+            self.draw_continue_indicator(box_x + box_w - 40.0, box_y + box_h - 30.0, alpha);
         }
-    }
-
-    /// 绘制继续提示（带透明度）
-    fn draw_continue_indicator_with_alpha(&self, x: f32, y: f32, alpha: f32) {
-        // 使用时间产生闪烁效果
-        let blink_alpha = ((get_time() * 3.0).sin() * 0.5 + 0.5) as f32;
-        let color = Color::new(1.0, 1.0, 1.0, blink_alpha * alpha);
-
-        draw_triangle(
-            vec2(x, y),
-            vec2(x + 15.0, y + 10.0),
-            vec2(x, y + 20.0),
-            color,
-        );
     }
 
     /// 渲染章节标题（左上角显示，不遮挡内容）
@@ -306,85 +230,7 @@ impl TextRenderer {
         selected_index: usize,
         hovered_index: Option<usize>,
     ) {
-        let screen_w = screen_width();
-        let screen_h = screen_height();
-
-        let choice_height = 50.0;
-        let choice_spacing = 10.0;
-        let total_height = choices.len() as f32 * (choice_height + choice_spacing) - choice_spacing;
-        let start_y = (screen_h - total_height) / 2.0;
-
-        // 绘制半透明背景
-        draw_rectangle(
-            0.0,
-            start_y - 30.0,
-            screen_w,
-            total_height + 60.0,
-            Color::new(0.0, 0.0, 0.0, 0.7),
-        );
-
-        for (i, choice) in choices.iter().enumerate() {
-            let y = start_y + i as f32 * (choice_height + choice_spacing);
-            let is_selected = i == selected_index;
-            let is_hovered = hovered_index == Some(i);
-
-            // 选项框
-            let box_w = screen_w * 0.6;
-            let box_x = (screen_w - box_w) / 2.0;
-
-            // 背景颜色：选中 > 悬停 > 普通
-            let bg_color = if is_selected {
-                Color::new(0.3, 0.4, 0.6, 0.9)
-            } else if is_hovered {
-                Color::new(0.25, 0.35, 0.5, 0.85)
-            } else {
-                Color::new(0.2, 0.2, 0.3, 0.8)
-            };
-
-            // 边框颜色：选中 > 悬停 > 普通
-            let border_color = if is_selected {
-                Color::new(0.6, 0.7, 0.9, 1.0)
-            } else if is_hovered {
-                Color::new(0.5, 0.6, 0.8, 0.9)
-            } else {
-                Color::new(0.4, 0.4, 0.5, 0.8)
-            };
-
-            draw_rectangle(box_x, y, box_w, choice_height, bg_color);
-            draw_rectangle_lines(
-                box_x,
-                y,
-                box_w,
-                choice_height,
-                if is_selected || is_hovered { 3.0 } else { 2.0 },
-                border_color,
-            );
-
-            // 选项文本
-            let text_size = self.measure_text(&choice.text, CONTENT_FONT_SIZE);
-            let text_x = box_x + (box_w - text_size.width) / 2.0;
-            let text_y = y + (choice_height + CONTENT_FONT_SIZE) / 2.0 - 5.0;
-
-            let text_color = if is_selected || is_hovered {
-                WHITE
-            } else {
-                Color::new(0.8, 0.8, 0.8, 1.0)
-            };
-
-            self.draw_text(&choice.text, text_x, text_y, CONTENT_FONT_SIZE, text_color);
-
-            // 选中指示器
-            if is_selected {
-                let indicator_x = box_x - 30.0;
-                let indicator_y = y + choice_height / 2.0;
-                draw_triangle(
-                    vec2(indicator_x, indicator_y - 10.0),
-                    vec2(indicator_x, indicator_y + 10.0),
-                    vec2(indicator_x + 15.0, indicator_y),
-                    SPEAKER_NAME_COLOR,
-                );
-            }
-        }
+        self.render_choices_with_alpha(choices, selected_index, hovered_index, 1.0);
     }
 
     /// 渲染选择界面（带全局透明度）
@@ -400,12 +246,24 @@ impl TextRenderer {
         let screen_w = screen_width();
         let screen_h = screen_height();
 
-        let choice_height = 50.0;
-        let choice_spacing = 10.0;
-        let total_height = choices.len() as f32 * (choice_height + choice_spacing) - choice_spacing;
+        // 选项布局常量
+        const CHOICE_HEIGHT: f32 = 50.0;
+        const CHOICE_SPACING: f32 = 10.0;
+
+        let total_height = choices.len() as f32 * (CHOICE_HEIGHT + CHOICE_SPACING) - CHOICE_SPACING;
         let start_y = (screen_h - total_height) / 2.0;
 
-        // 绘制半透明背景（带 alpha）
+        // 选项颜色定义
+        const BG_SELECTED: Color = Color::new(0.3, 0.4, 0.6, 0.9);
+        const BG_HOVERED: Color = Color::new(0.25, 0.35, 0.5, 0.85);
+        const BG_NORMAL: Color = Color::new(0.2, 0.2, 0.3, 0.8);
+        const BORDER_SELECTED: Color = Color::new(0.6, 0.7, 0.9, 1.0);
+        const BORDER_HOVERED: Color = Color::new(0.5, 0.6, 0.8, 0.9);
+        const BORDER_NORMAL: Color = Color::new(0.4, 0.4, 0.5, 0.8);
+        const TEXT_ACTIVE: Color = WHITE;
+        const TEXT_NORMAL: Color = Color::new(0.8, 0.8, 0.8, 1.0);
+
+        // 绘制半透明背景
         draw_rectangle(
             0.0,
             start_y - 30.0,
@@ -414,71 +272,61 @@ impl TextRenderer {
             Color::new(0.0, 0.0, 0.0, 0.7 * alpha),
         );
 
+        let box_w = screen_w * 0.6;
+        let box_x = (screen_w - box_w) / 2.0;
+
         for (i, choice) in choices.iter().enumerate() {
-            let y = start_y + i as f32 * (choice_height + choice_spacing);
+            let y = start_y + i as f32 * (CHOICE_HEIGHT + CHOICE_SPACING);
             let is_selected = i == selected_index;
             let is_hovered = hovered_index == Some(i);
 
-            // 选项框
-            let box_w = screen_w * 0.6;
-            let box_x = (screen_w - box_w) / 2.0;
-
-            // 背景颜色：选中 > 悬停 > 普通（带 alpha）
-            let bg_color = if is_selected {
-                Color::new(0.3, 0.4, 0.6, 0.9 * alpha)
+            // 选择合适的颜色
+            let (bg_color, border_color, text_color) = if is_selected {
+                (BG_SELECTED, BORDER_SELECTED, TEXT_ACTIVE)
             } else if is_hovered {
-                Color::new(0.25, 0.35, 0.5, 0.85 * alpha)
+                (BG_HOVERED, BORDER_HOVERED, TEXT_ACTIVE)
             } else {
-                Color::new(0.2, 0.2, 0.3, 0.8 * alpha)
+                (BG_NORMAL, BORDER_NORMAL, TEXT_NORMAL)
             };
 
-            // 边框颜色：选中 > 悬停 > 普通（带 alpha）
-            let border_color = if is_selected {
-                Color::new(0.6, 0.7, 0.9, 1.0 * alpha)
-            } else if is_hovered {
-                Color::new(0.5, 0.6, 0.8, 0.9 * alpha)
-            } else {
-                Color::new(0.4, 0.4, 0.5, 0.8 * alpha)
-            };
-
-            draw_rectangle(box_x, y, box_w, choice_height, bg_color);
+            // 绘制选项背景和边框
+            draw_rectangle(
+                box_x,
+                y,
+                box_w,
+                CHOICE_HEIGHT,
+                color_with_alpha(bg_color, alpha),
+            );
             draw_rectangle_lines(
                 box_x,
                 y,
                 box_w,
-                choice_height,
+                CHOICE_HEIGHT,
                 if is_selected || is_hovered { 3.0 } else { 2.0 },
-                border_color,
+                color_with_alpha(border_color, alpha),
             );
 
-            // 选项文本
+            // 绘制选项文本
             let text_size = self.measure_text(&choice.text, CONTENT_FONT_SIZE);
             let text_x = box_x + (box_w - text_size.width) / 2.0;
-            let text_y = y + (choice_height + CONTENT_FONT_SIZE) / 2.0 - 5.0;
+            let text_y = y + (CHOICE_HEIGHT + CONTENT_FONT_SIZE) / 2.0 - 5.0;
+            self.draw_text(
+                &choice.text,
+                text_x,
+                text_y,
+                CONTENT_FONT_SIZE,
+                color_with_alpha(text_color, alpha),
+            );
 
-            let text_color = if is_selected || is_hovered {
-                Color::new(1.0, 1.0, 1.0, alpha)
-            } else {
-                Color::new(0.8, 0.8, 0.8, alpha)
-            };
-
-            self.draw_text(&choice.text, text_x, text_y, CONTENT_FONT_SIZE, text_color);
-
-            // 选中指示器（带 alpha）
+            // 绘制选中指示器
             if is_selected {
                 let indicator_x = box_x - 30.0;
-                let indicator_y = y + choice_height / 2.0;
-                let indicator_color = Color::new(
-                    SPEAKER_NAME_COLOR.r,
-                    SPEAKER_NAME_COLOR.g,
-                    SPEAKER_NAME_COLOR.b,
-                    SPEAKER_NAME_COLOR.a * alpha,
-                );
+                let indicator_y = y + CHOICE_HEIGHT / 2.0;
                 draw_triangle(
                     vec2(indicator_x, indicator_y - 10.0),
                     vec2(indicator_x, indicator_y + 10.0),
                     vec2(indicator_x + 15.0, indicator_y),
-                    indicator_color,
+                    color_with_alpha(SPEAKER_NAME_COLOR, alpha),
                 );
             }
         }
@@ -566,10 +414,10 @@ impl TextRenderer {
     }
 
     /// 绘制继续提示（闪烁的三角形）
-    fn draw_continue_indicator(&self, x: f32, y: f32) {
+    fn draw_continue_indicator(&self, x: f32, y: f32, alpha: f32) {
         // 使用时间产生闪烁效果
-        let alpha = ((get_time() * 3.0).sin() * 0.5 + 0.5) as f32;
-        let color = Color::new(1.0, 1.0, 1.0, alpha);
+        let blink_alpha = ((get_time() * 3.0).sin() * 0.5 + 0.5) as f32;
+        let color = Color::new(1.0, 1.0, 1.0, blink_alpha * alpha);
 
         draw_triangle(
             vec2(x, y),

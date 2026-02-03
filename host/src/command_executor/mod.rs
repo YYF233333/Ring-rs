@@ -8,14 +8,26 @@
 //! - 执行器不直接渲染，只更新状态，渲染由 `Renderer` 负责
 //! - 角色动画通过 `CharacterAnimationCommand` 传递给主循环，由 AnimationSystem 处理
 //! - 场景切换通过 `SceneTransitionCommand` 传递给主循环，由 SceneTransitionManager 处理
+//!
+//! ## 模块结构
+//!
+//! - `audio`: 音频命令执行
+//! - `background`: 背景命令执行
+//! - `character`: 角色命令执行
+//! - `ui`: UI 命令执行
+//! - `types`: 类型定义
 
+mod audio;
+mod background;
+mod character;
 mod types;
+mod ui;
 
 pub use types::*;
 
-use crate::renderer::{ChoiceItem, RenderState};
+use crate::renderer::RenderState;
 use crate::resources::ResourceManager;
-use vn_runtime::command::{Choice, Command, Position, Transition, TransitionArg};
+use vn_runtime::command::{Command, Transition};
 
 /// Command 执行器
 ///
@@ -51,7 +63,7 @@ impl CommandExecutor {
         &mut self,
         command: &Command,
         render_state: &mut RenderState,
-        _resource_manager: &ResourceManager,
+        resource_manager: &ResourceManager,
     ) -> ExecuteResult {
         // 重置输出
         self.last_output = CommandOutput::default();
@@ -62,7 +74,7 @@ impl CommandExecutor {
             }
             Command::ChangeScene { path, transition } => {
                 // ChangeScene 是复合场景切换，包含：清立绘、换背景、遮罩过渡
-                self.execute_change_scene(path, transition.clone(), render_state, _resource_manager)
+                self.execute_change_scene(path, transition.clone(), render_state, resource_manager)
             }
             Command::ShowCharacter {
                 path,
@@ -122,320 +134,8 @@ impl CommandExecutor {
         last_result
     }
 
-    /// 执行 ShowBackground
-    fn execute_show_background(
-        &mut self,
-        path: &str,
-        transition: Option<Transition>,
-        render_state: &mut RenderState,
-    ) -> ExecuteResult {
-        // 保存旧背景用于过渡效果
-        let old_background = render_state.current_background.clone();
-
-        // 设置新背景路径
-        render_state.set_background(path.to_string());
-
-        // 记录过渡信息
-        self.last_output.transition_info = TransitionInfo {
-            has_background_transition: true,
-            old_background,
-            transition: transition.clone(),
-        };
-
-        // 处理过渡效果
-        if let Some(ref trans) = transition {
-            self.start_transition(trans);
-        }
-
-        ExecuteResult::Ok
-    }
-
-    /// 执行 ChangeScene（复合场景切换）
-    ///
-    /// 与 ShowBackground 不同，ChangeScene 会：
-    /// 1. 隐藏 UI
-    /// 2. 清除所有立绘
-    /// 3. 发出场景切换命令（由 Renderer.SceneTransitionManager 处理）
-    fn execute_change_scene(
-        &mut self,
-        path: &str,
-        transition: Option<Transition>,
-        render_state: &mut RenderState,
-        resource_manager: &ResourceManager,
-    ) -> ExecuteResult {
-        // 保存旧背景用于过渡效果
-        let old_background = render_state.current_background.clone();
-
-        // 1. 隐藏 UI（对话框、选择分支等）
-        render_state.ui_visible = false;
-
-        // 2. 清除所有立绘
-        render_state.hide_all_characters();
-
-        // 3. 根据 transition 类型发出场景切换命令
-        if let Some(ref trans) = transition {
-            let name_lower = trans.name.to_lowercase();
-            let duration = trans.get_duration().unwrap_or(0.5) as f32;
-
-            match name_lower.as_str() {
-                "fade" => {
-                    // 黑屏遮罩 - 发出 Fade 命令
-                    self.last_output.scene_transition = Some(SceneTransitionCommand::Fade {
-                        duration,
-                        pending_background: path.to_string(),
-                    });
-                    println!("🎬 changeScene: Fade 黑屏过渡 ({}s)", duration);
-                }
-                "fadewhite" => {
-                    // 白屏遮罩 - 发出 FadeWhite 命令
-                    self.last_output.scene_transition = Some(SceneTransitionCommand::FadeWhite {
-                        duration,
-                        pending_background: path.to_string(),
-                    });
-                    println!("🎬 changeScene: FadeWhite 白屏过渡 ({}s)", duration);
-                }
-                "rule" => {
-                    // 图片遮罩 - 使用 resource_manager 规范化路径
-                    let raw_mask_path = trans
-                        .get_named("mask")
-                        .and_then(|arg| {
-                            if let TransitionArg::String(s) = arg {
-                                Some(s.clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or_default();
-
-                    // 规范化路径
-                    let normalized_mask_path = resource_manager.resolve_path(&raw_mask_path);
-                    let reversed = trans.get_reversed().unwrap_or(false);
-
-                    // 发出 Rule 命令
-                    self.last_output.scene_transition = Some(SceneTransitionCommand::Rule {
-                        duration,
-                        pending_background: path.to_string(),
-                        mask_path: normalized_mask_path.clone(),
-                        reversed,
-                    });
-                    println!(
-                        "🎬 changeScene: Rule 遮罩过渡 ({}, {}s, reversed={})",
-                        normalized_mask_path, duration, reversed
-                    );
-                }
-                "dissolve" => {
-                    // Dissolve 使用 TransitionManager 处理背景过渡
-                    // 记录过渡信息，让 main.rs 启动背景过渡
-                    self.last_output.transition_info = TransitionInfo {
-                        has_background_transition: true,
-                        old_background: old_background.clone(),
-                        transition: transition.clone(),
-                    };
-                    // 立即切换背景（交叉溶解依赖 old_background）
-                    render_state.set_background(path.to_string());
-                    // 立即恢复 UI
-                    render_state.ui_visible = true;
-                    println!("🎬 changeScene: Dissolve 过渡 ({}s)", duration);
-                }
-                _ => {
-                    // 未知效果，使用默认 dissolve
-                    self.last_output.transition_info = TransitionInfo {
-                        has_background_transition: true,
-                        old_background: old_background.clone(),
-                        transition: transition.clone(),
-                    };
-                    render_state.set_background(path.to_string());
-                    render_state.ui_visible = true;
-                    println!("🎬 changeScene: 未知效果 '{}', 使用 dissolve", trans.name);
-                }
-            }
-        } else {
-            // 无过渡效果，立即恢复 UI
-            render_state.set_background(path.to_string());
-            render_state.ui_visible = true;
-        }
-
-        ExecuteResult::Ok
-    }
-
-    /// 执行 ShowCharacter
-    fn execute_show_character(
-        &mut self,
-        path: &str,
-        alias: &str,
-        position: Position,
-        transition: &Option<Transition>,
-        render_state: &mut RenderState,
-    ) -> ExecuteResult {
-        // 解析过渡效果持续时间
-        // 如果 transition 存在且是 dissolve/fade，使用指定的 duration 或默认 0.3 秒
-        let duration = transition
-            .as_ref()
-            .and_then(|t| {
-                let name_lower = t.name.to_lowercase();
-                if name_lower == "dissolve" || name_lower == "fade" {
-                    Some(t.get_duration().map(|d| d as f32).unwrap_or(0.3))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0.0); // 无过渡效果时立即显示
-
-        // 在 RenderState 中创建角色数据
-        render_state.show_character(alias.to_string(), path.to_string(), position);
-
-        // 如果有过渡效果，记录动画命令（由 main.rs 处理）
-        if duration > 0.0 {
-            self.last_output.character_animation = Some(CharacterAnimationCommand::Show {
-                alias: alias.to_string(),
-                duration,
-            });
-        } else {
-            // 无过渡效果：直接设置角色为完全可见
-            if let Some(anim) = render_state.get_character_anim(alias) {
-                anim.set_alpha(1.0);
-            }
-        }
-
-        ExecuteResult::Ok
-    }
-
-    /// 执行 HideCharacter
-    fn execute_hide_character(
-        &mut self,
-        alias: &str,
-        transition: &Option<Transition>,
-        render_state: &mut RenderState,
-    ) -> ExecuteResult {
-        // 解析过渡效果持续时间
-        let duration = transition
-            .as_ref()
-            .and_then(|t| {
-                let name_lower = t.name.to_lowercase();
-                if name_lower == "dissolve" || name_lower == "fade" {
-                    Some(t.get_duration().map(|d| d as f32).unwrap_or(0.3))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0.0);
-
-        if duration > 0.0 {
-            // 有过渡效果：标记为淡出，由 AnimationSystem 处理
-            render_state.mark_character_fading_out(alias);
-            self.last_output.character_animation = Some(CharacterAnimationCommand::Hide {
-                alias: alias.to_string(),
-                duration,
-            });
-        } else {
-            // 无过渡效果：立即移除
-            render_state.hide_character(alias);
-        }
-
-        ExecuteResult::Ok
-    }
-
-    /// 执行 ShowText
-    fn execute_show_text(
-        &mut self,
-        speaker: Option<String>,
-        content: &str,
-        render_state: &mut RenderState,
-    ) -> ExecuteResult {
-        // 清除章节标记（避免遮挡对话）
-        render_state.clear_chapter_mark();
-
-        // 开始打字机效果
-        render_state.start_typewriter(speaker, content.to_string());
-
-        // ShowText 通常需要等待用户点击
-        ExecuteResult::WaitForClick
-    }
-
-    /// 执行 PresentChoices
-    fn execute_present_choices(
-        &mut self,
-        style: Option<String>,
-        choices: &[Choice],
-        render_state: &mut RenderState,
-    ) -> ExecuteResult {
-        // 清除对话框和章节标记
-        render_state.clear_dialogue();
-        render_state.clear_chapter_mark();
-
-        // 转换选项格式
-        let choice_items: Vec<ChoiceItem> = choices
-            .iter()
-            .map(|c| ChoiceItem {
-                text: c.text.clone(),
-                target_label: c.target_label.clone(),
-            })
-            .collect();
-
-        let choice_count = choice_items.len();
-
-        // 设置选择界面
-        render_state.set_choices(choice_items, style);
-
-        ExecuteResult::WaitForChoice { choice_count }
-    }
-
-    /// 执行 ChapterMark
-    fn execute_chapter_mark(
-        &mut self,
-        title: &str,
-        level: u8,
-        render_state: &mut RenderState,
-    ) -> ExecuteResult {
-        // 清除其他 UI 元素
-        render_state.clear_dialogue();
-        render_state.clear_choices();
-
-        // 显示章节标记
-        render_state.set_chapter_mark(title.to_string(), level);
-
-        // 章节标记通常需要等待用户点击
-        ExecuteResult::WaitForClick
-    }
-
-    /// 执行 PlayBgm
-    fn execute_play_bgm(&mut self, path: &str, looping: bool) -> ExecuteResult {
-        // 记录音频命令，由 main.rs 处理实际播放
-        self.last_output.audio_command = Some(AudioCommand::PlayBgm {
-            path: path.to_string(),
-            looping,
-            fade_in: Some(0.5), // 默认 0.5 秒淡入
-        });
-        println!("🎵 命令：播放 BGM: {} (循环: {})", path, looping);
-        ExecuteResult::Ok
-    }
-
-    /// 执行 StopBgm
-    fn execute_stop_bgm(&mut self, fade_out: Option<f64>) -> ExecuteResult {
-        // 记录音频命令
-        self.last_output.audio_command = Some(AudioCommand::StopBgm {
-            fade_out: fade_out.map(|d| d as f32),
-        });
-        if let Some(duration) = fade_out {
-            println!("🎵 命令：停止 BGM (淡出: {}s)", duration);
-        } else {
-            println!("🎵 命令：停止 BGM (立即)");
-        }
-        ExecuteResult::Ok
-    }
-
-    /// 执行 PlaySfx
-    fn execute_play_sfx(&mut self, path: &str) -> ExecuteResult {
-        // 记录音频命令
-        self.last_output.audio_command = Some(AudioCommand::PlaySfx {
-            path: path.to_string(),
-        });
-        println!("🔊 命令：播放音效: {}", path);
-        ExecuteResult::Ok
-    }
-
     /// 开始过渡效果
-    fn start_transition(&mut self, transition: &Transition) {
+    pub(crate) fn start_transition(&mut self, transition: &Transition) {
         self.transition_active = true;
         self.transition_timer = 0.0;
 
@@ -490,6 +190,7 @@ impl Default for CommandExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vn_runtime::command::{Choice, Position, Transition};
 
     #[test]
     fn test_executor_creation() {
@@ -685,7 +386,7 @@ mod tests {
         let resource_manager = ResourceManager::new("assets", 256);
 
         let cmd = Command::PlayBgm {
-            path: "bgm/track1.mp3".to_string(),
+            path: "bgm/music.mp3".to_string(),
             looping: true,
         };
 
@@ -696,7 +397,7 @@ mod tests {
         if let Some(AudioCommand::PlayBgm { path, looping, .. }) =
             &executor.last_output.audio_command
         {
-            assert_eq!(path, "bgm/track1.mp3");
+            assert_eq!(path, "bgm/music.mp3");
             assert!(*looping);
         } else {
             panic!("Expected PlayBgm command");
@@ -715,6 +416,7 @@ mod tests {
 
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
+        assert!(executor.last_output.audio_command.is_some());
 
         if let Some(AudioCommand::StopBgm { fade_out }) = &executor.last_output.audio_command {
             assert_eq!(*fade_out, Some(1.0));
@@ -730,38 +432,64 @@ mod tests {
         let resource_manager = ResourceManager::new("assets", 256);
 
         let cmd = Command::PlaySfx {
-            path: "sfx/click.mp3".to_string(),
+            path: "sfx/click.wav".to_string(),
         };
 
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
+        assert!(executor.last_output.audio_command.is_some());
 
         if let Some(AudioCommand::PlaySfx { path }) = &executor.last_output.audio_command {
-            assert_eq!(path, "sfx/click.mp3");
+            assert_eq!(path, "sfx/click.wav");
         } else {
             panic!("Expected PlaySfx command");
         }
     }
 
     #[test]
-    fn test_transition_lifecycle() {
+    fn test_transition_progress() {
         let mut executor = CommandExecutor::new();
-        assert!(!executor.is_transition_active());
 
-        // 模拟启动过渡
+        // 未激活时进度为 1.0
+        assert_eq!(executor.get_transition_progress(), 1.0);
+
+        // 开始过渡
         let transition = Transition::simple("dissolve");
         executor.start_transition(&transition);
-
         assert!(executor.is_transition_active());
-        assert!(executor.get_transition_progress() < 1.0);
 
-        // 模拟更新
-        executor.update_transition(0.1);
-        assert!(executor.is_transition_active());
+        // 更新一半
+        executor.update_transition(0.15);
+        let progress = executor.get_transition_progress();
+        assert!(progress > 0.0 && progress < 1.0);
 
         // 完成过渡
-        executor.update_transition(1.0);
+        executor.update_transition(0.2);
         assert!(!executor.is_transition_active());
         assert_eq!(executor.get_transition_progress(), 1.0);
+    }
+
+    #[test]
+    fn test_execute_batch() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let commands = vec![
+            Command::ShowBackground {
+                path: "bg.png".to_string(),
+                transition: None,
+            },
+            Command::ShowText {
+                speaker: Some("角色".to_string()),
+                content: "对话".to_string(),
+            },
+        ];
+
+        let result = executor.execute_batch(&commands, &mut render_state, &resource_manager);
+        // 最后一个需要等待的结果
+        assert_eq!(result, ExecuteResult::WaitForClick);
+        assert!(render_state.dialogue.is_some());
+        assert_eq!(render_state.current_background, Some("bg.png".to_string()));
     }
 }
