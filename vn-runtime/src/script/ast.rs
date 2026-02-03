@@ -278,6 +278,20 @@ mod tests {
     }
 
     #[test]
+    fn test_script_node_is_jump_target() {
+        let label = ScriptNode::Label {
+            name: "start".to_string(),
+        };
+        assert!(label.is_jump_target());
+
+        let dialogue = ScriptNode::Dialogue {
+            speaker: None,
+            content: "hi".to_string(),
+        };
+        assert!(!dialogue.is_jump_target());
+    }
+
+    #[test]
     fn test_script_label_index() {
         let nodes = vec![
             ScriptNode::Label {
@@ -310,6 +324,22 @@ mod tests {
 
         assert!(script.get_node(0).is_some());
         assert!(script.get_node(1).is_none());
+    }
+
+    #[test]
+    fn test_script_is_empty() {
+        let s = Script::new("empty", vec![], "");
+        assert!(s.is_empty());
+
+        let s = Script::new(
+            "not_empty",
+            vec![ScriptNode::Dialogue {
+                speaker: None,
+                content: "x".to_string(),
+            }],
+            "",
+        );
+        assert!(!s.is_empty());
     }
 
     #[test]

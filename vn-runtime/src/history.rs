@@ -246,9 +246,19 @@ mod tests {
 
         assert_eq!(history.len(), 5);
         // 应该保留最后 5 条
-        if let HistoryEvent::Dialogue { content, .. } = &history.events()[0] {
-            assert_eq!(content, "对话 5");
+        fn dialogue_content(event: &HistoryEvent) -> Option<&str> {
+            match event {
+                HistoryEvent::Dialogue { content, .. } => Some(content),
+                _ => None,
+            }
         }
+
+        assert_eq!(dialogue_content(&history.events()[0]), Some("对话 5"));
+        // 覆盖非对话分支
+        assert_eq!(
+            dialogue_content(&HistoryEvent::chapter_mark("章节".to_string())),
+            None
+        );
     }
 
     #[test]
@@ -280,5 +290,27 @@ mod tests {
         let loaded: History = serde_json::from_str(&json).unwrap();
 
         assert_eq!(loaded.len(), 2);
+    }
+
+    #[test]
+    fn test_history_event_timestamp_covers_all_variants() {
+        // 目标：覆盖 HistoryEvent::timestamp() 的所有 match 分支
+        let _ = HistoryEvent::dialogue(Some("A".to_string()), "内容".to_string()).timestamp();
+        let _ = HistoryEvent::chapter_mark("第一章".to_string()).timestamp();
+        let _ = HistoryEvent::choice_made(vec!["A".to_string(), "B".to_string()], 1).timestamp();
+        let _ = HistoryEvent::jump("label".to_string()).timestamp();
+        let _ = HistoryEvent::background_change("bg.png".to_string()).timestamp();
+        let _ = HistoryEvent::bgm_change(Some("bgm.mp3".to_string())).timestamp();
+    }
+
+    #[test]
+    fn test_history_clear() {
+        let mut history = History::new();
+        history.push(HistoryEvent::dialogue(None, "对话1".to_string()));
+        assert!(!history.is_empty());
+
+        history.clear();
+        assert!(history.is_empty());
+        assert_eq!(history.len(), 0);
     }
 }

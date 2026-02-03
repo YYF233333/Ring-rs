@@ -298,8 +298,13 @@ impl Default for Executor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::Position;
+    use crate::command::{Position, Transition, TransitionArg};
     use crate::script::ChoiceOption;
+
+    #[test]
+    fn test_executor_default() {
+        let _ = Executor::default();
+    }
 
     #[test]
     fn test_execute_dialogue() {
@@ -343,6 +348,78 @@ mod tests {
 
         // 验证状态更新
         assert!(state.visible_characters.contains_key("test_char"));
+    }
+
+    #[test]
+    fn test_execute_show_character_without_path_uses_existing_binding() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        state.visible_characters.insert(
+            "alice".to_string(),
+            ("alice.png".to_string(), Position::Left),
+        );
+
+        let node = ScriptNode::ShowCharacter {
+            path: None,
+            alias: "alice".to_string(),
+            position: Position::Right,
+            transition: None,
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert!(matches!(
+            &result.commands[0],
+            Command::ShowCharacter { path, alias, position, .. }
+            if path == "alice.png" && alias == "alice" && *position == Position::Right
+        ));
+        assert_eq!(
+            state.visible_characters.get("alice"),
+            Some(&("alice.png".to_string(), Position::Right))
+        );
+    }
+
+    #[test]
+    fn test_execute_show_character_without_path_errors_when_not_bound() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::ShowCharacter {
+            path: None,
+            alias: "alice".to_string(),
+            position: Position::Center,
+            transition: None,
+        };
+
+        let result = executor.execute(&node, &mut state, &script);
+        assert!(matches!(result, Err(RuntimeError::InvalidState { .. })));
+    }
+
+    #[test]
+    fn test_execute_hide_character_updates_state() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        state.visible_characters.insert(
+            "alice".to_string(),
+            ("alice.png".to_string(), Position::Center),
+        );
+
+        let node = ScriptNode::HideCharacter {
+            alias: "alice".to_string(),
+            transition: None,
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+        assert!(matches!(
+            &result.commands[0],
+            Command::HideCharacter { alias, .. } if alias == "alice"
+        ));
+        assert!(!state.visible_characters.contains_key("alice"));
     }
 
     #[test]
@@ -424,6 +501,120 @@ mod tests {
         assert!(result.commands.is_empty());
         assert!(result.waiting.is_none());
         assert_eq!(result.jump_to, Some(2)); // 跳转到 "end" 标签
+    }
+
+    #[test]
+    fn test_execute_goto_label_not_found() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::Goto {
+            target_label: "missing".to_string(),
+        };
+
+        let result = executor.execute(&node, &mut state, &script);
+        assert!(matches!(
+            result,
+            Err(RuntimeError::LabelNotFound { label }) if label == "missing"
+        ));
+    }
+
+    #[test]
+    fn test_execute_chapter_mark() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::Chapter {
+            title: "第一章".to_string(),
+            level: 1,
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+        assert!(matches!(
+            &result.commands[0],
+            Command::ChapterMark { title, level } if title == "第一章" && *level == 1
+        ));
+    }
+
+    #[test]
+    fn test_execute_uianim() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let effect = Transition::with_named_args(
+            "fade",
+            vec![(Some("duration".to_string()), TransitionArg::Number(0.3))],
+        );
+        let node = ScriptNode::UIAnim { effect };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+        assert!(matches!(&result.commands[0], Command::UIAnimation { .. }));
+    }
+
+    #[test]
+    fn test_execute_change_scene_resolves_mask_path() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "scripts");
+
+        let transition = Transition::with_named_args(
+            "rule",
+            vec![
+                (
+                    Some("mask".to_string()),
+                    TransitionArg::String("masks/rule.png".to_string()),
+                ),
+                (Some("duration".to_string()), TransitionArg::Number(0.5)),
+            ],
+        );
+
+        let node = ScriptNode::ChangeScene {
+            path: "../backgrounds/bg.jpg".to_string(),
+            transition: Some(transition),
+        };
+
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        // 背景路径会被 resolve
+        assert_eq!(
+            state.current_background,
+            Some("scripts/../backgrounds/bg.jpg".to_string())
+        );
+
+        // mask 参数会被 resolve
+        fn extract_mask(cmd: &Command) -> Option<String> {
+            match cmd {
+                Command::ChangeScene { transition, .. } => {
+                    let transition = transition.as_ref()?;
+                    transition.args.iter().find_map(|(k, v)| {
+                        if k.as_deref() != Some("mask") {
+                            return None;
+                        }
+                        match v {
+                            TransitionArg::String(s) => Some(s.clone()),
+                            _ => None,
+                        }
+                    })
+                }
+                _ => None,
+            }
+        }
+
+        assert_eq!(
+            extract_mask(&result.commands[0]),
+            Some("scripts/masks/rule.png".to_string())
+        );
+        // 覆盖非 ChangeScene 分支
+        assert_eq!(
+            extract_mask(&Command::ShowText {
+                speaker: None,
+                content: "x".to_string(),
+            }),
+            None
+        );
     }
 
     #[test]

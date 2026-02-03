@@ -2,12 +2,15 @@
 //!
 //! 应用状态与主循环逻辑。
 
+mod bootstrap;
 mod command_handlers;
 mod draw;
+mod init;
 mod save;
 mod script_loader;
 mod update;
 
+pub use bootstrap::*;
 pub use command_handlers::*;
 pub use draw::*;
 pub use save::*;
@@ -22,11 +25,10 @@ use crate::screens::{
 };
 use crate::ui::{Theme, ToastManager, UiContext};
 use crate::{
-    AppConfig, AssetSourceType, AudioManager, CommandExecutor, HostState, InputManager,
-    NavigationStack, UserSettings, ZipSource,
+    AppConfig, AudioManager, CommandExecutor, HostState, InputManager, NavigationStack,
+    UserSettings,
 };
 use std::collections::HashMap;
-use std::sync::Arc;
 use vn_runtime::VNRuntime;
 use vn_runtime::state::WaitingReason;
 
@@ -93,106 +95,13 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: AppConfig) -> Self {
-        let assets_root = config.assets_root.to_string_lossy().to_string();
-        let saves_dir = config.saves_dir.to_string_lossy().to_string();
-
-        // 根据配置选择资源来源
-        let resource_manager = match config.asset_source {
-            AssetSourceType::Fs => {
-                println!("📂 资源来源: 文件系统 ({})", assets_root);
-                ResourceManager::new(&assets_root, config.resources.texture_cache_size_mb)
-            }
-            AssetSourceType::Zip => {
-                let zip_path = config.zip_path.as_ref().expect("Zip 模式必须配置 zip_path");
-                println!("📦 资源来源: ZIP 文件 ({})", zip_path);
-                ResourceManager::with_source(
-                    &assets_root,
-                    Arc::new(ZipSource::new(zip_path)),
-                    config.resources.texture_cache_size_mb,
-                )
-            }
-        };
-
-        // 初始化音频管理器（根据资源来源选择模式）
-        let audio_manager = match config.asset_source {
-            AssetSourceType::Fs => match AudioManager::new(&assets_root) {
-                Ok(am) => {
-                    println!("✅ 音频系统初始化成功");
-                    Some(am)
-                }
-                Err(e) => {
-                    eprintln!("⚠️ 音频系统初始化失败: {}", e);
-                    None
-                }
-            },
-            AssetSourceType::Zip => match AudioManager::new_zip_mode(&assets_root) {
-                Ok(am) => {
-                    println!("✅ 音频系统初始化成功 (ZIP 模式)");
-                    Some(am)
-                }
-                Err(e) => {
-                    eprintln!("⚠️ 音频系统初始化失败: {}", e);
-                    None
-                }
-            },
-        };
-
-        // 加载资源清单（立绘配置）
-        let manifest = match config.asset_source {
-            AssetSourceType::Fs => {
-                let manifest_path = config.manifest_full_path();
-                match crate::manifest::Manifest::load(&manifest_path.to_string_lossy()) {
-                    Ok(m) => {
-                        println!("✅ 资源清单加载成功: {:?}", manifest_path);
-                        m
-                    }
-                    Err(e) => {
-                        eprintln!("⚠️ 资源清单加载失败，使用默认配置: {}", e);
-                        crate::manifest::Manifest::with_defaults()
-                    }
-                }
-            }
-            AssetSourceType::Zip => {
-                // ZIP 模式：通过 ResourceManager 读取
-                let manifest_path = &config.manifest_path;
-                match resource_manager.read_text(manifest_path) {
-                    Ok(content) => {
-                        match crate::manifest::Manifest::load_from_bytes(content.as_bytes()) {
-                            Ok(m) => {
-                                println!("✅ 资源清单加载成功: {}", manifest_path);
-                                m
-                            }
-                            Err(e) => {
-                                eprintln!("⚠️ 资源清单解析失败，使用默认配置: {}", e);
-                                crate::manifest::Manifest::with_defaults()
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("⚠️ 资源清单加载失败，使用默认配置: {}", e);
-                        crate::manifest::Manifest::with_defaults()
-                    }
-                }
-            }
-        };
-
-        // 初始化存档管理器
-        let save_manager = crate::save_manager::SaveManager::new(&saves_dir);
-        println!("✅ 存档管理器初始化成功: {}", saves_dir);
-
-        // 扫描脚本目录
-        let scripts = match config.asset_source {
-            AssetSourceType::Fs => scan_scripts(&config.assets_root),
-            AssetSourceType::Zip => scan_scripts_from_zip(&resource_manager),
-        };
-        println!("📜 发现 {} 个脚本文件", scripts.len());
-
-        // 从配置获取窗口尺寸
-        let (width, height) = (config.window.width as f32, config.window.height as f32);
-
-        // 加载用户设置
-        let user_settings = UserSettings::load(USER_SETTINGS_PATH);
-        println!("✅ 用户设置加载完成");
+        let resource_manager = init::create_resource_manager(&config);
+        let audio_manager = init::create_audio_manager(&config);
+        let manifest = init::load_manifest(&config, &resource_manager);
+        let save_manager = init::create_save_manager(&config);
+        let scripts = init::scan_script_list(&config, &resource_manager);
+        let (width, height) = init::window_size(&config);
+        let user_settings = init::load_user_settings(USER_SETTINGS_PATH);
 
         Self {
             config,

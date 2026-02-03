@@ -147,48 +147,30 @@
 - `host/src/renderer/render_state.rs`
 - `host/tests/command_execution.rs`
 
+---
+
+## 阶段 21：覆盖率度量落地 + host 结构第二轮 ✅ 已完成
+
+> **主题**：在不引入 CI 的前提下，把“质量反馈”从**能跑**提升到**可度量**；同时继续梳理 host 不合理结构/边界，让后续功能迭代更顺手。
+
+**核心成果（浓缩）**：
+- ✅ **覆盖率口径与工具链**：以 `cargo llvm-cov` 作为 Windows 友好的主口径，本地一条命令生成 HTML 报告（`cargo cov-runtime` / `cargo cov-workspace`）
+- ✅ **vn-runtime 覆盖率冲刺达标**（`--all-features`）：
+  - **行覆盖率**：**96.99%**
+  - **`script/parser.rs` 行覆盖率**：**94.10%**（补齐大量错误/边界分支与 warning 路径）
+- ✅ **host 结构与边界第二轮**（测试非主目标，重构优先）：
+  - 入口进一步去业务化：资源引导/按需加载从 `host/src/main.rs` 下沉到 `host::app`（`app/bootstrap.rs`）
+  - 初始化拆分：`AppState::new` 的资源/音频/manifest/脚本扫描/用户设置等初始化收口到 `app/init.rs`
+  - 更新逻辑模块化：将“巨型 `app/update.rs`”拆分为 `app/update/`（modes/script/scene_transition），降低耦合、便于继续演进
+- ✅ **本地质量门禁稳定**：`cargo fmt-all` + `cargo check-all` 重构后持续通过
+
+**关键文件**：
+- `docs/coverage.md`、`.cargo/config.toml`、`tools/xtask/`
+- `vn-runtime/src/{script/parser.rs,runtime/*,save.rs,history.rs,state.rs,command.rs}`
+- `host/src/main.rs`、`host/src/app/{bootstrap.rs,init.rs,update/*}`
+
 
 ## 下一步开发方向
-
-### 阶段 21：测试覆盖率攻坚（vn-runtime 近 100%）+ 技术债继续偿还 🟦 计划中
-
-> **主题**：在不引入 CI 的前提下，把“质量反馈”从**能跑**提升到**可度量**；同时继续梳理不合理结构/边界，降低后续功能迭代风险。
-
-**背景**：
-- `cargo tarpaulin` 显示 workspace 总体覆盖率 < 20%（host 受环境/设备/渲染驱动影响很难拉满）
-- `vn-runtime` 基本不依赖外部环境，理论上可做到接近 100% 覆盖率
-
-### 21.1 覆盖率度量与口径统一（优先级：高）
-- 统一覆盖率口径：
-  - **主目标**：`vn-runtime` 覆盖率（以 line 为主，必要时加 branch）
-  - **次目标**：workspace 覆盖率（允许合理 exclude：macroquad 入口/平台适配等）
-- 产出本地可复现报告（HTML/JSON 均可），并写清“如何跑”和“怎么看”。
-- 可选：评估 `cargo llvm-cov`（Windows 友好）与 `cargo tarpaulin`（Linux/WSL 常用）的取舍，最终选一个作为主口径。
-
-**验收**：开发者本地一条命令可以生成报告；文档写清统计口径与 exclude 列表。
-
-### 21.2 vn-runtime 覆盖率冲刺（优先级：最高）
-**目标**：`vn-runtime` 覆盖率达到 **95%+**（目标值可根据实际分支复杂度再收敛到 98%）。
-
-建议按模块补齐用例：
-- **脚本解析**：更多错误用例、边界输入（空行/缩进/非法 token/转义字符串/参数列表）
-- **执行引擎**：WaitingReason/输入驱动推进、goto/label、命令序列边界、错误路径
-- **状态/序列化**：save/load roundtrip、版本兼容（如有）、history 记录边界
-- **命令结构**：Transition 参数解析（位置/命名参数）、不允许混用的约束测试
-
-**验收**：覆盖率达到目标；关键 bug 修复都有回归测试；无“只为覆盖率而写”的脆弱测试（断言语义而非实现细节）。
-
-### 21.3 host 结构与可测试边界第二轮（优先级：中）
-> 目标不是让 host 覆盖率“接近 100%”，而是把“能测的纯逻辑”抽出来，并建立稳定边界。
-
-- 继续盘点不合理结构（文件位置、模块耦合、跨层读写内部字段）
-- 将可测试纯逻辑下沉到：
-  - `vn-runtime`（优先）或 host 的纯逻辑模块（不触碰 macroquad/音频设备）
-- 对外部依赖（时间/文件系统/音频/渲染）逐步引入 trait 注入或 feature gate（仅对新增/重构模块做，不强行全盘重写）
-
-**验收**：新增/重构模块自带测试；host 的 headless 集成测试覆盖更多关键链路（按需增加 3-5 个场景）。
-
-
 
 ### 阶段 22：脚本语法扩展（变量系统 + 条件分支）🟦 计划中
 

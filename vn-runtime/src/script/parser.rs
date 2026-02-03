@@ -1147,6 +1147,23 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_img_src_requires_quoted_value() {
+        // 覆盖：quote_char 不是 ' 或 " 时返回 None
+        assert_eq!(extract_img_src(r#"<img src=path/to/image.png />"#), None);
+        assert_eq!(extract_img_src(r#"<img src= path/to/image.png />"#), None);
+    }
+
+    #[test]
+    fn test_extract_audio_src_and_requires_quoted_value() {
+        assert_eq!(
+            extract_audio_src(r#"<audio src="bgm.mp3"></audio>"#),
+            Some("bgm.mp3")
+        );
+        // 覆盖：quote_char 校验失败分支
+        assert_eq!(extract_audio_src(r#"<audio src=bgm.mp3></audio>"#), None);
+    }
+
+    #[test]
     fn test_extract_keyword_value() {
         let line = "show <img src=\"char.png\" /> as royu at center with dissolve";
         assert_eq!(extract_keyword_value(line, "as"), Some("royu"));
@@ -1155,6 +1172,19 @@ mod tests {
         let line2 = "show <img src=\"char.png\" /> as test_char at nearleft";
         assert_eq!(extract_keyword_value(line2, "as"), Some("test_char"));
         assert_eq!(extract_keyword_value(line2, "at"), Some("nearleft"));
+    }
+
+    #[test]
+    fn test_extract_keyword_value_edge_cases() {
+        // 覆盖：value_start 越界 / value 为空
+        assert_eq!(
+            extract_keyword_value("show <img src=\"x\" /> as", "as"),
+            None
+        );
+
+        // 覆盖：">as " 模式（无空格紧跟 img 标签结束）
+        let line = "show <img src=\"char.png\" />as royu at center";
+        assert_eq!(extract_keyword_value(line, "as"), Some("royu"));
     }
 
     #[test]
@@ -1171,6 +1201,14 @@ mod tests {
 
         let t = parse_transition("fade").unwrap();
         assert_eq!(t.name, "fade");
+    }
+
+    #[test]
+    fn test_parse_transition_invalid_format_returns_none() {
+        // 缺失右括号
+        assert_eq!(parse_transition("Dissolve(1.0"), None);
+        // 参数解析失败（混用位置/命名）-> parse_transition 内部吞掉 Err，返回 None
+        assert_eq!(parse_transition("Dissolve(1.0, duration: 2.0)"), None);
     }
 
     #[test]
@@ -1283,6 +1321,14 @@ mod tests {
             &script.nodes[0],
             ScriptNode::Chapter { title, level: 1 } if title == "Chapter 1"
         ));
+    }
+
+    #[test]
+    fn test_parse_chapter_invalid_is_ignored() {
+        let mut parser = Parser::new();
+        // 7 个 #（超过 6）应被忽略而不是报错
+        let script = parser.parse("test", "####### too deep").unwrap();
+        assert_eq!(script.len(), 0);
     }
 
     #[test]
@@ -2193,5 +2239,146 @@ stopBGM
         } else {
             panic!("Expected ChangeScene node");
         }
+    }
+
+    #[test]
+    fn test_parse_change_scene_requires_with_clause() {
+        let mut parser = Parser::new();
+        let err = parser
+            .parse("test", r#"changeScene <img src="assets/bg.png" />"#)
+            .unwrap_err();
+        assert!(matches!(err, ParseError::MissingParameter { .. }));
+    }
+
+    #[test]
+    fn test_parse_change_scene_invalid_transition() {
+        let mut parser = Parser::new();
+        // 过渡表达式解析失败（混用参数），应报 InvalidTransition
+        let err = parser
+            .parse(
+                "test",
+                r#"changeScene <img src="assets/bg.png" /> with Dissolve(1.0, duration: 2.0)"#,
+            )
+            .unwrap_err();
+        assert!(matches!(err, ParseError::InvalidTransition { .. }));
+    }
+
+    #[test]
+    fn test_parse_show_simplified_requires_at() {
+        let mut parser = Parser::new();
+        let err = parser.parse("test", "show alice").unwrap_err();
+        assert!(matches!(err, ParseError::MissingParameter { .. }));
+    }
+
+    #[test]
+    fn test_parse_hide_missing_alias() {
+        let mut parser = Parser::new();
+        let err = parser.parse("test", "hide").unwrap_err();
+        assert!(matches!(err, ParseError::MissingParameter { .. }));
+    }
+
+    #[test]
+    fn test_parse_uianim_missing_effect() {
+        let mut parser = Parser::new();
+        let err = parser.parse("test", "UIAnim").unwrap_err();
+        assert!(matches!(err, ParseError::MissingParameter { .. }));
+    }
+
+    #[test]
+    fn test_parse_goto_label_extraction_and_empty_label_error() {
+        let mut parser = Parser::new();
+        // 支持 **label**
+        let script = parser.parse("test", "goto **end**").unwrap();
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::Goto { target_label } if target_label == "end"
+        ));
+
+        // "**  **" 会被 trim 成空字符串，应报 MissingParameter
+        let err = parser.parse("test", "goto **  **").unwrap_err();
+        assert!(matches!(err, ParseError::MissingParameter { .. }));
+    }
+
+    #[test]
+    fn test_parse_audio_loop_and_no_close_tag() {
+        let mut parser = Parser::new();
+
+        // 有 </audio> 且带 loop -> BGM
+        let script = parser
+            .parse("test", r#"<audio src="bgm.mp3"></audio> loop"#)
+            .unwrap();
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::PlayAudio { path, is_bgm: true } if path == "bgm.mp3"
+        ));
+
+        // 没有 </audio> -> is_bgm = false
+        let script = parser.parse("test", r#"<audio src="sfx.mp3">"#).unwrap();
+        assert!(matches!(
+            &script.nodes[0],
+            ScriptNode::PlayAudio { path, is_bgm: false } if path == "sfx.mp3"
+        ));
+    }
+
+    #[test]
+    fn test_unknown_line_produces_warning() {
+        let mut parser = Parser::new();
+        let script = parser.parse("test", "??? what is this").unwrap();
+        assert_eq!(script.len(), 0);
+        assert_eq!(parser.warnings().len(), 1);
+        assert!(parser.warnings()[0].contains("无法识别"));
+    }
+
+    #[test]
+    fn test_parse_table_incomplete_rows_and_empty_options_errors() {
+        let mut parser = Parser::new();
+
+        // 1) 不完整行应产生 warning，但仍能解析出 Choice
+        let text = r#"
+| 横排 |
+| --- |
+| 只有一列 |
+| 选项1 | label1 |
+"#
+        .trim();
+        let script = parser.parse("test", text).unwrap();
+        assert_eq!(script.len(), 1);
+        assert!(matches!(&script.nodes[0], ScriptNode::Choice { .. }));
+        assert!(!parser.warnings().is_empty());
+
+        // 2) 没有任何有效选项 -> InvalidTable
+        let mut parser = Parser::new();
+        let text = r#"
+| 横排 |
+| --- |
+| 只有一列 |
+"#
+        .trim();
+        let err = parser.parse("test", text).unwrap_err();
+        assert!(matches!(err, ParseError::InvalidTable { .. }));
+    }
+
+    #[test]
+    fn test_extract_transition_from_line_rule_without_src_and_with_invalid_args() {
+        let parser = Parser::new();
+
+        // rule: 有 <img 但没有 src -> 返回 simple("rule")
+        let t = parser
+            .extract_transition_from_line(
+                r#"changeScene <img src="bg.png" /> with <img alt="x" />"#,
+            )
+            .unwrap();
+        assert_eq!(t.name, "rule");
+        assert!(t.args.is_empty());
+
+        // rule: 有 src，但括号里参数非法（混用）-> extract_rule_args 不扩展参数，只保留 mask
+        let t = parser
+            .extract_transition_from_line(
+                r#"changeScene <img src="bg.png" /> with <img src="masks/rule.png" /> (1.0, duration: 2.0)"#,
+            )
+            .unwrap();
+        assert_eq!(t.name, "rule");
+        assert!(t.get_named("mask").is_some());
+        assert!(t.get_named("duration").is_none());
     }
 }

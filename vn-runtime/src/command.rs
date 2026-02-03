@@ -340,6 +340,25 @@ mod tests {
     }
 
     #[test]
+    fn test_transition_get_duration_and_reversed_wrong_type_returns_none() {
+        let t = Transition::with_named_args(
+            "Any",
+            vec![
+                // duration 不是 Number
+                (
+                    Some("duration".to_string()),
+                    TransitionArg::String("not-a-number".to_string()),
+                ),
+                // reversed 不是 Bool
+                (Some("reversed".to_string()), TransitionArg::Number(1.0)),
+            ],
+        );
+
+        assert_eq!(t.get_duration(), None);
+        assert_eq!(t.get_reversed(), None);
+    }
+
+    #[test]
     fn test_transition_get_positional() {
         let t = Transition::with_args(
             "Effect",

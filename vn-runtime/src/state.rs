@@ -241,6 +241,9 @@ mod tests {
         assert!(WaitingReason::choice(3).is_waiting());
         assert!(WaitingReason::time(Duration::from_secs(1)).is_waiting());
         assert!(WaitingReason::signal("test").is_waiting());
+
+        // Default
+        assert_eq!(WaitingReason::default(), WaitingReason::None);
     }
 
     #[test]
@@ -248,6 +251,9 @@ mod tests {
         let mut pos = ScriptPosition::start("main");
         assert_eq!(pos.node_index, 0);
         assert_eq!(pos.script_path, "");
+
+        pos.set_path("scripts/main.md");
+        assert_eq!(pos.script_path, "scripts/main.md");
 
         pos.advance();
         assert_eq!(pos.node_index, 1);

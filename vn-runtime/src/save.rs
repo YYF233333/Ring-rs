@@ -261,6 +261,7 @@ fn chrono_now_iso8601() -> String {
 mod tests {
     use super::*;
     use crate::command::Position;
+    use crate::history::HistoryEvent;
 
     #[test]
     fn test_save_version_compatibility() {
@@ -272,6 +273,28 @@ mod tests {
 
         let incompatible = SaveVersion { major: 2, minor: 0 };
         assert!(!incompatible.is_compatible());
+    }
+
+    #[test]
+    fn test_save_version_default_and_to_string() {
+        let v = SaveVersion::default();
+        assert_eq!(v, SaveVersion::current());
+        assert_eq!(
+            v.to_string(),
+            format!("{}.{}", SAVE_VERSION_MAJOR, SAVE_VERSION_MINOR)
+        );
+    }
+
+    #[test]
+    fn test_save_metadata_builders() {
+        let md = SaveMetadata::new(7)
+            .with_chapter("第二章")
+            .with_play_time(123);
+        assert_eq!(md.slot, 7);
+        assert_eq!(md.chapter_title, Some("第二章".to_string()));
+        assert_eq!(md.play_time_secs, 123);
+        // timestamp 只要求存在且非空（当前实现是 unix seconds）
+        assert!(!md.timestamp.is_empty());
     }
 
     #[test]
@@ -303,6 +326,36 @@ mod tests {
     }
 
     #[test]
+    fn test_save_data_with_render_and_history() {
+        let state = RuntimeState::new("test_script");
+
+        let render = RenderSnapshot {
+            background: Some("bg.png".to_string()),
+            characters: vec![CharacterSnapshot {
+                alias: "char1".to_string(),
+                texture_path: "char1.png".to_string(),
+                position: "Center".to_string(),
+            }],
+        };
+
+        let mut history = History::new();
+        history.push(HistoryEvent::dialogue(
+            Some("北风".to_string()),
+            "你好".to_string(),
+        ));
+
+        let save_data = SaveData::new(1, state)
+            .with_render(render.clone())
+            .with_history(history.clone());
+
+        assert_eq!(save_data.render.background, render.background);
+        assert_eq!(save_data.render.characters.len(), 1);
+        assert_eq!(save_data.render.characters[0].alias, "char1");
+
+        assert_eq!(save_data.history.len(), history.len());
+    }
+
+    #[test]
     fn test_incompatible_version_error() {
         let json = r#"{
             "version": { "major": 99, "minor": 0 },
@@ -321,5 +374,28 @@ mod tests {
 
         let result = SaveData::from_json(json);
         assert!(matches!(result, Err(SaveError::IncompatibleVersion { .. })));
+    }
+
+    #[test]
+    fn test_save_error_display() {
+        let e = SaveError::IoError("disk full".to_string());
+        assert_eq!(e.to_string(), "文件操作失败: disk full");
+
+        let e = SaveError::NotFound("slot_001.json".to_string());
+        assert_eq!(e.to_string(), "存档不存在: slot_001.json");
+
+        let e = SaveError::SerializationFailed("bad".to_string());
+        assert_eq!(e.to_string(), "序列化失败: bad");
+
+        let e = SaveError::DeserializationFailed("bad".to_string());
+        assert_eq!(e.to_string(), "反序列化失败: bad");
+
+        let e = SaveError::IncompatibleVersion {
+            save_version: "2.0".to_string(),
+            current_version: "1.0".to_string(),
+        };
+        assert!(e.to_string().contains("存档版本不兼容"));
+        assert!(e.to_string().contains("2.0"));
+        assert!(e.to_string().contains("1.0"));
     }
 }
