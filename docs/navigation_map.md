@@ -14,13 +14,15 @@
 
 ## 重要文档（建议阅读顺序）
 
-- **架构硬约束**：`PLAN.md`（Runtime/Host 分离、显式状态、确定性、Command 驱动）
-- **开发路线图**：`ROADMAP.md`
-- **脚本语法规范**：`docs/script_syntax_spec.md`
-- **脚本示例集**：`docs/script_language_showcase.md`
-- **资源系统**：`docs/resource_management.md`、`docs/manifest_guide.md`
-- **存档格式**：`docs/save_format.md`
-- **覆盖率与门禁**：`docs/coverage.md`、`CONTRIBUTING.md`
+- **架构硬约束**：[PLAN.md](../PLAN.md)（Runtime/Host 分离、显式状态、确定性、Command 驱动）
+- **开发路线图**：[ROADMAP.md](../ROADMAP.md)
+- **内容制作入门**：[getting_started.md](getting_started.md)（不改代码写脚本/素材 → 测试 → 打包发布）
+- **运行配置说明**：[config_guide.md](config_guide.md)（`config.json` 字段含义/默认值/校验规则）
+- **脚本语法规范**：[script_syntax_spec.md](script_syntax_spec.md)
+- **脚本示例集**：[script_language_showcase.md](script_language_showcase.md)
+- **资源系统**：[resource_management.md](resource_management.md)、[manifest_guide.md](manifest_guide.md)
+- **存档格式**：[save_format.md](save_format.md)
+- **覆盖率与门禁**：[coverage.md](coverage.md)、[CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## `vn-runtime/`：从“脚本”到“Command”的链路
 
@@ -43,7 +45,7 @@
 - **把 AST 变成命令（语义层）**：`runtime/executor.rs`
 - **新增/修改命令类型（通信契约）**：`command.rs`（同时要改 `host/` 的执行端）
 - **调整运行时状态/等待机制**：`state.rs`、`runtime/engine.rs`
-- **存档兼容**：`save.rs` + `docs/save_format.md`
+- **存档兼容**：`save.rs` + [save_format.md](save_format.md)
 
 ## `host/`：把 `Command` 变成“画面/音频/UI”
 
@@ -100,9 +102,9 @@
 
 ## 当你想做 X（快速索引）
 
-- **想加/改脚本语法** → `docs/script_syntax_spec.md` + `vn-runtime/src/script/*`
+- **想加/改脚本语法** → [script_syntax_spec.md](script_syntax_spec.md) + `vn-runtime/src/script/*`
 - **想加一个新 Command** → `vn-runtime/src/command.rs` + `host/src/command_executor/*`
 - **想改 UI 页面** → `host/src/screens/*` + `host/src/ui/*`
-- **想改资源路径解析/打包/缓存** → `host/src/resources/*` + `docs/resource_management.md`
-- **想改存档/兼容** → `vn-runtime/src/save.rs` + `host/src/app/save.rs` + `docs/save_format.md`
+- **想改资源路径解析/打包/缓存** → `host/src/resources/*` + [resource_management.md](resource_management.md)
+- **想改存档/兼容** → `vn-runtime/src/save.rs` + `host/src/app/save.rs` + [save_format.md](save_format.md)
 

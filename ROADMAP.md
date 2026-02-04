@@ -112,54 +112,23 @@
 - ✅ Dev Mode 自动诊断：在 debug build 或 `debug.script_check=true` 时，Host 启动时自动检查脚本
 - ✅ 行号精确定位：诊断输出包含准确的源码行号（如 `script.md:42: 错误信息`）
 
+### 仓库瘦身与上下文治理（2w+ LOC）🟩 已完成 ✅
+
+> **目标**：在不改行为前提下，降低“巨型文件 + 索引噪音”带来的协作/模型上下文成本。
+
+**已完成（关键改动）**：
+- ✅ `.cursorignore`：忽略 `target/`、`dist/`、`assets/`、覆盖率产物、zip/exe/pdb 等，降低索引噪音
+- ✅ `vn-runtime`：`script/parser.rs` 拆分为 `script/parser/*`（保持 `Parser` API 与测试不变）
+- ✅ `host`：拆分 `command_executor`；`text_renderer` 去重复逻辑（只搬/抽公共逻辑，不改语义）
+- ✅ `host` 日志治理：`println!/eprintln!` → `tracing`（可控等级、字段化），并支持 `config.json debug.log_level`
+- ✅ `xtask`：CLI 规范化为 `clap` + `walkdir`（`cargo script-check --help` 清晰、参数校验一致）
+
+**验收（DoD）**：
+- ✅ `cargo test -p vn-runtime --lib`
+- ✅ `cargo check -p host` / `cargo test -p host --lib`
+- ✅ `cargo check-all`
+
 ## 下一步开发方向
-
-### 仓库瘦身与上下文治理（2w+ LOC）🟩 已完成（短期拆分）
-
-> **主题**：在不改变引擎行为的前提下，优先降低“单文件巨无霸 + 索引噪音”带来的协作/模型上下文成本；其次再评估用成熟库替换易碎的手写解析逻辑。
-
-**现状（数据）**：
-- Rust 代码约 **21k LOC**
-  - `host` ~13k（59 files）
-  - `vn-runtime` ~7k（15 files）
-- 最大文件：`vn-runtime/src/script/parser.rs` ~2.7k 行（上下文消耗主因）
-
-**短期（零行为改动 / 立刻见效）**：
-- **IDE/模型索引忽略**：新增 `.cursorignore`，忽略 `target/`、`dist/`、`assets/`、覆盖率产物、zip/exe/pdb 等（减少噪音与误读大文件）✅
-- **拆分大文件（结构瘦身）**：
-  - `vn-runtime/src/script/parser.rs` → `vn-runtime/src/script/parser/*`（按“辅助函数/表达式/阶段1/阶段2/测试”分组），保持 `Parser` API 与测试不变 ✅
-    - 入口：`vn-runtime/src/script/parser/mod.rs`
-    - 模块：`helpers.rs` / `expr_parser.rs` / `phase1.rs` / `phase2.rs` / `tests.rs`
-  - `host/src/renderer/text_renderer.rs` 抽内部共享渲染逻辑，消除 `render_dialogue_box`/`_with_alpha` 以及 choices 渲染的重复路径 ✅
-  - `host/src/command_executor/mod.rs` 按 command/feature 拆分文件（只搬代码，不改语义）✅
-    - `host/src/command_executor/{background.rs,character.rs,ui.rs,audio.rs,types.rs,mod.rs}`
-
-**中期（可选：真正减少自研代码量）**：
-- **脚本解析**：
-  - Markdown：评估 `pulldown-cmark` / `comrak` 作为“块识别/表格/强调”等基础解析层，只保留“AST -> ScriptNode”的映射
-  - HTML 标签：评估 `tl` / `scraper` 来提取 `img/audio` 的 `src`（减少边界 case 与手写字符串解析代码）
-- **开发工具**：`tools/xtask` 评估 `clap`（子命令/帮助/参数校验）与 `walkdir`（文件遍历）
-- **日志治理**：`host` 逐步将 `println!/eprintln!` 收敛到 `tracing`/`log`（可控等级，减少输出污染）
-
-**建议优先级（从低风险/高收益开始）**：
-- P0：日志治理（Host）→ `tracing`/`log`
-- P1：xtask CLI 规范化 → `clap` + `walkdir`
-- P2：HTML 标签提取替换（仅 `img/audio src`，可回滚）→ `tl` / `scraper`
-- P3：Markdown 解析层替换（优先只做 Phase1 POC 与差异报告）→ `pulldown-cmark` / `comrak`
-
-**建议里程碑（最小可执行集合）**：
-- M1（1-2 天）：Host 日志统一（不改行为），关键路径输出字段化，可控等级
-- M2（0.5-1 天）：xtask 迁移 `clap`/`walkdir`，`cargo script-check --help` 清晰、参数校验一致
-- M3（可选，1-2 天 POC）：HTML 提取库替换试验（保留 fallback），用边界测试护航
-- M4（可选，3-5 天 POC）：Markdown 库仅用于“块识别”对比，输出差异报告后再决策是否接入主线
-
-**验收标准（DoD）**：
-- “拆分大文件”不改变行为：`cargo test -p vn-runtime --lib` 通过 ✅
-- Host 编译与相关测试通过：`cargo check -p host` / `cargo test -p host --lib` ✅
-- 一键门禁通过：`cargo check-all` ✅
-- 新增/调整的忽略规则不影响打包与运行，但显著降低本地索引/上下文开销
-
-
 
 ### 阶段 24：演出与体验增强（基于现有动画系统渐进扩展）🟦 计划中
 

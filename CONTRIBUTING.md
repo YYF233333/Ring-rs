@@ -63,11 +63,11 @@ Host 启动会自动运行脚本检查并输出诊断结果；release build 默�
   - `cargo cov-runtime`：生成 `vn-runtime` 覆盖率 HTML 报告
   - `cargo cov-workspace`：生成 workspace 覆盖率 HTML 报告（趋势观察）
 - 报告位置：`target/llvm-cov/html/index.html`
-- 详情见：`docs/coverage.md`
+- 详情见：[docs/coverage.md](docs/coverage.md)
 
 ## 仓库导航地图（强烈建议先看）
 
-- `docs/navigation_map.md`：按“常见改动场景”索引到具体 crate/模块/文件，减少无效翻文件。
+- [docs/navigation_map.md](docs/navigation_map.md)：按“常见改动场景”索引到具体 crate/模块/文件，减少无效翻文件。
 
 ## 约定
 
