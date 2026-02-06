@@ -293,13 +293,9 @@ impl Executor {
                 self.execute_conditional(branches, state, script)
             }
 
-            ScriptNode::TextBoxHide => {
-                Ok(ExecuteResult::with_commands(vec![Command::TextBoxHide]))
-            }
+            ScriptNode::TextBoxHide => Ok(ExecuteResult::with_commands(vec![Command::TextBoxHide])),
 
-            ScriptNode::TextBoxShow => {
-                Ok(ExecuteResult::with_commands(vec![Command::TextBoxShow]))
-            }
+            ScriptNode::TextBoxShow => Ok(ExecuteResult::with_commands(vec![Command::TextBoxShow])),
 
             ScriptNode::TextBoxClear => {
                 Ok(ExecuteResult::with_commands(vec![Command::TextBoxClear]))
@@ -1121,10 +1117,9 @@ mod tests {
             "alice".to_string(),
             ("alice.png".to_string(), Position::Left),
         );
-        state.visible_characters.insert(
-            "bob".to_string(),
-            ("bob.png".to_string(), Position::Right),
-        );
+        state
+            .visible_characters
+            .insert("bob".to_string(), ("bob.png".to_string(), Position::Right));
         assert_eq!(state.visible_characters.len(), 2);
 
         let node = ScriptNode::ClearCharacters;

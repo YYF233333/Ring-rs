@@ -1533,7 +1533,12 @@ fn test_parse_clear_characters() {
 #[test]
 fn test_parse_textbox_commands_case_insensitive() {
     let mut parser = Parser::new();
-    let script = parser.parse("test", "TEXTBOXHIDE\nTextBoxShow\ntextboxclear\nCLEARCHARACTERS").unwrap();
+    let script = parser
+        .parse(
+            "test",
+            "TEXTBOXHIDE\nTextBoxShow\ntextboxclear\nCLEARCHARACTERS",
+        )
+        .unwrap();
     assert_eq!(script.nodes.len(), 4);
     assert!(matches!(script.nodes[0], ScriptNode::TextBoxHide));
     assert!(matches!(script.nodes[1], ScriptNode::TextBoxShow));

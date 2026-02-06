@@ -451,16 +451,25 @@ pub enum TransitionArg {
 - 命名参数的意义在于：允许乱序、允许只填写部分参数，其余使用默认值（由 Host/具体 effect 解释层决定）
 - 同一次调用中**不允许混用**位置参数与命名参数（语法层保证，避免歧义）
 
-### 7.3 内置效果参考
+### 7.3 内置效果参考（统一语义表）
 
-以下是内置效果参考（解析器无需感知；具体支持情况由 Host/指令决定）：
+以下是内置效果参考（解析器无需感知；具体支持情况由 Host/指令决定）。
 
-| 效果名 | 语法 | 适用指令 | 说明 |
-|--------|------|---------|------|
-| dissolve | `dissolve` 或 `Dissolve(duration: N)` | changeBG, changeScene, show, hide | 交叉溶解 |
-| Fade | `Fade(duration: N)` | **仅 changeScene** | 黑屏遮罩过渡 |
-| FadeWhite | `FadeWhite(duration: N)` | **仅 changeScene** | 白屏遮罩过渡 |
-| rule | `<img src="mask.png" /> (duration: N, reversed: bool)` | **仅 changeScene** | 图片遮罩过渡 |
+**阶段 25 统一说明**：所有效果的解析逻辑由 `host/src/renderer/effects/` 模块统一处理，同名效果在不同目标上共享同一份解析与默认值。
+
+| 效果名 | 语法 | 适用指令 | 默认时长 | 说明 |
+|--------|------|---------|---------|------|
+| dissolve | `dissolve` 或 `Dissolve(duration: N)` | changeBG, changeScene, show, hide | 0.3s | Alpha 交叉溶解 |
+| fade | `fade` 或 `Fade(duration: N)` | changeScene: 黑屏遮罩；show/hide: 等价 dissolve | 0.5s（场景）/ 0.3s（立绘） | 上下文相关 |
+| fadewhite | `FadeWhite(duration: N)` | **仅 changeScene** | 0.5s | 白屏遮罩过渡 |
+| rule | `<img src="mask.png" /> (duration: N, reversed: bool)` | **仅 changeScene** | 0.5s | 图片遮罩过渡 |
+| move | `move(duration: N)` 或 `slide(duration: N)` | **仅 show**（立绘位置变更） | 0.3s | 平滑位置移动 |
+| none | `none` | 所有 | 0s | 无效果（瞬间切换） |
+
+**语义约定**：
+- `show alias at pos` 默认瞬移；只有 `with move/slide` 才产生平滑移动动画
+- `with dissolve/fade` 不触发位置移动（仅影响 alpha）
+- 未知效果名降级为 `dissolve`
 
 > **注意**：旧语法 `changeBG with fade/fadewhite` 已废弃，请使用 `changeScene with Fade(...)`/`FadeWhite(...)`。
 

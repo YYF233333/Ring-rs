@@ -123,7 +123,7 @@ impl TransitionManager {
         self.new_bg_animation_id = Some(new_id);
     }
 
-    /// 从 vn-runtime 的 Transition 解析
+    /// 从 vn-runtime 的 Transition 解析（保留兼容）
     ///
     /// 注意：只支持 `dissolve` 效果。`fade` 和 `fadewhite` 效果应使用 `changeScene` 命令。
     pub fn start_from_command(&mut self, transition: &vn_runtime::command::Transition) {
@@ -139,6 +139,26 @@ impl TransitionManager {
             }
         };
 
+        self.start(transition_type, duration);
+    }
+
+    /// 从 ResolvedEffect 启动过渡（阶段 25：统一入口）
+    ///
+    /// 使用已解析的效果信息启动过渡，避免重复解析 Transition。
+    /// 仅支持 `Dissolve` / `None`，其他效果降级为 Dissolve。
+    pub fn start_from_resolved(&mut self, effect: &super::effects::ResolvedEffect) {
+        use super::effects::{EffectKind, defaults};
+
+        let transition_type = match &effect.kind {
+            EffectKind::Dissolve => TransitionType::Dissolve,
+            EffectKind::None => TransitionType::None,
+            other => {
+                warn!(kind = ?other, "BackgroundTransition 只支持 dissolve/none，降级为 dissolve");
+                TransitionType::Dissolve
+            }
+        };
+
+        let duration = effect.duration_or(defaults::BACKGROUND_DISSOLVE_DURATION);
         self.start(transition_type, duration);
     }
 

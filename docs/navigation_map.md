@@ -79,6 +79,8 @@
 ### 渲染/资源/音频/UI/屏幕
 
 - **渲染系统**：`host/src/renderer/`
+  - **统一效果解析**：`host/src/renderer/effects/`（EffectKind、ResolvedEffect、resolve()）
+  - **动画系统**：`host/src/renderer/animation/`（AnimationSystem、Animatable trait）
 - **资源管理**：`host/src/resources/`（路径、来源、缓存、错误）
 - **音频系统**：`host/src/audio/`
 - **屏幕（UI 页面）**：`host/src/screens/`（title/settings/save_load/history…）

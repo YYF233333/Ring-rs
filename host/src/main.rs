@@ -9,8 +9,8 @@ use host::AppConfig;
 use host::app::{AppState, draw, ensure_render_resources, load_resources, save_continue, update};
 use macroquad::prelude::*;
 use tracing::info;
-use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::filter::LevelFilter;
 
 /// 配置文件路径
 const CONFIG_PATH: &str = "config.json";

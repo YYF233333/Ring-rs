@@ -19,6 +19,7 @@ use crate::resources::ResourceManager;
 pub mod animation;
 pub mod background_transition;
 pub mod character_animation;
+pub mod effects;
 mod image_dissolve;
 pub mod render_state;
 pub mod scene_transition;
@@ -132,7 +133,7 @@ impl Renderer {
         self.transition.update(dt)
     }
 
-    /// 开始背景过渡
+    /// 开始背景过渡（保留兼容）
     pub fn start_background_transition(
         &mut self,
         old_bg: Option<String>,
@@ -146,6 +147,16 @@ impl Renderer {
             // 默认使用短暂的 dissolve
             self.transition.start(TransitionType::Dissolve, 0.2);
         }
+    }
+
+    /// 开始背景过渡（阶段 25：基于 ResolvedEffect 的统一入口）
+    pub fn start_background_transition_resolved(
+        &mut self,
+        old_bg: Option<String>,
+        effect: &effects::ResolvedEffect,
+    ) {
+        self.old_background = old_bg;
+        self.transition.start_from_resolved(effect);
     }
 
     /// 跳过当前过渡效果

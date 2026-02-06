@@ -1,18 +1,27 @@
 //! 过渡效果命令处理
 
 use crate::command_executor::SceneTransitionCommand;
+use crate::renderer::effects::ResolvedEffect;
 
 use super::super::AppState;
 
-/// 应用过渡效果
+/// 应用过渡效果（阶段 25：使用 ResolvedEffect）
 pub fn apply_transition_effect(app_state: &mut AppState) {
     let transition_info = &app_state.command_executor.last_output.transition_info;
 
     if transition_info.has_background_transition {
-        app_state.renderer.start_background_transition(
-            transition_info.old_background.clone(),
-            transition_info.transition.as_ref(),
-        );
+        if let Some(ref effect) = transition_info.effect {
+            app_state.renderer.start_background_transition_resolved(
+                transition_info.old_background.clone(),
+                effect,
+            );
+        } else {
+            // 无显式效果：使用默认短暂 dissolve
+            app_state.renderer.start_background_transition_resolved(
+                transition_info.old_background.clone(),
+                &ResolvedEffect::none(),
+            );
+        }
     }
 }
 

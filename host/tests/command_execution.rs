@@ -111,6 +111,8 @@ fn test_choice_flow() {
 }
 
 /// 测试章节标记
+///
+/// 阶段 24 重构：ChapterMark 是非阻塞的（不再等待用户点击）
 #[test]
 fn test_chapter_mark() {
     let mut executor = CommandExecutor::new();
@@ -122,7 +124,8 @@ fn test_chapter_mark() {
         level: 1,
     };
     let result = executor.execute(&cmd, &mut state, &rm);
-    assert_eq!(result, ExecuteResult::WaitForClick);
+    // 阶段 24：ChapterMark 非阻塞
+    assert_eq!(result, ExecuteResult::Ok);
 
     let chapter = state.chapter_mark.as_ref().unwrap();
     assert_eq!(chapter.title, "序章：开始");
@@ -232,9 +235,12 @@ fn test_multiple_characters() {
     );
 }
 
-/// 测试 changeScene 的 UI 隐藏行为
+/// 测试 changeScene 行为
+///
+/// 阶段 24 重构：changeScene **不再隐式隐藏 UI 或清除立绘**。
+/// 这些操作由编剧通过 textBoxHide / clearCharacters 显式控制。
 #[test]
-fn test_change_scene_hides_ui() {
+fn test_change_scene_produces_transition() {
     let mut executor = CommandExecutor::new();
     let mut state = RenderState::new();
     let rm = test_resource_manager();
@@ -257,11 +263,9 @@ fn test_change_scene_hides_ui() {
     };
     executor.execute(&cmd, &mut state, &rm);
 
-    // changeScene 应该：
-    // 1. 隐藏 UI
-    // 2. 清除所有角色
-    // 3. 产生场景切换命令
-    assert!(!state.ui_visible);
-    assert!(state.visible_characters.is_empty());
+    // 阶段 24：changeScene 只负责产生场景切换命令，不隐式操作 UI/立绘
     assert!(executor.last_output.scene_transition.is_some());
+    // UI 和立绘状态不受影响（由编剧显式控制）
+    assert!(state.ui_visible);
+    assert!(!state.visible_characters.is_empty());
 }

@@ -75,13 +75,19 @@ impl CommandExecutor {
     }
 
     /// 执行 TextBoxHide（隐藏对话框，不影响背景/立绘）
-    pub(super) fn execute_text_box_hide(&mut self, render_state: &mut RenderState) -> ExecuteResult {
+    pub(super) fn execute_text_box_hide(
+        &mut self,
+        render_state: &mut RenderState,
+    ) -> ExecuteResult {
         render_state.ui_visible = false;
         ExecuteResult::Ok
     }
 
     /// 执行 TextBoxShow（显示对话框）
-    pub(super) fn execute_text_box_show(&mut self, render_state: &mut RenderState) -> ExecuteResult {
+    pub(super) fn execute_text_box_show(
+        &mut self,
+        render_state: &mut RenderState,
+    ) -> ExecuteResult {
         render_state.ui_visible = true;
         ExecuteResult::Ok
     }

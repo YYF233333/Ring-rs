@@ -222,71 +222,47 @@
 - `host/src/renderer/render_state.rs`、`host/src/app/update/{mod,scene_transition}.rs`
 - `docs/script_syntax_spec.md`
 
-### 阶段 25：统一动画/过渡效果解析与执行（Effect Registry + AnimationSystem 统一入口）🟦 计划中
+### 阶段 25：统一动画/过渡效果解析与执行（Effect Registry + AnimationSystem 统一入口）✅ 已完成
 
-> **主题**：把“过渡效果/动画效果”的**解析与执行**收敛到一个统一单元，背景/立绘/UI 共享同一套效果定义与时间轴驱动；命令执行层只负责把 `Transition` 翻译成“对动画系统的请求”，避免多处重复维护（例如 `dissolve` 同时存在于背景与立绘的实现）。
+> **主题**：把"过渡效果/动画效果"的**解析与执行**收敛到一个统一单元，背景/立绘/UI 共享同一套效果定义与时间轴驱动；命令执行层只负责把 `Transition` 翻译成"对动画系统的请求"，避免多处重复维护。
 
-#### 背景与动机（为什么要做）
-- 当前 `Transition`（如 `dissolve/fade`）在不同目标（背景/场景/立绘）存在**各自的解释与实现**，导致：
-  - 语义漂移：同名效果在不同对象上表现不一致
-  - 维护成本高：改一个效果要改多处
-  - 扩展困难：新增 wipe/slide 等效果需要复制粘贴多份逻辑
+**已实现**：
 
-#### 设计目标
+- ✅ **统一效果解析模块** `host/src/renderer/effects/`
+  - `EffectKind`：效果类型枚举（Dissolve / Fade / FadeWhite / Rule / Move / None）
+  - `ResolvedEffect`：已解析效果（kind + 显式 duration + easing），`duration_or()` 支持上下文默认值
+  - `resolve()`：`Transition → ResolvedEffect` 的唯一转换入口
+  - `defaults` 模块：所有默认持续时间的唯一来源
+- ✅ **重构 command_executor**：`character.rs` / `background.rs` 均通过 `effects::resolve()` 解析
+  - 消除了 3 处对 `Transition.name/duration` 的手写解析
+  - `TransitionInfo` 改为携带 `ResolvedEffect` 替代 raw `Transition`
+- ✅ **重构 command_handlers**：`transition.rs` 使用 `ResolvedEffect` 驱动 `TransitionManager`
+  - `TransitionManager` 新增 `start_from_resolved()` 方法
+  - `Renderer` 新增 `start_background_transition_resolved()` 入口
+- ✅ **效果矩阵测试**：新增 10 个验证效果解析一致性的测试
+  - dissolve 在 Background/Character 上解析一致
+  - fade 在立绘上下文等价 dissolve，在场景上下文为黑屏遮罩
+  - 显式 duration 在所有 target 上优先于默认值
+- ✅ **文档更新**：`script_syntax_spec.md` 增加统一效果语义表（含 move/slide）
+- ✅ **清理 AnimationTarget**（已删除废弃模块与导出）
+- ✅ **修复阶段 24 遗留的集成测试**
 
-- **统一效果源**：同一个效果名（如 `dissolve`）在所有目标上共享同一份“解析/默认值/校验/时间轴”
+**测试覆盖**：
+- `cargo test -p host --lib`：142 tests passed（新增 10 个效果矩阵 + 17 个 resolver 测试）
+- `cargo test -p host --test command_execution`：7 tests passed
+- `cargo check-all`：通过
 
-#### 核心方案（统一解析单元）
-- 在 Host 引入一个“效果注册表/解析器”模块（建议命名 `host/src/renderer/effects/`）：
-  - `EffectRegistry`：维护效果名 → 规格（支持哪些参数、默认值、适用目标、输出哪些属性动画）
-  - `EffectResolver`：把 `vn_runtime::command::Transition` 解析成 `ResolvedEffect`（已填默认值、已校验）
-  - `EffectApplier`：把 `ResolvedEffect + Target` 转成对 `AnimationSystem` 的**一组动画请求**（可多属性、多阶段）
+**关键文件**：
+- 新增：`host/src/renderer/effects/{mod.rs, registry.rs, resolver.rs}`
+- 重构：`host/src/command_executor/{character.rs, background.rs, mod.rs, types.rs}`
+- 重构：`host/src/app/command_handlers/transition.rs`
+- 扩展：`host/src/renderer/{transition.rs, mod.rs}`
+- 文档：`docs/script_syntax_spec.md`、`docs/navigation_map.md`
 
-#### 目标分类（Target Model）
-- **以 `Animatable` + `ObjectId` 为唯一动画对象模型**：
-  - `Animatable` 只描述“对象暴露哪些可动画属性”（能力接口），不承担路由/唯一标识
-  - `ObjectId`（由 `AnimationSystem::register` 分配）是动画系统内部唯一标识，用于索引动画、去注册、以及属性键 `AnimPropertyKey(TypeId + ObjectId + property)`
-- 在 Effect 层引入 `EffectRequest`（或 `EffectContext`）作为统一输入：**“动画对象是谁（ObjectId） + 这次效果需要哪些上下文 + 要改哪些属性”**：
-  - `EffectRequest { object_id: background_id, kind: Background { old_bg, new_bg }, effect: ResolvedEffect }`
-  - `EffectRequest { object_id: character_id(alias), kind: Character { old_pos, new_pos, texture_change }, effect: ResolvedEffect }`
-  - `EffectRequest { object_id: scene_mask_id, kind: SceneMask { ... }, effect: ResolvedEffect }`
-  - （可选）UI 元素同理：`object_id` 由 UI 管理层维护映射
-- （清理项）`AnimationTarget` 当前无引用：在阶段 25 推进统一入口后，可删除该模块与导出，避免“概念存在但无实现落点”的噪音。
-
-#### 效果语义规范（先收敛，再扩展）
-- **第一批统一效果**（把当前重复处收敛掉）：
-  - `dissolve(duration=0.3)`：统一为“alpha 交叉淡化”的通用时间轴（背景/立绘/遮罩复用）
-  - `fade(duration=0.3)`：同上（与 dissolve 在实现层可共享，只是名称别名/参数差异）
-  - `rule(src=..., duration=...)`：保持现有场景/背景用法，统一参数解析与默认值
-- **位置动画**：
-  - `move(duration=0.3, easing=linear)` / `slide(...)`：仅对 `Character` 的 position 偏移生效
-  - **明确约定**：`show alias at pos` 默认瞬移；只有 `with move/slide` 才平滑移动（`with dissolve/fade` 不触发移动）
-
-#### 分阶段落地计划（可并行但建议顺序）
-- **Step A：抽离解析与默认值**（不改表现）
-  - 把 `command_executor/*` 中对 `Transition.name/duration` 的手写解析迁移到 `EffectResolver`
-  - 为每个效果补齐参数校验与默认值（单元测试覆盖）
-- **Step B：统一执行入口**（减少重复代码）
-  - 背景过渡、场景遮罩过渡、立绘淡入淡出：改为统一走 `EffectApplier → AnimationSystem`
-  - `CommandExecutor` 只负责选择 target + 触发 apply（不再自己算 duration/分支）
-- **Step C：补齐效果矩阵测试**
-  - 同一 `dissolve` 在 Background/Character/SceneMask 上：解析一致、默认值一致、不会产生语义分叉
-  - 回归测试：现有脚本演出行为不变（除明确修正的语义）
-- **Step D：文档与脚本规范更新**
-  - 在 `docs/script_syntax_spec.md` 增加“效果名的统一语义表”
-  - 明确哪些效果适用哪些目标，哪些参数可用
-
-#### 关键文件（预期改动入口）
-- 新增：`host/src/renderer/effects/{mod.rs,registry.rs,resolver.rs,applier.rs}`（命名可调整）
-- 调整：`host/src/command_executor/{background.rs,character.rs,ui.rs,mod.rs}`
-- 调整：`host/src/app/command_handlers/*`（把动画请求统一交给 AnimationSystem）
-- 既有动画系统：`host/src/renderer/animation/*`
-
-#### 验收标准（DoD）
-- `dissolve/fade/rule` 的参数解析与默认值只存在**一处**（registry/resolver），并有单测
-- 背景/立绘/场景遮罩的过渡执行路径统一走 `EffectApplier → AnimationSystem`
-- 同名效果在不同目标上行为一致（除 target 本身差异）
-- `cargo test -p host --lib` 通过，并新增覆盖“效果解析一致性”的测试
+**后续演进方向**：
+- 引入 `EffectApplier` 让 command_handlers 直接通过统一接口操作 `AnimationSystem`（当前仍通过 `CharacterAnimationCommand` 等中间类型传递）
+- 引入 `EffectRequest { object_id, kind, effect }` 统一动画请求模型
+- 新增效果（wipe/slide 等）只需在 `registry.rs` 和 `resolver.rs` 添加即可
 
 ---
 

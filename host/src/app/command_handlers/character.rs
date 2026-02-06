@@ -20,10 +20,7 @@ pub fn handle_character_animation(app_state: &mut AppState) {
         match cmd {
             CharacterAnimationCommand::Show { alias, duration } => {
                 // 获取角色的动画对象（clone 解除借用）
-                let character = app_state
-                    .render_state
-                    .get_character_anim(&alias)
-                    .cloned();
+                let character = app_state.render_state.get_character_anim(&alias).cloned();
                 if let Some(character) = character {
                     let object_id = ensure_character_registered(app_state, &alias, &character);
 
@@ -70,10 +67,7 @@ pub fn handle_character_animation(app_state: &mut AppState) {
                 let offset_x = screen_w * (old_preset.x - new_preset.x);
 
                 // 获取角色的动画对象（clone 解除借用）
-                let character = app_state
-                    .render_state
-                    .get_character_anim(&alias)
-                    .cloned();
+                let character = app_state.render_state.get_character_anim(&alias).cloned();
                 if let Some(character) = character {
                     let object_id = ensure_character_registered(app_state, &alias, &character);
 

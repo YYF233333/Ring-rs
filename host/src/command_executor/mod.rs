@@ -28,7 +28,7 @@ pub use types::*;
 use crate::renderer::RenderState;
 use crate::resources::ResourceManager;
 use tracing::debug;
-use vn_runtime::command::{Command, Transition};
+use vn_runtime::command::Command;
 
 /// Command 执行器
 ///
@@ -140,18 +140,14 @@ impl CommandExecutor {
     }
 
     /// 开始过渡效果
-    pub(crate) fn start_transition(&mut self, transition: &Transition) {
+    ///
+    /// 阶段 25 重构：接受已解析的 duration（不再从 Transition 提取）。
+    pub(crate) fn start_transition(&mut self, duration: f32) {
         self.transition_active = true;
         self.transition_timer = 0.0;
+        self.transition_duration = duration;
 
-        // 从参数中提取时长，默认 0.3 秒（优先命名参数，回退位置参数）
-        self.transition_duration = transition.get_duration().map(|d| d as f32).unwrap_or(0.3);
-
-        debug!(
-            name = %transition.name,
-            duration = self.transition_duration,
-            "开始过渡效果"
-        );
+        debug!(duration = self.transition_duration, "开始过渡效果");
     }
 
     /// 更新过渡效果
@@ -538,9 +534,8 @@ mod tests {
         // 未激活时进度为 1.0
         assert_eq!(executor.get_transition_progress(), 1.0);
 
-        // 开始过渡
-        let transition = Transition::simple("dissolve");
-        executor.start_transition(&transition);
+        // 开始过渡（阶段 25：直接传 duration）
+        executor.start_transition(0.3);
         assert!(executor.is_transition_active());
 
         // 更新一半
@@ -576,5 +571,354 @@ mod tests {
         assert_eq!(result, ExecuteResult::WaitForClick);
         assert!(render_state.dialogue.is_some());
         assert_eq!(render_state.current_background, Some("bg.png".to_string()));
+    }
+
+    // ========== 阶段 25：效果矩阵测试 ==========
+    // 验证同名效果在不同 target 上的解析一致性
+
+    #[test]
+    fn test_dissolve_consistency_background_vs_character() {
+        // 同一个 `dissolve(0.5)`：背景和立绘的解析结果应一致
+        use crate::renderer::effects;
+
+        let transition = Transition::with_args(
+            "dissolve",
+            vec![vn_runtime::command::TransitionArg::Number(0.5)],
+        );
+        let effect = effects::resolve(&transition);
+
+        // 解析结果唯一
+        assert_eq!(effect.kind, effects::EffectKind::Dissolve);
+        assert_eq!(effect.duration, Some(0.5));
+
+        // 立绘上下文：duration_or(CHARACTER_ALPHA_DURATION) = 0.5（显式值优先）
+        assert_eq!(
+            effect.duration_or(effects::defaults::CHARACTER_ALPHA_DURATION),
+            0.5
+        );
+        // 背景上下文：duration_or(BACKGROUND_DISSOLVE_DURATION) = 0.5（显式值优先）
+        assert_eq!(
+            effect.duration_or(effects::defaults::BACKGROUND_DISSOLVE_DURATION),
+            0.5
+        );
+    }
+
+    #[test]
+    fn test_dissolve_default_duration_background_vs_character() {
+        // `dissolve`（无参数）的默认值在不同上下文中一致
+        use crate::renderer::effects;
+
+        let transition = Transition::simple("dissolve");
+        let effect = effects::resolve(&transition);
+
+        assert_eq!(effect.duration, None);
+        // 立绘和背景的默认 dissolve 时长都是 0.3
+        assert_eq!(
+            effect.duration_or(effects::defaults::CHARACTER_ALPHA_DURATION),
+            effects::defaults::CHARACTER_ALPHA_DURATION
+        );
+        assert_eq!(
+            effect.duration_or(effects::defaults::BACKGROUND_DISSOLVE_DURATION),
+            effects::defaults::BACKGROUND_DISSOLVE_DURATION
+        );
+        // 两者应相等
+        assert_eq!(
+            effects::defaults::CHARACTER_ALPHA_DURATION,
+            effects::defaults::BACKGROUND_DISSOLVE_DURATION
+        );
+    }
+
+    #[test]
+    fn test_show_character_with_dissolve_produces_alpha_animation() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::ShowCharacter {
+            path: "characters/char1.png".to_string(),
+            alias: "char1".to_string(),
+            position: Position::Center,
+            transition: Some(Transition::simple("dissolve")),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        // dissolve 应产生 Show 动画（alpha 淡入）
+        match executor.last_output.character_animation.as_ref() {
+            Some(CharacterAnimationCommand::Show { alias, duration }) => {
+                assert_eq!(alias, "char1");
+                assert!(*duration > 0.0);
+            }
+            other => panic!("Expected Show animation, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_hide_character_with_dissolve_produces_alpha_animation() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        // 先显示角色
+        render_state.show_character(
+            "char1".to_string(),
+            "characters/char1.png".to_string(),
+            Position::Center,
+        );
+
+        let cmd = Command::HideCharacter {
+            alias: "char1".to_string(),
+            transition: Some(Transition::simple("dissolve")),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        // dissolve 应产生 Hide 动画（alpha 淡出）
+        match executor.last_output.character_animation.as_ref() {
+            Some(CharacterAnimationCommand::Hide { alias, duration }) => {
+                assert_eq!(alias, "char1");
+                assert!(*duration > 0.0);
+            }
+            other => panic!("Expected Hide animation, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_show_background_with_dissolve_produces_transition_info() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        render_state.set_background("old_bg.png".to_string());
+
+        let cmd = Command::ShowBackground {
+            path: "new_bg.png".to_string(),
+            transition: Some(Transition::simple("dissolve")),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        let ti = &executor.last_output.transition_info;
+        assert!(ti.has_background_transition);
+        assert_eq!(ti.old_background, Some("old_bg.png".to_string()));
+
+        // 应携带 ResolvedEffect
+        let effect = ti.effect.as_ref().expect("Should have ResolvedEffect");
+        use crate::renderer::effects::EffectKind;
+        assert_eq!(effect.kind, EffectKind::Dissolve);
+    }
+
+    #[test]
+    fn test_change_scene_fade_produces_scene_transition() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::ChangeScene {
+            path: "new_bg.png".to_string(),
+            transition: Some(Transition::simple("fade")),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        // fade 在 changeScene 上下文应产生 Fade 场景过渡
+        match executor.last_output.scene_transition.as_ref() {
+            Some(SceneTransitionCommand::Fade {
+                duration,
+                pending_background,
+            }) => {
+                assert_eq!(pending_background, "new_bg.png");
+                assert!(*duration > 0.0);
+            }
+            other => panic!("Expected SceneTransitionCommand::Fade, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_change_scene_dissolve_produces_transition_info() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        render_state.set_background("old_bg.png".to_string());
+
+        let cmd = Command::ChangeScene {
+            path: "new_bg.png".to_string(),
+            transition: Some(Transition::simple("dissolve")),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        // dissolve 在 changeScene 上下文应产生 transition_info（交叉淡化）
+        assert!(executor.last_output.scene_transition.is_none());
+        assert!(
+            executor
+                .last_output
+                .transition_info
+                .has_background_transition
+        );
+
+        let effect = executor
+            .last_output
+            .transition_info
+            .effect
+            .as_ref()
+            .expect("Should have ResolvedEffect");
+        use crate::renderer::effects::EffectKind;
+        assert_eq!(effect.kind, EffectKind::Dissolve);
+    }
+
+    #[test]
+    fn test_change_scene_rule_produces_scene_transition() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::ChangeScene {
+            path: "new_bg.png".to_string(),
+            transition: Some(Transition::with_named_args(
+                "rule",
+                vec![
+                    (
+                        Some("duration".to_string()),
+                        vn_runtime::command::TransitionArg::Number(0.8),
+                    ),
+                    (
+                        Some("mask".to_string()),
+                        vn_runtime::command::TransitionArg::String("masks/wipe.png".to_string()),
+                    ),
+                    (
+                        Some("reversed".to_string()),
+                        vn_runtime::command::TransitionArg::Bool(true),
+                    ),
+                ],
+            )),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        match executor.last_output.scene_transition.as_ref() {
+            Some(SceneTransitionCommand::Rule {
+                duration,
+                pending_background,
+                mask_path,
+                reversed,
+            }) => {
+                assert_eq!(pending_background, "new_bg.png");
+                assert!((duration - 0.8).abs() < 0.01);
+                assert!(mask_path.contains("wipe.png") || mask_path.contains("masks"));
+                assert!(*reversed);
+            }
+            other => panic!("Expected SceneTransitionCommand::Rule, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_fade_on_character_is_alpha_not_scene_mask() {
+        // fade 在立绘上下文中等价于 dissolve（alpha 淡入），不是黑屏遮罩
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        let cmd = Command::ShowCharacter {
+            path: "characters/char1.png".to_string(),
+            alias: "char1".to_string(),
+            position: Position::Center,
+            transition: Some(Transition::simple("fade")),
+        };
+
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        // 应产生 Show 动画（alpha 淡入），而非场景过渡
+        match executor.last_output.character_animation.as_ref() {
+            Some(CharacterAnimationCommand::Show { alias, duration }) => {
+                assert_eq!(alias, "char1");
+                assert!(*duration > 0.0);
+            }
+            other => panic!(
+                "Expected Show animation for fade on character, got {:?}",
+                other
+            ),
+        }
+        assert!(executor.last_output.scene_transition.is_none());
+    }
+
+    #[test]
+    fn test_explicit_duration_overrides_default_for_all_targets() {
+        // 显式 duration 应在所有 target 上生效
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        // 立绘：dissolve(2.0)
+        let cmd = Command::ShowCharacter {
+            path: "characters/char1.png".to_string(),
+            alias: "char1".to_string(),
+            position: Position::Center,
+            transition: Some(Transition::with_args(
+                "dissolve",
+                vec![vn_runtime::command::TransitionArg::Number(2.0)],
+            )),
+        };
+        executor.execute(&cmd, &mut render_state, &resource_manager);
+
+        if let Some(CharacterAnimationCommand::Show { duration, .. }) =
+            &executor.last_output.character_animation
+        {
+            assert!(
+                (duration - 2.0).abs() < 0.01,
+                "Character dissolve duration should be 2.0, got {}",
+                duration
+            );
+        } else {
+            panic!("Expected Show animation");
+        }
+
+        // 背景：dissolve(2.0)
+        let cmd = Command::ShowBackground {
+            path: "bg.png".to_string(),
+            transition: Some(Transition::with_args(
+                "dissolve",
+                vec![vn_runtime::command::TransitionArg::Number(2.0)],
+            )),
+        };
+        executor.execute(&cmd, &mut render_state, &resource_manager);
+
+        let effect = executor
+            .last_output
+            .transition_info
+            .effect
+            .as_ref()
+            .unwrap();
+        assert_eq!(effect.duration, Some(2.0));
+
+        // changeScene fade(2.0)
+        let cmd = Command::ChangeScene {
+            path: "bg2.png".to_string(),
+            transition: Some(Transition::with_args(
+                "fade",
+                vec![vn_runtime::command::TransitionArg::Number(2.0)],
+            )),
+        };
+        executor.execute(&cmd, &mut render_state, &resource_manager);
+
+        if let Some(SceneTransitionCommand::Fade { duration, .. }) =
+            &executor.last_output.scene_transition
+        {
+            assert!(
+                (duration - 2.0).abs() < 0.01,
+                "Scene fade duration should be 2.0, got {}",
+                duration
+            );
+        } else {
+            panic!("Expected SceneTransitionCommand::Fade");
+        }
     }
 }

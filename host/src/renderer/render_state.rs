@@ -207,8 +207,7 @@ impl RenderState {
             mark.timer += dt;
             match mark.phase {
                 ChapterMarkPhase::FadeIn => {
-                    mark.alpha =
-                        (mark.timer / ChapterMarkState::FADE_IN_DURATION).min(1.0);
+                    mark.alpha = (mark.timer / ChapterMarkState::FADE_IN_DURATION).min(1.0);
                     if mark.timer >= ChapterMarkState::FADE_IN_DURATION {
                         mark.phase = ChapterMarkPhase::Visible;
                         mark.timer = 0.0;
@@ -225,8 +224,7 @@ impl RenderState {
                     false
                 }
                 ChapterMarkPhase::FadeOut => {
-                    mark.alpha =
-                        1.0 - (mark.timer / ChapterMarkState::FADE_OUT_DURATION).min(1.0);
+                    mark.alpha = 1.0 - (mark.timer / ChapterMarkState::FADE_OUT_DURATION).min(1.0);
                     if mark.timer >= ChapterMarkState::FADE_OUT_DURATION {
                         true // 动画完成，需要清除
                     } else {
