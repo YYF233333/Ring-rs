@@ -78,118 +78,117 @@
 
 > **主题**：仓库已经进入"功能迭代期"，下一阶段把编剧/制作过程里的问题前置：脚本/资源/manifest 的错误尽量在运行前就被发现。
 
-**已实现**：
-- **脚本静态检查**（不运行游戏也能做）：
-  - **未定义 label（Error）**：所有"显式跳转目标"（如 `goto`/choice 目标等）必须存在 ✅
-  - choice 表格目标缺失检测 ✅
-  - 语法错误（复用 parser 的错误信息）✅
-- **资源引用检查**：
-  - 脚本里的 `<img src>` / `<audio src>` 统一解析为逻辑路径后，检查资源是否存在 ✅
-  - 路径规范化（与 `ResourceManager` 口径一致）✅
-- **诊断输出体验**：
-  - 报错格式统一：文件/脚本ID/消息/详情 ✅
-  - 诊断分级：Error/Warn/Info ✅
+**已实现（浓缩）**：
+- ✅ **静态脚本诊断**：未定义 label / choice 目标缺失 / 语法错误（复用 parser 错误）  
+- ✅ **资源引用检查**：`<img src>` / `<audio src>` 统一逻辑路径解析 + 存在性校验（与 `ResourceManager` 同口径）
+- ✅ **诊断体验**：统一格式（文件/脚本ID/行号/详情）+ 分级（Error/Warn/Info）
+- ✅ **工具链落地**：`cargo script-check [path]`（xtask），支持只读扫描；Dev Mode 可自动诊断
 
-**落地形态**：
-- **核心能力放在 `vn-runtime`**：`vn-runtime/src/diagnostic.rs` 提供纯函数的脚本分析/诊断 API
-- 以 `tools/xtask` 子命令形式提供：`cargo script-check`
-- 允许"只读扫描"：不触碰 macroquad/音频设备，避免环境依赖
-
-**使用方式**：
-- `cargo script-check`：检查 `assets/scripts/` 下所有脚本
-- `cargo script-check <path>`：检查指定文件或目录
-
-**关键文件**：
-- `vn-runtime/src/diagnostic.rs`（诊断 API）
-- `vn-runtime/src/script/ast.rs`（Script.source_map 源码映射）
-- `tools/xtask/src/main.rs`（script-check 命令）
-- `host/src/app/init.rs`（Dev Mode 自动诊断）
-- `host/src/config/mod.rs`（debug.script_check 配置）
-
-**已实现的扩展功能**：
-- ✅ Dev Mode 自动诊断：在 debug build 或 `debug.script_check=true` 时，Host 启动时自动检查脚本
-- ✅ 行号精确定位：诊断输出包含准确的源码行号（如 `script.md:42: 错误信息`）
+**关键入口**：`vn-runtime/src/diagnostic.rs`、`tools/xtask/src/main.rs`、`host/src/app/init.rs`
 
 ### 仓库瘦身与上下文治理（2w+ LOC）🟩 已完成 ✅
 
 > **目标**：在不改行为前提下，降低"巨型文件 + 索引噪音"带来的协作/模型上下文成本。
 
-**已完成（关键改动）**：
-- ✅ `.cursorignore`：忽略 `target/`、`dist/`、`assets/`、覆盖率产物、zip/exe/pdb 等，降低索引噪音
-- ✅ `vn-runtime`：`script/parser.rs` 拆分为 `script/parser/*`（保持 `Parser` API 与测试不变）
-- ✅ `host`：拆分 `command_executor`；`text_renderer` 去重复逻辑（只搬/抽公共逻辑，不改语义）
-- ✅ `host` 日志治理：`println!/eprintln!` → `tracing`（可控等级、字段化），并支持 `config.json debug.log_level`
-- ✅ `xtask`：CLI 规范化为 `clap` + `walkdir`（`cargo script-check --help` 清晰、参数校验一致）
+**已完成（浓缩）**：
+- ✅ `.cursorignore` 降低索引噪音（target/dist/assets/覆盖率产物等）
+- ✅ 拆分大模块：`vn-runtime/script/parser/*`、`host/command_executor/*`（不改语义，只拆分/去重）
+- ✅ 日志与 CLI 规范化：`tracing` + `clap`/`walkdir`
 
-**验收（DoD）**：
-- ✅ `cargo test -p vn-runtime --lib`
-- ✅ `cargo check -p host` / `cargo test -p host --lib`
-- ✅ `cargo check-all`
-
-## 下一步开发方向
+**验收**：`cargo test -p vn-runtime --lib`、`cargo test -p host --lib`、`cargo check-all`
 
 ### 阶段 24：演出与体验增强（基于现有动画系统渐进扩展）✅ 已完成
 
 > **主题**：在不破坏"命令驱动 + 显式状态"的前提下，围绕现有动画系统与转场体系，补齐最影响观感的演出能力。
 
-**已实现**：
+**已实现（浓缩）**：
+- ✅ TextBox 显式控制：`textBoxHide/show/clear`（全链路打通）
+- ✅ `clearCharacters` 一键清立绘
+- ✅ `changeScene` 语义收敛：只做遮罩过渡 + 切背景；不再隐式隐藏 UI/清立绘
+- ✅ ChapterMark：非阻塞、固定节奏、覆盖策略
+- ✅ 立绘位置：默认瞬移；需要动画时用 `with move/slide`（与 dissolve/fade 解耦）
 
-- ✅ **新增 TextBox 命令（对话框显式控制）**：`textBoxHide` / `textBoxShow` / `textBoxClear`
-  - 全链路：AST → Parser → Executor → Command → Host CommandExecutor
-- ✅ **新增 clearCharacters 命令**：一键清除所有角色立绘
-- ✅ **重构 changeScene 职责**：只负责遮罩过渡 + 切换背景，不再隐式隐藏 UI / 清除立绘
-- ✅ **修复 ChapterMark 语义**：非阻塞、固定持续时间（FadeIn 0.4s → Visible 3.0s → FadeOut 0.6s）、覆盖策略
-- ✅ **立绘动效（位置移动）**：`show alias at newPosition` 默认瞬移；需要动画时用 `show alias at newPosition with effect`
-
-**测试覆盖**：vn-runtime 195 tests / host 114 tests 全部通过
-
-**待完成（可选扩展）**：更多过渡效果（wipe/slide）、立绘缩放动画
-
-**关键文件**：
-- `vn-runtime/src/script/ast.rs`、`command.rs`、`runtime/executor.rs`、`script/parser/phase2.rs`
-- `host/src/command_executor/{ui,background,types}.rs`、`host/src/app/command_handlers/character.rs`
-- `host/src/renderer/render_state.rs`、`host/src/app/update/{mod,scene_transition}.rs`
-- `docs/script_syntax_spec.md`
+**关键入口**：`vn-runtime/src/runtime/executor.rs`、`host/src/app/update/scene_transition.rs`、`docs/script_syntax_spec.md`
 
 ### 阶段 25：统一动画/过渡效果解析与执行（Effect Registry + AnimationSystem 统一入口）✅ 已完成
 
 > **主题**：把"过渡效果/动画效果"的**解析与执行**收敛到一个统一单元，背景/立绘/UI 共享同一套效果定义与时间轴驱动；命令执行层只负责把 `Transition` 翻译成"对动画系统的请求"，避免多处重复维护。
 
-**已实现**：
+**已实现（浓缩）**：
+- ✅ **统一解析**：`Transition → ResolvedEffect`（`EffectKind/ResolvedEffect/resolve()/defaults`）
+- ✅ **统一请求**：`EffectRequest { target, effect }`（替代多套中间类型与字段）
+- ✅ **统一应用入口**：`EffectApplier`（统一分发到 AnimationSystem / TransitionManager / SceneTransitionManager）
+- ✅ **清理**：移除 `CharacterAnimationCommand/SceneTransitionCommand/TransitionInfo`、移除 `CommandExecutor` 冗余 timer、删除旧 handlers、清理 `AnimationTarget`
+- ✅ **测试/文档**：效果矩阵测试 + resolver 单测；统一效果语义表与导航更新
 
-- ✅ **统一效果解析模块** `host/src/renderer/effects/`
-  - `EffectKind`：效果类型枚举（Dissolve / Fade / FadeWhite / Rule / Move / None）
-  - `ResolvedEffect`：已解析效果（kind + 显式 duration + easing），`duration_or()` 支持上下文默认值
-  - `resolve()`：`Transition → ResolvedEffect` 的唯一转换入口
-  - `defaults` 模块：所有默认持续时间的唯一来源
-- ✅ **统一动画请求模型** `EffectRequest { target: EffectTarget, effect: ResolvedEffect }`
-  - `EffectTarget` 枚举：`CharacterShow` / `CharacterHide` / `CharacterMove` / `BackgroundTransition` / `SceneTransition`
-  - `CommandOutput.effect_requests: Vec<EffectRequest>` 替代原来的 3 个独立字段
-- ✅ **统一执行入口** `EffectApplier`（`host/src/app/command_handlers/effect_applier.rs`）
-  - `apply_effect_requests()` 遍历请求并分发到 AnimationSystem / TransitionManager / SceneTransitionManager
-  - 替代原来的 `handle_character_animation()` + `apply_transition_effect()` + `handle_scene_transition()` 三个独立 handler
-- ✅ **删除冗余类型和机制**
-  - 删除 `CharacterAnimationCommand`、`SceneTransitionCommand`、`TransitionInfo` 三个中间类型
-  - 删除 `CommandExecutor` 的 transition timer（`transition_active/timer/duration` + 4 个方法）
-  - 删除 `host/src/app/command_handlers/{character.rs, transition.rs}`
-- ✅ **效果矩阵测试**：10 个验证效果解析一致性的测试 + 17 个 resolver 测试
-- ✅ **文档更新**：`script_syntax_spec.md` 增加统一效果语义表（含 move/slide）
-- ✅ **清理 AnimationTarget**（已删除废弃模块与导出）
+**关键入口**：`host/src/renderer/effects/`、`host/src/app/command_handlers/effect_applier.rs`、`host/src/command_executor/*`
 
-**测试覆盖**：
-- `cargo test -p host --lib`：141 tests passed
-- `cargo test -p host --test command_execution`：7 tests passed
-- `cargo check-all`：通过
+## 下一步开发方向
 
-**关键文件**：
-- 新增：`host/src/renderer/effects/{mod.rs, registry.rs, resolver.rs, request.rs}`
-- 新增：`host/src/app/command_handlers/effect_applier.rs`
-- 重构：`host/src/command_executor/{character.rs, background.rs, mod.rs, types.rs}`
-- 扩展：`host/src/renderer/{transition.rs, mod.rs}`
-- 文档：`docs/script_syntax_spec.md`、`docs/navigation_map.md`
+### 阶段 26：快进/自动/跳过体系（演出推进可控 + 无竞态）🟦 计划中
 
-**后续演进方向**：
-- 新增效果（wipe/slide 等）只需在 `registry.rs` 和 `resolver.rs` 添加即可
+> **主题**：在不破坏“命令驱动 + 显式状态”的前提下，把**用户推进剧情的体验**（快进/自动/跳过）做成可预测、可测试、无竞态的系统；同时补齐“跳过时的过渡/动画收敛规则”，避免背景/遮罩/立绘进入不一致状态。
+
+**建议优先级：高**（当前演出系统已统一入口，适合把“推进控制”也收敛起来）
+
+**核心目标**：
+- **统一推进模式**：Normal / Auto / Skip（或按键按住的临时 Skip）
+- **统一跳过语义**：跳过时“该完成的效果必须完成、该切的背景必须切”，且只切一次
+- **无竞态**：快点/连点/按住跳过不应导致背景闪现、遮罩卡住、立绘状态残留
+
+**落地建议（按模块）**：
+- **输入与模式状态（Host）**：在 `AppState` 建立 `PlaybackMode`（含 auto 的节拍/策略、skip 的触发条件），将点击/按住/自动统一转成更新循环的控制信号
+- **过渡/动画的跳过收敛**：`EffectApplier`/`Renderer` 提供“跳过当前演出”的统一入口（内部调用 AnimationSystem / TransitionManager / SceneTransitionManager 的 skip），并明确：
+  - Background dissolve：跳过即直接完成到新背景（alpha=1）
+  - changeScene：跳过需保证遮罩到达中点并切背景，再完成淡出/收尾（或直接完成到 Completed）
+
+**验收标准（DoD）**：
+- 连点/按住 Skip 时：`changeScene Fade/FadeWhite/Rule` 必定切到目标背景，且无闪现/卡遮罩
+- 新增单测：SceneTransition/Transition 的 skip 语义覆盖（至少 Fade 与 Rule 两条路径）
+- 新增集成测试：脚本层模拟快速输入，验证背景最终状态与过渡完成状态一致
+- `cargo check-all` 通过
+
+**关键文件（预期入口）**：
+- `host/src/app/update/{mod.rs,scene_transition.rs,script.rs}`
+- `host/src/app/command_handlers/effect_applier.rs`
+- `host/src/renderer/{mod.rs,scene_transition.rs,transition.rs,animation/system.rs}`
+
+### 阶段 27：Host 结构治理（AppState 解耦 + 子系统边界）🟦 计划中
+
+> **主题**：控制 `AppState` 的“上帝对象”膨胀，把 Host 的状态与能力按职责拆分为若干子系统接口；让 command_handlers/update/screen 只依赖**必要能力**，减少改动波及面，提升可测试性与可读性。
+
+**动机（可维护性问题）**：
+- `host/src/app/mod.rs::AppState` 聚合了资源/渲染/输入/执行器/UI/动画/存档/脚本等多类状态，导致：
+  - 任意功能改动都容易触及 `AppState` 与大量调用点（高耦合）
+  - handler/screen 容易“顺手”拿到不该依赖的能力（边界被侵蚀）
+  - 单测/集测构造成本上升（需要填充更多无关字段）
+
+**设计目标**：
+- **按能力分层**：将 `AppState` 拆为“子系统 struct + façade 接口”，减少直接字段暴露
+- **依赖最小化**：handler/screen 通过参数传入的 façade/trait 获取能力，而不是随处 `&mut AppState`
+- **不改语义**：本阶段原则上只做结构治理与迁移，不引入新玩法/新演出表现
+
+**建议落地方式（渐进迁移）**：
+- **Step A：定义子系统容器**（先搬字段，不改行为）
+  - `CoreSystems`：`ResourceManager` / `Renderer` / `RenderState` / `AnimationSystem` / `CommandExecutor` / `AudioManager`
+  - `UiSystems`：`NavigationStack` / `UiContext` / `ToastManager` / screens（Title/Menu/SaveLoad/Settings/History）
+  - `GameSession`：`VNRuntime` / `WaitingReason` / `typewriter_timer` / `script_finished` / `manifest` / `character_object_ids`
+- **Step B：建立 façade**（控制可见性）
+  - 为 `EffectApplier`/update 侧提供 `EffectContext`/`GameContext`（只暴露本模块需要的方法）
+  - 将 `pub` 字段逐步收敛为私有，通过 getter/方法访问（减少跨模块写入）
+- **Step C：迁移调用点**（以模块为单位）
+  - 优先迁移：`host/src/app/command_handlers/*`、`host/src/app/update/*`
+  - 再迁移：screens/UI 相关模块
+
+**验收标准（DoD）**：
+- `AppState` 字段数量显著下降（或至少不再对外 `pub` 暴露大部分字段）
+- `command_handlers` 与 `update` 层不再直接依赖整颗 `&mut AppState`（改为依赖 façade）
+- `cargo check-all` 通过，且新增/调整的测试构造成本下降（文档或注释说明）
+
+**关键文件（预期入口）**：
+- `host/src/app/mod.rs`（AppState 拆分入口）
+- `host/src/app/command_handlers/*`
+- `host/src/app/update/*`
 
 ---
 
