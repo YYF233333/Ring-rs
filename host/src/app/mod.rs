@@ -59,8 +59,8 @@ pub struct AppState {
     pub save_manager: crate::save_manager::SaveManager,
     /// 当前存档槽位
     pub current_save_slot: u32,
-    /// 可用脚本列表 (id, path)
-    pub scripts: Vec<(String, std::path::PathBuf)>,
+    /// 可用脚本列表（路径；展示用 ID 可从路径提取）
+    pub scripts: Vec<std::path::PathBuf>,
     /// 游戏开始时间（用于计算游戏时长）
     pub play_start_time: std::time::Instant,
 

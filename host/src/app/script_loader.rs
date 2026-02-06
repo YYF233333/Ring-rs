@@ -7,30 +7,27 @@ use vn_runtime::{Parser, VNRuntime};
 
 use super::AppState;
 
-/// 扫描脚本目录，返回 (script_id, script_path) 列表
-pub fn scan_scripts(assets_root: &PathBuf) -> Vec<(String, PathBuf)> {
+/// 扫描脚本目录，返回脚本路径列表
+pub fn scan_scripts(assets_root: &PathBuf) -> Vec<PathBuf> {
     let scripts_dir = assets_root.join("scripts");
     let mut scripts = Vec::new();
 
     if let Ok(entries) = std::fs::read_dir(&scripts_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "md")
-                && let Some(stem) = path.file_stem()
-            {
-                let script_id = stem.to_string_lossy().to_string();
-                scripts.push((script_id, path));
+            if path.extension().is_some_and(|ext| ext == "md") {
+                scripts.push(path);
             }
         }
     }
 
-    // 按文件名排序，确保顺序稳定
-    scripts.sort_by(|a, b| a.0.cmp(&b.0));
+    // 按路径排序，确保顺序稳定
+    scripts.sort();
     scripts
 }
 
 /// 从 ZIP 扫描脚本文件
-pub fn scan_scripts_from_zip(resource_manager: &ResourceManager) -> Vec<(String, PathBuf)> {
+pub fn scan_scripts_from_zip(resource_manager: &ResourceManager) -> Vec<PathBuf> {
     let mut scripts = Vec::new();
 
     // 通过 ResourceManager 列出 scripts 目录下的文件
@@ -38,18 +35,14 @@ pub fn scan_scripts_from_zip(resource_manager: &ResourceManager) -> Vec<(String,
 
     for file_path in files {
         // 只处理 .md 文件
-        if file_path.ends_with(".md")
-            && let Some(stem) = PathBuf::from(&file_path).file_stem()
-        {
-            let script_id = stem.to_string_lossy().to_string();
-            // 使用完整路径作为 PathBuf（ZIP 模式下路径已经是相对于 assets_root 的）
-            let full_path = PathBuf::from(&file_path);
-            scripts.push((script_id, full_path));
+        if file_path.ends_with(".md") {
+            // ZIP 模式下路径已经是相对于 assets_root 的
+            scripts.push(PathBuf::from(&file_path));
         }
     }
 
-    // 按文件名排序，确保顺序稳定
-    scripts.sort_by(|a, b| a.0.cmp(&b.0));
+    // 按路径排序，确保顺序稳定
+    scripts.sort();
     scripts
 }
 
@@ -102,63 +95,18 @@ pub fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &st
     }
 }
 
-/// 从 PathBuf 加载脚本（兼容旧接口）
-pub fn load_script_from_path(app_state: &mut AppState, script_path: &PathBuf) -> bool {
-    use crate::resources::normalize_logical_path;
-
-    // 将 PathBuf 转换为逻辑路径
-    let path_str = script_path.to_string_lossy().replace('\\', "/");
-    let logical_path = normalize_logical_path(&path_str);
-
-    load_script_from_logical_path(app_state, &logical_path)
-}
-
-/// 根据脚本路径或 ID 加载脚本（用于存档恢复）
+/// 根据脚本路径加载脚本（用于存档恢复）
 ///
-/// 优先使用 script_path（如果非空），否则回退到 script_id。
-pub fn load_script_by_path_or_id(
-    app_state: &mut AppState,
-    script_path: &str,
-    script_id: &str,
-) -> bool {
-    // 如果有脚本路径，直接使用
-    if !script_path.is_empty() {
-        info!(path = %script_path, "从路径加载脚本");
-        return load_script_from_logical_path(app_state, script_path);
+/// 约定：新版本存档总是携带 `script_path`；因此不再支持通过 `script_id`
+/// 推断路径的历史兼容逻辑。
+pub fn load_script_from_save_path(app_state: &mut AppState, script_path: &str) -> bool {
+    if script_path.is_empty() {
+        error!("存档缺少 script_path，无法加载脚本");
+        return false;
     }
 
-    // 否则从 ID 推断路径
-    load_script_by_id(app_state, script_id)
-}
-
-/// 根据脚本 ID 加载脚本（兼容旧存档）
-pub fn load_script_by_id(app_state: &mut AppState, script_id: &str) -> bool {
-    info!(script_id = %script_id, "从 ID 推断脚本路径");
-
-    // 在 scripts 列表中查找
-    if let Some((_, path)) = app_state.scripts.iter().find(|(id, _)| id == script_id) {
-        let path = path.clone();
-        return load_script_from_path(app_state, &path);
-    }
-
-    // 尝试常见的脚本位置
-    let possible_paths = [
-        format!("scripts/{}.md", script_id),
-        format!("{}.md", script_id),
-    ];
-
-    for path in &possible_paths {
-        if app_state.resource_manager.resource_exists(path) {
-            return load_script_from_logical_path(app_state, path);
-        }
-    }
-
-    error!(
-        script_id = %script_id,
-        possible_paths = ?possible_paths,
-        "找不到脚本"
-    );
-    false
+    info!(path = %script_path, "从存档 script_path 加载脚本");
+    load_script_from_logical_path(app_state, script_path)
 }
 
 /// 从命令列表中收集需要预取的资源路径

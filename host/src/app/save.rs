@@ -5,7 +5,7 @@ use tracing::{error, info, warn};
 use vn_runtime::state::WaitingReason;
 
 use super::AppState;
-use super::script_loader::{load_script_by_path_or_id, load_script_from_logical_path};
+use super::script_loader::{load_script_from_logical_path, load_script_from_save_path};
 
 /// 构建当前游戏状态的存档数据
 pub fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::SaveData> {
@@ -97,15 +97,13 @@ pub fn save_continue(app_state: &mut AppState) {
 
 /// 从存档数据恢复游戏状态
 pub fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::SaveData) -> bool {
-    // 加载对应的脚本（优先使用 script_path，回退到 script_id）
+    // 加载对应的脚本（新存档应总是携带 script_path）
     let script_path = &save_data.runtime_state.position.script_path;
-    let script_id = &save_data.runtime_state.position.script_id;
+    info!(path = %script_path, "尝试从存档恢复脚本");
 
-    info!(path = %script_path, id = %script_id, "尝试加载脚本");
-    if !load_script_by_path_or_id(app_state, script_path, script_id) {
-        error!("找不到脚本");
-        // 尝试使用 start_script_path 作为后备
-        info!("尝试使用 start_script_path 作为后备");
+    // 若存档不包含 path，则直接使用 start_script_path 兜底（避免卡死在无法恢复的状态）
+    if !load_script_from_save_path(app_state, script_path) {
+        warn!("存档脚本加载失败，尝试使用 start_script_path 作为后备");
         let start_path = app_state.config.start_script_path.clone();
         if !load_script_from_logical_path(app_state, &start_path) {
             error!("后备脚本加载也失败");

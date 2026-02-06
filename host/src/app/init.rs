@@ -4,8 +4,8 @@
 //! 让 `app/mod.rs` 保持可读，后续扩展更容易定位修改点。
 
 use crate::manifest::Manifest;
-use crate::resources::ResourceManager;
 use crate::resources::path::{extract_base_dir, normalize_logical_path};
+use crate::resources::{ResourceManager, extract_script_id};
 use crate::save_manager::SaveManager;
 use crate::{AppConfig, AssetSourceType, AudioManager, UserSettings, ZipSource};
 use std::path::PathBuf;
@@ -119,10 +119,7 @@ pub fn create_save_manager(config: &AppConfig) -> SaveManager {
     save_manager
 }
 
-pub fn scan_script_list(
-    config: &AppConfig,
-    resource_manager: &ResourceManager,
-) -> Vec<(String, PathBuf)> {
+pub fn scan_script_list(config: &AppConfig, resource_manager: &ResourceManager) -> Vec<PathBuf> {
     let scripts = match config.asset_source {
         AssetSourceType::Fs => scan_scripts(&config.assets_root),
         AssetSourceType::Zip => scan_scripts_from_zip(resource_manager),
@@ -147,7 +144,7 @@ pub fn load_user_settings(settings_path: &str) -> UserSettings {
 /// 只输出警告，不阻塞启动。
 pub fn run_script_check(
     config: &AppConfig,
-    scripts: &[(String, PathBuf)],
+    scripts: &[PathBuf],
     resource_manager: &ResourceManager,
 ) {
     // 检查是否需要运行
@@ -161,9 +158,10 @@ pub fn run_script_check(
     let mut total_warnings = 0;
     let mut scripts_checked = 0;
 
-    for (script_id, script_path) in scripts {
+    for script_path in scripts {
         // 读取脚本内容
         let logical_path = normalize_logical_path(&script_path.to_string_lossy());
+        let script_id = extract_script_id(&logical_path);
         let content = match resource_manager.read_text(&logical_path) {
             Ok(c) => c,
             Err(e) => {
@@ -178,7 +176,7 @@ pub fn run_script_check(
 
         // 解析脚本
         let mut parser = Parser::new();
-        let script = match parser.parse_with_base_path(script_id, &content, &base_path) {
+        let script = match parser.parse_with_base_path(&script_id, &content, &base_path) {
             Ok(s) => s,
             Err(e) => {
                 error!(script_id = %script_id, error = %e, "脚本解析失败");
