@@ -48,7 +48,6 @@ pub fn update(app_state: &mut AppState) {
     // 游戏进行时的通用更新（过渡效果、音频等）
     if current_mode.is_in_game() {
         // 更新过渡效果
-        app_state.command_executor.update_transition(dt);
         app_state.renderer.update_transition(dt);
 
         // 更新场景过渡状态（基于动画系统）

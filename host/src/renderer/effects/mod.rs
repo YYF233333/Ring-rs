@@ -26,7 +26,9 @@
 //!   `duration_or()` 提供
 
 mod registry;
+mod request;
 mod resolver;
 
 pub use registry::{EffectKind, defaults};
+pub use request::{EffectRequest, EffectTarget};
 pub use resolver::{ResolvedEffect, resolve};

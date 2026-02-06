@@ -37,13 +37,11 @@ pub use state::HostState;
 // Trait-based 动画系统 API
 pub use app_mode::{AppMode, InputCapture, NavigationStack, SaveLoadTab, UserSettings};
 pub use audio::AudioManager;
-pub use command_executor::{
-    AudioCommand, CharacterAnimationCommand, CommandExecutor, CommandOutput, ExecuteResult,
-    TransitionInfo,
-};
+pub use command_executor::{AudioCommand, CommandExecutor, CommandOutput, ExecuteResult};
 pub use config::{AppConfig, AssetSourceType, AudioConfig, DebugConfig, WindowConfig};
 pub use input::InputManager;
 pub use manifest::Manifest;
+pub use renderer::effects::{EffectRequest, EffectTarget};
 pub use renderer::{
     AnimPropertyKey, Animatable, ObjectId, PropertyAccessor, SimplePropertyAccessor,
 };

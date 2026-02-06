@@ -3,17 +3,17 @@
 //! 处理 ShowBackground 和 ChangeScene 命令。
 
 use crate::renderer::RenderState;
-use crate::renderer::effects::{self, EffectKind, defaults};
+use crate::renderer::effects::{self, EffectKind, EffectRequest, EffectTarget};
 use crate::resources::ResourceManager;
 use tracing::debug;
 
 use super::CommandExecutor;
-use super::types::{ExecuteResult, SceneTransitionCommand, TransitionInfo};
+use super::types::ExecuteResult;
 
 impl CommandExecutor {
     /// 执行 ShowBackground
     ///
-    /// 阶段 25 重构：使用统一 `effects::resolve()` 解析过渡效果。
+    /// 阶段 25 续：产出 `EffectRequest` 替代 `TransitionInfo`。
     pub(super) fn execute_show_background(
         &mut self,
         path: &str,
@@ -29,17 +29,12 @@ impl CommandExecutor {
         // 统一解析过渡效果
         let effect = transition.as_ref().map(effects::resolve);
 
-        // 记录过渡信息（使用 ResolvedEffect）
-        self.last_output.transition_info = TransitionInfo {
-            has_background_transition: true,
-            old_background,
-            effect: effect.clone(),
-        };
-
-        // 处理过渡效果
-        if let Some(ref effect) = effect {
-            let duration = effect.duration_or(defaults::BACKGROUND_DISSOLVE_DURATION);
-            self.start_transition(duration);
+        // 产出背景过渡效果请求
+        if let Some(effect) = effect {
+            self.last_output.effect_requests.push(EffectRequest {
+                target: EffectTarget::BackgroundTransition { old_background },
+                effect,
+            });
         }
 
         ExecuteResult::Ok
@@ -52,7 +47,7 @@ impl CommandExecutor {
     /// - **不再隐式隐藏 UI**（由编剧通过 textBoxHide 显式控制）
     /// - **不再隐式清除立绘**（由编剧通过 clearCharacters / hide 显式控制）
     ///
-    /// 阶段 25 重构：使用统一 `effects::resolve()` 解析过渡效果。
+    /// 阶段 25 续：产出 `EffectRequest` 替代 `SceneTransitionCommand` / `TransitionInfo`。
     pub(super) fn execute_change_scene(
         &mut self,
         path: &str,
@@ -64,70 +59,83 @@ impl CommandExecutor {
         let old_background = render_state.current_background.clone();
 
         if let Some(ref trans) = transition {
-            let effect = effects::resolve(trans);
+            let mut effect = effects::resolve(trans);
 
             match &effect.kind {
                 EffectKind::Fade => {
-                    let duration = effect.duration_or(defaults::FADE_DURATION);
-                    self.last_output.scene_transition = Some(SceneTransitionCommand::Fade {
-                        duration,
-                        pending_background: path.to_string(),
+                    debug!(
+                        duration = ?effect.duration,
+                        "changeScene: Fade 黑屏过渡"
+                    );
+                    self.last_output.effect_requests.push(EffectRequest {
+                        target: EffectTarget::SceneTransition {
+                            pending_background: path.to_string(),
+                        },
+                        effect,
                     });
-                    debug!(duration = duration, "changeScene: Fade 黑屏过渡");
                 }
                 EffectKind::FadeWhite => {
-                    let duration = effect.duration_or(defaults::FADE_WHITE_DURATION);
-                    self.last_output.scene_transition = Some(SceneTransitionCommand::FadeWhite {
-                        duration,
-                        pending_background: path.to_string(),
+                    debug!(
+                        duration = ?effect.duration,
+                        "changeScene: FadeWhite 白屏过渡"
+                    );
+                    self.last_output.effect_requests.push(EffectRequest {
+                        target: EffectTarget::SceneTransition {
+                            pending_background: path.to_string(),
+                        },
+                        effect,
                     });
-                    debug!(duration = duration, "changeScene: FadeWhite 白屏过渡");
                 }
                 EffectKind::Rule {
                     mask_path,
                     reversed,
                 } => {
-                    let duration = effect.duration_or(defaults::RULE_DURATION);
                     // 规范化路径
                     let normalized_mask_path = resource_manager.resolve_path(mask_path);
-
-                    self.last_output.scene_transition = Some(SceneTransitionCommand::Rule {
-                        duration,
-                        pending_background: path.to_string(),
-                        mask_path: normalized_mask_path.clone(),
-                        reversed: *reversed,
-                    });
                     debug!(
                         mask = %normalized_mask_path,
-                        duration = duration,
+                        duration = ?effect.duration,
                         reversed = reversed,
                         "changeScene: Rule 遮罩过渡"
                     );
-                }
-                EffectKind::Dissolve => {
-                    // Dissolve 使用 TransitionManager 处理背景过渡
-                    self.last_output.transition_info = TransitionInfo {
-                        has_background_transition: true,
-                        old_background: old_background.clone(),
-                        effect: Some(effect),
-                    };
-                    render_state.set_background(path.to_string());
-                    debug!("changeScene: Dissolve 过渡");
-                }
-                _ => {
-                    // 未知/None/Move 等：使用默认 dissolve
-                    let fallback_effect = effects::ResolvedEffect {
-                        kind: EffectKind::Dissolve,
+                    // 用规范化后的路径重建 EffectKind::Rule
+                    let resolved_effect = effects::ResolvedEffect {
+                        kind: EffectKind::Rule {
+                            mask_path: normalized_mask_path,
+                            reversed: *reversed,
+                        },
                         duration: effect.duration,
                         easing: effect.easing,
                     };
-                    self.last_output.transition_info = TransitionInfo {
-                        has_background_transition: true,
-                        old_background: old_background.clone(),
-                        effect: Some(fallback_effect),
-                    };
+                    self.last_output.effect_requests.push(EffectRequest {
+                        target: EffectTarget::SceneTransition {
+                            pending_background: path.to_string(),
+                        },
+                        effect: resolved_effect,
+                    });
+                }
+                EffectKind::Dissolve => {
+                    // Dissolve 使用 TransitionManager 处理背景过渡
+                    render_state.set_background(path.to_string());
+                    debug!("changeScene: Dissolve 过渡");
+                    self.last_output.effect_requests.push(EffectRequest {
+                        target: EffectTarget::BackgroundTransition {
+                            old_background: old_background.clone(),
+                        },
+                        effect,
+                    });
+                }
+                _ => {
+                    // 未知/None/Move 等：使用默认 dissolve
                     render_state.set_background(path.to_string());
                     debug!(kind = ?effect.kind, "changeScene: 降级为 dissolve");
+                    effect.kind = EffectKind::Dissolve;
+                    self.last_output.effect_requests.push(EffectRequest {
+                        target: EffectTarget::BackgroundTransition {
+                            old_background: old_background.clone(),
+                        },
+                        effect,
+                    });
                 }
             }
         } else {

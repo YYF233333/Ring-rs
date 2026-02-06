@@ -487,9 +487,28 @@ impl SceneTransitionManager {
     /// 对于 Fade/FadeWhite：FadeOut 阶段刚开始时
     /// 对于 Rule：FadeOut 阶段刚开始时（黑屏停顿结束后）
     pub fn is_at_midpoint(&self) -> bool {
-        self.phase == SceneTransitionPhase::FadeOut
-            && !self.animation_system.has_active_animations()
-            && self.phase_timer < 0.01
+        if self.phase != SceneTransitionPhase::FadeOut {
+            return false;
+        }
+
+        // 只要 pending_background 仍存在，就意味着“背景尚未切换”，
+        // 中间点只应触发一次：切换后会通过 take_pending_background() 清空。
+        if self.pending_background.is_none() {
+            return false;
+        }
+
+        // 关键：这里的“中间点”必须发生在进入 FadeOut 之后、FadeOut 动画推进之前。
+        // 由于 update() 先推进动画，再进行阶段转换并启动 FadeOut 动画，
+        // 因此在进入 FadeOut 的那一帧，属性值仍保持在 FadeOut 的起始值：
+        // - Fade/FadeWhite：mask_alpha == 1.0（全遮罩）
+        // - Rule：progress == 0.0（从黑屏溶解到新背景的起点）
+        match &self.transition_type {
+            Some(SceneTransitionType::Fade) | Some(SceneTransitionType::FadeWhite) => {
+                self.mask_alpha() >= 0.999
+            }
+            Some(SceneTransitionType::Rule { .. }) => self.progress() <= 0.001,
+            None => false,
+        }
     }
 
     /// 判断是否正在进行 UI 淡入
@@ -624,5 +643,52 @@ mod tests {
         assert!(!manager.is_active());
         assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
         assert_eq!(manager.ui_alpha(), 1.0);
+    }
+
+    #[test]
+    fn test_midpoint_detected_for_fade_and_consumed_by_take_pending_background() {
+        let mut manager = SceneTransitionManager::new();
+        manager.start_fade(0.2, "new_bg.png".to_string());
+
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);
+        assert!(!manager.is_at_midpoint());
+        assert_eq!(manager.pending_background(), Some("new_bg.png"));
+
+        // 推进足够的时间：FadeIn 完成并进入 FadeOut（且刚开始）
+        manager.update(0.25);
+
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeOut);
+        assert!(manager.is_at_midpoint());
+
+        // 一旦消费 pending_background，中间点不应再次触发
+        assert_eq!(
+            manager.take_pending_background().as_deref(),
+            Some("new_bg.png")
+        );
+        assert!(manager.pending_background().is_none());
+        assert!(!manager.is_at_midpoint());
+    }
+
+    #[test]
+    fn test_midpoint_detected_for_rule_after_blackout_and_consumed() {
+        let mut manager = SceneTransitionManager::new();
+        manager.start_rule(0.1, "new_bg.png".to_string(), "mask.png".to_string(), false);
+
+        // 先完成 FadeIn → Blackout
+        manager.update(0.2);
+        assert_eq!(manager.phase(), SceneTransitionPhase::Blackout);
+        assert!(!manager.is_at_midpoint());
+
+        // 再推进超过黑屏停顿：进入 FadeOut（起点）
+        manager.update(RULE_BLACKOUT_DURATION + 0.01);
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeOut);
+        assert!(manager.is_at_midpoint());
+
+        assert_eq!(
+            manager.take_pending_background().as_deref(),
+            Some("new_bg.png")
+        );
+        assert!(manager.pending_background().is_none());
+        assert!(!manager.is_at_midpoint());
     }
 }

@@ -1,77 +1,6 @@
 # Visual Novel Engine 开发路线图
 
-> 本文档定义了项目的架构约束和具体执行计划。
-
-## 总体架构原则（硬约束）
-
-- Runtime 与 Host 分离
-   - **`vn-runtime`**：纯逻辑核心（脚本解析/执行、状态管理、等待建模、产出 `Command`）
-   - **`host`**：IO/渲染/音频/输入/资源宿主（执行 `Command` 产生画面/音频/UI）
-   - Runtime **禁止**：引擎 API（macroquad）、IO、真实时间依赖
-   - Host **禁止**：脚本逻辑；直接修改 Runtime 内部状态
-
-- 显式状态、确定性执行
-   - 所有运行状态必须**显式建模**且可序列化（支持存档/读档）
-   - 不允许隐式全局状态
-   - 不依赖真实时间推进逻辑（时间等待由 Host 负责）
-
-- 命令驱动（Command-based）
-   - Runtime **只产出** `Command`
-   - Host **只执行** `Command`
-   - Runtime 不直接渲染/播放音频/等待输入
-
----
-
-## VN Runtime 核心模型（必须遵守）
-
-- `RuntimeState`（唯一可变状态）
-   - 脚本执行位置（`ScriptPosition`）
-   - 脚本变量（variables）
-   - 当前等待状态（`WaitingReason`）
-   - 以及其他可恢复的显式状态（如已显示角色/背景等）
-
-   要求：**可序列化**、可测试；禁止隐式状态。
-
-- `WaitingReason`（显式等待模型）
-
-   允许的等待原因（示例口径）：
-
-   ```text
-   None
-   WaitForClick
-   WaitForChoice { choice_count }
-   WaitForTime(Duration)
-   WaitForSignal(SignalId)
-   ```
-
-   禁止使用隐式 await/sleep 来推进脚本。
-
-- 执行模型（tick）
-   - Runtime 通过 `tick(input) -> (Vec<Command>, WaitingReason)` 驱动
-   - 若处于等待：仅处理输入尝试解除等待
-   - 若不等待：持续推进脚本直到再次阻塞或结束
-
-- `RuntimeInput`（Host → Runtime）
-
-   典型输入：
-
-   ```text
-   Click
-   ChoiceSelected(index)
-   Signal(signal_id)
-   ```
-
-   说明：`WaitForTime` 由 Host 处理（Host 等待指定时长再调用 tick）。
-
----
-
-## Command 模型（Runtime → Host）
-
-- `Command` 是 Runtime 与 Host 的**唯一通信方式**
-- 要求：**声明式**、不包含引擎类型、不产生副作用
-
-
----
+> 本文档定义了项目的具体执行计划。
 
 ## 项目当前状态
 
@@ -233,35 +162,33 @@
   - `ResolvedEffect`：已解析效果（kind + 显式 duration + easing），`duration_or()` 支持上下文默认值
   - `resolve()`：`Transition → ResolvedEffect` 的唯一转换入口
   - `defaults` 模块：所有默认持续时间的唯一来源
-- ✅ **重构 command_executor**：`character.rs` / `background.rs` 均通过 `effects::resolve()` 解析
-  - 消除了 3 处对 `Transition.name/duration` 的手写解析
-  - `TransitionInfo` 改为携带 `ResolvedEffect` 替代 raw `Transition`
-- ✅ **重构 command_handlers**：`transition.rs` 使用 `ResolvedEffect` 驱动 `TransitionManager`
-  - `TransitionManager` 新增 `start_from_resolved()` 方法
-  - `Renderer` 新增 `start_background_transition_resolved()` 入口
-- ✅ **效果矩阵测试**：新增 10 个验证效果解析一致性的测试
-  - dissolve 在 Background/Character 上解析一致
-  - fade 在立绘上下文等价 dissolve，在场景上下文为黑屏遮罩
-  - 显式 duration 在所有 target 上优先于默认值
+- ✅ **统一动画请求模型** `EffectRequest { target: EffectTarget, effect: ResolvedEffect }`
+  - `EffectTarget` 枚举：`CharacterShow` / `CharacterHide` / `CharacterMove` / `BackgroundTransition` / `SceneTransition`
+  - `CommandOutput.effect_requests: Vec<EffectRequest>` 替代原来的 3 个独立字段
+- ✅ **统一执行入口** `EffectApplier`（`host/src/app/command_handlers/effect_applier.rs`）
+  - `apply_effect_requests()` 遍历请求并分发到 AnimationSystem / TransitionManager / SceneTransitionManager
+  - 替代原来的 `handle_character_animation()` + `apply_transition_effect()` + `handle_scene_transition()` 三个独立 handler
+- ✅ **删除冗余类型和机制**
+  - 删除 `CharacterAnimationCommand`、`SceneTransitionCommand`、`TransitionInfo` 三个中间类型
+  - 删除 `CommandExecutor` 的 transition timer（`transition_active/timer/duration` + 4 个方法）
+  - 删除 `host/src/app/command_handlers/{character.rs, transition.rs}`
+- ✅ **效果矩阵测试**：10 个验证效果解析一致性的测试 + 17 个 resolver 测试
 - ✅ **文档更新**：`script_syntax_spec.md` 增加统一效果语义表（含 move/slide）
 - ✅ **清理 AnimationTarget**（已删除废弃模块与导出）
-- ✅ **修复阶段 24 遗留的集成测试**
 
 **测试覆盖**：
-- `cargo test -p host --lib`：142 tests passed（新增 10 个效果矩阵 + 17 个 resolver 测试）
+- `cargo test -p host --lib`：141 tests passed
 - `cargo test -p host --test command_execution`：7 tests passed
 - `cargo check-all`：通过
 
 **关键文件**：
-- 新增：`host/src/renderer/effects/{mod.rs, registry.rs, resolver.rs}`
+- 新增：`host/src/renderer/effects/{mod.rs, registry.rs, resolver.rs, request.rs}`
+- 新增：`host/src/app/command_handlers/effect_applier.rs`
 - 重构：`host/src/command_executor/{character.rs, background.rs, mod.rs, types.rs}`
-- 重构：`host/src/app/command_handlers/transition.rs`
 - 扩展：`host/src/renderer/{transition.rs, mod.rs}`
 - 文档：`docs/script_syntax_spec.md`、`docs/navigation_map.md`
 
 **后续演进方向**：
-- 引入 `EffectApplier` 让 command_handlers 直接通过统一接口操作 `AnimationSystem`（当前仍通过 `CharacterAnimationCommand` 等中间类型传递）
-- 引入 `EffectRequest { object_id, kind, effect }` 统一动画请求模型
 - 新增效果（wipe/slide 等）只需在 `registry.rs` 和 `resolver.rs` 添加即可
 
 ---

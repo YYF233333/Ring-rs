@@ -184,17 +184,8 @@ fn test_background_with_transition() {
     let result = executor.execute(&cmd, &mut state, &rm);
     assert_eq!(result, ExecuteResult::Ok);
 
-    // 检查过渡信息
-    assert!(
-        executor
-            .last_output
-            .transition_info
-            .has_background_transition
-    );
-    assert_eq!(
-        executor.last_output.transition_info.old_background,
-        Some("old_bg.png".to_string())
-    );
+    // 检查效果请求
+    assert_eq!(executor.last_output.effect_requests.len(), 1);
 }
 
 /// 测试多角色场景
@@ -263,8 +254,8 @@ fn test_change_scene_produces_transition() {
     };
     executor.execute(&cmd, &mut state, &rm);
 
-    // 阶段 24：changeScene 只负责产生场景切换命令，不隐式操作 UI/立绘
-    assert!(executor.last_output.scene_transition.is_some());
+    // 阶段 24：changeScene 只负责产生效果请求，不隐式操作 UI/立绘
+    assert!(!executor.last_output.effect_requests.is_empty());
     // UI 和立绘状态不受影响（由编剧显式控制）
     assert!(state.ui_visible);
     assert!(!state.visible_characters.is_empty());

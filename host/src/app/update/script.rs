@@ -7,10 +7,7 @@ use vn_runtime::state::WaitingReason;
 use crate::ExecuteResult;
 
 use super::super::AppState;
-use super::super::command_handlers::{
-    apply_transition_effect, handle_audio_command, handle_character_animation,
-    handle_scene_transition,
-};
+use super::super::command_handlers::{apply_effect_requests, handle_audio_command};
 use super::super::save::return_to_title_from_game;
 use super::super::script_loader::collect_prefetch_paths;
 
@@ -121,17 +118,11 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                     &app_state.resource_manager,
                 );
 
-                // 应用过渡效果
-                apply_transition_effect(app_state);
+                // 应用动画/过渡效果请求（统一入口）
+                apply_effect_requests(app_state);
 
                 // 处理音频命令
                 handle_audio_command(app_state);
-
-                // 处理角色动画命令
-                handle_character_animation(app_state);
-
-                // 处理场景切换命令
-                handle_scene_transition(app_state);
 
                 // 检查执行结果
                 if let ExecuteResult::Error(e) = result {

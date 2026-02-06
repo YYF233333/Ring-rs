@@ -3,17 +3,18 @@
 //! 处理 ShowCharacter 和 HideCharacter 命令。
 
 use crate::renderer::RenderState;
-use crate::renderer::effects::{self, EffectKind, defaults};
+use crate::renderer::effects::{self, EffectKind, EffectRequest, EffectTarget, defaults};
 use vn_runtime::command::{Position, Transition};
 
 use super::CommandExecutor;
-use super::types::{CharacterAnimationCommand, ExecuteResult};
+use super::types::ExecuteResult;
 
 impl CommandExecutor {
     /// 执行 ShowCharacter
     ///
     /// 阶段 24 扩展：如果角色已存在且位置变更，生成 Move 动画命令。
     /// 阶段 25 重构：使用统一 `effects::resolve()` 解析过渡效果。
+    /// 阶段 25 续：产出 `EffectRequest` 替代 `CharacterAnimationCommand`。
     pub(super) fn execute_show_character(
         &mut self,
         path: &str,
@@ -47,13 +48,18 @@ impl CommandExecutor {
                 if let Some(ref effect) = effect {
                     if effect.is_move_effect() {
                         let move_duration = effect.duration_or(defaults::MOVE_DURATION);
-                        self.last_output.character_animation =
-                            Some(CharacterAnimationCommand::Move {
+                        self.last_output.effect_requests.push(EffectRequest {
+                            target: EffectTarget::CharacterMove {
                                 alias: alias.to_string(),
                                 old_position,
                                 new_position: position,
-                                duration: move_duration,
-                            });
+                            },
+                            effect: effects::ResolvedEffect {
+                                kind: effect.kind.clone(),
+                                duration: Some(move_duration),
+                                easing: effect.easing,
+                            },
+                        });
                     }
                 }
 
@@ -82,9 +88,16 @@ impl CommandExecutor {
             .unwrap_or(0.0);
 
         if alpha_duration > 0.0 {
-            self.last_output.character_animation = Some(CharacterAnimationCommand::Show {
-                alias: alias.to_string(),
-                duration: alpha_duration,
+            let resolved = effect.unwrap(); // safe: alpha_duration > 0 implies effect is Some
+            self.last_output.effect_requests.push(EffectRequest {
+                target: EffectTarget::CharacterShow {
+                    alias: alias.to_string(),
+                },
+                effect: effects::ResolvedEffect {
+                    kind: resolved.kind,
+                    duration: Some(alpha_duration),
+                    easing: resolved.easing,
+                },
             });
         } else {
             // 无过渡效果：直接设置角色为完全可见
@@ -99,6 +112,7 @@ impl CommandExecutor {
     /// 执行 HideCharacter
     ///
     /// 阶段 25 重构：使用统一 `effects::resolve()` 解析过渡效果。
+    /// 阶段 25 续：产出 `EffectRequest` 替代 `CharacterAnimationCommand`。
     pub(super) fn execute_hide_character(
         &mut self,
         alias: &str,
@@ -118,9 +132,16 @@ impl CommandExecutor {
         if alpha_duration > 0.0 {
             // 有过渡效果：标记为淡出，由 AnimationSystem 处理
             render_state.mark_character_fading_out(alias);
-            self.last_output.character_animation = Some(CharacterAnimationCommand::Hide {
-                alias: alias.to_string(),
-                duration: alpha_duration,
+            let resolved = effect.unwrap(); // safe: alpha_duration > 0 implies effect is Some
+            self.last_output.effect_requests.push(EffectRequest {
+                target: EffectTarget::CharacterHide {
+                    alias: alias.to_string(),
+                },
+                effect: effects::ResolvedEffect {
+                    kind: resolved.kind,
+                    duration: Some(alpha_duration),
+                    easing: resolved.easing,
+                },
             });
         } else {
             // 无过渡效果：立即移除

@@ -5,7 +5,7 @@
 //! 这是 Transition → ResolvedEffect 的**唯一转换入口**。
 //! 所有效果参数的提取、校验、默认值填充都在这里完成。
 
-use super::registry::{EffectKind, defaults};
+use super::registry::EffectKind;
 use crate::renderer::animation::EasingFunction;
 use vn_runtime::command::{Transition, TransitionArg};
 
@@ -152,6 +152,7 @@ pub fn resolve(transition: &Transition) -> ResolvedEffect {
 
 #[cfg(test)]
 mod tests {
+    use super::super::registry::defaults;
     use super::*;
     use vn_runtime::command::{Transition, TransitionArg};
 

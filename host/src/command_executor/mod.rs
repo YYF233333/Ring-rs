@@ -6,8 +6,7 @@
 //!
 //! - `CommandExecutor` 接收 `Command`，更新 `RenderState` 和控制音频
 //! - 执行器不直接渲染，只更新状态，渲染由 `Renderer` 负责
-//! - 角色动画通过 `CharacterAnimationCommand` 传递给主循环，由 AnimationSystem 处理
-//! - 场景切换通过 `SceneTransitionCommand` 传递给主循环，由 SceneTransitionManager 处理
+//! - 动画/过渡效果通过 `EffectRequest` 统一传递给 `EffectApplier`
 //!
 //! ## 模块结构
 //!
@@ -27,20 +26,14 @@ pub use types::*;
 
 use crate::renderer::RenderState;
 use crate::resources::ResourceManager;
-use tracing::debug;
 use vn_runtime::command::Command;
 
 /// Command 执行器
 ///
 /// 负责将 Runtime 发出的 Command 转换为实际的渲染状态更新。
+/// 动画/过渡效果通过 `last_output.effect_requests` 传递给 `EffectApplier`。
 #[derive(Debug)]
 pub struct CommandExecutor {
-    /// 当前是否有活跃的过渡效果
-    transition_active: bool,
-    /// 过渡效果计时器
-    transition_timer: f32,
-    /// 过渡效果总时长
-    transition_duration: f32,
     /// 最近一次执行的输出
     pub last_output: CommandOutput,
 }
@@ -49,9 +42,6 @@ impl CommandExecutor {
     /// 创建新的 Command 执行器
     pub fn new() -> Self {
         Self {
-            transition_active: false,
-            transition_timer: 0.0,
-            transition_duration: 0.0,
             last_output: CommandOutput::default(),
         }
     }
@@ -138,49 +128,6 @@ impl CommandExecutor {
 
         last_result
     }
-
-    /// 开始过渡效果
-    ///
-    /// 阶段 25 重构：接受已解析的 duration（不再从 Transition 提取）。
-    pub(crate) fn start_transition(&mut self, duration: f32) {
-        self.transition_active = true;
-        self.transition_timer = 0.0;
-        self.transition_duration = duration;
-
-        debug!(duration = self.transition_duration, "开始过渡效果");
-    }
-
-    /// 更新过渡效果
-    ///
-    /// 返回 true 表示过渡效果仍在进行中。
-    pub fn update_transition(&mut self, dt: f32) -> bool {
-        if !self.transition_active {
-            return false;
-        }
-
-        self.transition_timer += dt;
-        if self.transition_timer >= self.transition_duration {
-            self.transition_active = false;
-            self.transition_timer = 0.0;
-            debug!("过渡效果完成");
-            return false;
-        }
-
-        true
-    }
-
-    /// 获取过渡效果进度 (0.0 - 1.0)
-    pub fn get_transition_progress(&self) -> f32 {
-        if !self.transition_active || self.transition_duration <= 0.0 {
-            return 1.0;
-        }
-        (self.transition_timer / self.transition_duration).min(1.0)
-    }
-
-    /// 检查是否有活跃的过渡效果
-    pub fn is_transition_active(&self) -> bool {
-        self.transition_active
-    }
 }
 
 impl Default for CommandExecutor {
@@ -197,7 +144,7 @@ mod tests {
     #[test]
     fn test_executor_creation() {
         let executor = CommandExecutor::new();
-        assert!(!executor.is_transition_active());
+        assert!(executor.last_output.effect_requests.is_empty());
     }
 
     #[test]
@@ -289,6 +236,8 @@ mod tests {
 
     #[test]
     fn test_execute_show_background_with_transition() {
+        use crate::renderer::effects::{EffectKind, EffectTarget};
+
         let mut executor = CommandExecutor::new();
         let mut render_state = RenderState::new();
         let resource_manager = ResourceManager::new("assets", 256);
@@ -304,16 +253,16 @@ mod tests {
 
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
-        assert!(
-            executor
-                .last_output
-                .transition_info
-                .has_background_transition
-        );
-        assert_eq!(
-            executor.last_output.transition_info.old_background,
-            Some("old_bg.png".to_string())
-        );
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            EffectTarget::BackgroundTransition { old_background } => {
+                assert_eq!(*old_background, Some("old_bg.png".to_string()));
+            }
+            other => panic!("Expected BackgroundTransition, got {:?}", other),
+        }
+        assert_eq!(req.effect.kind, EffectKind::Dissolve);
     }
 
     #[test]
@@ -353,7 +302,7 @@ mod tests {
         };
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
-        assert!(executor.last_output.character_animation.is_none());
+        assert!(executor.last_output.effect_requests.is_empty());
 
         // 位置变更：with dissolve 只应“瞬移”（不触发 Move 动画）
         let cmd = Command::ShowCharacter {
@@ -364,7 +313,7 @@ mod tests {
         };
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
-        assert!(executor.last_output.character_animation.is_none());
+        assert!(executor.last_output.effect_requests.is_empty());
 
         let char_sprite = render_state.visible_characters.get("char1").unwrap();
         assert_eq!(char_sprite.position, Position::Left);
@@ -396,20 +345,21 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
 
-        match executor.last_output.character_animation.as_ref() {
-            Some(CharacterAnimationCommand::Move {
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            crate::renderer::effects::EffectTarget::CharacterMove {
                 alias,
                 old_position,
                 new_position,
-                duration,
-            }) => {
+            } => {
                 assert_eq!(alias, "char1");
                 assert_eq!(*old_position, Position::Center);
                 assert_eq!(*new_position, Position::Right);
-                assert!(*duration > 0.0);
             }
-            other => panic!("Expected Move animation, got {:?}", other),
+            other => panic!("Expected CharacterMove, got {:?}", other),
         }
+        assert!(req.effect.duration_or(0.0) > 0.0);
 
         let char_sprite = render_state.visible_characters.get("char1").unwrap();
         assert_eq!(char_sprite.position, Position::Right);
@@ -527,27 +477,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_transition_progress() {
-        let mut executor = CommandExecutor::new();
-
-        // 未激活时进度为 1.0
-        assert_eq!(executor.get_transition_progress(), 1.0);
-
-        // 开始过渡（阶段 25：直接传 duration）
-        executor.start_transition(0.3);
-        assert!(executor.is_transition_active());
-
-        // 更新一半
-        executor.update_transition(0.15);
-        let progress = executor.get_transition_progress();
-        assert!(progress > 0.0 && progress < 1.0);
-
-        // 完成过渡
-        executor.update_transition(0.2);
-        assert!(!executor.is_transition_active());
-        assert_eq!(executor.get_transition_progress(), 1.0);
-    }
+    // test_transition_progress 已移除：transition timer 已从 CommandExecutor 删除
 
     #[test]
     fn test_execute_batch() {
@@ -630,6 +560,8 @@ mod tests {
 
     #[test]
     fn test_show_character_with_dissolve_produces_alpha_animation() {
+        use crate::renderer::effects::EffectTarget;
+
         let mut executor = CommandExecutor::new();
         let mut render_state = RenderState::new();
         let resource_manager = ResourceManager::new("assets", 256);
@@ -644,14 +576,16 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
 
-        // dissolve 应产生 Show 动画（alpha 淡入）
-        match executor.last_output.character_animation.as_ref() {
-            Some(CharacterAnimationCommand::Show { alias, duration }) => {
+        // dissolve 应产生 CharacterShow 效果请求（alpha 淡入）
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            EffectTarget::CharacterShow { alias } => {
                 assert_eq!(alias, "char1");
-                assert!(*duration > 0.0);
             }
-            other => panic!("Expected Show animation, got {:?}", other),
+            other => panic!("Expected CharacterShow, got {:?}", other),
         }
+        assert!(req.effect.duration_or(0.0) > 0.0);
     }
 
     #[test]
@@ -675,18 +609,22 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
 
-        // dissolve 应产生 Hide 动画（alpha 淡出）
-        match executor.last_output.character_animation.as_ref() {
-            Some(CharacterAnimationCommand::Hide { alias, duration }) => {
+        // dissolve 应产生 CharacterHide 效果请求（alpha 淡出）
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            crate::renderer::effects::EffectTarget::CharacterHide { alias } => {
                 assert_eq!(alias, "char1");
-                assert!(*duration > 0.0);
             }
-            other => panic!("Expected Hide animation, got {:?}", other),
+            other => panic!("Expected CharacterHide, got {:?}", other),
         }
+        assert!(req.effect.duration_or(0.0) > 0.0);
     }
 
     #[test]
-    fn test_show_background_with_dissolve_produces_transition_info() {
+    fn test_show_background_with_dissolve_produces_effect_request() {
+        use crate::renderer::effects::{EffectKind, EffectTarget};
+
         let mut executor = CommandExecutor::new();
         let mut render_state = RenderState::new();
         let resource_manager = ResourceManager::new("assets", 256);
@@ -701,18 +639,21 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
 
-        let ti = &executor.last_output.transition_info;
-        assert!(ti.has_background_transition);
-        assert_eq!(ti.old_background, Some("old_bg.png".to_string()));
-
-        // 应携带 ResolvedEffect
-        let effect = ti.effect.as_ref().expect("Should have ResolvedEffect");
-        use crate::renderer::effects::EffectKind;
-        assert_eq!(effect.kind, EffectKind::Dissolve);
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            EffectTarget::BackgroundTransition { old_background } => {
+                assert_eq!(*old_background, Some("old_bg.png".to_string()));
+            }
+            other => panic!("Expected BackgroundTransition, got {:?}", other),
+        }
+        assert_eq!(req.effect.kind, EffectKind::Dissolve);
     }
 
     #[test]
     fn test_change_scene_fade_produces_scene_transition() {
+        use crate::renderer::effects::{EffectKind, EffectTarget};
+
         let mut executor = CommandExecutor::new();
         let mut render_state = RenderState::new();
         let resource_manager = ResourceManager::new("assets", 256);
@@ -725,21 +666,28 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
 
-        // fade 在 changeScene 上下文应产生 Fade 场景过渡
-        match executor.last_output.scene_transition.as_ref() {
-            Some(SceneTransitionCommand::Fade {
-                duration,
-                pending_background,
-            }) => {
+        // fade 在 changeScene 上下文应产生 SceneTransition 效果请求
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            EffectTarget::SceneTransition { pending_background } => {
                 assert_eq!(pending_background, "new_bg.png");
-                assert!(*duration > 0.0);
             }
-            other => panic!("Expected SceneTransitionCommand::Fade, got {:?}", other),
+            other => panic!("Expected SceneTransition, got {:?}", other),
         }
+        assert_eq!(req.effect.kind, EffectKind::Fade);
+        // duration 未显式指定时为 None；EffectApplier 会使用 defaults::FADE_DURATION
+        assert!(
+            req.effect
+                .duration_or(crate::renderer::effects::defaults::FADE_DURATION)
+                > 0.0
+        );
     }
 
     #[test]
-    fn test_change_scene_dissolve_produces_transition_info() {
+    fn test_change_scene_dissolve_produces_background_transition() {
+        use crate::renderer::effects::{EffectKind, EffectTarget};
+
         let mut executor = CommandExecutor::new();
         let mut render_state = RenderState::new();
         let resource_manager = ResourceManager::new("assets", 256);
@@ -754,23 +702,16 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
 
-        // dissolve 在 changeScene 上下文应产生 transition_info（交叉淡化）
-        assert!(executor.last_output.scene_transition.is_none());
-        assert!(
-            executor
-                .last_output
-                .transition_info
-                .has_background_transition
-        );
-
-        let effect = executor
-            .last_output
-            .transition_info
-            .effect
-            .as_ref()
-            .expect("Should have ResolvedEffect");
-        use crate::renderer::effects::EffectKind;
-        assert_eq!(effect.kind, EffectKind::Dissolve);
+        // dissolve 在 changeScene 上下文应产生 BackgroundTransition 效果请求
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            EffectTarget::BackgroundTransition { old_background } => {
+                assert_eq!(*old_background, Some("old_bg.png".to_string()));
+            }
+            other => panic!("Expected BackgroundTransition, got {:?}", other),
+        }
+        assert_eq!(req.effect.kind, EffectKind::Dissolve);
     }
 
     #[test]
@@ -803,20 +744,25 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
 
-        match executor.last_output.scene_transition.as_ref() {
-            Some(SceneTransitionCommand::Rule {
-                duration,
-                pending_background,
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            crate::renderer::effects::EffectTarget::SceneTransition { pending_background } => {
+                assert_eq!(pending_background, "new_bg.png");
+            }
+            other => panic!("Expected SceneTransition, got {:?}", other),
+        }
+        match &req.effect.kind {
+            crate::renderer::effects::EffectKind::Rule {
                 mask_path,
                 reversed,
-            }) => {
-                assert_eq!(pending_background, "new_bg.png");
-                assert!((duration - 0.8).abs() < 0.01);
+            } => {
                 assert!(mask_path.contains("wipe.png") || mask_path.contains("masks"));
                 assert!(*reversed);
             }
-            other => panic!("Expected SceneTransitionCommand::Rule, got {:?}", other),
+            other => panic!("Expected Rule effect, got {:?}", other),
         }
+        assert!((req.effect.duration_or(0.0) - 0.8).abs() < 0.01);
     }
 
     #[test]
@@ -836,18 +782,19 @@ mod tests {
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
         assert_eq!(result, ExecuteResult::Ok);
 
-        // 应产生 Show 动画（alpha 淡入），而非场景过渡
-        match executor.last_output.character_animation.as_ref() {
-            Some(CharacterAnimationCommand::Show { alias, duration }) => {
+        // 应产生 CharacterShow 效果请求（alpha 淡入），而非场景过渡
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let req = &executor.last_output.effect_requests[0];
+        match &req.target {
+            crate::renderer::effects::EffectTarget::CharacterShow { alias } => {
                 assert_eq!(alias, "char1");
-                assert!(*duration > 0.0);
             }
             other => panic!(
-                "Expected Show animation for fade on character, got {:?}",
+                "Expected CharacterShow for fade on character, got {:?}",
                 other
             ),
         }
-        assert!(executor.last_output.scene_transition.is_none());
+        assert!(req.effect.duration_or(0.0) > 0.0);
     }
 
     #[test]
@@ -869,17 +816,15 @@ mod tests {
         };
         executor.execute(&cmd, &mut render_state, &resource_manager);
 
-        if let Some(CharacterAnimationCommand::Show { duration, .. }) =
-            &executor.last_output.character_animation
-        {
-            assert!(
-                (duration - 2.0).abs() < 0.01,
-                "Character dissolve duration should be 2.0, got {}",
-                duration
-            );
-        } else {
-            panic!("Expected Show animation");
-        }
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let dur = executor.last_output.effect_requests[0]
+            .effect
+            .duration_or(0.0);
+        assert!(
+            (dur - 2.0).abs() < 0.01,
+            "Character dissolve duration should be 2.0, got {}",
+            dur
+        );
 
         // 背景：dissolve(2.0)
         let cmd = Command::ShowBackground {
@@ -891,13 +836,11 @@ mod tests {
         };
         executor.execute(&cmd, &mut render_state, &resource_manager);
 
-        let effect = executor
-            .last_output
-            .transition_info
-            .effect
-            .as_ref()
-            .unwrap();
-        assert_eq!(effect.duration, Some(2.0));
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        assert_eq!(
+            executor.last_output.effect_requests[0].effect.duration,
+            Some(2.0)
+        );
 
         // changeScene fade(2.0)
         let cmd = Command::ChangeScene {
@@ -909,16 +852,14 @@ mod tests {
         };
         executor.execute(&cmd, &mut render_state, &resource_manager);
 
-        if let Some(SceneTransitionCommand::Fade { duration, .. }) =
-            &executor.last_output.scene_transition
-        {
-            assert!(
-                (duration - 2.0).abs() < 0.01,
-                "Scene fade duration should be 2.0, got {}",
-                duration
-            );
-        } else {
-            panic!("Expected SceneTransitionCommand::Fade");
-        }
+        assert_eq!(executor.last_output.effect_requests.len(), 1);
+        let scene_dur = executor.last_output.effect_requests[0]
+            .effect
+            .duration_or(0.0);
+        assert!(
+            (scene_dur - 2.0).abs() < 0.01,
+            "Scene fade duration should be 2.0, got {}",
+            scene_dur
+        );
     }
 }
