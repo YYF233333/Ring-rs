@@ -379,10 +379,10 @@ impl AnimationSystem {
         property_id: &str,
         value: f32,
     ) -> bool {
-        if let Some(registered) = self.objects.get(&object_id) {
-            if registered.type_id == TypeId::of::<T>() {
-                return registered.object.set_property(property_id, value);
-            }
+        if let Some(registered) = self.objects.get(&object_id)
+            && registered.type_id == TypeId::of::<T>()
+        {
+            return registered.object.set_property(property_id, value);
         }
         false
     }

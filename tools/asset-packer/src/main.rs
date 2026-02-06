@@ -310,7 +310,7 @@ fn create_release(
     // 2. 编译 release 版本的 host
     println!("🔨 步骤 2/4: 编译 release 版本的 host...");
     let build_result = Command::new("cargo")
-        .args(&["build", "--release", "--package", "host"])
+        .args(["build", "--release", "--package", "host"])
         .status()?;
 
     if !build_result.success() {

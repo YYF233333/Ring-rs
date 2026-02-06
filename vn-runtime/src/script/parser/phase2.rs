@@ -648,13 +648,13 @@ impl Phase2Parser {
         if let Some(img_end) = text.find("/>") {
             let after_img = &text[img_end + 2..];
             // 查找 (...)
-            if let Some(paren_start) = after_img.find('(') {
-                if let Some(paren_end) = after_img.rfind(')') {
-                    let params_str = &after_img[paren_start + 1..paren_end];
-                    // 解析参数（命名参数格式）
-                    if let Ok(parsed_args) = parse_transition_args(params_str) {
-                        args.extend(parsed_args);
-                    }
+            if let Some(paren_start) = after_img.find('(')
+                && let Some(paren_end) = after_img.rfind(')')
+            {
+                let params_str = &after_img[paren_start + 1..paren_end];
+                // 解析参数（命名参数格式）
+                if let Ok(parsed_args) = parse_transition_args(params_str) {
+                    args.extend(parsed_args);
                 }
             }
         }

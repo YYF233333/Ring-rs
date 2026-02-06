@@ -32,11 +32,7 @@ pub fn normalize_logical_path(path: &str) -> String {
     let normalized = path.replace('\\', "/");
 
     // 移除开头的 ./
-    let path = if normalized.starts_with("./") {
-        &normalized[2..]
-    } else {
-        &normalized
-    };
+    let path = normalized.strip_prefix("./").unwrap_or(&normalized);
 
     // 处理路径组件
     let mut components = Vec::new();
@@ -62,11 +58,10 @@ pub fn normalize_logical_path(path: &str) -> String {
     let result = components.join("/");
 
     // 移除 assets/ 前缀（如果存在）
-    if result.starts_with("assets/") {
-        result[7..].to_string()
-    } else {
-        result
-    }
+    result
+        .strip_prefix("assets/")
+        .unwrap_or(&result)
+        .to_string()
 }
 
 /// 解析相对路径

@@ -164,12 +164,12 @@ impl ZipSource {
 
         let mut index = HashMap::new();
         for i in 0..archive.len() {
-            if let Ok(file) = archive.by_index(i) {
-                if !file.is_dir() {
-                    // 规范化路径（统一使用 /）
-                    let name = file.name().replace('\\', "/");
-                    index.insert(name, i);
-                }
+            if let Ok(file) = archive.by_index(i)
+                && !file.is_dir()
+            {
+                // 规范化路径（统一使用 /）
+                let name = file.name().replace('\\', "/");
+                index.insert(name, i);
             }
         }
 

@@ -138,10 +138,10 @@ pub fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::S
     }
 
     // 恢复音频状态
-    if let Some(ref mut audio) = app_state.audio_manager {
-        if let Some(ref bgm_path) = save_data.audio.current_bgm {
-            audio.play_bgm(bgm_path, save_data.audio.bgm_looping, Some(0.5));
-        }
+    if let Some(ref mut audio) = app_state.audio_manager
+        && let Some(ref bgm_path) = save_data.audio.current_bgm
+    {
+        audio.play_bgm(bgm_path, save_data.audio.bgm_looping, Some(0.5));
     }
 
     // 设置游戏状态

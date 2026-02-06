@@ -197,14 +197,14 @@ impl InputManager {
         }
 
         // 鼠标点击选择（点击悬停的选项）
-        if is_mouse_button_pressed(MouseButton::Left) {
-            if let Some(hover_idx) = self.hovered_index {
-                let current_time = get_time();
-                if current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
-                    self.last_click_time = current_time;
-                    self.selected_index = hover_idx;
-                    return Some(RuntimeInput::ChoiceSelected { index: hover_idx });
-                }
+        if is_mouse_button_pressed(MouseButton::Left)
+            && let Some(hover_idx) = self.hovered_index
+        {
+            let current_time = get_time();
+            if current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
+                self.last_click_time = current_time;
+                self.selected_index = hover_idx;
+                return Some(RuntimeInput::ChoiceSelected { index: hover_idx });
             }
         }
 

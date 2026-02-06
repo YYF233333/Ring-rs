@@ -81,14 +81,14 @@ impl HistoryScreen {
                         )
                     }
                     HistoryEvent::Jump { label, .. } => {
-                        (format!("➡️ 跳转"), format!("→ {}", label))
+                        ("➡️ 跳转".to_string(), format!("→ {}", label))
                     }
                     HistoryEvent::BackgroundChange { path, .. } => {
-                        (format!("🖼️ 背景切换"), path.clone())
+                        ("🖼️ 背景切换".to_string(), path.clone())
                     }
                     HistoryEvent::BgmChange { path, .. } => {
                         let path_text = path.as_deref().unwrap_or("停止");
-                        (format!("🎵 BGM"), path_text.to_string())
+                        ("🎵 BGM".to_string(), path_text.to_string())
                     }
                 };
 
@@ -134,10 +134,10 @@ impl HistoryScreen {
         }
 
         // 返回按钮
-        if let Some(ref mut btn) = self.back_button {
-            if btn.update(ctx) {
-                return HistoryAction::Back;
-            }
+        if let Some(ref mut btn) = self.back_button
+            && btn.update(ctx)
+        {
+            return HistoryAction::Back;
         }
 
         HistoryAction::None

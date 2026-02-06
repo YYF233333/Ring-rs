@@ -45,22 +45,22 @@ impl CommandExecutor {
                 }
 
                 // 仅 move/slide 效果触发移动动画
-                if let Some(ref effect) = effect {
-                    if effect.is_move_effect() {
-                        let move_duration = effect.duration_or(defaults::MOVE_DURATION);
-                        self.last_output.effect_requests.push(EffectRequest {
-                            target: EffectTarget::CharacterMove {
-                                alias: alias.to_string(),
-                                old_position,
-                                new_position: position,
-                            },
-                            effect: effects::ResolvedEffect {
-                                kind: effect.kind.clone(),
-                                duration: Some(move_duration),
-                                easing: effect.easing,
-                            },
-                        });
-                    }
+                if let Some(ref effect) = effect
+                    && effect.is_move_effect()
+                {
+                    let move_duration = effect.duration_or(defaults::MOVE_DURATION);
+                    self.last_output.effect_requests.push(EffectRequest {
+                        target: EffectTarget::CharacterMove {
+                            alias: alias.to_string(),
+                            old_position,
+                            new_position: position,
+                        },
+                        effect: effects::ResolvedEffect {
+                            kind: effect.kind.clone(),
+                            duration: Some(move_duration),
+                            easing: effect.easing,
+                        },
+                    });
                 }
 
                 return ExecuteResult::Ok;

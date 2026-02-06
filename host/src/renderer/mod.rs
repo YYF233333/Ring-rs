@@ -245,23 +245,22 @@ impl Renderer {
         resource_manager: &ResourceManager,
     ) {
         // 渲染旧背景（如果正在过渡中）
-        if self.transition.is_active() {
-            if let Some(ref old_bg_path) = self.old_background {
-                if let Some(texture) = resource_manager.peek_texture(old_bg_path) {
-                    let alpha = self.transition.old_content_alpha();
-                    if alpha > 0.0 {
-                        self.draw_texture_fit_with_alpha(&texture, DrawMode::Cover, alpha);
-                    }
-                }
+        if self.transition.is_active()
+            && let Some(ref old_bg_path) = self.old_background
+            && let Some(texture) = resource_manager.peek_texture(old_bg_path)
+        {
+            let alpha = self.transition.old_content_alpha();
+            if alpha > 0.0 {
+                self.draw_texture_fit_with_alpha(&texture, DrawMode::Cover, alpha);
             }
         }
 
         // 渲染新背景
-        if let Some(ref bg_path) = state.current_background {
-            if let Some(texture) = resource_manager.peek_texture(bg_path) {
-                let alpha = self.transition.new_content_alpha();
-                self.draw_texture_fit_with_alpha(&texture, DrawMode::Cover, alpha);
-            }
+        if let Some(ref bg_path) = state.current_background
+            && let Some(texture) = resource_manager.peek_texture(bg_path)
+        {
+            let alpha = self.transition.new_content_alpha();
+            self.draw_texture_fit_with_alpha(&texture, DrawMode::Cover, alpha);
         }
     }
 
@@ -294,7 +293,7 @@ impl Renderer {
 
                 // 获取站位预设
                 let position_name = Self::position_to_preset_name(character.position);
-                let preset = manifest.get_preset(&position_name);
+                let preset = manifest.get_preset(position_name);
 
                 // 从角色动画状态获取属性
                 let alpha = character.anim.alpha();

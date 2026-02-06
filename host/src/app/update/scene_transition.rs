@@ -24,9 +24,9 @@ pub fn update_scene_transition(renderer: &mut Renderer, render_state: &mut Rende
     renderer.update_scene_transition(dt);
 
     // 在中间点时切换背景
-    if renderer.is_scene_transition_at_midpoint() {
-        if let Some(path) = renderer.take_pending_background() {
-            render_state.set_background(path);
-        }
+    if renderer.is_scene_transition_at_midpoint()
+        && let Some(path) = renderer.take_pending_background()
+    {
+        render_state.set_background(path);
     }
 }

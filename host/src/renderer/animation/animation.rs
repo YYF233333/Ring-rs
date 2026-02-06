@@ -124,7 +124,7 @@ impl Animation {
                 self.elapsed += dt;
                 if self.elapsed >= self.delay {
                     self.state = AnimationState::Playing;
-                    self.elapsed = self.elapsed - self.delay;
+                    self.elapsed -= self.delay;
                     self.update_playing(self.elapsed)
                 } else {
                     true

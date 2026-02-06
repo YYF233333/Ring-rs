@@ -70,14 +70,14 @@ impl ListView {
         self.items = items;
         self.scroll_offset = 0.0;
         // 保持选中索引有效
-        if let Some(idx) = self.selected_index {
-            if idx >= self.items.len() {
-                self.selected_index = if self.items.is_empty() {
-                    None
-                } else {
-                    Some(self.items.len() - 1)
-                };
-            }
+        if let Some(idx) = self.selected_index
+            && idx >= self.items.len()
+        {
+            self.selected_index = if self.items.is_empty() {
+                None
+            } else {
+                Some(self.items.len() - 1)
+            };
         }
     }
 

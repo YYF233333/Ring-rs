@@ -139,15 +139,15 @@ impl Modal {
         }
 
         // 更新按钮
-        if let Some(ref mut btn) = self.confirm_button {
-            if btn.update(ctx) {
-                return ModalResult::Confirm;
-            }
+        if let Some(ref mut btn) = self.confirm_button
+            && btn.update(ctx)
+        {
+            return ModalResult::Confirm;
         }
-        if let Some(ref mut btn) = self.cancel_button {
-            if btn.update(ctx) {
-                return ModalResult::Cancel;
-            }
+        if let Some(ref mut btn) = self.cancel_button
+            && btn.update(ctx)
+        {
+            return ModalResult::Cancel;
         }
 
         // ESC 关闭

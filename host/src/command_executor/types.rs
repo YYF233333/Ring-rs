@@ -5,9 +5,10 @@
 use crate::renderer::effects::EffectRequest;
 
 /// Command 执行结果
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum ExecuteResult {
     /// 执行成功，继续
+    #[default]
     Ok,
     /// 执行成功，需要等待用户输入（对话显示完成后）
     WaitForClick,
@@ -19,12 +20,6 @@ pub enum ExecuteResult {
     Loading,
     /// 执行失败
     Error(String),
-}
-
-impl Default for ExecuteResult {
-    fn default() -> Self {
-        Self::Ok
-    }
 }
 
 /// 音频命令

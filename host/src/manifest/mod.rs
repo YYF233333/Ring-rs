@@ -362,10 +362,10 @@ impl Manifest {
     /// 4. 返回默认配置
     pub fn get_group_config(&self, sprite_path: &str) -> GroupConfig {
         // 1. 显式映射
-        if let Some(group_id) = self.characters.sprites.get(sprite_path) {
-            if let Some(config) = self.characters.groups.get(group_id) {
-                return config.clone();
-            }
+        if let Some(group_id) = self.characters.sprites.get(sprite_path)
+            && let Some(config) = self.characters.groups.get(group_id)
+        {
+            return config.clone();
         }
 
         // 2. 路径推导
@@ -390,16 +390,16 @@ impl Manifest {
         let path = Path::new(sprite_path);
 
         // 尝试从父目录推导
-        if let Some(parent) = path.parent() {
-            if let Some(parent_name) = parent.file_name() {
-                let parent_str = parent_name.to_string_lossy();
-                // 如果父目录不是通用目录名，使用它
-                if !matches!(
-                    parent_str.as_ref(),
-                    "characters" | "sprites" | "images" | "assets"
-                ) {
-                    return parent_str.to_string();
-                }
+        if let Some(parent) = path.parent()
+            && let Some(parent_name) = parent.file_name()
+        {
+            let parent_str = parent_name.to_string_lossy();
+            // 如果父目录不是通用目录名，使用它
+            if !matches!(
+                parent_str.as_ref(),
+                "characters" | "sprites" | "images" | "assets"
+            ) {
+                return parent_str.to_string();
             }
         }
 

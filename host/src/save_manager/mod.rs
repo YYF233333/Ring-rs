@@ -125,10 +125,11 @@ impl SaveManager {
                 let path = entry.path();
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                     // 解析 slot_XXX.json
-                    if name.starts_with("slot_") && name.ends_with(".json") {
-                        if let Ok(slot) = name[5..8].parse::<u32>() {
-                            saves.push((slot, path));
-                        }
+                    if name.starts_with("slot_")
+                        && name.ends_with(".json")
+                        && let Ok(slot) = name[5..8].parse::<u32>()
+                    {
+                        saves.push((slot, path));
                     }
                 }
             }
@@ -140,12 +141,7 @@ impl SaveManager {
 
     /// 获取下一个可用的存档槽位
     pub fn next_available_slot(&self) -> Option<u32> {
-        for slot in 1..=MAX_SAVE_SLOTS {
-            if !self.exists(slot) {
-                return Some(slot);
-            }
-        }
-        None
+        (1..=MAX_SAVE_SLOTS).find(|&slot| !self.exists(slot))
     }
 
     /// 获取存档信息（不加载完整数据）

@@ -93,14 +93,14 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     }
 
     // 更新打字机效果
-    if let Some(ref dialogue) = app_state.render_state.dialogue {
-        if !dialogue.is_complete {
-            app_state.typewriter_timer += dt * app_state.user_settings.text_speed;
-            while app_state.typewriter_timer >= 1.0 {
-                app_state.typewriter_timer -= 1.0;
-                if app_state.render_state.advance_typewriter() {
-                    break;
-                }
+    if let Some(ref dialogue) = app_state.render_state.dialogue
+        && !dialogue.is_complete
+    {
+        app_state.typewriter_timer += dt * app_state.user_settings.text_speed;
+        while app_state.typewriter_timer >= 1.0 {
+            app_state.typewriter_timer -= 1.0;
+            if app_state.render_state.advance_typewriter() {
+                break;
             }
         }
     }
@@ -233,12 +233,12 @@ pub(super) fn update_settings(app_state: &mut AppState) {
 
 /// 更新历史界面
 pub(super) fn update_history(app_state: &mut AppState) {
-    if app_state.history_screen.needs_init() {
-        if let Some(ref runtime) = app_state.vn_runtime {
-            app_state
-                .history_screen
-                .init(&app_state.ui_context, runtime.history());
-        }
+    if app_state.history_screen.needs_init()
+        && let Some(ref runtime) = app_state.vn_runtime
+    {
+        app_state
+            .history_screen
+            .init(&app_state.ui_context, runtime.history());
     }
 
     match app_state.history_screen.update(&app_state.ui_context) {

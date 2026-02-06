@@ -151,18 +151,18 @@ impl SettingsScreen {
         }
 
         // 返回按钮
-        if let Some(ref mut btn) = self.back_button {
-            if btn.update(ctx) {
-                self.settings = self.original_settings.clone();
-                return SettingsAction::Back;
-            }
+        if let Some(ref mut btn) = self.back_button
+            && btn.update(ctx)
+        {
+            self.settings = self.original_settings.clone();
+            return SettingsAction::Back;
         }
 
         // 应用按钮
-        if let Some(ref mut btn) = self.apply_button {
-            if btn.update(ctx) {
-                return SettingsAction::Apply;
-            }
+        if let Some(ref mut btn) = self.apply_button
+            && btn.update(ctx)
+        {
+            return SettingsAction::Apply;
         }
 
         SettingsAction::None

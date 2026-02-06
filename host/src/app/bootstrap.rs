@@ -99,10 +99,10 @@ pub async fn ensure_render_resources(app_state: &mut AppState) {
     let mut paths_to_load: Vec<String> = Vec::new();
 
     // 检查当前背景
-    if let Some(ref bg_path) = app_state.render_state.current_background {
-        if !app_state.resource_manager.has_texture(bg_path) {
-            paths_to_load.push(bg_path.clone());
-        }
+    if let Some(ref bg_path) = app_state.render_state.current_background
+        && !app_state.resource_manager.has_texture(bg_path)
+    {
+        paths_to_load.push(bg_path.clone());
     }
 
     // 检查可见角色
@@ -118,10 +118,9 @@ pub async fn ensure_render_resources(app_state: &mut AppState) {
     // 检查场景过渡（Rule 效果需要遮罩纹理）
     if let Some(crate::renderer::SceneTransitionType::Rule { mask_path, .. }) =
         app_state.renderer.scene_transition.transition_type()
+        && !app_state.resource_manager.has_texture(mask_path)
     {
-        if !app_state.resource_manager.has_texture(mask_path) {
-            paths_to_load.push(mask_path.clone());
-        }
+        paths_to_load.push(mask_path.clone());
     }
 
     // 加载缺失的资源

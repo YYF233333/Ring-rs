@@ -251,13 +251,13 @@ impl TextureCache {
             })
             .cloned();
 
-        if let Some(key) = key_to_evict {
-            if let Some(entry) = self.entries.remove(&key) {
-                self.used_bytes = self.used_bytes.saturating_sub(entry.size_bytes);
-                self.remove_from_lru(&key);
-                self.evictions += 1;
-                return true;
-            }
+        if let Some(key) = key_to_evict
+            && let Some(entry) = self.entries.remove(&key)
+        {
+            self.used_bytes = self.used_bytes.saturating_sub(entry.size_bytes);
+            self.remove_from_lru(&key);
+            self.evictions += 1;
+            return true;
         }
 
         false

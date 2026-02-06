@@ -28,9 +28,10 @@ use crate::input::SignalId;
 /// WaitForTime   -> Host 等待指定时长后调用 tick，Runtime 自动继续
 /// WaitForSignal -> 等待外部信号，收到匹配的 Signal 输入后继续
 /// ```
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum WaitingReason {
     /// 不等待，继续执行
+    #[default]
     None,
 
     /// 等待用户点击
@@ -77,12 +78,6 @@ impl WaitingReason {
     /// 创建等待信号状态
     pub fn signal(id: impl Into<SignalId>) -> Self {
         Self::WaitForSignal(id.into())
-    }
-}
-
-impl Default for WaitingReason {
-    fn default() -> Self {
-        Self::None
     }
 }
 

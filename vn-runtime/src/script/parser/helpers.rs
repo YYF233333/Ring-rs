@@ -14,7 +14,7 @@ pub fn starts_with_ignore_case(s: &str, prefix: &str) -> bool {
     s.len() >= prefix.len()
         && s.chars()
             .zip(prefix.chars())
-            .all(|(a, b)| a.to_ascii_lowercase() == b.to_ascii_lowercase())
+            .all(|(a, b)| a.eq_ignore_ascii_case(&b))
 }
 
 /// 从字符串中提取 HTML img 标签的 src 属性值
@@ -100,11 +100,11 @@ pub fn extract_keyword_value<'a>(s: &'a str, keyword: &str) -> Option<&'a str> {
     let mut best_pattern_len = 0;
 
     for pattern in &patterns {
-        if let Some(pos) = lower.find(pattern.as_str()) {
-            if best_pos.is_none() || pos < best_pos.unwrap() {
-                best_pos = Some(pos);
-                best_pattern_len = pattern.len();
-            }
+        if let Some(pos) = lower.find(pattern.as_str())
+            && (best_pos.is_none() || pos < best_pos.unwrap())
+        {
+            best_pos = Some(pos);
+            best_pattern_len = pattern.len();
         }
     }
 
@@ -124,10 +124,10 @@ pub fn extract_keyword_value<'a>(s: &'a str, keyword: &str) -> Option<&'a str> {
     let mut end_pos = remaining.len();
 
     for term in &terminators {
-        if let Some(p) = remaining_lower.find(term) {
-            if p < end_pos {
-                end_pos = p;
-            }
+        if let Some(p) = remaining_lower.find(term)
+            && p < end_pos
+        {
+            end_pos = p;
         }
     }
 
@@ -307,10 +307,10 @@ pub fn parse_arg_value(s: &str) -> TransitionArg {
     let s = s.trim();
 
     // 带引号的字符串
-    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
-        if s.len() >= 2 {
-            return TransitionArg::String(s[1..s.len() - 1].to_string());
-        }
+    if ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')))
+        && s.len() >= 2
+    {
+        return TransitionArg::String(s[1..s.len() - 1].to_string());
     }
 
     parse_single_arg(s)

@@ -407,7 +407,7 @@ show <img src="assets/char.png" /> as protagonist at center with dissolve
 hide protagonist with fade
 "#;
 
-    let script = parser.parse("test", &text).unwrap();
+    let script = parser.parse("test", text).unwrap();
 
     // 验证节点数量
     assert!(script.len() >= 8);

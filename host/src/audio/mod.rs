@@ -226,14 +226,14 @@ impl AudioManager {
         self.current_bgm_path = Some(logical_path.clone());
 
         // 设置淡入状态
-        if let Some(duration) = fade_in {
-            if duration > 0.0 {
-                self.fade_state = FadeState::FadeIn {
-                    target_volume: self.get_effective_bgm_volume(),
-                    current_volume: 0.0,
-                    rate: self.get_effective_bgm_volume() / duration,
-                };
-            }
+        if let Some(duration) = fade_in
+            && duration > 0.0
+        {
+            self.fade_state = FadeState::FadeIn {
+                target_volume: self.get_effective_bgm_volume(),
+                current_volume: 0.0,
+                rate: self.get_effective_bgm_volume() / duration,
+            };
         }
 
         debug!(
@@ -254,23 +254,23 @@ impl AudioManager {
             return;
         }
 
-        if let Some(duration) = fade_out {
-            if duration > 0.0 {
-                let current_volume = self
-                    .bgm_sink
-                    .as_ref()
-                    .map(|s| s.volume())
-                    .unwrap_or(self.get_effective_bgm_volume());
+        if let Some(duration) = fade_out
+            && duration > 0.0
+        {
+            let current_volume = self
+                .bgm_sink
+                .as_ref()
+                .map(|s| s.volume())
+                .unwrap_or(self.get_effective_bgm_volume());
 
-                self.fade_state = FadeState::FadeOut {
-                    current_volume,
-                    rate: current_volume / duration,
-                    stop_after: true,
-                    next_bgm: None,
-                };
-                debug!(duration = duration, "BGM 淡出中");
-                return;
-            }
+            self.fade_state = FadeState::FadeOut {
+                current_volume,
+                rate: current_volume / duration,
+                stop_after: true,
+                next_bgm: None,
+            };
+            debug!(duration = duration, "BGM 淡出中");
+            return;
         }
 
         // 立即停止

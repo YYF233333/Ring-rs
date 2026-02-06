@@ -15,11 +15,11 @@ pub fn scan_scripts(assets_root: &PathBuf) -> Vec<(String, PathBuf)> {
     if let Ok(entries) = std::fs::read_dir(&scripts_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "md") {
-                if let Some(stem) = path.file_stem() {
-                    let script_id = stem.to_string_lossy().to_string();
-                    scripts.push((script_id, path));
-                }
+            if path.extension().is_some_and(|ext| ext == "md")
+                && let Some(stem) = path.file_stem()
+            {
+                let script_id = stem.to_string_lossy().to_string();
+                scripts.push((script_id, path));
             }
         }
     }
@@ -38,13 +38,13 @@ pub fn scan_scripts_from_zip(resource_manager: &ResourceManager) -> Vec<(String,
 
     for file_path in files {
         // 只处理 .md 文件
-        if file_path.ends_with(".md") {
-            if let Some(stem) = PathBuf::from(&file_path).file_stem() {
-                let script_id = stem.to_string_lossy().to_string();
-                // 使用完整路径作为 PathBuf（ZIP 模式下路径已经是相对于 assets_root 的）
-                let full_path = PathBuf::from(&file_path);
-                scripts.push((script_id, full_path));
-            }
+        if file_path.ends_with(".md")
+            && let Some(stem) = PathBuf::from(&file_path).file_stem()
+        {
+            let script_id = stem.to_string_lossy().to_string();
+            // 使用完整路径作为 PathBuf（ZIP 模式下路径已经是相对于 assets_root 的）
+            let full_path = PathBuf::from(&file_path);
+            scripts.push((script_id, full_path));
         }
     }
 
@@ -176,10 +176,10 @@ pub fn collect_prefetch_paths(commands: &[vn_runtime::Command]) -> Vec<String> {
             Command::ChangeScene { path, transition } => {
                 paths.push(path.clone());
                 // Rule 过渡还需要遮罩纹理
-                if let Some(trans) = transition {
-                    if let Some(TransitionArg::String(mask)) = trans.get_named("mask") {
-                        paths.push(mask.clone());
-                    }
+                if let Some(trans) = transition
+                    && let Some(TransitionArg::String(mask)) = trans.get_named("mask")
+                {
+                    paths.push(mask.clone());
                 }
             }
             Command::ShowCharacter { path, .. } => {

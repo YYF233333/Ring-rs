@@ -115,10 +115,10 @@ impl RenderState {
     /// 应在动画系统更新后调用，传入已完成淡出的角色列表。
     pub fn remove_fading_out_characters(&mut self, completed_aliases: &[String]) {
         for alias in completed_aliases {
-            if let Some(character) = self.visible_characters.get(alias) {
-                if character.fading_out {
-                    self.visible_characters.remove(alias);
-                }
+            if let Some(character) = self.visible_characters.get(alias)
+                && character.fading_out
+            {
+                self.visible_characters.remove(alias);
             }
         }
     }
@@ -177,7 +177,7 @@ impl RenderState {
 
     /// 检查对话是否完成
     pub fn is_dialogue_complete(&self) -> bool {
-        self.dialogue.as_ref().map_or(true, |d| d.is_complete)
+        self.dialogue.as_ref().is_none_or(|d| d.is_complete)
     }
 
     /// 设置章节标记（覆盖策略：新的直接覆盖旧的）

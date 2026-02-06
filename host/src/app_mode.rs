@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 /// 应用模式
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum AppMode {
     /// 主标题界面
+    #[default]
     Title,
     /// 游戏进行中
     InGame,
@@ -22,23 +23,12 @@ pub enum AppMode {
     History,
 }
 
-impl Default for AppMode {
-    fn default() -> Self {
-        AppMode::Title
-    }
-}
-
 /// 存档/读档界面的当前标签页
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SaveLoadTab {
     Save,
+    #[default]
     Load,
-}
-
-impl Default for SaveLoadTab {
-    fn default() -> Self {
-        SaveLoadTab::Load
-    }
 }
 
 /// 导航栈管理器
@@ -116,20 +106,15 @@ impl NavigationStack {
 /// 输入捕获状态
 ///
 /// 控制不同模式下的输入行为，避免"双重消费"
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum InputCapture {
     /// 游戏输入（推进剧情、选择等）
+    #[default]
     Game,
     /// 菜单输入（导航、选择菜单项）
     Menu,
     /// 无输入（过渡动画中等）
     Blocked,
-}
-
-impl Default for InputCapture {
-    fn default() -> Self {
-        InputCapture::Game
-    }
 }
 
 impl AppMode {

@@ -139,15 +139,15 @@ impl Executor {
                         .map(|(key, arg)| {
                             if let Some(k) = key {
                                 // 命名参数：mask 参数需要解析路径
-                                if k == "mask" {
-                                    if let crate::command::TransitionArg::String(s) = arg {
-                                        return (
-                                            Some(k.clone()),
-                                            crate::command::TransitionArg::String(
-                                                script.resolve_path(s),
-                                            ),
-                                        );
-                                    }
+                                if k == "mask"
+                                    && let crate::command::TransitionArg::String(s) = arg
+                                {
+                                    return (
+                                        Some(k.clone()),
+                                        crate::command::TransitionArg::String(
+                                            script.resolve_path(s),
+                                        ),
+                                    );
                                 }
                             }
                             (key.clone(), arg.clone())

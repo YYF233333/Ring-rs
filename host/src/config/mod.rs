@@ -16,17 +16,13 @@ use tracing::{info, warn};
 /// 资源来源类型
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum AssetSourceType {
     /// 文件系统（开发模式）
+    #[default]
     Fs,
     /// ZIP 文件（发布模式）
     Zip,
-}
-
-impl Default for AssetSourceType {
-    fn default() -> Self {
-        Self::Fs
-    }
 }
 
 /// 应用配置

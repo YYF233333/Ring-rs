@@ -258,9 +258,7 @@ impl SaveLoadScreen {
 
             for (action_id, button) in &mut self.action_buttons {
                 // 更新按钮禁用状态
-                if action_id == "delete" {
-                    button.disabled = !has_save;
-                } else if self.tab == SaveLoadTab::Load {
+                if action_id == "delete" || self.tab == SaveLoadTab::Load {
                     button.disabled = !has_save;
                 }
 
@@ -318,10 +316,10 @@ impl SaveLoadScreen {
         }
 
         // 返回按钮
-        if let Some(ref mut btn) = self.back_button {
-            if btn.update(ctx) {
-                return SaveLoadAction::Back;
-            }
+        if let Some(ref mut btn) = self.back_button
+            && btn.update(ctx)
+        {
+            return SaveLoadAction::Back;
         }
 
         SaveLoadAction::None
