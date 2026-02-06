@@ -180,19 +180,70 @@ impl RenderState {
         self.dialogue.as_ref().map_or(true, |d| d.is_complete)
     }
 
-    /// 设置章节标记
+    /// 设置章节标记（覆盖策略：新的直接覆盖旧的）
+    ///
+    /// 从 FadeIn 阶段开始，alpha = 0，由 update_chapter_mark 驱动动画。
     pub fn set_chapter_mark(&mut self, title: String, level: u8) {
         self.chapter_mark = Some(ChapterMarkState {
             title,
             level,
-            alpha: 1.0,
+            alpha: 0.0,
             timer: 0.0,
+            phase: ChapterMarkPhase::FadeIn,
         });
     }
 
     /// 清除章节标记
     pub fn clear_chapter_mark(&mut self) {
         self.chapter_mark = None;
+    }
+
+    /// 更新章节标记动画（由每帧 update 调用）
+    ///
+    /// 返回 true 表示章节标记仍在显示。
+    /// 此更新**不受用户快进/点击影响**。
+    pub fn update_chapter_mark(&mut self, dt: f32) -> bool {
+        let should_clear = if let Some(ref mut mark) = self.chapter_mark {
+            mark.timer += dt;
+            match mark.phase {
+                ChapterMarkPhase::FadeIn => {
+                    mark.alpha =
+                        (mark.timer / ChapterMarkState::FADE_IN_DURATION).min(1.0);
+                    if mark.timer >= ChapterMarkState::FADE_IN_DURATION {
+                        mark.phase = ChapterMarkPhase::Visible;
+                        mark.timer = 0.0;
+                        mark.alpha = 1.0;
+                    }
+                    false
+                }
+                ChapterMarkPhase::Visible => {
+                    mark.alpha = 1.0;
+                    if mark.timer >= ChapterMarkState::VISIBLE_DURATION {
+                        mark.phase = ChapterMarkPhase::FadeOut;
+                        mark.timer = 0.0;
+                    }
+                    false
+                }
+                ChapterMarkPhase::FadeOut => {
+                    mark.alpha =
+                        1.0 - (mark.timer / ChapterMarkState::FADE_OUT_DURATION).min(1.0);
+                    if mark.timer >= ChapterMarkState::FADE_OUT_DURATION {
+                        true // 动画完成，需要清除
+                    } else {
+                        false
+                    }
+                }
+            }
+        } else {
+            return false;
+        };
+
+        if should_clear {
+            self.chapter_mark = None;
+            false
+        } else {
+            true
+        }
     }
 
     /// 设置选择界面
@@ -243,7 +294,21 @@ pub struct DialogueState {
     pub is_complete: bool,
 }
 
+/// 章节标记显示阶段
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChapterMarkPhase {
+    /// 淡入阶段
+    FadeIn,
+    /// 持续显示阶段
+    Visible,
+    /// 淡出阶段
+    FadeOut,
+}
+
 /// 章节标记状态
+///
+/// 阶段 24 重构：非阻塞、固定持续时间、不受快进影响。
+/// 在左上角异步显示，固定时间后自动消失。
 #[derive(Debug, Clone)]
 pub struct ChapterMarkState {
     /// 章节标题
@@ -252,8 +317,20 @@ pub struct ChapterMarkState {
     pub level: u8,
     /// 透明度（用于淡入淡出）
     pub alpha: f32,
-    /// 计时器（用于动画）
+    /// 当前阶段计时器（秒）
     pub timer: f32,
+    /// 当前显示阶段
+    pub phase: ChapterMarkPhase,
+}
+
+/// ChapterMark 时间常量
+impl ChapterMarkState {
+    /// 淡入时长（秒）
+    const FADE_IN_DURATION: f32 = 0.4;
+    /// 持续显示时长（秒）
+    const VISIBLE_DURATION: f32 = 3.0;
+    /// 淡出时长（秒）
+    const FADE_OUT_DURATION: f32 = 0.6;
 }
 
 /// 选择项
@@ -410,9 +487,70 @@ mod tests {
         let chapter = state.chapter_mark.as_ref().unwrap();
         assert_eq!(chapter.title, "第一章");
         assert_eq!(chapter.level, 1);
+        assert_eq!(chapter.alpha, 0.0); // 从 FadeIn 开始
+        assert_eq!(chapter.phase, ChapterMarkPhase::FadeIn);
 
         state.clear_chapter_mark();
         assert!(state.chapter_mark.is_none());
+    }
+
+    #[test]
+    fn test_chapter_mark_animation_lifecycle() {
+        let mut state = RenderState::new();
+
+        state.set_chapter_mark("第一章".to_string(), 1);
+        assert!(state.chapter_mark.is_some());
+
+        // FadeIn 阶段 (FADE_IN_DURATION = 0.4s)
+        state.update_chapter_mark(0.2);
+        let mark = state.chapter_mark.as_ref().unwrap();
+        assert_eq!(mark.phase, ChapterMarkPhase::FadeIn);
+        assert!(mark.alpha > 0.0 && mark.alpha < 1.0);
+
+        // 完成 FadeIn → Visible (累计 0.2 + 0.3 = 0.5 > 0.4)
+        state.update_chapter_mark(0.3);
+        let mark = state.chapter_mark.as_ref().unwrap();
+        assert_eq!(mark.phase, ChapterMarkPhase::Visible);
+        assert_eq!(mark.alpha, 1.0);
+
+        // Visible 期间保持 (VISIBLE_DURATION = 3.0s)
+        state.update_chapter_mark(1.0);
+        let mark = state.chapter_mark.as_ref().unwrap();
+        assert_eq!(mark.phase, ChapterMarkPhase::Visible);
+        assert_eq!(mark.alpha, 1.0);
+
+        // 完成 Visible → FadeOut (需要再过 2.1s 来超过 3.0s)
+        state.update_chapter_mark(2.1);
+        let mark = state.chapter_mark.as_ref().unwrap();
+        assert_eq!(mark.phase, ChapterMarkPhase::FadeOut);
+
+        // FadeOut 阶段开始时 timer 被重置为 0，这个 update 后 timer=0.0 (刚进入)
+        // alpha 应该接近 1.0 因为刚进入 FadeOut
+        // 继续推进
+        state.update_chapter_mark(0.3);
+        let mark = state.chapter_mark.as_ref().unwrap();
+        assert_eq!(mark.phase, ChapterMarkPhase::FadeOut);
+        assert!(mark.alpha < 1.0 && mark.alpha > 0.0);
+
+        // 完成 FadeOut → 自动消失 (FADE_OUT_DURATION = 0.6s)
+        state.update_chapter_mark(0.5);
+        assert!(state.chapter_mark.is_none());
+    }
+
+    #[test]
+    fn test_chapter_mark_overlap_replace() {
+        let mut state = RenderState::new();
+
+        // 设置第一个
+        state.set_chapter_mark("第一章".to_string(), 1);
+        state.update_chapter_mark(0.5); // 进入 Visible 阶段
+
+        // 设置第二个（覆盖第一个）
+        state.set_chapter_mark("第二章".to_string(), 1);
+        let mark = state.chapter_mark.as_ref().unwrap();
+        assert_eq!(mark.title, "第二章");
+        assert_eq!(mark.phase, ChapterMarkPhase::FadeIn);
+        assert_eq!(mark.alpha, 0.0);
     }
 
     #[test]

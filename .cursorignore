@@ -3,6 +3,7 @@ dist/
 
 # 本地资源/大文件（通常不需要被索引）
 assets/
+!assets/scripts/
 *.zip
 *.exe
 *.pdb

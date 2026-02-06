@@ -266,6 +266,44 @@ stopBGM
 
 > 备注：音量/静音属于**玩家设置选项**，脚本层不提供音量/静音控制能力；制作时应尽量保证不同 BGM 的响度一致。
 
+## UI 与立绘显式控制（阶段 24 新增）
+
+### 对话框控制
+
+```markdown
+textBoxHide
+textBoxShow
+textBoxClear
+```
+
+| 指令 | 说明 |
+|------|------|
+| `textBoxHide` | 隐藏对话框（不影响背景/立绘） |
+| `textBoxShow` | 显示对话框 |
+| `textBoxClear` | 清理对话框内容（对话/选择分支） |
+
+> **设计意图**：`changeScene` 不再隐式隐藏/恢复 UI，编剧通过这些命令显式控制对话框的可见性和内容。
+
+### 清除所有角色立绘
+
+```markdown
+clearCharacters
+```
+
+一键清除场景中所有角色立绘。等效于对每个角色逐一执行 `hide`（但不带过渡动画）。
+
+> **设计意图**：`changeScene` 不再隐式清除立绘，编剧可以选择在换场前用 `clearCharacters` 或逐个 `hide` 来控制立绘。
+
+### 典型场景切换脚本示例
+
+```markdown
+textBoxHide
+clearCharacters
+changeScene <img src="new_bg.jpg" /> with Fade(duration: 1)
+textBoxShow
+："新的场景开始了。"
+```
+
 ## 控制逻辑
 
 ### 无条件跳转

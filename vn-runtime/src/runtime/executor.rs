@@ -292,6 +292,24 @@ impl Executor {
                 // 顺序求值每个分支条件，找到第一个为真的分支
                 self.execute_conditional(branches, state, script)
             }
+
+            ScriptNode::TextBoxHide => {
+                Ok(ExecuteResult::with_commands(vec![Command::TextBoxHide]))
+            }
+
+            ScriptNode::TextBoxShow => {
+                Ok(ExecuteResult::with_commands(vec![Command::TextBoxShow]))
+            }
+
+            ScriptNode::TextBoxClear => {
+                Ok(ExecuteResult::with_commands(vec![Command::TextBoxClear]))
+            }
+
+            ScriptNode::ClearCharacters => {
+                // 清除状态中的所有角色
+                state.visible_characters.clear();
+                Ok(ExecuteResult::with_commands(vec![Command::ClearCharacters]))
+            }
         }
     }
 
@@ -1044,6 +1062,79 @@ mod tests {
         ));
         assert!(matches!(&result.commands[1], Command::ShowText { .. }));
         assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
+    }
+
+    // =========================================================================
+    // 阶段 24：TextBox / ClearCharacters 命令测试
+    // =========================================================================
+
+    #[test]
+    fn test_execute_textbox_hide() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::TextBoxHide;
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(result.commands[0], Command::TextBoxHide));
+        assert!(result.waiting.is_none());
+    }
+
+    #[test]
+    fn test_execute_textbox_show() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::TextBoxShow;
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(result.commands[0], Command::TextBoxShow));
+        assert!(result.waiting.is_none());
+    }
+
+    #[test]
+    fn test_execute_textbox_clear() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        let node = ScriptNode::TextBoxClear;
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(result.commands[0], Command::TextBoxClear));
+        assert!(result.waiting.is_none());
+    }
+
+    #[test]
+    fn test_execute_clear_characters() {
+        let mut executor = Executor::new();
+        let mut state = RuntimeState::new("test");
+        let script = Script::new("test", vec![], "");
+
+        // 先添加一些角色
+        state.visible_characters.insert(
+            "alice".to_string(),
+            ("alice.png".to_string(), Position::Left),
+        );
+        state.visible_characters.insert(
+            "bob".to_string(),
+            ("bob.png".to_string(), Position::Right),
+        );
+        assert_eq!(state.visible_characters.len(), 2);
+
+        let node = ScriptNode::ClearCharacters;
+        let result = executor.execute(&node, &mut state, &script).unwrap();
+
+        assert_eq!(result.commands.len(), 1);
+        assert!(matches!(result.commands[0], Command::ClearCharacters));
+        assert!(result.waiting.is_none());
+        // 状态中的角色应该被清除
+        assert!(state.visible_characters.is_empty());
     }
 
     #[test]

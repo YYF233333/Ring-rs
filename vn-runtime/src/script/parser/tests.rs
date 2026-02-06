@@ -1493,3 +1493,50 @@ fn test_parse_expression_unclosed_paren() {
     let err = parse_expression("($a == true", 1).unwrap_err();
     assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
 }
+
+// =========================================================================
+// 阶段 24：TextBox / ClearCharacters 指令解析测试
+// =========================================================================
+
+#[test]
+fn test_parse_textbox_hide() {
+    let mut parser = Parser::new();
+    let script = parser.parse("test", "textBoxHide").unwrap();
+    assert_eq!(script.nodes.len(), 1);
+    assert!(matches!(script.nodes[0], ScriptNode::TextBoxHide));
+}
+
+#[test]
+fn test_parse_textbox_show() {
+    let mut parser = Parser::new();
+    let script = parser.parse("test", "textBoxShow").unwrap();
+    assert_eq!(script.nodes.len(), 1);
+    assert!(matches!(script.nodes[0], ScriptNode::TextBoxShow));
+}
+
+#[test]
+fn test_parse_textbox_clear() {
+    let mut parser = Parser::new();
+    let script = parser.parse("test", "textBoxClear").unwrap();
+    assert_eq!(script.nodes.len(), 1);
+    assert!(matches!(script.nodes[0], ScriptNode::TextBoxClear));
+}
+
+#[test]
+fn test_parse_clear_characters() {
+    let mut parser = Parser::new();
+    let script = parser.parse("test", "clearCharacters").unwrap();
+    assert_eq!(script.nodes.len(), 1);
+    assert!(matches!(script.nodes[0], ScriptNode::ClearCharacters));
+}
+
+#[test]
+fn test_parse_textbox_commands_case_insensitive() {
+    let mut parser = Parser::new();
+    let script = parser.parse("test", "TEXTBOXHIDE\nTextBoxShow\ntextboxclear\nCLEARCHARACTERS").unwrap();
+    assert_eq!(script.nodes.len(), 4);
+    assert!(matches!(script.nodes[0], ScriptNode::TextBoxHide));
+    assert!(matches!(script.nodes[1], ScriptNode::TextBoxShow));
+    assert!(matches!(script.nodes[2], ScriptNode::TextBoxClear));
+    assert!(matches!(script.nodes[3], ScriptNode::ClearCharacters));
+}

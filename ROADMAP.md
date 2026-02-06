@@ -1,6 +1,75 @@
 # Visual Novel Engine 开发路线图
 
-> 本文档定义了项目的具体执行计划，遵循 PLAN.md 中的架构约束。
+> 本文档定义了项目的架构约束和具体执行计划。
+
+## 总体架构原则（硬约束）
+
+- Runtime 与 Host 分离
+   - **`vn-runtime`**：纯逻辑核心（脚本解析/执行、状态管理、等待建模、产出 `Command`）
+   - **`host`**：IO/渲染/音频/输入/资源宿主（执行 `Command` 产生画面/音频/UI）
+   - Runtime **禁止**：引擎 API（macroquad）、IO、真实时间依赖
+   - Host **禁止**：脚本逻辑；直接修改 Runtime 内部状态
+
+- 显式状态、确定性执行
+   - 所有运行状态必须**显式建模**且可序列化（支持存档/读档）
+   - 不允许隐式全局状态
+   - 不依赖真实时间推进逻辑（时间等待由 Host 负责）
+
+- 命令驱动（Command-based）
+   - Runtime **只产出** `Command`
+   - Host **只执行** `Command`
+   - Runtime 不直接渲染/播放音频/等待输入
+
+---
+
+## VN Runtime 核心模型（必须遵守）
+
+- `RuntimeState`（唯一可变状态）
+   - 脚本执行位置（`ScriptPosition`）
+   - 脚本变量（variables）
+   - 当前等待状态（`WaitingReason`）
+   - 以及其他可恢复的显式状态（如已显示角色/背景等）
+
+   要求：**可序列化**、可测试；禁止隐式状态。
+
+- `WaitingReason`（显式等待模型）
+
+   允许的等待原因（示例口径）：
+
+   ```text
+   None
+   WaitForClick
+   WaitForChoice { choice_count }
+   WaitForTime(Duration)
+   WaitForSignal(SignalId)
+   ```
+
+   禁止使用隐式 await/sleep 来推进脚本。
+
+- 执行模型（tick）
+   - Runtime 通过 `tick(input) -> (Vec<Command>, WaitingReason)` 驱动
+   - 若处于等待：仅处理输入尝试解除等待
+   - 若不等待：持续推进脚本直到再次阻塞或结束
+
+- `RuntimeInput`（Host → Runtime）
+
+   典型输入：
+
+   ```text
+   Click
+   ChoiceSelected(index)
+   Signal(signal_id)
+   ```
+
+   说明：`WaitForTime` 由 Host 处理（Host 等待指定时长再调用 tick）。
+
+---
+
+## Command 模型（Runtime → Host）
+
+- `Command` 是 Runtime 与 Host 的**唯一通信方式**
+- 要求：**声明式**、不包含引擎类型、不产生副作用
+
 
 ---
 
@@ -33,7 +102,7 @@
 
 ## 开发历程总结（浓缩版）
 
-> 目标：避免把 ROADMAP 写成“开发日志”。这里仅保留里程碑结论，细节进入对应阶段归档。
+> 目标：避免把 ROADMAP 写成"开发日志"。这里仅保留里程碑结论，细节进入对应阶段归档。
 
 ### 阶段 1-22：开发成果总结（约 50 行，可扫描）
 
@@ -114,7 +183,7 @@
 
 ### 仓库瘦身与上下文治理（2w+ LOC）🟩 已完成 ✅
 
-> **目标**：在不改行为前提下，降低“巨型文件 + 索引噪音”带来的协作/模型上下文成本。
+> **目标**：在不改行为前提下，降低"巨型文件 + 索引噪音"带来的协作/模型上下文成本。
 
 **已完成（关键改动）**：
 - ✅ `.cursorignore`：忽略 `target/`、`dist/`、`assets/`、覆盖率产物、zip/exe/pdb 等，降低索引噪音
@@ -130,37 +199,94 @@
 
 ## 下一步开发方向
 
-### 阶段 24：演出与体验增强（基于现有动画系统渐进扩展）🟦 计划中
+### 阶段 24：演出与体验增强（基于现有动画系统渐进扩展）✅ 已完成
 
-> **主题**：在不破坏“命令驱动 + 显式状态”的前提下，围绕现有动画系统与转场体系，补齐最影响观感的演出能力。
+> **主题**：在不破坏"命令驱动 + 显式状态"的前提下，围绕现有动画系统与转场体系，补齐最影响观感的演出能力。
 
-**目标（建议从小到大）**：
-- **立绘动效**：在已有 alpha 动画基础上扩展到移动/缩放/缓动（不追求全能，先做最常用）
-- **重构 changeScene 职责（给编剧操作空间）**：
-  - `changeScene` **只负责**：拉遮罩/蒙版过渡 + 切换背景（不再隐式隐藏 UI / 不再隐式清理立绘）
-  - 立绘由编剧显式控制：`hide alias ...` 或（可选新增）`clearCharacters` 一键清空
-  - UI 操作由**专门命令**承担：把“对话框显示/隐藏/清理”的语义做成显式命令（避免塞进 `changeScene`）
-- **新增 TextBox 命令（对话框显式控制）**：
-  - `textBoxHide`：隐藏对话框（不影响背景/立绘）
-  - `textBoxShow`：显示对话框
-  - `textBoxClear`：清理对话框内容（对话/choices 等按设计明确范围）
-- **修复与重定义 ChapterMark 语义（当前实现有问题，实际看不到）**：
-  - 语义明确：章节切换时，在**左上角异步显示**一个 mark（非阻塞），“固定持续时间”后自动消失
-  - 时间推进**不受用户快进/连续点击影响**（避免被瞬间跳过）
-  - 处理章节很短的情况：两个 chapter mark 不能乱叠，需要明确策略（覆盖/队列/延迟/合并）
-  - `chapter mark` 与章节强绑定：不需要专用脚本指令（由章节标题节点触发即可）
-- **更多过渡效果（可选）**：在现有 `Transition` 表达式之上新增 1-2 个简单效果（如 wipe/slide），并保持参数约定一致
+**已实现**：
 
-**验收标准（DoD）**：
-- 新增效果有最小文档说明（脚本写法 + 默认值）
-- `changeScene`/UI/立绘职责分离后，脚本语义更可控：同一段演出可以通过脚本组合出不同“先清 UI/先清立绘/先换背景”的流程
-- ChapterMark 可见且稳定：持续时间固定、不受快进影响、不会出现重叠导致的闪烁/不可读
-- 与资源系统/缓存系统兼容，不引入额外的全局隐式状态
+- ✅ **新增 TextBox 命令（对话框显式控制）**：`textBoxHide` / `textBoxShow` / `textBoxClear`
+  - 全链路：AST → Parser → Executor → Command → Host CommandExecutor
+- ✅ **新增 clearCharacters 命令**：一键清除所有角色立绘
+- ✅ **重构 changeScene 职责**：只负责遮罩过渡 + 切换背景，不再隐式隐藏 UI / 清除立绘
+- ✅ **修复 ChapterMark 语义**：非阻塞、固定持续时间（FadeIn 0.4s → Visible 3.0s → FadeOut 0.6s）、覆盖策略
+- ✅ **立绘动效（位置移动）**：`show alias at newPosition` 默认瞬移；需要动画时用 `show alias at newPosition with effect`
+
+**测试覆盖**：vn-runtime 195 tests / host 114 tests 全部通过
+
+**待完成（可选扩展）**：更多过渡效果（wipe/slide）、立绘缩放动画
 
 **关键文件**：
-- `host/src/renderer/animation/*`
-- `host/src/renderer/{transition.rs,scene_transition.rs,character_animation.rs}`
-- `host/src/app/command_handlers/*`
+- `vn-runtime/src/script/ast.rs`、`command.rs`、`runtime/executor.rs`、`script/parser/phase2.rs`
+- `host/src/command_executor/{ui,background,types}.rs`、`host/src/app/command_handlers/character.rs`
+- `host/src/renderer/render_state.rs`、`host/src/app/update/{mod,scene_transition}.rs`
+- `docs/script_syntax_spec.md`
+
+### 阶段 25：统一动画/过渡效果解析与执行（Effect Registry + AnimationSystem 统一入口）🟦 计划中
+
+> **主题**：把“过渡效果/动画效果”的**解析与执行**收敛到一个统一单元，背景/立绘/UI 共享同一套效果定义与时间轴驱动；命令执行层只负责把 `Transition` 翻译成“对动画系统的请求”，避免多处重复维护（例如 `dissolve` 同时存在于背景与立绘的实现）。
+
+#### 背景与动机（为什么要做）
+- 当前 `Transition`（如 `dissolve/fade`）在不同目标（背景/场景/立绘）存在**各自的解释与实现**，导致：
+  - 语义漂移：同名效果在不同对象上表现不一致
+  - 维护成本高：改一个效果要改多处
+  - 扩展困难：新增 wipe/slide 等效果需要复制粘贴多份逻辑
+
+#### 设计目标
+
+- **统一效果源**：同一个效果名（如 `dissolve`）在所有目标上共享同一份“解析/默认值/校验/时间轴”
+
+#### 核心方案（统一解析单元）
+- 在 Host 引入一个“效果注册表/解析器”模块（建议命名 `host/src/renderer/effects/`）：
+  - `EffectRegistry`：维护效果名 → 规格（支持哪些参数、默认值、适用目标、输出哪些属性动画）
+  - `EffectResolver`：把 `vn_runtime::command::Transition` 解析成 `ResolvedEffect`（已填默认值、已校验）
+  - `EffectApplier`：把 `ResolvedEffect + Target` 转成对 `AnimationSystem` 的**一组动画请求**（可多属性、多阶段）
+
+#### 目标分类（Target Model）
+- **以 `Animatable` + `ObjectId` 为唯一动画对象模型**：
+  - `Animatable` 只描述“对象暴露哪些可动画属性”（能力接口），不承担路由/唯一标识
+  - `ObjectId`（由 `AnimationSystem::register` 分配）是动画系统内部唯一标识，用于索引动画、去注册、以及属性键 `AnimPropertyKey(TypeId + ObjectId + property)`
+- 在 Effect 层引入 `EffectRequest`（或 `EffectContext`）作为统一输入：**“动画对象是谁（ObjectId） + 这次效果需要哪些上下文 + 要改哪些属性”**：
+  - `EffectRequest { object_id: background_id, kind: Background { old_bg, new_bg }, effect: ResolvedEffect }`
+  - `EffectRequest { object_id: character_id(alias), kind: Character { old_pos, new_pos, texture_change }, effect: ResolvedEffect }`
+  - `EffectRequest { object_id: scene_mask_id, kind: SceneMask { ... }, effect: ResolvedEffect }`
+  - （可选）UI 元素同理：`object_id` 由 UI 管理层维护映射
+- （清理项）`AnimationTarget` 当前无引用：在阶段 25 推进统一入口后，可删除该模块与导出，避免“概念存在但无实现落点”的噪音。
+
+#### 效果语义规范（先收敛，再扩展）
+- **第一批统一效果**（把当前重复处收敛掉）：
+  - `dissolve(duration=0.3)`：统一为“alpha 交叉淡化”的通用时间轴（背景/立绘/遮罩复用）
+  - `fade(duration=0.3)`：同上（与 dissolve 在实现层可共享，只是名称别名/参数差异）
+  - `rule(src=..., duration=...)`：保持现有场景/背景用法，统一参数解析与默认值
+- **位置动画**：
+  - `move(duration=0.3, easing=linear)` / `slide(...)`：仅对 `Character` 的 position 偏移生效
+  - **明确约定**：`show alias at pos` 默认瞬移；只有 `with move/slide` 才平滑移动（`with dissolve/fade` 不触发移动）
+
+#### 分阶段落地计划（可并行但建议顺序）
+- **Step A：抽离解析与默认值**（不改表现）
+  - 把 `command_executor/*` 中对 `Transition.name/duration` 的手写解析迁移到 `EffectResolver`
+  - 为每个效果补齐参数校验与默认值（单元测试覆盖）
+- **Step B：统一执行入口**（减少重复代码）
+  - 背景过渡、场景遮罩过渡、立绘淡入淡出：改为统一走 `EffectApplier → AnimationSystem`
+  - `CommandExecutor` 只负责选择 target + 触发 apply（不再自己算 duration/分支）
+- **Step C：补齐效果矩阵测试**
+  - 同一 `dissolve` 在 Background/Character/SceneMask 上：解析一致、默认值一致、不会产生语义分叉
+  - 回归测试：现有脚本演出行为不变（除明确修正的语义）
+- **Step D：文档与脚本规范更新**
+  - 在 `docs/script_syntax_spec.md` 增加“效果名的统一语义表”
+  - 明确哪些效果适用哪些目标，哪些参数可用
+
+#### 关键文件（预期改动入口）
+- 新增：`host/src/renderer/effects/{mod.rs,registry.rs,resolver.rs,applier.rs}`（命名可调整）
+- 调整：`host/src/command_executor/{background.rs,character.rs,ui.rs,mod.rs}`
+- 调整：`host/src/app/command_handlers/*`（把动画请求统一交给 AnimationSystem）
+- 既有动画系统：`host/src/renderer/animation/*`
+
+#### 验收标准（DoD）
+- `dissolve/fade/rule` 的参数解析与默认值只存在**一处**（registry/resolver），并有单测
+- 背景/立绘/场景遮罩的过渡执行路径统一走 `EffectApplier → AnimationSystem`
+- 同名效果在不同目标上行为一致（除 target 本身差异）
+- `cargo test -p host --lib` 通过，并新增覆盖“效果解析一致性”的测试
 
 ---
 

@@ -26,8 +26,8 @@ mod text_renderer;
 mod transition;
 
 pub use animation::{
-    Animation, AnimationEvent, AnimationId, AnimationState, AnimationSystem, AnimationTarget,
-    EasingFunction, Transform, Vec2 as AnimVec2,
+    Animation, AnimationEvent, AnimationId, AnimationState, AnimationSystem, EasingFunction,
+    Transform, Vec2 as AnimVec2,
 };
 // Trait-based 动画系统 API
 pub use animation::{
@@ -326,21 +326,30 @@ impl Renderer {
         }
     }
 
-    /// 将 Position 枚举转换为预设名称
+    /// 将 Position 枚举转换为预设名称（委托到模块级函数）
     fn position_to_preset_name(position: Position) -> &'static str {
-        match position {
-            Position::Left => "left",
-            Position::NearLeft => "nearleft",
-            Position::FarLeft => "farleft",
-            Position::Center => "center",
-            Position::NearMiddle => "nearmiddle",
-            Position::FarMiddle => "farmiddle",
-            Position::Right => "right",
-            Position::NearRight => "nearright",
-            Position::FarRight => "farright",
-        }
+        position_to_preset_name(position)
     }
+}
 
+/// 将 Position 枚举转换为 manifest 预设名称
+///
+/// 此函数是公共的，供命令处理器等模块查询位置预设。
+pub fn position_to_preset_name(position: Position) -> &'static str {
+    match position {
+        Position::Left => "left",
+        Position::NearLeft => "nearleft",
+        Position::FarLeft => "farleft",
+        Position::Center => "center",
+        Position::NearMiddle => "nearmiddle",
+        Position::FarMiddle => "farmiddle",
+        Position::Right => "right",
+        Position::NearRight => "nearright",
+        Position::FarRight => "farright",
+    }
+}
+
+impl Renderer {
     /// 渲染对话框（带透明度）
     fn render_dialogue_with_alpha(&self, state: &RenderState, alpha: f32) {
         if let Some(ref dialogue) = state.dialogue {

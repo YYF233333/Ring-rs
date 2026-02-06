@@ -54,6 +54,9 @@ pub fn update(app_state: &mut AppState) {
         // 更新场景过渡状态（基于动画系统）
         update_scene_transition(&mut app_state.renderer, &mut app_state.render_state, dt);
 
+        // 更新章节标记动画（非阻塞、不受快进影响、固定时间自动消失）
+        app_state.render_state.update_chapter_mark(dt);
+
         // 更新动画系统
         let _events = app_state.animation_system.update(dt);
 

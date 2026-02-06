@@ -162,6 +162,26 @@ pub enum ScriptNode {
         /// 分支列表（if + elseif + else）
         branches: Vec<ConditionalBranch>,
     },
+
+    /// 隐藏对话框
+    ///
+    /// 对应 `textBoxHide` 语法
+    TextBoxHide,
+
+    /// 显示对话框
+    ///
+    /// 对应 `textBoxShow` 语法
+    TextBoxShow,
+
+    /// 清理对话框内容
+    ///
+    /// 对应 `textBoxClear` 语法
+    TextBoxClear,
+
+    /// 清除所有角色立绘
+    ///
+    /// 对应 `clearCharacters` 语法
+    ClearCharacters,
 }
 
 impl ScriptNode {

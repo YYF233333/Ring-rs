@@ -69,6 +69,8 @@
 
 - **核心执行器**：`host/src/command_executor/mod.rs`
 - **执行器类型（输出事件/命令载荷）**：`host/src/command_executor/types.rs`
+- **UI 命令执行（TextBox/ChapterMark/ClearCharacters）**：`host/src/command_executor/ui.rs`
+- **背景/场景命令执行**：`host/src/command_executor/background.rs`
 
 > 直觉对齐：
 > - `command_executor` 更偏“把 Command 翻译成**状态变更 + 需要外部系统执行的输出**”

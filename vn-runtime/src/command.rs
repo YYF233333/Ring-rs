@@ -260,6 +260,18 @@ pub enum Command {
         /// 章节级别（1-6，对应 # 到 ######）
         level: u8,
     },
+
+    /// 隐藏对话框（不影响背景/立绘）
+    TextBoxHide,
+
+    /// 显示对话框
+    TextBoxShow,
+
+    /// 清理对话框内容（对话/选择分支等）
+    TextBoxClear,
+
+    /// 清除所有角色立绘
+    ClearCharacters,
 }
 
 #[cfg(test)]

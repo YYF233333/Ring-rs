@@ -74,7 +74,7 @@ impl CommandExecutor {
                 self.execute_show_background(path, transition.clone(), render_state)
             }
             Command::ChangeScene { path, transition } => {
-                // ChangeScene 是复合场景切换，包含：清立绘、换背景、遮罩过渡
+                // ChangeScene：遮罩过渡 + 切换背景（不再隐式清理 UI/立绘）
                 self.execute_change_scene(path, transition.clone(), render_state, resource_manager)
             }
             Command::ShowCharacter {
@@ -98,6 +98,10 @@ impl CommandExecutor {
             Command::PlayBgm { path, looping } => self.execute_play_bgm(path, *looping),
             Command::StopBgm { fade_out } => self.execute_stop_bgm(*fade_out),
             Command::PlaySfx { path } => self.execute_play_sfx(path),
+            Command::TextBoxHide => self.execute_text_box_hide(render_state),
+            Command::TextBoxShow => self.execute_text_box_show(render_state),
+            Command::TextBoxClear => self.execute_text_box_clear(render_state),
+            Command::ClearCharacters => self.execute_clear_characters(render_state),
         };
 
         self.last_output.result = result.clone();
@@ -339,6 +343,83 @@ mod tests {
     }
 
     #[test]
+    fn test_execute_show_character_reposition_with_dissolve_is_teleport() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        // 先显示角色（无过渡）
+        let cmd = Command::ShowCharacter {
+            path: "characters/char1.png".to_string(),
+            alias: "char1".to_string(),
+            position: Position::Center,
+            transition: None,
+        };
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+        assert!(executor.last_output.character_animation.is_none());
+
+        // 位置变更：with dissolve 只应“瞬移”（不触发 Move 动画）
+        let cmd = Command::ShowCharacter {
+            path: "characters/char1.png".to_string(),
+            alias: "char1".to_string(),
+            position: Position::Left,
+            transition: Some(Transition::simple("dissolve")),
+        };
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+        assert!(executor.last_output.character_animation.is_none());
+
+        let char_sprite = render_state.visible_characters.get("char1").unwrap();
+        assert_eq!(char_sprite.position, Position::Left);
+    }
+
+    #[test]
+    fn test_execute_show_character_reposition_with_move_triggers_animation() {
+        let mut executor = CommandExecutor::new();
+        let mut render_state = RenderState::new();
+        let resource_manager = ResourceManager::new("assets", 256);
+
+        // 先显示角色（无过渡）
+        let cmd = Command::ShowCharacter {
+            path: "characters/char1.png".to_string(),
+            alias: "char1".to_string(),
+            position: Position::Center,
+            transition: None,
+        };
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        // 位置变更：with move 应触发 Move 动画
+        let cmd = Command::ShowCharacter {
+            path: "characters/char1.png".to_string(),
+            alias: "char1".to_string(),
+            position: Position::Right,
+            transition: Some(Transition::simple("move")),
+        };
+        let result = executor.execute(&cmd, &mut render_state, &resource_manager);
+        assert_eq!(result, ExecuteResult::Ok);
+
+        match executor.last_output.character_animation.as_ref() {
+            Some(CharacterAnimationCommand::Move {
+                alias,
+                old_position,
+                new_position,
+                duration,
+            }) => {
+                assert_eq!(alias, "char1");
+                assert_eq!(*old_position, Position::Center);
+                assert_eq!(*new_position, Position::Right);
+                assert!(*duration > 0.0);
+            }
+            other => panic!("Expected Move animation, got {:?}", other),
+        }
+
+        let char_sprite = render_state.visible_characters.get("char1").unwrap();
+        assert_eq!(char_sprite.position, Position::Right);
+    }
+
+    #[test]
     fn test_execute_hide_character() {
         let mut executor = CommandExecutor::new();
         let mut render_state = RenderState::new();
@@ -372,13 +453,15 @@ mod tests {
             level: 1,
         };
 
+        // 阶段 24：ChapterMark 是非阻塞的
         let result = executor.execute(&cmd, &mut render_state, &resource_manager);
-        assert_eq!(result, ExecuteResult::WaitForClick);
+        assert_eq!(result, ExecuteResult::Ok);
         assert!(render_state.chapter_mark.is_some());
 
         let chapter = render_state.chapter_mark.as_ref().unwrap();
         assert_eq!(chapter.title, "第一章");
         assert_eq!(chapter.level, 1);
+        assert_eq!(chapter.alpha, 0.0); // 从 FadeIn 开始
     }
 
     #[test]

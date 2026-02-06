@@ -38,7 +38,6 @@
 mod animation;
 mod easing;
 mod system;
-mod target;
 mod traits;
 mod transform;
 
@@ -50,8 +49,6 @@ pub use system::AnimationSystem;
 // Trait-based 动画系统 API
 pub use traits::{AnimPropertyKey, Animatable, ObjectId, PropertyAccessor, SimplePropertyAccessor};
 
-// 辅助类型（保留以便需要时使用）
-pub use target::AnimationTarget;
 pub use transform::{Transform, Vec2};
 
 /// 动画事件

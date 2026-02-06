@@ -83,6 +83,22 @@ impl Phase2Parser {
         if starts_with_ignore_case(line, "set ") {
             return self.parse_set_var(line, line_number);
         }
+        // textBoxHide - 隐藏对话框
+        if starts_with_ignore_case(line, "textboxhide") {
+            return Ok(Some(ScriptNode::TextBoxHide));
+        }
+        // textBoxShow - 显示对话框
+        if starts_with_ignore_case(line, "textboxshow") {
+            return Ok(Some(ScriptNode::TextBoxShow));
+        }
+        // textBoxClear - 清理对话框内容
+        if starts_with_ignore_case(line, "textboxclear") {
+            return Ok(Some(ScriptNode::TextBoxClear));
+        }
+        // clearCharacters - 清除所有角色立绘
+        if starts_with_ignore_case(line, "clearcharacters") {
+            return Ok(Some(ScriptNode::ClearCharacters));
+        }
 
         // 4. HTML 标签解析
         // <audio src="..."></audio> 或 <audio src="..."></audio> loop

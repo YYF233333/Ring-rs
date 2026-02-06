@@ -58,6 +58,13 @@ pub enum CharacterAnimationCommand {
     Show { alias: String, duration: f32 },
     /// 隐藏角色（淡出）
     Hide { alias: String, duration: f32 },
+    /// 移动角色到新位置（位置变更动画）
+    Move {
+        alias: String,
+        old_position: vn_runtime::command::Position,
+        new_position: vn_runtime::command::Position,
+        duration: f32,
+    },
 }
 
 /// 场景切换命令
