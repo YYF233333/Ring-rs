@@ -10,6 +10,7 @@
 //! - **引擎无关**：不包含任何 Bevy 或其他引擎的类型
 
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 /// 过渡效果参数
 ///
@@ -149,19 +150,28 @@ pub enum Position {
 }
 
 impl Position {
-    /// 从字符串解析位置
-    pub fn from_str(s: &str) -> Option<Self> {
+    /// 从字符串解析位置（便捷方法）
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::from_str(s).ok()
+    }
+}
+
+impl FromStr for Position {
+    type Err = ();
+
+    /// 从字符串解析位置（不区分大小写）
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "left" => Some(Self::Left),
-            "right" => Some(Self::Right),
-            "center" | "middle" => Some(Self::Center),
-            "nearleft" => Some(Self::NearLeft),
-            "nearright" => Some(Self::NearRight),
-            "nearmiddle" => Some(Self::NearMiddle),
-            "farleft" => Some(Self::FarLeft),
-            "farright" => Some(Self::FarRight),
-            "farmiddle" => Some(Self::FarMiddle),
-            _ => None,
+            "left" => Ok(Self::Left),
+            "right" => Ok(Self::Right),
+            "center" | "middle" => Ok(Self::Center),
+            "nearleft" => Ok(Self::NearLeft),
+            "nearright" => Ok(Self::NearRight),
+            "nearmiddle" => Ok(Self::NearMiddle),
+            "farleft" => Ok(Self::FarLeft),
+            "farright" => Ok(Self::FarRight),
+            "farmiddle" => Ok(Self::FarMiddle),
+            _ => Err(()),
         }
     }
 }
@@ -277,6 +287,7 @@ pub enum Command {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_transition_simple() {
@@ -294,12 +305,15 @@ mod tests {
 
     #[test]
     fn test_position_from_str() {
-        assert_eq!(Position::from_str("left"), Some(Position::Left));
-        assert_eq!(Position::from_str("LEFT"), Some(Position::Left));
-        assert_eq!(Position::from_str("center"), Some(Position::Center));
-        assert_eq!(Position::from_str("middle"), Some(Position::Center));
-        assert_eq!(Position::from_str("nearleft"), Some(Position::NearLeft));
-        assert_eq!(Position::from_str("unknown"), None);
+        assert_eq!(Position::from_str("left").ok(), Some(Position::Left));
+        assert_eq!(Position::from_str("LEFT").ok(), Some(Position::Left));
+        assert_eq!(Position::from_str("center").ok(), Some(Position::Center));
+        assert_eq!(Position::from_str("middle").ok(), Some(Position::Center));
+        assert_eq!(
+            Position::from_str("nearleft").ok(),
+            Some(Position::NearLeft)
+        );
+        assert_eq!(Position::from_str("unknown").ok(), None);
     }
 
     #[test]

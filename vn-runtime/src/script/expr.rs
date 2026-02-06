@@ -91,6 +91,7 @@ impl Expr {
     }
 
     /// 创建逻辑非
+    #[allow(clippy::should_implement_trait)]
     pub fn not(expr: Expr) -> Self {
         Self::Not(Box::new(expr))
     }

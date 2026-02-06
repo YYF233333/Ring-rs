@@ -35,14 +35,14 @@
 //! let progress = system.get_value_or(&PropertyKey::custom("my_object.progress"), 0.0);
 //! ```
 
-mod animation;
+mod core;
 mod easing;
 mod system;
 mod traits;
 mod transform;
 
 // 核心类型
-pub use animation::{Animation, AnimationId, AnimationState};
+pub use core::{Animation, AnimationId, AnimationState};
 pub use easing::EasingFunction;
 pub use system::AnimationSystem;
 

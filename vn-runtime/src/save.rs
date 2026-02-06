@@ -28,6 +28,12 @@ pub struct SaveVersion {
     pub minor: u32,
 }
 
+impl std::fmt::Display for SaveVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
 impl SaveVersion {
     /// 当前版本
     pub fn current() -> Self {
@@ -44,11 +50,6 @@ impl SaveVersion {
     /// - minor 可以不同（向后兼容）
     pub fn is_compatible(&self) -> bool {
         self.major == SAVE_VERSION_MAJOR
-    }
-
-    /// 格式化版本号
-    pub fn to_string(&self) -> String {
-        format!("{}.{}", self.major, self.minor)
     }
 }
 

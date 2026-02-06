@@ -4,6 +4,8 @@
 
 use super::helpers::starts_with_ignore_case;
 
+type ConditionalState = (Vec<(String, usize)>, usize, usize); // (lines, start_line, depth)
+
 /// 块类型（阶段 1 输出）
 #[derive(Debug, Clone)]
 pub enum Block {
@@ -37,7 +39,7 @@ impl Block {
 pub fn recognize_blocks(text: &str) -> Vec<Block> {
     let mut blocks = Vec::new();
     let mut current_table: Option<(Vec<String>, usize)> = None;
-    let mut current_conditional: Option<(Vec<(String, usize)>, usize, usize)> = None; // (lines, start_line, depth)
+    let mut current_conditional: Option<ConditionalState> = None;
 
     for (line_idx, line) in text.lines().enumerate() {
         let line_number = line_idx + 1;

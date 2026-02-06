@@ -1,14 +1,14 @@
 //! 脚本扫描与加载
 
 use crate::resources::ResourceManager;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::{error, info, warn};
 use vn_runtime::{Parser, VNRuntime};
 
 use super::AppState;
 
 /// 扫描脚本目录，返回脚本路径列表
-pub fn scan_scripts(assets_root: &PathBuf) -> Vec<PathBuf> {
+pub fn scan_scripts(assets_root: &Path) -> Vec<PathBuf> {
     let scripts_dir = assets_root.join("scripts");
     let mut scripts = Vec::new();
 

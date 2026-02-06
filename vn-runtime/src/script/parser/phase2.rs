@@ -468,12 +468,14 @@ impl Phase2Parser {
                 param: "at (位置)".to_string(),
             })?;
 
-        let position =
-            Position::from_str(position_str).ok_or_else(|| ParseError::InvalidParameter {
-                line: line_number,
-                param: "position".to_string(),
-                message: format!("未知位置 '{}'", position_str),
-            })?;
+        let position: Position =
+            position_str
+                .parse()
+                .map_err(|_| ParseError::InvalidParameter {
+                    line: line_number,
+                    param: "position".to_string(),
+                    message: format!("未知位置 '{}'", position_str),
+                })?;
 
         let transition = self.extract_transition_from_line(line);
 
@@ -590,15 +592,13 @@ impl Phase2Parser {
             .or_else(|| lower.rfind(">with`"))?;
 
         // 计算实际的过渡文本起始位置
-        let text_after_with = if lower[with_pos..].starts_with(" with ") {
-            &line[with_pos + 6..]
-        } else if lower[with_pos..].starts_with(">with ") {
-            &line[with_pos + 6..]
-        } else if lower[with_pos..].starts_with(" with`") {
-            &line[with_pos + 5..]
-        } else {
-            &line[with_pos + 5..]
-        };
+        let with_slice = &lower[with_pos..];
+        let text_after_with =
+            if with_slice.starts_with(" with ") || with_slice.starts_with(">with ") {
+                &line[with_pos + 6..]
+            } else {
+                &line[with_pos + 5..]
+            };
 
         let transition_text = text_after_with.trim();
 
@@ -614,15 +614,13 @@ impl Phase2Parser {
         }
 
         // 处理行内代码格式: `Dissolve(2.0, 0.5)`
-        let transition_text = if transition_text.starts_with('`') && transition_text.ends_with('`')
-        {
-            &transition_text[1..transition_text.len() - 1]
-        } else if transition_text.starts_with('`') {
-            // 只有开始反引号，查找结束
-            if let Some(end) = transition_text[1..].find('`') {
-                &transition_text[1..end + 1]
+        let transition_text = if let Some(stripped) = transition_text.strip_prefix('`') {
+            if let Some(stripped) = stripped.strip_suffix('`') {
+                stripped
+            } else if let Some(end) = stripped.find('`') {
+                &stripped[..end]
             } else {
-                transition_text.trim_start_matches('`')
+                stripped
             }
         } else {
             transition_text
