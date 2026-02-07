@@ -64,7 +64,7 @@ pub fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &st
     info!(script_id = %script_id, path = %normalized_path, base_dir = %base_dir, "加载脚本");
 
     // 通过 ResourceManager 读取（统一处理 FS 和 ZIP 模式）
-    let script_text = match app_state.resource_manager.read_text(&normalized_path) {
+    let script_text = match app_state.core.resource_manager.read_text(&normalized_path) {
         Ok(text) => text,
         Err(e) => {
             error!(path = %normalized_path, error = %e, "脚本文件加载失败");
@@ -85,7 +85,7 @@ pub fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &st
             // 创建 VNRuntime 并设置脚本路径
             let mut runtime = VNRuntime::new(script);
             runtime.state_mut().position.set_path(&normalized_path);
-            app_state.vn_runtime = Some(runtime);
+            app_state.session.vn_runtime = Some(runtime);
             true
         }
         Err(e) => {

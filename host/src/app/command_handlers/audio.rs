@@ -1,19 +1,23 @@
 //! 音频命令处理
+//!
+//! 阶段 27：函数签名从 `&mut AppState` 改为 `(&mut CoreSystems, &AppConfig)`，
+//! 不再依赖完整的应用状态。
 
 use crate::AssetSourceType;
 use crate::command_executor::AudioCommand;
+use crate::config::AppConfig;
 use crate::resources::normalize_logical_path;
 
-use super::super::AppState;
+use super::super::CoreSystems;
 use tracing::error;
 
 /// 处理音频命令
-pub fn handle_audio_command(app_state: &mut AppState) {
-    let audio_cmd = app_state.command_executor.last_output.audio_command.clone();
+pub fn handle_audio_command(core: &mut CoreSystems, config: &AppConfig) {
+    let audio_cmd = core.command_executor.last_output.audio_command.clone();
 
     if let Some(cmd) = audio_cmd {
         // ZIP 模式下需要先缓存音频字节
-        if let AssetSourceType::Zip = app_state.config.asset_source {
+        if let AssetSourceType::Zip = config.asset_source {
             let path_to_cache = match &cmd {
                 AudioCommand::PlayBgm { path, .. } => Some(path.clone()),
                 AudioCommand::PlaySfx { path } => Some(path.clone()),
@@ -23,9 +27,9 @@ pub fn handle_audio_command(app_state: &mut AppState) {
             if let Some(path) = path_to_cache {
                 let logical_path = normalize_logical_path(&path);
                 // 读取音频字节并缓存
-                match app_state.resource_manager.read_bytes(&logical_path) {
+                match core.resource_manager.read_bytes(&logical_path) {
                     Ok(bytes) => {
-                        if let Some(ref mut audio) = app_state.audio_manager {
+                        if let Some(ref mut audio) = core.audio_manager {
                             audio.cache_audio_bytes(&logical_path, bytes);
                         }
                     }
@@ -37,7 +41,7 @@ pub fn handle_audio_command(app_state: &mut AppState) {
             }
         }
 
-        if let Some(ref mut audio_manager) = app_state.audio_manager {
+        if let Some(ref mut audio_manager) = core.audio_manager {
             match cmd {
                 AudioCommand::PlayBgm {
                     path,

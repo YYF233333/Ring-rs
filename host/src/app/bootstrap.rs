@@ -18,7 +18,12 @@ pub async fn load_resources(app_state: &mut AppState) {
                 .assets_root
                 .join(&app_state.config.default_font);
             info!(path = ?font_path, "加载字体");
-            if let Err(e) = app_state.renderer.init(&font_path.to_string_lossy()).await {
+            if let Err(e) = app_state
+                .core
+                .renderer
+                .init(&font_path.to_string_lossy())
+                .await
+            {
                 warn!(
                     error = %e,
                     "字体加载失败，回退到 macroquad 默认字体（仅支持 ASCII）"
@@ -29,6 +34,7 @@ pub async fn load_resources(app_state: &mut AppState) {
             // ZIP 模式：需要将字体文件写入临时文件
             // 因为 macroquad 的 load_ttf_font 只接受文件路径
             let font_bytes = match app_state
+                .core
                 .resource_manager
                 .read_bytes(&app_state.config.default_font)
             {
@@ -62,6 +68,7 @@ pub async fn load_resources(app_state: &mut AppState) {
                 "加载字体"
             );
             if let Err(e) = app_state
+                .core
                 .renderer
                 .init(&temp_font_path.to_string_lossy())
                 .await
@@ -80,14 +87,14 @@ pub async fn load_resources(app_state: &mut AppState) {
     // 其他资源改为按需加载（由 TextureCache 管理）
     let essential_textures = ["backgrounds/black.png", "backgrounds/white.png"];
     for path in &essential_textures {
-        match app_state.resource_manager.load_texture(path).await {
+        match app_state.core.resource_manager.load_texture(path).await {
             Ok(_) => debug!(path = %path, "预加载纹理"),
             Err(e) => warn!(path = %path, error = %e, "预加载失败"),
         }
     }
 
     app_state.loading_complete = true;
-    let stats = app_state.resource_manager.texture_cache_stats();
+    let stats = app_state.core.resource_manager.texture_cache_stats();
     info!(stats = %stats.format(), "资源加载完成");
 }
 
@@ -99,15 +106,16 @@ pub async fn ensure_render_resources(app_state: &mut AppState) {
     let mut paths_to_load: Vec<String> = Vec::new();
 
     // 检查当前背景
-    if let Some(ref bg_path) = app_state.render_state.current_background
-        && !app_state.resource_manager.has_texture(bg_path)
+    if let Some(ref bg_path) = app_state.core.render_state.current_background
+        && !app_state.core.resource_manager.has_texture(bg_path)
     {
         paths_to_load.push(bg_path.clone());
     }
 
     // 检查可见角色
-    for character in app_state.render_state.visible_characters.values() {
+    for character in app_state.core.render_state.visible_characters.values() {
         if !app_state
+            .core
             .resource_manager
             .has_texture(&character.texture_path)
         {
@@ -117,15 +125,15 @@ pub async fn ensure_render_resources(app_state: &mut AppState) {
 
     // 检查场景过渡（Rule 效果需要遮罩纹理）
     if let Some(crate::renderer::SceneTransitionType::Rule { mask_path, .. }) =
-        app_state.renderer.scene_transition.transition_type()
-        && !app_state.resource_manager.has_texture(mask_path)
+        app_state.core.renderer.scene_transition.transition_type()
+        && !app_state.core.resource_manager.has_texture(mask_path)
     {
         paths_to_load.push(mask_path.clone());
     }
 
     // 加载缺失的资源
     for path in paths_to_load {
-        match app_state.resource_manager.load_texture(&path).await {
+        match app_state.core.resource_manager.load_texture(&path).await {
             Ok(_) => debug!(path = %path, "按需加载纹理"),
             Err(e) => error!(path = %path, error = %e, "加载失败"),
         }

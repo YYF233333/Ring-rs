@@ -8,69 +8,75 @@ use super::AppState;
 
 /// 渲染函数
 pub fn draw(app_state: &mut AppState) {
-    let current_mode = app_state.navigation.current();
+    let current_mode = app_state.ui.navigation.current();
 
     // 根据当前模式绘制
     match current_mode {
         AppMode::Title => {
-            app_state
-                .title_screen
-                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state.ui.title_screen.draw(
+                &app_state.ui.ui_context,
+                &app_state.core.renderer.text_renderer,
+            );
         }
         AppMode::InGame => {
             // 渲染游戏画面
-            app_state.renderer.render(
-                &app_state.render_state,
-                &app_state.resource_manager,
-                &app_state.manifest,
+            app_state.core.renderer.render(
+                &app_state.core.render_state,
+                &app_state.core.resource_manager,
+                &app_state.session.manifest,
             );
         }
         AppMode::InGameMenu => {
             // 先渲染游戏画面，再渲染菜单覆盖层
-            app_state.renderer.render(
-                &app_state.render_state,
-                &app_state.resource_manager,
-                &app_state.manifest,
+            app_state.core.renderer.render(
+                &app_state.core.render_state,
+                &app_state.core.resource_manager,
+                &app_state.session.manifest,
             );
-            app_state
-                .ingame_menu
-                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state.ui.ingame_menu.draw(
+                &app_state.ui.ui_context,
+                &app_state.core.renderer.text_renderer,
+            );
         }
         AppMode::SaveLoad => {
             // 如果是从游戏内打开，先渲染游戏画面
-            if app_state.vn_runtime.is_some() {
-                app_state.renderer.render(
-                    &app_state.render_state,
-                    &app_state.resource_manager,
-                    &app_state.manifest,
+            if app_state.session.vn_runtime.is_some() {
+                app_state.core.renderer.render(
+                    &app_state.core.render_state,
+                    &app_state.core.resource_manager,
+                    &app_state.session.manifest,
                 );
             }
-            app_state
-                .save_load_screen
-                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state.ui.save_load_screen.draw(
+                &app_state.ui.ui_context,
+                &app_state.core.renderer.text_renderer,
+            );
         }
         AppMode::Settings => {
-            app_state
-                .settings_screen
-                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state.ui.settings_screen.draw(
+                &app_state.ui.ui_context,
+                &app_state.core.renderer.text_renderer,
+            );
         }
         AppMode::History => {
             // 先渲染游戏画面，再渲染历史覆盖层
-            app_state.renderer.render(
-                &app_state.render_state,
-                &app_state.resource_manager,
-                &app_state.manifest,
+            app_state.core.renderer.render(
+                &app_state.core.render_state,
+                &app_state.core.resource_manager,
+                &app_state.session.manifest,
             );
-            app_state
-                .history_screen
-                .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+            app_state.ui.history_screen.draw(
+                &app_state.ui.ui_context,
+                &app_state.core.renderer.text_renderer,
+            );
         }
     }
 
     // 绘制 Toast 提示（所有模式都可显示）
-    app_state
-        .toast_manager
-        .draw(&app_state.ui_context, &app_state.renderer.text_renderer);
+    app_state.ui.toast_manager.draw(
+        &app_state.ui.ui_context,
+        &app_state.core.renderer.text_renderer,
+    );
 
     // 显示调试信息
     if app_state.host_state.debug_mode {
@@ -81,13 +87,13 @@ pub fn draw(app_state: &mut AppState) {
 /// 绘制调试信息
 pub fn draw_debug_info(app_state: &AppState) {
     let fps = get_fps();
-    let char_count = app_state.render_state.visible_characters.len();
-    let has_bg = app_state.render_state.current_background.is_some();
-    let has_dialogue = app_state.render_state.dialogue.is_some();
-    let current_mode = app_state.navigation.current();
+    let char_count = app_state.core.render_state.visible_characters.len();
+    let has_bg = app_state.core.render_state.current_background.is_some();
+    let has_dialogue = app_state.core.render_state.dialogue.is_some();
+    let current_mode = app_state.ui.navigation.current();
 
     // 获取缓存统计
-    let cache_stats = app_state.resource_manager.texture_cache_stats();
+    let cache_stats = app_state.core.resource_manager.texture_cache_stats();
 
     // 绘制半透明背景（加高以容纳更多信息）
     // 注意：使用较高的 alpha 值确保可见性
@@ -159,6 +165,7 @@ pub fn draw_debug_info(app_state: &AppState) {
         let y = 25.0 + i as f32 * 22.0;
         // 使用文本渲染器绘制（支持中文）
         app_state
+            .core
             .renderer
             .text_renderer
             .draw_ui_text(line, 10.0, y, 16.0, *color);

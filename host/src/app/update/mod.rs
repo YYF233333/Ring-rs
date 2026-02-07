@@ -23,10 +23,10 @@ pub fn update(app_state: &mut AppState) {
     let dt = get_frame_time();
 
     // 更新 UI 上下文
-    app_state.ui_context.update();
+    app_state.ui.ui_context.update();
 
     // 更新 Toast
-    app_state.toast_manager.update(dt);
+    app_state.ui.toast_manager.update(dt);
 
     // 切换调试模式（全局可用）
     if is_key_pressed(KeyCode::F1) {
@@ -35,7 +35,7 @@ pub fn update(app_state: &mut AppState) {
     }
 
     // 根据当前模式处理更新
-    let current_mode = app_state.navigation.current();
+    let current_mode = app_state.ui.navigation.current();
     match current_mode {
         AppMode::Title => modes::update_title(app_state),
         AppMode::InGame => modes::update_ingame(app_state, dt),
@@ -48,19 +48,24 @@ pub fn update(app_state: &mut AppState) {
     // 游戏进行时的通用更新（过渡效果、音频等）
     if current_mode.is_in_game() {
         // 更新过渡效果
-        app_state.renderer.update_transition(dt);
+        app_state.core.renderer.update_transition(dt);
 
         // 更新场景过渡状态（基于动画系统）
-        update_scene_transition(&mut app_state.renderer, &mut app_state.render_state, dt);
+        update_scene_transition(
+            &mut app_state.core.renderer,
+            &mut app_state.core.render_state,
+            dt,
+        );
 
         // 更新章节标记动画（非阻塞、不受快进影响、固定时间自动消失）
-        app_state.render_state.update_chapter_mark(dt);
+        app_state.core.render_state.update_chapter_mark(dt);
 
         // 更新动画系统
-        let _events = app_state.animation_system.update(dt);
+        let _events = app_state.core.animation_system.update(dt);
 
         // 检测淡出完成的角色并移除
         let completed_fadeouts: Vec<String> = app_state
+            .core
             .render_state
             .visible_characters
             .iter()
@@ -78,17 +83,18 @@ pub fn update(app_state: &mut AppState) {
 
         // 移除淡出完成的角色，并从动画系统注销
         for alias in &completed_fadeouts {
-            if let Some(object_id) = app_state.character_object_ids.remove(alias) {
-                app_state.animation_system.unregister(object_id);
+            if let Some(object_id) = app_state.core.character_object_ids.remove(alias) {
+                app_state.core.animation_system.unregister(object_id);
             }
         }
         app_state
+            .core
             .render_state
             .remove_fading_out_characters(&completed_fadeouts);
     }
 
     // 更新音频状态（所有模式都需要）
-    if let Some(ref mut audio_manager) = app_state.audio_manager {
+    if let Some(ref mut audio_manager) = app_state.core.audio_manager {
         audio_manager.update(dt);
     }
 }

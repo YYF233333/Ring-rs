@@ -9,14 +9,14 @@ use super::script_loader::{load_script_from_logical_path, load_script_from_save_
 
 /// 构建当前游戏状态的存档数据
 pub fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::SaveData> {
-    let runtime = app_state.vn_runtime.as_ref()?;
+    let runtime = app_state.session.vn_runtime.as_ref()?;
 
     // 构建存档数据
     let runtime_state = runtime.state().clone();
     let mut save_data = vn_runtime::SaveData::new(slot, runtime_state);
 
     // 设置章节标题（如果有）
-    if let Some(ref chapter) = app_state.render_state.chapter_mark {
+    if let Some(ref chapter) = app_state.core.render_state.chapter_mark {
         save_data = save_data.with_chapter(&chapter.title);
     }
 
@@ -25,7 +25,7 @@ pub fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::Sa
     save_data.metadata.play_time_secs = play_time;
 
     // 设置音频状态
-    if let Some(ref audio) = app_state.audio_manager {
+    if let Some(ref audio) = app_state.core.audio_manager {
         save_data = save_data.with_audio(vn_runtime::AudioState {
             current_bgm: audio.current_bgm_path().map(|s| s.to_string()),
             bgm_looping: true, // 假设 BGM 总是循环
@@ -34,8 +34,9 @@ pub fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::Sa
 
     // 设置渲染快照
     let render_snapshot = vn_runtime::RenderSnapshot {
-        background: app_state.render_state.current_background.clone(),
+        background: app_state.core.render_state.current_background.clone(),
         characters: app_state
+            .core
             .render_state
             .visible_characters
             .iter()
@@ -57,7 +58,7 @@ pub fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::Sa
 /// 快速保存（到槽位）
 pub fn quick_save(app_state: &mut AppState) {
     // 检查是否有游戏状态（允许从 SaveLoad 界面保存）
-    if app_state.vn_runtime.is_none() {
+    if app_state.session.vn_runtime.is_none() {
         warn!("只能在游戏中保存");
         return;
     }
@@ -79,7 +80,7 @@ pub fn quick_save(app_state: &mut AppState) {
 /// 保存 Continue 存档（用于"继续"功能）
 pub fn save_continue(app_state: &mut AppState) {
     // 只在有游戏状态时保存
-    if app_state.vn_runtime.is_none() {
+    if app_state.session.vn_runtime.is_none() {
         return;
     }
 
@@ -112,39 +113,43 @@ pub fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::S
     }
 
     // 恢复 Runtime 状态和历史记录
-    if let Some(ref mut runtime) = app_state.vn_runtime {
+    if let Some(ref mut runtime) = app_state.session.vn_runtime {
         runtime.restore_state(save_data.runtime_state);
         runtime.restore_history(save_data.history);
     }
 
     // 恢复渲染状态
-    app_state.render_state = RenderState::new();
-    app_state.character_object_ids.clear(); // 清除旧的对象 ID 映射
-    app_state.render_state.current_background = save_data.render.background;
+    app_state.core.render_state = RenderState::new();
+    app_state.core.character_object_ids.clear(); // 清除旧的对象 ID 映射
+    app_state.core.render_state.current_background = save_data.render.background;
     for char_snap in save_data.render.characters {
         // 尝试解析 position（简化处理，默认 Center）
         let position = vn_runtime::Position::Center;
-        app_state.render_state.show_character(
+        app_state.core.render_state.show_character(
             char_snap.alias.clone(),
             char_snap.texture_path,
             position,
         );
         // 恢复角色时设置为完全不透明（存档的角色应该是可见的）
-        if let Some(anim) = app_state.render_state.get_character_anim(&char_snap.alias) {
+        if let Some(anim) = app_state
+            .core
+            .render_state
+            .get_character_anim(&char_snap.alias)
+        {
             anim.set_alpha(1.0);
         }
     }
 
     // 恢复音频状态
-    if let Some(ref mut audio) = app_state.audio_manager
+    if let Some(ref mut audio) = app_state.core.audio_manager
         && let Some(ref bgm_path) = save_data.audio.current_bgm
     {
         audio.play_bgm(bgm_path, save_data.audio.bgm_looping, Some(0.5));
     }
 
     // 设置游戏状态
-    app_state.script_finished = false;
-    app_state.waiting_reason = WaitingReason::WaitForClick;
+    app_state.session.script_finished = false;
+    app_state.session.waiting_reason = WaitingReason::WaitForClick;
     app_state.play_start_time = std::time::Instant::now(); // 重置开始时间
 
     true
@@ -184,18 +189,18 @@ pub fn return_to_title_from_game(app_state: &mut AppState, should_save_continue:
     }
 
     // 停止音乐
-    if let Some(ref mut audio) = app_state.audio_manager {
+    if let Some(ref mut audio) = app_state.core.audio_manager {
         audio.stop_bgm(Some(0.5));
     }
 
     // 清理游戏状态
-    app_state.vn_runtime = None;
-    app_state.render_state = RenderState::new();
-    app_state.script_finished = false;
+    app_state.session.vn_runtime = None;
+    app_state.core.render_state = RenderState::new();
+    app_state.session.script_finished = false;
 
     // 返回标题
-    app_state.navigation.return_to_title();
-    app_state.title_screen.mark_needs_init();
+    app_state.ui.navigation.return_to_title();
+    app_state.ui.title_screen.mark_needs_init();
 }
 
 /// 开始新游戏（使用 config.start_script_path）
@@ -207,18 +212,18 @@ pub fn start_new_game(app_state: &mut AppState) {
     let script_path = app_state.config.start_script_path.clone();
 
     if load_script_from_logical_path(app_state, &script_path) {
-        app_state.render_state = RenderState::new();
-        app_state.script_finished = false;
+        app_state.core.render_state = RenderState::new();
+        app_state.session.script_finished = false;
         app_state.play_start_time = std::time::Instant::now();
 
         // 执行第一次 tick
         run_script_tick(app_state, None);
 
         // 切换到游戏模式
-        app_state.navigation.switch_to(AppMode::InGame);
+        app_state.ui.navigation.switch_to(AppMode::InGame);
         info!(script = %script_path, "开始新游戏");
     } else {
-        app_state.toast_manager.error("无法加载入口脚本");
+        app_state.ui.toast_manager.error("无法加载入口脚本");
     }
 }
 
@@ -229,7 +234,7 @@ pub fn load_game(app_state: &mut AppState, slot: u32) {
     app_state.current_save_slot = slot;
     if quick_load(app_state) {
         // 成功读档后切换到游戏模式
-        app_state.navigation.switch_to(AppMode::InGame);
+        app_state.ui.navigation.switch_to(AppMode::InGame);
     }
 }
 
@@ -242,7 +247,7 @@ pub fn load_continue(app_state: &mut AppState) {
         Ok(data) => data,
         Err(e) => {
             error!(error = %e, "Continue 读取失败");
-            app_state.toast_manager.error("Continue 存档读取失败");
+            app_state.ui.toast_manager.error("Continue 存档读取失败");
             return;
         }
     };
@@ -250,7 +255,7 @@ pub fn load_continue(app_state: &mut AppState) {
     // 恢复游戏状态
     if restore_from_save_data(app_state, save_data) {
         // 成功读档后切换到游戏模式
-        app_state.navigation.switch_to(AppMode::InGame);
+        app_state.ui.navigation.switch_to(AppMode::InGame);
         info!("继续游戏");
     }
 }

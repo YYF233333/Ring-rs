@@ -50,3 +50,6 @@ pub use renderer::{
 pub use renderer::{AnimatableBackgroundTransition, BackgroundTransitionData};
 pub use renderer::{AnimatableCharacter, CharacterAnimData};
 pub use save_manager::SaveManager;
+
+// 阶段 27：子系统容器类型
+pub use app::{CoreSystems, GameSession, UiSystems};

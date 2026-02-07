@@ -123,24 +123,14 @@
 
 **关键入口**：`host/src/renderer/effects/`、`host/src/app/command_handlers/effect_applier.rs`、`host/src/command_executor/*`
 
-## 下一步开发方向
-
 ### 阶段 26：快进/自动/跳过体系（演出推进可控 + 无竞态）✅ 已完成
 
 > **主题**：在不破坏“命令驱动 + 显式状态”的前提下，把**用户推进剧情的体验**（快进/自动/跳过）做成可预测、可测试、无竞态的系统；同时补齐“跳过时的过渡/动画收敛规则”，避免背景/遮罩/立绘进入不一致状态。
-
-**建议优先级：高**（当前演出系统已统一入口，适合把“推进控制”也收敛起来）
 
 **核心目标**：
 - **统一推进模式**：Normal / Auto / Skip（或按键按住的临时 Skip）
 - **统一跳过语义**：跳过时“该完成的效果必须完成、该切的背景必须切”，且只切一次
 - **无竞态**：快点/连点/按住跳过不应导致背景闪现、遮罩卡住、立绘状态残留
-
-**落地建议（按模块）**：
-- **输入与模式状态（Host）**：在 `AppState` 建立 `PlaybackMode`（含 auto 的节拍/策略、skip 的触发条件），将点击/按住/自动统一转成更新循环的控制信号
-- **过渡/动画的跳过收敛**：`EffectApplier`/`Renderer` 提供“跳过当前演出”的统一入口（内部调用 AnimationSystem / TransitionManager / SceneTransitionManager 的 skip），并明确：
-  - Background dissolve：跳过即直接完成到新背景（alpha=1）
-  - changeScene：跳过需保证遮罩到达中点并切背景，再完成淡出/收尾（或直接完成到 Completed）
 
 **已实现（浓缩）**：
 - ✅ **统一推进模式**：`PlaybackMode::{Normal,Auto,Skip}`（Host 层）；其中 **Skip 为 Ctrl 按住的临时模式**、Auto 为 A 键切换
@@ -160,42 +150,31 @@
 - `host/src/app/command_handlers/effect_applier.rs`
 - `host/src/renderer/{mod.rs,scene_transition.rs,transition.rs,animation/system.rs}`
 
-### 阶段 27：Host 结构治理（AppState 解耦 + 子系统边界）🟦 计划中
+### 阶段 27：Host 结构治理（AppState 解耦 + 子系统边界）✅ 已完成
 
 > **主题**：控制 `AppState` 的“上帝对象”膨胀，把 Host 的状态与能力按职责拆分为若干子系统接口；让 command_handlers/update/screen 只依赖**必要能力**，减少改动波及面，提升可测试性与可读性。
 
-**动机（可维护性问题）**：
-- `host/src/app/mod.rs::AppState` 聚合了资源/渲染/输入/执行器/UI/动画/存档/脚本等多类状态，导致：
-  - 任意功能改动都容易触及 `AppState` 与大量调用点（高耦合）
-  - handler/screen 容易“顺手”拿到不该依赖的能力（边界被侵蚀）
-  - 单测/集测构造成本上升（需要填充更多无关字段）
-
-**设计目标**：
-- **按能力分层**：将 `AppState` 拆为“子系统 struct + façade 接口”，减少直接字段暴露
-- **依赖最小化**：handler/screen 通过参数传入的 façade/trait 获取能力，而不是随处 `&mut AppState`
-- **不改语义**：本阶段原则上只做结构治理与迁移，不引入新玩法/新演出表现
-
-**建议落地方式（渐进迁移）**：
-- **Step A：定义子系统容器**（先搬字段，不改行为）
-  - `CoreSystems`：`ResourceManager` / `Renderer` / `RenderState` / `AnimationSystem` / `CommandExecutor` / `AudioManager`
-  - `UiSystems`：`NavigationStack` / `UiContext` / `ToastManager` / screens（Title/Menu/SaveLoad/Settings/History）
-  - `GameSession`：`VNRuntime` / `WaitingReason` / `typewriter_timer` / `script_finished` / `manifest` / `character_object_ids`
-- **Step B：建立 façade**（控制可见性）
-  - 为 `EffectApplier`/update 侧提供 `EffectContext`/`GameContext`（只暴露本模块需要的方法）
-  - 将 `pub` 字段逐步收敛为私有，通过 getter/方法访问（减少跨模块写入）
-- **Step C：迁移调用点**（以模块为单位）
-  - 优先迁移：`host/src/app/command_handlers/*`、`host/src/app/update/*`
-  - 再迁移：screens/UI 相关模块
+**已实现（浓缩）**：
+- **Step A — 子系统容器**：定义 `CoreSystems`（渲染/动画/资源/命令执行/音频 + `character_object_ids`）、`UiSystems`（导航/界面状态/Toast/screens）、`GameSession`（Runtime/等待/打字机/manifest/推进模式），AppState 顶层字段从 ~30 降至 12（3 个子系统 + 9 个配置/基础设施）
+- **Step B+C — command_handlers 完全脱离 AppState**：
+  - `apply_effect_requests` / 各 `apply_*` / `ensure_character_registered` → `(&mut CoreSystems, &Manifest)`
+  - `handle_audio_command` → `(&mut CoreSystems, &AppConfig)`
+  - `skip_all_active_effects` / `cleanup_fading_characters` → `(&mut CoreSystems)`
+- **调用点迁移**：12 个文件的字段路径全部更新（`app_state.X` → `app_state.core.X` / `app_state.ui.X` / `app_state.session.X`）
+- `cargo check-all` 通过（fmt + clippy + 195 tests）
 
 **验收标准（DoD）**：
-- `AppState` 字段数量显著下降（或至少不再对外 `pub` 暴露大部分字段）
-- `command_handlers` 与 `update` 层不再直接依赖整颗 `&mut AppState`（改为依赖 façade）
-- `cargo check-all` 通过，且新增/调整的测试构造成本下降（文档或注释说明）
+- `AppState` 字段数量显著下降（~30 → 12 顶层 + 3 子系统）
+- `command_handlers` 完全不依赖 `&mut AppState`（改为依赖 `&mut CoreSystems` + 只读引用）
+- `cargo check-all` 通过
+- 注：`update` 层中 `run_script_tick` / `handle_script_mode_input` / `modes.rs` 因跨子系统访问仍保留 `&mut AppState`，可在后续迭代中进一步收敛
 
-**关键文件（预期入口）**：
-- `host/src/app/mod.rs`（AppState 拆分入口）
-- `host/src/app/command_handlers/*`
-- `host/src/app/update/*`
+**关键文件**：
+- `host/src/app/mod.rs`（`CoreSystems` / `UiSystems` / `GameSession` 定义 + `AppState` 重构）
+- `host/src/app/command_handlers/*`（facade 签名迁移）
+- `host/src/app/update/*`（字段路径迁移 + `skip_all_active_effects` facade）
+
+## 下一步开发方向
 
 ---
 

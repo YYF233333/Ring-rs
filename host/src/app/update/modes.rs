@@ -21,17 +21,17 @@ use crate::{AppMode, SaveLoadTab};
 /// 更新主标题界面
 pub(super) fn update_title(app_state: &mut AppState) {
     // 初始化界面
-    if app_state.title_screen.needs_init() {
-        app_state.title_screen.init(
+    if app_state.ui.title_screen.needs_init() {
+        app_state.ui.title_screen.init(
             &app_state.save_manager,
-            &app_state.ui_context.theme,
-            app_state.ui_context.screen_width,
-            app_state.ui_context.screen_height,
+            &app_state.ui.ui_context.theme,
+            app_state.ui.ui_context.screen_width,
+            app_state.ui.ui_context.screen_height,
         );
     }
 
     // 处理用户操作
-    match app_state.title_screen.update(&app_state.ui_context) {
+    match app_state.ui.title_screen.update(&app_state.ui.ui_context) {
         TitleAction::StartGame => {
             // 开始新游戏时删除旧的 Continue 存档
             let _ = app_state.save_manager.delete_continue();
@@ -39,19 +39,19 @@ pub(super) fn update_title(app_state: &mut AppState) {
         }
         TitleAction::Continue => {
             // 读取专用 Continue 存档
-            if app_state.title_screen.has_continue() {
+            if app_state.ui.title_screen.has_continue() {
                 load_continue(app_state);
             }
         }
         TitleAction::LoadGame => {
-            app_state.save_load_screen =
+            app_state.ui.save_load_screen =
                 crate::screens::SaveLoadScreen::new().with_tab(SaveLoadTab::Load);
-            app_state.save_load_screen.mark_needs_init();
-            app_state.navigation.navigate_to(AppMode::SaveLoad);
+            app_state.ui.save_load_screen.mark_needs_init();
+            app_state.ui.navigation.navigate_to(AppMode::SaveLoad);
         }
         TitleAction::Settings => {
-            app_state.settings_screen.mark_needs_init();
-            app_state.navigation.navigate_to(AppMode::Settings);
+            app_state.ui.settings_screen.mark_needs_init();
+            app_state.ui.navigation.navigate_to(AppMode::Settings);
         }
         TitleAction::Exit => {
             app_state.host_state.stop();
@@ -64,10 +64,10 @@ pub(super) fn update_title(app_state: &mut AppState) {
 pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     // ESC 打开系统菜单（同时退出 Auto/Skip 模式）
     if is_key_pressed(KeyCode::Escape) {
-        app_state.playback_mode = PlaybackMode::Normal;
-        app_state.auto_timer = 0.0;
-        app_state.ingame_menu.mark_needs_init();
-        app_state.navigation.navigate_to(AppMode::InGameMenu);
+        app_state.session.playback_mode = PlaybackMode::Normal;
+        app_state.session.auto_timer = 0.0;
+        app_state.ui.ingame_menu.mark_needs_init();
+        app_state.ui.navigation.navigate_to(AppMode::InGameMenu);
         return;
     }
 
@@ -86,7 +86,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
 
     // A 键切换 Auto 模式
     if is_key_pressed(KeyCode::A) {
-        app_state.playback_mode = match app_state.playback_mode {
+        app_state.session.playback_mode = match app_state.session.playback_mode {
             PlaybackMode::Normal => {
                 debug!("切换到 Auto 模式");
                 PlaybackMode::Auto
@@ -98,7 +98,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
             // Skip 是临时模式，不受 A 键影响
             PlaybackMode::Skip => PlaybackMode::Skip,
         };
-        app_state.auto_timer = 0.0;
+        app_state.session.auto_timer = 0.0;
     }
 
     // Ctrl 按住 → 临时 Skip 模式（松开恢复）
@@ -106,7 +106,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     let effective_mode = if ctrl_held {
         PlaybackMode::Skip
     } else {
-        app_state.playback_mode
+        app_state.session.playback_mode
     };
 
     // --- 按模式分发 ---
@@ -124,21 +124,24 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     }
 
     // --- 通用：同步选择索引到 RenderState ---
-    if let Some(ref mut choices) = app_state.render_state.choices {
-        let choice_rects = app_state.renderer.get_choice_rects(choices.choices.len());
+    if let Some(ref mut choices) = app_state.core.render_state.choices {
+        let choice_rects = app_state
+            .core
+            .renderer
+            .get_choice_rects(choices.choices.len());
         app_state.input_manager.set_choice_rects(choice_rects);
         choices.selected_index = app_state.input_manager.selected_index;
         choices.hovered_index = app_state.input_manager.hovered_index;
     }
 
     // --- 通用：更新打字机效果（Skip 模式下打字机已被 skip_all_active_effects 完成） ---
-    if let Some(ref dialogue) = app_state.render_state.dialogue
+    if let Some(ref dialogue) = app_state.core.render_state.dialogue
         && !dialogue.is_complete
     {
-        app_state.typewriter_timer += dt * app_state.user_settings.text_speed;
-        while app_state.typewriter_timer >= 1.0 {
-            app_state.typewriter_timer -= 1.0;
-            if app_state.render_state.advance_typewriter() {
+        app_state.session.typewriter_timer += dt * app_state.user_settings.text_speed;
+        while app_state.session.typewriter_timer >= 1.0 {
+            app_state.session.typewriter_timer -= 1.0;
+            if app_state.core.render_state.advance_typewriter() {
                 break;
             }
         }
@@ -148,10 +151,10 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
 /// Skip 模式更新：立即完成所有演出并推进
 fn update_ingame_skip(app_state: &mut AppState, dt: f32) {
     // 1. 一次性跳过所有活跃效果
-    super::skip_all_active_effects(app_state);
+    super::skip_all_active_effects(&mut app_state.core);
 
     // 2. 如果等待点击，自动推进
-    if app_state.waiting_reason == WaitingReason::WaitForClick {
+    if app_state.session.waiting_reason == WaitingReason::WaitForClick {
         super::run_script_tick(app_state, Some(RuntimeInput::Click));
         return;
     }
@@ -159,7 +162,7 @@ fn update_ingame_skip(app_state: &mut AppState, dt: f32) {
     // 3. 其他等待类型（选择/时间/信号）仍使用正常输入处理
     if let Some(input) = app_state
         .input_manager
-        .update(&app_state.waiting_reason, dt)
+        .update(&app_state.session.waiting_reason, dt)
     {
         super::handle_script_mode_input(app_state, input);
     }
@@ -170,10 +173,10 @@ fn update_ingame_auto(app_state: &mut AppState, dt: f32) {
     // 用户手动输入仍然有效（手动输入优先）
     if let Some(input) = app_state
         .input_manager
-        .update(&app_state.waiting_reason, dt)
+        .update(&app_state.session.waiting_reason, dt)
     {
         // 手动输入时重置 auto 计时器
-        app_state.auto_timer = 0.0;
+        app_state.session.auto_timer = 0.0;
         super::handle_script_mode_input(app_state, input);
         return;
     }
@@ -182,21 +185,21 @@ fn update_ingame_auto(app_state: &mut AppState, dt: f32) {
     // - 等待点击
     // - 对话已完成（打字机结束）
     // - 无活跃动画/过渡
-    let can_auto_advance = app_state.waiting_reason == WaitingReason::WaitForClick
-        && app_state.render_state.is_dialogue_complete()
-        && !app_state.animation_system.has_active_animations()
-        && !app_state.renderer.transition.is_active()
-        && !app_state.renderer.is_scene_transition_active();
+    let can_auto_advance = app_state.session.waiting_reason == WaitingReason::WaitForClick
+        && app_state.core.render_state.is_dialogue_complete()
+        && !app_state.core.animation_system.has_active_animations()
+        && !app_state.core.renderer.transition.is_active()
+        && !app_state.core.renderer.is_scene_transition_active();
 
     if can_auto_advance {
-        app_state.auto_timer += dt;
-        if app_state.auto_timer >= app_state.user_settings.auto_delay {
-            app_state.auto_timer = 0.0;
+        app_state.session.auto_timer += dt;
+        if app_state.session.auto_timer >= app_state.user_settings.auto_delay {
+            app_state.session.auto_timer = 0.0;
             super::run_script_tick(app_state, Some(RuntimeInput::Click));
         }
     } else {
         // 条件不满足时重置计时器
-        app_state.auto_timer = 0.0;
+        app_state.session.auto_timer = 0.0;
     }
 }
 
@@ -205,7 +208,7 @@ fn update_ingame_normal(app_state: &mut AppState, dt: f32) {
     // 使用 InputManager 处理游戏输入（传入 dt 用于长按快进）
     if let Some(input) = app_state
         .input_manager
-        .update(&app_state.waiting_reason, dt)
+        .update(&app_state.session.waiting_reason, dt)
     {
         super::handle_script_mode_input(app_state, input);
     }
@@ -213,33 +216,33 @@ fn update_ingame_normal(app_state: &mut AppState, dt: f32) {
 
 /// 更新游戏内菜单
 pub(super) fn update_ingame_menu(app_state: &mut AppState) {
-    if app_state.ingame_menu.needs_init() {
-        app_state.ingame_menu.init(&app_state.ui_context);
+    if app_state.ui.ingame_menu.needs_init() {
+        app_state.ui.ingame_menu.init(&app_state.ui.ui_context);
     }
 
-    match app_state.ingame_menu.update(&app_state.ui_context) {
+    match app_state.ui.ingame_menu.update(&app_state.ui.ui_context) {
         InGameMenuAction::Resume => {
-            app_state.navigation.go_back();
+            app_state.ui.navigation.go_back();
         }
         InGameMenuAction::Save => {
-            app_state.save_load_screen =
+            app_state.ui.save_load_screen =
                 crate::screens::SaveLoadScreen::new().with_tab(SaveLoadTab::Save);
-            app_state.save_load_screen.mark_needs_init();
-            app_state.navigation.navigate_to(AppMode::SaveLoad);
+            app_state.ui.save_load_screen.mark_needs_init();
+            app_state.ui.navigation.navigate_to(AppMode::SaveLoad);
         }
         InGameMenuAction::Load => {
-            app_state.save_load_screen =
+            app_state.ui.save_load_screen =
                 crate::screens::SaveLoadScreen::new().with_tab(SaveLoadTab::Load);
-            app_state.save_load_screen.mark_needs_init();
-            app_state.navigation.navigate_to(AppMode::SaveLoad);
+            app_state.ui.save_load_screen.mark_needs_init();
+            app_state.ui.navigation.navigate_to(AppMode::SaveLoad);
         }
         InGameMenuAction::Settings => {
-            app_state.settings_screen.mark_needs_init();
-            app_state.navigation.navigate_to(AppMode::Settings);
+            app_state.ui.settings_screen.mark_needs_init();
+            app_state.ui.navigation.navigate_to(AppMode::Settings);
         }
         InGameMenuAction::History => {
-            app_state.history_screen.mark_needs_init();
-            app_state.navigation.navigate_to(AppMode::History);
+            app_state.ui.history_screen.mark_needs_init();
+            app_state.ui.navigation.navigate_to(AppMode::History);
         }
         InGameMenuAction::ReturnToTitle => {
             // 用户主动返回，保存 Continue 存档
@@ -254,45 +257,58 @@ pub(super) fn update_ingame_menu(app_state: &mut AppState) {
 
 /// 更新存档/读档界面
 pub(super) fn update_save_load(app_state: &mut AppState) {
-    if app_state.save_load_screen.needs_init() {
+    if app_state.ui.save_load_screen.needs_init() {
         app_state
+            .ui
             .save_load_screen
-            .init(&app_state.ui_context, &app_state.save_manager);
+            .init(&app_state.ui.ui_context, &app_state.save_manager);
     }
-    if app_state.save_load_screen.needs_refresh() {
+    if app_state.ui.save_load_screen.needs_refresh() {
         app_state
+            .ui
             .save_load_screen
             .refresh_saves(&app_state.save_manager);
     }
 
-    match app_state.save_load_screen.update(&app_state.ui_context) {
+    match app_state
+        .ui
+        .save_load_screen
+        .update(&app_state.ui.ui_context)
+    {
         SaveLoadAction::Back => {
-            app_state.navigation.go_back();
+            app_state.ui.navigation.go_back();
         }
         SaveLoadAction::Save(slot) => {
             app_state.current_save_slot = slot;
             quick_save(app_state);
             app_state
+                .ui
                 .toast_manager
                 .success(format!("已保存到槽位 {}", slot));
             app_state
+                .ui
                 .save_load_screen
                 .refresh_saves(&app_state.save_manager);
         }
         SaveLoadAction::Load(slot) => {
             load_game(app_state, slot);
             app_state
+                .ui
                 .toast_manager
                 .success(format!("已读取槽位 {}", slot));
         }
         SaveLoadAction::Delete(slot) => {
             if app_state.save_manager.delete(slot).is_ok() {
-                app_state.toast_manager.info(format!("已删除槽位 {}", slot));
                 app_state
+                    .ui
+                    .toast_manager
+                    .info(format!("已删除槽位 {}", slot));
+                app_state
+                    .ui
                     .save_load_screen
                     .refresh_saves(&app_state.save_manager);
             } else {
-                app_state.toast_manager.error("删除失败");
+                app_state.ui.toast_manager.error("删除失败");
             }
         }
         SaveLoadAction::None => {}
@@ -301,22 +317,27 @@ pub(super) fn update_save_load(app_state: &mut AppState) {
 
 /// 更新设置界面
 pub(super) fn update_settings(app_state: &mut AppState) {
-    if app_state.settings_screen.needs_init() {
+    if app_state.ui.settings_screen.needs_init() {
         app_state
+            .ui
             .settings_screen
-            .init(&app_state.ui_context, &app_state.user_settings);
+            .init(&app_state.ui.ui_context, &app_state.user_settings);
     }
 
-    match app_state.settings_screen.update(&app_state.ui_context) {
+    match app_state
+        .ui
+        .settings_screen
+        .update(&app_state.ui.ui_context)
+    {
         SettingsAction::Back => {
-            app_state.navigation.go_back();
+            app_state.ui.navigation.go_back();
         }
         SettingsAction::Apply => {
             // 应用设置
-            app_state.user_settings = app_state.settings_screen.settings().clone();
+            app_state.user_settings = app_state.ui.settings_screen.settings().clone();
 
             // 应用音量
-            if let Some(ref mut audio) = app_state.audio_manager {
+            if let Some(ref mut audio) = app_state.core.audio_manager {
                 audio.set_bgm_volume(app_state.user_settings.bgm_volume);
                 audio.set_sfx_volume(app_state.user_settings.sfx_volume);
                 audio.set_muted(app_state.user_settings.muted);
@@ -325,12 +346,12 @@ pub(super) fn update_settings(app_state: &mut AppState) {
             // 保存设置
             if let Err(e) = app_state.user_settings.save(USER_SETTINGS_PATH) {
                 tracing::warn!(error = %e, "保存用户设置失败");
-                app_state.toast_manager.error("设置保存失败");
+                app_state.ui.toast_manager.error("设置保存失败");
             } else {
-                app_state.toast_manager.success("设置已保存");
+                app_state.ui.toast_manager.success("设置已保存");
             }
 
-            app_state.navigation.go_back();
+            app_state.ui.navigation.go_back();
         }
         SettingsAction::None => {}
     }
@@ -338,17 +359,18 @@ pub(super) fn update_settings(app_state: &mut AppState) {
 
 /// 更新历史界面
 pub(super) fn update_history(app_state: &mut AppState) {
-    if app_state.history_screen.needs_init()
-        && let Some(ref runtime) = app_state.vn_runtime
+    if app_state.ui.history_screen.needs_init()
+        && let Some(ref runtime) = app_state.session.vn_runtime
     {
         app_state
+            .ui
             .history_screen
-            .init(&app_state.ui_context, runtime.history());
+            .init(&app_state.ui.ui_context, runtime.history());
     }
 
-    match app_state.history_screen.update(&app_state.ui_context) {
+    match app_state.ui.history_screen.update(&app_state.ui.ui_context) {
         HistoryAction::Back => {
-            app_state.navigation.go_back();
+            app_state.ui.navigation.go_back();
         }
         HistoryAction::None => {}
     }
