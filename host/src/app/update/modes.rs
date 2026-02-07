@@ -1,12 +1,16 @@
 //! 各 AppMode 的更新逻辑
 
 use macroquad::prelude::*;
+use tracing::debug;
+use vn_runtime::input::RuntimeInput;
+use vn_runtime::state::WaitingReason;
 
 use super::super::AppState;
 use super::super::USER_SETTINGS_PATH;
 use super::super::save::{
     load_continue, load_game, quick_load, quick_save, return_to_title_from_game, start_new_game,
 };
+use crate::PlaybackMode;
 use crate::screens::history::HistoryAction;
 use crate::screens::ingame_menu::InGameMenuAction;
 use crate::screens::save_load::SaveLoadAction;
@@ -58,8 +62,10 @@ pub(super) fn update_title(app_state: &mut AppState) {
 
 /// 更新游戏进行中
 pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
-    // ESC 打开系统菜单
+    // ESC 打开系统菜单（同时退出 Auto/Skip 模式）
     if is_key_pressed(KeyCode::Escape) {
+        app_state.playback_mode = PlaybackMode::Normal;
+        app_state.auto_timer = 0.0;
         app_state.ingame_menu.mark_needs_init();
         app_state.navigation.navigate_to(AppMode::InGameMenu);
         return;
@@ -76,15 +82,48 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
         }
     }
 
-    // 使用 InputManager 处理游戏输入（传入 dt 用于长按快进）
-    if let Some(input) = app_state
-        .input_manager
-        .update(&app_state.waiting_reason, dt)
-    {
-        super::handle_script_mode_input(app_state, input);
+    // --- 播放推进模式检测 ---
+
+    // A 键切换 Auto 模式
+    if is_key_pressed(KeyCode::A) {
+        app_state.playback_mode = match app_state.playback_mode {
+            PlaybackMode::Normal => {
+                debug!("切换到 Auto 模式");
+                PlaybackMode::Auto
+            }
+            PlaybackMode::Auto => {
+                debug!("退出 Auto 模式");
+                PlaybackMode::Normal
+            }
+            // Skip 是临时模式，不受 A 键影响
+            PlaybackMode::Skip => PlaybackMode::Skip,
+        };
+        app_state.auto_timer = 0.0;
     }
 
-    // 同步选择索引到 RenderState
+    // Ctrl 按住 → 临时 Skip 模式（松开恢复）
+    let ctrl_held = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
+    let effective_mode = if ctrl_held {
+        PlaybackMode::Skip
+    } else {
+        app_state.playback_mode
+    };
+
+    // --- 按模式分发 ---
+
+    match effective_mode {
+        PlaybackMode::Skip => {
+            update_ingame_skip(app_state, dt);
+        }
+        PlaybackMode::Auto => {
+            update_ingame_auto(app_state, dt);
+        }
+        PlaybackMode::Normal => {
+            update_ingame_normal(app_state, dt);
+        }
+    }
+
+    // --- 通用：同步选择索引到 RenderState ---
     if let Some(ref mut choices) = app_state.render_state.choices {
         let choice_rects = app_state.renderer.get_choice_rects(choices.choices.len());
         app_state.input_manager.set_choice_rects(choice_rects);
@@ -92,7 +131,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
         choices.hovered_index = app_state.input_manager.hovered_index;
     }
 
-    // 更新打字机效果
+    // --- 通用：更新打字机效果（Skip 模式下打字机已被 skip_all_active_effects 完成） ---
     if let Some(ref dialogue) = app_state.render_state.dialogue
         && !dialogue.is_complete
     {
@@ -103,6 +142,72 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
                 break;
             }
         }
+    }
+}
+
+/// Skip 模式更新：立即完成所有演出并推进
+fn update_ingame_skip(app_state: &mut AppState, dt: f32) {
+    // 1. 一次性跳过所有活跃效果
+    super::skip_all_active_effects(app_state);
+
+    // 2. 如果等待点击，自动推进
+    if app_state.waiting_reason == WaitingReason::WaitForClick {
+        super::run_script_tick(app_state, Some(RuntimeInput::Click));
+        return;
+    }
+
+    // 3. 其他等待类型（选择/时间/信号）仍使用正常输入处理
+    if let Some(input) = app_state
+        .input_manager
+        .update(&app_state.waiting_reason, dt)
+    {
+        super::handle_script_mode_input(app_state, input);
+    }
+}
+
+/// Auto 模式更新：对话完成后等待 auto_delay 秒自动推进
+fn update_ingame_auto(app_state: &mut AppState, dt: f32) {
+    // 用户手动输入仍然有效（手动输入优先）
+    if let Some(input) = app_state
+        .input_manager
+        .update(&app_state.waiting_reason, dt)
+    {
+        // 手动输入时重置 auto 计时器
+        app_state.auto_timer = 0.0;
+        super::handle_script_mode_input(app_state, input);
+        return;
+    }
+
+    // Auto 推进条件：
+    // - 等待点击
+    // - 对话已完成（打字机结束）
+    // - 无活跃动画/过渡
+    let can_auto_advance = app_state.waiting_reason == WaitingReason::WaitForClick
+        && app_state.render_state.is_dialogue_complete()
+        && !app_state.animation_system.has_active_animations()
+        && !app_state.renderer.transition.is_active()
+        && !app_state.renderer.is_scene_transition_active();
+
+    if can_auto_advance {
+        app_state.auto_timer += dt;
+        if app_state.auto_timer >= app_state.user_settings.auto_delay {
+            app_state.auto_timer = 0.0;
+            super::run_script_tick(app_state, Some(RuntimeInput::Click));
+        }
+    } else {
+        // 条件不满足时重置计时器
+        app_state.auto_timer = 0.0;
+    }
+}
+
+/// Normal 模式更新：等待用户点击推进（原有行为）
+fn update_ingame_normal(app_state: &mut AppState, dt: f32) {
+    // 使用 InputManager 处理游戏输入（传入 dt 用于长按快进）
+    if let Some(input) = app_state
+        .input_manager
+        .update(&app_state.waiting_reason, dt)
+    {
+        super::handle_script_mode_input(app_state, input);
     }
 }
 

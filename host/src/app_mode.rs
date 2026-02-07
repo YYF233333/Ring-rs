@@ -103,6 +103,23 @@ impl NavigationStack {
     }
 }
 
+/// 播放推进模式
+///
+/// 控制游戏中剧情的推进方式：
+/// - `Normal`：等待用户点击/按键推进（默认）
+/// - `Auto`：对话完成后等待 `auto_delay` 秒自动推进
+/// - `Skip`：立即完成所有演出并推进（Ctrl 按住时激活）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlaybackMode {
+    /// 正常模式：等待用户点击推进
+    #[default]
+    Normal,
+    /// 自动模式：对话完成后等待 auto_delay 秒自动推进
+    Auto,
+    /// 跳过模式：立即完成所有演出并推进（Ctrl 按住时激活）
+    Skip,
+}
+
 /// 输入捕获状态
 ///
 /// 控制不同模式下的输入行为，避免"双重消费"

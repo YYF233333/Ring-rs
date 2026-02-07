@@ -11,6 +11,60 @@ use super::super::command_handlers::{apply_effect_requests, handle_audio_command
 use super::super::save::return_to_title_from_game;
 use super::super::script_loader::collect_prefetch_paths;
 
+/// 一次性跳过所有活跃的演出效果（动画/过渡/场景过渡/打字机）
+///
+/// 用于 Skip 模式，确保所有效果正确收敛：
+/// - 角色动画：skip_all + 清理淡出完成的角色
+/// - 背景过渡（changeBG dissolve）：直接完成
+/// - 场景过渡（changeScene）：完全跳过并切换背景
+/// - 打字机：立即完成
+pub fn skip_all_active_effects(app_state: &mut AppState) {
+    // 1. 跳过所有角色动画
+    if app_state.animation_system.has_active_animations() {
+        app_state.animation_system.skip_all();
+        let _ = app_state.animation_system.update(0.0);
+        cleanup_fading_characters(app_state);
+    }
+
+    // 2. 跳过背景过渡（changeBG dissolve）
+    if app_state.renderer.transition.is_active() {
+        app_state.renderer.transition.skip();
+    }
+
+    // 3. 完全跳过场景过渡（changeScene），确保背景切换
+    if app_state.renderer.is_scene_transition_active() {
+        if let Some(path) = app_state.renderer.skip_scene_transition_to_end() {
+            app_state.render_state.set_background(path);
+        }
+        app_state.render_state.ui_visible = true;
+    }
+
+    // 4. 完成打字机
+    if !app_state.render_state.is_dialogue_complete() {
+        app_state.render_state.complete_typewriter();
+    }
+}
+
+/// 清理淡出完成的角色（从动画系统注销并从 render_state 移除）
+fn cleanup_fading_characters(app_state: &mut AppState) {
+    let fading_out: Vec<String> = app_state
+        .render_state
+        .visible_characters
+        .iter()
+        .filter(|(_, c)| c.fading_out)
+        .map(|(alias, _)| alias.clone())
+        .collect();
+
+    for alias in &fading_out {
+        if let Some(object_id) = app_state.character_object_ids.remove(alias) {
+            app_state.animation_system.unregister(object_id);
+        }
+    }
+    app_state
+        .render_state
+        .remove_fading_out_characters(&fading_out);
+}
+
 /// 处理脚本模式下的输入
 pub fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
     // 如果有动画正在进行，跳过所有动画
@@ -20,23 +74,7 @@ pub fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
         let _ = app_state.animation_system.update(0.0);
 
         // 清理淡出完成的角色
-        let fading_out: Vec<String> = app_state
-            .render_state
-            .visible_characters
-            .iter()
-            .filter(|(_, c)| c.fading_out)
-            .map(|(alias, _)| alias.clone())
-            .collect();
-
-        // 从动画系统注销并移除
-        for alias in &fading_out {
-            if let Some(object_id) = app_state.character_object_ids.remove(alias) {
-                app_state.animation_system.unregister(object_id);
-            }
-        }
-        app_state
-            .render_state
-            .remove_fading_out_characters(&fading_out);
+        cleanup_fading_characters(app_state);
         return;
     }
 

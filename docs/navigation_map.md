@@ -58,7 +58,7 @@
 - **每帧更新（已模块化）**：`host/src/app/update/`
   - `host/src/app/update/mod.rs`：聚合入口 `update(app_state)`
   - `host/src/app/update/modes.rs`：按 `AppMode` 分发（Title/Menu/Settings/History…）
-  - `host/src/app/update/script.rs`：脚本输入 + runtime tick + 命令执行链路
+  - `host/src/app/update/script.rs`：脚本输入 + runtime tick + 命令执行链路；阶段26新增 `skip_all_active_effects()`（Skip 模式收敛入口）
   - `host/src/app/update/scene_transition.rs`：场景过渡驱动
 - **绘制**：`host/src/app/draw.rs`
 - **存档操作（quick save/load 等）**：`host/src/app/save.rs`
@@ -87,6 +87,15 @@
 - **UI 组件**：`host/src/ui/`（button/list/modal/panel/theme/toast）
 - **输入**：`host/src/input/`
 - **配置/manifest/save manager**：`host/src/config/`、`host/src/manifest/`、`host/src/save_manager/`
+
+### 常见改动：推进模式 / Skip / Auto（阶段 26）
+
+- **推进模式状态**：`host/src/app_mode.rs`（`PlaybackMode::{Normal,Auto,Skip}`；UserSettings 的 `auto_delay/auto_mode`）
+- **推进控制主循环**：`host/src/app/update/modes.rs`（Ctrl 按住临时 Skip；Auto 的节拍与推进条件）
+- **统一跳过入口（收敛语义）**：`host/src/app/update/script.rs::skip_all_active_effects()`（动画/changeBG/changeScene/打字机）
+- **changeScene 完整跳过（不丢背景）**：
+  - `host/src/renderer/scene_transition.rs::SceneTransitionManager::skip_to_end()`
+  - `host/src/renderer/mod.rs::Renderer::skip_scene_transition_to_end()`
 
 ## 开发工作流（质量门禁/覆盖率）
 

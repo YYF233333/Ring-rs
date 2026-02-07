@@ -26,7 +26,7 @@ use crate::screens::{
 use crate::ui::{Theme, ToastManager, UiContext};
 use crate::{
     AppConfig, AudioManager, CommandExecutor, HostState, InputManager, NavigationStack,
-    UserSettings,
+    PlaybackMode, UserSettings,
 };
 use std::collections::HashMap;
 use vn_runtime::VNRuntime;
@@ -86,6 +86,12 @@ pub struct AppState {
     /// 历史界面
     pub history_screen: HistoryScreen,
 
+    // ===== 阶段26新增：播放推进模式 =====
+    /// 当前播放推进模式（Normal/Auto/Skip）
+    pub playback_mode: PlaybackMode,
+    /// Auto 模式的等待计时器（秒）
+    pub auto_timer: f32,
+
     // ===== 阶段19新增：动画系统 =====
     /// 统一动画系统
     pub animation_system: AnimationSystem,
@@ -138,6 +144,10 @@ impl AppState {
             save_load_screen: SaveLoadScreen::new(),
             settings_screen: SettingsScreen::new(),
             history_screen: HistoryScreen::new(),
+
+            // 播放推进模式
+            playback_mode: PlaybackMode::Normal,
+            auto_timer: 0.0,
 
             // 动画系统
             animation_system: AnimationSystem::new(),

@@ -228,6 +228,13 @@ impl Renderer {
         self.scene_transition.skip_current_phase();
     }
 
+    /// 完全跳过场景过渡，返回待切换的背景路径
+    ///
+    /// 用于 Skip 模式：一次性完成过渡并确保背景不丢失。
+    pub fn skip_scene_transition_to_end(&mut self) -> Option<String> {
+        self.scene_transition.skip_to_end()
+    }
+
     /// 检查场景过渡是否正在进行
     pub fn is_scene_transition_active(&self) -> bool {
         self.scene_transition.is_active()

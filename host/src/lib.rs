@@ -35,7 +35,9 @@ pub use resources::{
 };
 pub use state::HostState;
 // Trait-based 动画系统 API
-pub use app_mode::{AppMode, InputCapture, NavigationStack, SaveLoadTab, UserSettings};
+pub use app_mode::{
+    AppMode, InputCapture, NavigationStack, PlaybackMode, SaveLoadTab, UserSettings,
+};
 pub use audio::AudioManager;
 pub use command_executor::{AudioCommand, CommandExecutor, CommandOutput, ExecuteResult};
 pub use config::{AppConfig, AssetSourceType, AudioConfig, DebugConfig, WindowConfig};

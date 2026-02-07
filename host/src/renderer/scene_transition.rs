@@ -472,6 +472,16 @@ impl SceneTransitionManager {
         self.transition_state.set_completed();
     }
 
+    /// 完全跳过过渡并返回待切换的背景
+    ///
+    /// 与 `skip_all()` 不同，本方法**保证** `pending_background` 被正确返回，
+    /// 调用方可据此完成背景切换，避免 Skip 模式下背景丢失。
+    pub fn skip_to_end(&mut self) -> Option<String> {
+        let bg = self.pending_background.take();
+        self.skip_all();
+        bg
+    }
+
     /// 获取当前阶段
     pub fn phase(&self) -> SceneTransitionPhase {
         self.phase
@@ -690,5 +700,139 @@ mod tests {
         );
         assert!(manager.pending_background().is_none());
         assert!(!manager.is_at_midpoint());
+    }
+
+    // ===== 阶段 26 新增：skip_to_end / 逐阶段跳过语义测试 =====
+
+    #[test]
+    fn test_skip_to_end_fade() {
+        let mut manager = SceneTransitionManager::new();
+        manager.start_fade(1.0, "target_bg.png".to_string());
+
+        assert!(manager.is_active());
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);
+
+        // skip_to_end 应返回 pending_background 并完成过渡
+        let bg = manager.skip_to_end();
+        assert_eq!(bg.as_deref(), Some("target_bg.png"));
+        assert!(!manager.is_active());
+        assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
+        assert_eq!(manager.ui_alpha(), 1.0);
+        // pending_background 已被取走
+        assert!(manager.pending_background().is_none());
+    }
+
+    #[test]
+    fn test_skip_to_end_fade_white() {
+        let mut manager = SceneTransitionManager::new();
+        manager.start_fade_white(0.5, "white_bg.png".to_string());
+
+        assert!(manager.is_active());
+
+        let bg = manager.skip_to_end();
+        assert_eq!(bg.as_deref(), Some("white_bg.png"));
+        assert!(!manager.is_active());
+        assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
+    }
+
+    #[test]
+    fn test_skip_to_end_rule() {
+        let mut manager = SceneTransitionManager::new();
+        manager.start_rule(
+            0.5,
+            "rule_bg.png".to_string(),
+            "mask.png".to_string(),
+            false,
+        );
+
+        assert!(manager.is_active());
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);
+
+        // skip_to_end 应返回 pending_background 并完成过渡
+        let bg = manager.skip_to_end();
+        assert_eq!(bg.as_deref(), Some("rule_bg.png"));
+        assert!(!manager.is_active());
+        assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
+        assert_eq!(manager.ui_alpha(), 1.0);
+        assert!(manager.pending_background().is_none());
+    }
+
+    #[test]
+    fn test_skip_to_end_during_fade_out() {
+        // 即使在 FadeOut 阶段（背景可能已被 take），skip_to_end 也应安全完成
+        let mut manager = SceneTransitionManager::new();
+        manager.start_fade(0.2, "mid_bg.png".to_string());
+
+        // 推进到 FadeOut 阶段
+        manager.update(0.25);
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeOut);
+
+        // 模拟中间点背景已被消费
+        let _ = manager.take_pending_background();
+
+        // skip_to_end 应返回 None（背景已消费）并安全完成
+        let bg = manager.skip_to_end();
+        assert!(bg.is_none());
+        assert!(!manager.is_active());
+        assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
+    }
+
+    #[test]
+    fn test_skip_current_phase_fade_ensures_midpoint() {
+        // 验证：逐阶段跳过 Fade 时，FadeIn → FadeOut 跳转后 midpoint 可被检测
+        let mut manager = SceneTransitionManager::new();
+        manager.start_fade(1.0, "phase_bg.png".to_string());
+
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);
+        assert!(!manager.is_at_midpoint());
+
+        // 跳过 FadeIn → 直接进入 FadeOut
+        manager.skip_current_phase();
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeOut);
+
+        // 此时 midpoint 应被检测到（mask_alpha == 1.0，pending_background 仍在）
+        assert!(manager.is_at_midpoint());
+        assert_eq!(manager.pending_background(), Some("phase_bg.png"));
+
+        // 消费背景
+        let bg = manager.take_pending_background();
+        assert_eq!(bg.as_deref(), Some("phase_bg.png"));
+        assert!(!manager.is_at_midpoint());
+
+        // 再跳过 FadeOut → Completed
+        manager.skip_current_phase();
+        assert!(!manager.is_active());
+        assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
+    }
+
+    #[test]
+    fn test_skip_current_phase_rule_ensures_midpoint() {
+        // 验证：逐阶段跳过 Rule 时，FadeIn → FadeOut 跳转后 midpoint 可被检测
+        let mut manager = SceneTransitionManager::new();
+        manager.start_rule(
+            1.0,
+            "rule_phase_bg.png".to_string(),
+            "mask.png".to_string(),
+            false,
+        );
+
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);
+
+        // 跳过 FadeIn → 直接进入 FadeOut（Rule 跳过 Blackout）
+        manager.skip_current_phase();
+        assert_eq!(manager.phase(), SceneTransitionPhase::FadeOut);
+
+        // midpoint 应被检测到（progress == 0.0，pending_background 仍在）
+        assert!(manager.is_at_midpoint());
+        assert_eq!(manager.pending_background(), Some("rule_phase_bg.png"));
+
+        // 消费背景
+        let bg = manager.take_pending_background();
+        assert_eq!(bg.as_deref(), Some("rule_phase_bg.png"));
+
+        // 跳过 FadeOut → Completed
+        manager.skip_current_phase();
+        assert!(!manager.is_active());
+        assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
     }
 }

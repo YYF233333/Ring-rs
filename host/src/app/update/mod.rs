@@ -10,7 +10,7 @@ mod scene_transition;
 mod script;
 
 pub use scene_transition::update_scene_transition;
-pub use script::{handle_script_mode_input, run_script_tick};
+pub use script::{handle_script_mode_input, run_script_tick, skip_all_active_effects};
 
 use macroquad::prelude::*;
 use tracing::debug;

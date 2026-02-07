@@ -307,4 +307,26 @@ mod tests {
         assert_eq!(manager.new_content_alpha(), 1.0);
         assert_eq!(manager.old_content_alpha(), 0.0);
     }
+
+    // ===== 阶段 26 新增：skip 语义测试 =====
+
+    #[test]
+    fn test_skip_mid_dissolve_completes() {
+        // 验证：在 dissolve 进行到一半时 skip，过渡应完全完成
+        let mut manager = TransitionManager::new();
+        manager.start(TransitionType::Dissolve, 2.0);
+
+        // 推进到中间
+        manager.update(0.5);
+        assert!(manager.is_active());
+        let mid_alpha = manager.new_content_alpha();
+        assert!(mid_alpha > 0.0 && mid_alpha < 1.0);
+
+        // skip 应完成过渡
+        manager.skip();
+        assert!(!manager.is_active());
+        assert_eq!(manager.phase(), TransitionPhase::Idle);
+        assert_eq!(manager.new_content_alpha(), 1.0);
+        assert_eq!(manager.old_content_alpha(), 0.0);
+    }
 }

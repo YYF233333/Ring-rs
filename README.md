@@ -1,6 +1,6 @@
 # Ring-rs
 
-一个使用 Rust 构建的视觉小说引擎（Visual Novel Engine）。
+一个使用 Rust 构建的视觉小说引擎。
 
 如果你是来 **做内容（脚本/素材/配置）** 的：你不需要改仓库代码。
 
@@ -38,6 +38,14 @@
 ```bash
 cargo run
 ```
+
+### 游戏内操作（推进 / Auto / Skip）
+
+- **推进**：鼠标左键点击，或按 `Space` / `Enter`
+- **快进（连点）**：长按 `Space` / `Enter`
+- **Skip（临时）**：按住 `Ctrl`（左/右均可），松开恢复
+- **Auto（自动播放）**：游戏中按 `A` 开/关；间隔来自运行目录的 `user_settings.json` → `auto_delay`（秒）
+- **菜单**：`Esc`
 
 ## 内容制作闭环（检查 → 运行 → 打包发布）
 
@@ -99,11 +107,6 @@ Ring-rs/
 ├── config.json          # 运行配置（入口脚本、资源来源、窗口等）
 └── docs/                # 规范与指南
 ```
-
-## 架构概要（Runtime/Host 分离）
-
-- **`vn-runtime`**：只做确定性逻辑推进，**只产出** `Command`，不做渲染/音频/IO
-- **`host`**：只消费 `Command` 产生画面/音频/UI，输入以 `RuntimeInput` 回传 Runtime
 
 ## 贡献与开发
 
