@@ -181,8 +181,6 @@ pub struct UserSettings {
     pub text_speed: f32,
     /// 自动播放延迟（秒）
     pub auto_delay: f32,
-    /// 是否开启自动播放
-    pub auto_mode: bool,
 }
 
 impl Default for UserSettings {
@@ -194,7 +192,6 @@ impl Default for UserSettings {
             fullscreen: false,
             text_speed: 30.0,
             auto_delay: 2.0,
-            auto_mode: false,
         }
     }
 }

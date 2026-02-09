@@ -14,8 +14,8 @@ serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# 图像格式支持 - 添加 JPEG 支持
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# 图像格式支持
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 
 # 音频库 - 支持 MP3, WAV, FLAC, OGG
 rodio = { version = "0.19", features = ["mp3", "wav", "flac", "vorbis"] }

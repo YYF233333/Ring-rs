@@ -320,7 +320,7 @@ backgrounds/../characters/角色.png  → characters/角色.png
 **A**: 可以尝试：
 
 1. **提高压缩级别**：`cargo run -p asset-packer -- --level 9`
-2. **压缩图片资源**：使用工具压缩 PNG/JPEG 文件
+2. **压缩图片资源**：使用工具压缩 PNG/JPEG/WebP 文件
 3. **移除未使用的资源**：清理 `assets` 目录中不需要的文件
 
 ### Q: 开发时可以使用 ZIP 模式吗？

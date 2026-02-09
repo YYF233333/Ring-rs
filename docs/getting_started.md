@@ -31,7 +31,7 @@ assets/
 
 支持格式（当前实现）：
 
-- 图片：PNG/JPEG
+- 图片：PNG/JPEG/WebP
 - 音频：MP3/WAV/FLAC/OGG
 
 ## 2. 配置 `config.json`

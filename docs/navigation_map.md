@@ -14,7 +14,7 @@
 
 ## 重要文档（建议阅读顺序）
 
-- **架构硬约束**：[PLAN.md](../PLAN.md)（Runtime/Host 分离、显式状态、确定性、Command 驱动）
+- **架构硬约束**：[ARCH.md](../ARCH.md)（Runtime/Host 分离、显式状态、确定性、Command 驱动）
 - **开发路线图**：[ROADMAP.md](../ROADMAP.md)
 - **内容制作入门**：[getting_started.md](getting_started.md)（不改代码写脚本/素材 → 测试 → 打包发布）
 - **运行配置说明**：[config_guide.md](config_guide.md)（`config.json` 字段含义/默认值/校验规则）
@@ -34,14 +34,14 @@
 - **引擎循环（tick/handle_input/restore）**：`vn-runtime/src/runtime/engine.rs`
 - **执行器（AST → Command）**：`vn-runtime/src/runtime/executor.rs`
 - **脚本 AST**：`vn-runtime/src/script/ast.rs`
-- **脚本解析器**：`vn-runtime/src/script/parser.rs`
+- **脚本解析器**：`vn-runtime/src/script/parser/mod.rs`
 - **脚本诊断（静态分析）**：`vn-runtime/src/diagnostic.rs`
 - **存档模型**：`vn-runtime/src/save.rs`
 - **历史记录**：`vn-runtime/src/history.rs`
 
 ### 常见改动：我应该改哪里？
 
-- **新增脚本语法（解析层）**：`script/parser.rs` → `script/ast.rs`
+- **新增脚本语法（解析层）**：`vn-runtime/src/script/parser/mod.rs` → `vn-runtime/src/script/ast.rs`
 - **把 AST 变成命令（语义层）**：`runtime/executor.rs`
 - **新增/修改命令类型（通信契约）**：`command.rs`（同时要改 `host/` 的执行端）
 - **调整运行时状态/等待机制**：`state.rs`、`runtime/engine.rs`
@@ -90,7 +90,7 @@
 
 ### 常见改动：推进模式 / Skip / Auto（阶段 26）
 
-- **推进模式状态**：`host/src/app_mode.rs`（`PlaybackMode::{Normal,Auto,Skip}`；UserSettings 的 `auto_delay/auto_mode`）
+- **推进模式状态**：`host/src/app_mode.rs`（`PlaybackMode::{Normal,Auto,Skip}`；UserSettings 的 `auto_delay`；Auto 开关不持久化）
 - **推进控制主循环**：`host/src/app/update/modes.rs`（Ctrl 按住临时 Skip；Auto 的节拍与推进条件）
 - **统一跳过入口（收敛语义）**：`host/src/app/update/script.rs::skip_all_active_effects()`（动画/changeBG/changeScene/打字机）
 - **changeScene 完整跳过（不丢背景）**：
