@@ -21,4 +21,4 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 rodio = { version = "0.19", features = ["mp3", "wav", "flac", "vorbis"] }
 
 # ZIP 文件支持（资源打包/发布）
-zip = "2.2"
+zip = { version = "7.4", default-features = false, features = ["deflate"] }
