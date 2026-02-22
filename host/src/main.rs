@@ -9,7 +9,6 @@ use host::AppConfig;
 use host::app::{AppState, draw, ensure_render_resources, load_resources, save_continue, update};
 use macroquad::prelude::*;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 
 /// 配置文件路径
@@ -38,40 +37,32 @@ async fn main() {
     let config = AppConfig::load(CONFIG_PATH);
 
     // 初始化日志系统
-    // 优先级：RUST_LOG（最高） -> config.debug.log_level -> 默认 INFO
-    let env_filter = if std::env::var_os("RUST_LOG").is_some() {
-        EnvFilter::from_default_env()
-    } else {
-        let configured = config
-            .debug
-            .log_level
-            .as_deref()
-            .unwrap_or("info")
-            .trim()
-            .to_ascii_lowercase();
+    // 来源：config.debug.log_level（默认 info）
+    let configured = config
+        .debug
+        .log_level
+        .as_deref()
+        .unwrap_or("info")
+        .trim()
+        .to_ascii_lowercase();
 
-        let level = match configured.as_str() {
-            "trace" => LevelFilter::TRACE,
-            "debug" => LevelFilter::DEBUG,
-            "info" => LevelFilter::INFO,
-            "warn" | "warning" => LevelFilter::WARN,
-            "error" => LevelFilter::ERROR,
-            "off" => LevelFilter::OFF,
-            other => {
-                eprintln!(
-                    "Invalid config debug.log_level: '{other}'. Allowed: trace/debug/info/warn/error/off. Fallback to info."
-                );
-                LevelFilter::INFO
-            }
-        };
-
-        EnvFilter::builder()
-            .with_default_directive(level.into())
-            .from_env_lossy()
+    let level = match configured.as_str() {
+        "trace" => LevelFilter::TRACE,
+        "debug" => LevelFilter::DEBUG,
+        "info" => LevelFilter::INFO,
+        "warn" | "warning" => LevelFilter::WARN,
+        "error" => LevelFilter::ERROR,
+        "off" => LevelFilter::OFF,
+        other => {
+            eprintln!(
+                "Invalid config debug.log_level: '{other}'. Allowed: trace/debug/info/warn/error/off. Fallback to info."
+            );
+            LevelFilter::INFO
+        }
     };
 
     tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
+        .with_max_level(level)
         // 更简洁的输出：不显示时间戳，使用紧凑格式，隐藏 target（模块路径）
         // 输出示例：`INFO 配置加载完成 path="config.json"`
         .without_time()

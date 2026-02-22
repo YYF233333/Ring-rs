@@ -126,8 +126,7 @@
 
 - **用途**：日志等级。
 - **允许值**：`trace` / `debug` / `info` / `warn` / `error` / `off`（不区分大小写）
-- **优先级**：
-  - 环境变量 `RUST_LOG`（最高）
+- **来源**：
   - `debug.log_level`
   - 默认 `info`
 

@@ -14,7 +14,7 @@
 //! 音频路径使用**逻辑路径**（相对于 assets_root），由调用方负责规范化。
 //! 内部根据 `use_zip_mode` 决定从文件系统还是临时文件加载。
 
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
+use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Cursor};
@@ -25,12 +25,10 @@ use tracing::{debug, error};
 ///
 /// 负责管理 BGM 和 SFX 的播放状态。
 pub struct AudioManager {
-    /// 音频输出流（必须保持存活）
-    _stream: OutputStream,
-    /// 音频输出句柄
-    stream_handle: OutputStreamHandle,
+    /// 设备输出 Sink（必须保持存活）
+    device_sink: MixerDeviceSink,
     /// BGM 播放器
-    bgm_sink: Option<Sink>,
+    bgm_sink: Option<Player>,
     /// 当前 BGM 路径（逻辑路径）
     current_bgm_path: Option<String>,
     /// BGM 主音量 (0.0 - 1.0)
@@ -80,12 +78,11 @@ enum FadeState {
 impl AudioManager {
     /// 创建新的音频管理器（文件系统模式）
     pub fn new(base_path: &str) -> Result<Self, String> {
-        let (stream, stream_handle) =
-            OutputStream::try_default().map_err(|e| format!("无法初始化音频输出: {}", e))?;
+        let device_sink = DeviceSinkBuilder::open_default_sink()
+            .map_err(|e| format!("无法初始化音频输出: {}", e))?;
 
         Ok(Self {
-            _stream: stream,
-            stream_handle,
+            device_sink,
             bgm_sink: None,
             current_bgm_path: None,
             bgm_volume: 1.0,
@@ -100,12 +97,11 @@ impl AudioManager {
 
     /// 创建 ZIP 模式的音频管理器
     pub fn new_zip_mode(base_path: &str) -> Result<Self, String> {
-        let (stream, stream_handle) =
-            OutputStream::try_default().map_err(|e| format!("无法初始化音频输出: {}", e))?;
+        let device_sink = DeviceSinkBuilder::open_default_sink()
+            .map_err(|e| format!("无法初始化音频输出: {}", e))?;
 
         Ok(Self {
-            _stream: stream,
-            stream_handle,
+            device_sink,
             bgm_sink: None,
             current_bgm_path: None,
             bgm_volume: 1.0,
@@ -156,7 +152,7 @@ impl AudioManager {
         let logical_path = normalize_logical_path(path);
 
         // 根据模式加载音频
-        let source: Box<dyn Source<Item = i16> + Send> = if self.use_zip_mode {
+        let source: Box<dyn Source + Send> = if self.use_zip_mode {
             // ZIP 模式：从缓存读取字节
             let bytes = match self.audio_cache.get(&logical_path) {
                 Some(b) => b.clone(),
@@ -171,7 +167,7 @@ impl AudioManager {
 
             let cursor = Cursor::new(bytes);
             match Decoder::new(cursor) {
-                Ok(s) => Box::new(s.convert_samples::<i16>()),
+                Ok(s) => Box::new(s),
                 Err(e) => {
                     error!(path = %logical_path, error = %e, "无法解码音频");
                     return;
@@ -190,7 +186,7 @@ impl AudioManager {
             };
 
             match Decoder::new(BufReader::new(file)) {
-                Ok(s) => Box::new(s.convert_samples::<i16>()),
+                Ok(s) => Box::new(s),
                 Err(e) => {
                     error!(path = %full_path.display(), error = %e, "无法解码音频文件");
                     return;
@@ -198,14 +194,8 @@ impl AudioManager {
             }
         };
 
-        // 创建新的 Sink
-        let sink = match Sink::try_new(&self.stream_handle) {
-            Ok(s) => s,
-            Err(e) => {
-                error!(error = %e, "无法创建音频播放器");
-                return;
-            }
-        };
+        // 创建新的播放器并连接到输出 mixer
+        let sink = Player::connect_new(self.device_sink.mixer());
 
         // 设置初始音量
         let initial_volume = if fade_in.is_some() {
@@ -330,7 +320,7 @@ impl AudioManager {
         let logical_path = normalize_logical_path(path);
 
         // 根据模式加载音频
-        let source: Box<dyn Source<Item = i16> + Send> = if self.use_zip_mode {
+        let source: Box<dyn Source + Send> = if self.use_zip_mode {
             // ZIP 模式：从缓存读取字节
             let bytes = match self.audio_cache.get(&logical_path) {
                 Some(b) => b.clone(),
@@ -345,7 +335,7 @@ impl AudioManager {
 
             let cursor = Cursor::new(bytes);
             match Decoder::new(cursor) {
-                Ok(s) => Box::new(s.convert_samples::<i16>()),
+                Ok(s) => Box::new(s),
                 Err(e) => {
                     error!(path = %logical_path, error = %e, "无法解码音效");
                     return;
@@ -364,7 +354,7 @@ impl AudioManager {
             };
 
             match Decoder::new(BufReader::new(file)) {
-                Ok(s) => Box::new(s.convert_samples::<i16>()),
+                Ok(s) => Box::new(s),
                 Err(e) => {
                     error!(path = %full_path.display(), error = %e, "无法解码音效文件");
                     return;
@@ -372,13 +362,12 @@ impl AudioManager {
             }
         };
 
-        // 创建一次性播放器
-        if let Ok(sink) = Sink::try_new(&self.stream_handle) {
-            sink.set_volume(self.sfx_volume);
-            sink.append(source);
-            sink.detach(); // 分离后自动播放完毕
-            debug!(path = %logical_path, "播放音效");
-        }
+        // 创建一次性播放器并分离，避免函数返回时停止播放
+        let sink = Player::connect_new(self.device_sink.mixer());
+        sink.set_volume(self.sfx_volume);
+        sink.append(source);
+        sink.detach(); // 分离后自动播放完毕
+        debug!(path = %logical_path, "播放音效");
     }
 
     /// 更新音频状态（每帧调用）

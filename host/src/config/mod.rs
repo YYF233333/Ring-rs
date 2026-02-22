@@ -114,8 +114,7 @@ pub struct DebugConfig {
     /// 允许值（不区分大小写）：
     /// - `trace` / `debug` / `info` / `warn` / `error` / `off`
     ///
-    /// 优先级：
-    /// - `RUST_LOG` 环境变量（最高）
+    /// 来源：
     /// - `config.json` 的 `debug.log_level`
     /// - 默认 `info`
     #[serde(default)]
