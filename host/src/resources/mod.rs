@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn test_image_crate_can_decode_webp() {
         use image::codecs::webp::WebPEncoder;
-        use image::{ExtendedColorType, ImageEncoder};
+        use image::{ColorType, ImageEncoder};
 
         let width = 2u32;
         let height = 2u32;
@@ -437,7 +437,7 @@ mod tests {
             // lossless 编码，避免有损压缩带来的像素差异
             let encoder = WebPEncoder::new_lossless(&mut webp_bytes);
             encoder
-                .write_image(&rgba, width, height, ExtendedColorType::Rgba8)
+                .write_image(&rgba, width, height, ColorType::Rgba8)
                 .expect("encode webp");
         }
 
