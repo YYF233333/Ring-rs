@@ -513,9 +513,11 @@ def _remove_cfg_test_mod_tests(text: str) -> str:
     return new_text
 
 
-def _count_effective_loc(text: str) -> int:
-    text = _remove_cfg_test_mod_tests(text)
-    text = _strip_comments_preserve_newlines(text)
+def _count_effective_loc(text: str, include_inline_test: bool, include_comments: bool) -> int:
+    if not include_inline_test:
+        text = _remove_cfg_test_mod_tests(text)
+    if not include_comments:
+        text = _strip_comments_preserve_newlines(text)
     return sum(1 for line in text.splitlines() if line.strip())
 
 
@@ -530,6 +532,8 @@ def main(argv: list[str]) -> int:
         default=[],
         help="Extra directory name to exclude (can be repeated)",
     )
+    parser.add_argument("--include-inline-test", action="store_true", help="Include inline test code")
+    parser.add_argument("--include-comments", action="store_true", help="Include comments")
     parser.add_argument("--verbose", action="store_true", help="Print per-file LOC breakdown")
     args = parser.parse_args(argv)
 
@@ -544,7 +548,7 @@ def main(argv: list[str]) -> int:
             raw = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             raw = path.read_text(encoding="utf-8", errors="replace")
-        counts.append(FileCount(path=path, loc=_count_effective_loc(raw)))
+        counts.append(FileCount(path=path, loc=_count_effective_loc(raw, args.include_inline_test, args.include_comments)))
 
     total = sum(c.loc for c in counts)
 
