@@ -2,6 +2,18 @@ use super::*;
 use crate::command::{Position, Transition, TransitionArg};
 use crate::script::ChoiceOption;
 
+fn test_ctx(script_root: &str) -> (Executor, RuntimeState, Script) {
+    (
+        Executor::new(),
+        RuntimeState::new("test"),
+        Script::new("test", vec![], script_root),
+    )
+}
+
+fn test_env() -> (Executor, RuntimeState) {
+    (Executor::new(), RuntimeState::new("test"))
+}
+
 #[test]
 fn test_executor_default() {
     let _ = Executor::default();
@@ -9,9 +21,7 @@ fn test_executor_default() {
 
 #[test]
 fn test_execute_dialogue() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::Dialogue {
         speaker: Some("Test".to_string()),
@@ -31,9 +41,7 @@ fn test_execute_dialogue() {
 
 #[test]
 fn test_execute_show_character() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::ShowCharacter {
         path: Some("char.png".to_string()),
@@ -53,9 +61,7 @@ fn test_execute_show_character() {
 
 #[test]
 fn test_execute_show_character_without_path_uses_existing_binding() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     state.visible_characters.insert(
         "alice".to_string(),
@@ -84,9 +90,7 @@ fn test_execute_show_character_without_path_uses_existing_binding() {
 
 #[test]
 fn test_execute_show_character_without_path_errors_when_not_bound() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::ShowCharacter {
         path: None,
@@ -101,9 +105,7 @@ fn test_execute_show_character_without_path_errors_when_not_bound() {
 
 #[test]
 fn test_execute_hide_character_updates_state() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     state.visible_characters.insert(
         "alice".to_string(),
@@ -125,9 +127,7 @@ fn test_execute_hide_character_updates_state() {
 
 #[test]
 fn test_execute_choice() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::Choice {
         style: Some("横排".to_string()),
@@ -158,9 +158,7 @@ fn test_execute_choice() {
 
 #[test]
 fn test_execute_label_no_command() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::Label {
         name: "test".to_string(),
@@ -174,8 +172,7 @@ fn test_execute_label_no_command() {
 
 #[test]
 fn test_execute_goto() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
+    let (mut executor, mut state) = test_env();
     let script = Script::new(
         "test",
         vec![
@@ -206,9 +203,7 @@ fn test_execute_goto() {
 
 #[test]
 fn test_execute_goto_label_not_found() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::Goto {
         target_label: "missing".to_string(),
@@ -223,9 +218,7 @@ fn test_execute_goto_label_not_found() {
 
 #[test]
 fn test_execute_chapter_mark() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::Chapter {
         title: "第一章".to_string(),
@@ -241,9 +234,7 @@ fn test_execute_chapter_mark() {
 
 #[test]
 fn test_execute_change_scene_resolves_mask_path() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "scripts");
+    let (mut executor, mut state, script) = test_ctx("scripts");
 
     let transition = Transition::with_named_args(
         "rule",
@@ -304,9 +295,7 @@ fn test_execute_change_scene_resolves_mask_path() {
 
 #[test]
 fn test_execute_play_bgm() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "scripts");
+    let (mut executor, mut state, script) = test_ctx("scripts");
 
     // BGM: 有 loop 标识
     let node = ScriptNode::PlayAudio {
@@ -326,9 +315,7 @@ fn test_execute_play_bgm() {
 
 #[test]
 fn test_execute_play_sfx() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "scripts");
+    let (mut executor, mut state, script) = test_ctx("scripts");
 
     // SFX: 无 loop 标识
     let node = ScriptNode::PlayAudio {
@@ -348,9 +335,7 @@ fn test_execute_play_sfx() {
 
 #[test]
 fn test_execute_stop_bgm() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::StopBgm;
 
@@ -365,9 +350,7 @@ fn test_execute_stop_bgm() {
 
 #[test]
 fn test_path_resolution() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "assets/scripts");
+    let (mut executor, mut state, script) = test_ctx("assets/scripts");
 
     let node = ScriptNode::ChangeBG {
         path: "../backgrounds/bg.jpg".to_string(),
@@ -392,9 +375,7 @@ fn test_execute_set_var_string() {
     use crate::script::Expr;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::SetVar {
         name: "name".to_string(),
@@ -419,9 +400,7 @@ fn test_execute_set_var_bool() {
     use crate::script::Expr;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::SetVar {
         name: "flag".to_string(),
@@ -437,8 +416,7 @@ fn test_execute_set_var_from_expression() {
     use crate::script::Expr;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
+    let (mut executor, mut state) = test_env();
     state.set_var("a", VarValue::Bool(true));
     state.set_var("b", VarValue::Bool(false));
 
@@ -458,9 +436,7 @@ fn test_execute_set_var_from_expression() {
 fn test_execute_set_var_undefined_variable_error() {
     use crate::script::Expr;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     let node = ScriptNode::SetVar {
         name: "result".to_string(),
@@ -484,8 +460,7 @@ fn test_execute_conditional_true_branch() {
     use crate::script::ast::ConditionalBranch;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
+    let (mut executor, mut state) = test_env();
     state.set_var("flag", VarValue::Bool(true));
 
     let script = Script::new("test", vec![], "");
@@ -517,8 +492,7 @@ fn test_execute_conditional_false_branch() {
     use crate::script::ast::ConditionalBranch;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
+    let (mut executor, mut state) = test_env();
     state.set_var("flag", VarValue::Bool(false));
 
     let script = Script::new("test", vec![], "");
@@ -546,8 +520,7 @@ fn test_execute_conditional_else_branch() {
     use crate::script::ast::ConditionalBranch;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
+    let (mut executor, mut state) = test_env();
     state.set_var("flag", VarValue::Bool(false));
 
     let script = Script::new("test", vec![], "");
@@ -587,8 +560,7 @@ fn test_execute_conditional_elseif() {
     use crate::script::ast::ConditionalBranch;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
+    let (mut executor, mut state) = test_env();
     state.set_var("role", VarValue::String("user".to_string()));
 
     let script = Script::new("test", vec![], "");
@@ -635,8 +607,7 @@ fn test_execute_conditional_with_multiple_body_nodes() {
     use crate::script::ast::ConditionalBranch;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
+    let (mut executor, mut state) = test_env();
     state.set_var("flag", VarValue::Bool(true));
 
     let script = Script::new("test", vec![], "");
@@ -676,13 +647,9 @@ fn test_execute_conditional_with_multiple_body_nodes() {
 
 #[test]
 fn test_execute_textbox_hide() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
-
+    let (mut executor, mut state, script) = test_ctx("");
     let node = ScriptNode::TextBoxHide;
     let result = executor.execute(&node, &mut state, &script).unwrap();
-
     assert_eq!(result.commands.len(), 1);
     assert!(matches!(result.commands[0], Command::TextBoxHide));
     assert!(result.waiting.is_none());
@@ -690,13 +657,9 @@ fn test_execute_textbox_hide() {
 
 #[test]
 fn test_execute_textbox_show() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
-
+    let (mut executor, mut state, script) = test_ctx("");
     let node = ScriptNode::TextBoxShow;
     let result = executor.execute(&node, &mut state, &script).unwrap();
-
     assert_eq!(result.commands.len(), 1);
     assert!(matches!(result.commands[0], Command::TextBoxShow));
     assert!(result.waiting.is_none());
@@ -704,13 +667,9 @@ fn test_execute_textbox_show() {
 
 #[test]
 fn test_execute_textbox_clear() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
-
+    let (mut executor, mut state, script) = test_ctx("");
     let node = ScriptNode::TextBoxClear;
     let result = executor.execute(&node, &mut state, &script).unwrap();
-
     assert_eq!(result.commands.len(), 1);
     assert!(matches!(result.commands[0], Command::TextBoxClear));
     assert!(result.waiting.is_none());
@@ -718,9 +677,7 @@ fn test_execute_textbox_clear() {
 
 #[test]
 fn test_execute_clear_characters() {
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
-    let script = Script::new("test", vec![], "");
+    let (mut executor, mut state, script) = test_ctx("");
 
     // 先添加一些角色
     state.visible_characters.insert(
@@ -748,8 +705,7 @@ fn test_execute_conditional_with_goto() {
     use crate::script::ast::ConditionalBranch;
     use crate::state::VarValue;
 
-    let mut executor = Executor::new();
-    let mut state = RuntimeState::new("test");
+    let (mut executor, mut state) = test_env();
     state.set_var("flag", VarValue::Bool(true));
 
     let script = Script::new(

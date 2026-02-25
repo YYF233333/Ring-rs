@@ -1,10 +1,24 @@
 //! # Parser 测试
-//!
-//! 从原 parser.rs 迁移的完整测试套件。
 
 use super::*;
 use crate::command::{Position, TransitionArg};
 use crate::script::ast::ScriptNode;
+
+fn parse_ok(input: &str) -> crate::script::ast::Script {
+    let mut parser = Parser::new();
+    parser.parse("test", input).unwrap()
+}
+
+fn parse_single_node(input: &str) -> ScriptNode {
+    let script = parse_ok(input);
+    assert_eq!(script.nodes.len(), 1, "Expected exactly one node");
+    script.nodes.into_iter().next().unwrap()
+}
+
+fn parse_err(input: &str) -> crate::error::ParseError {
+    let mut parser = Parser::new();
+    parser.parse("test", input).unwrap_err()
+}
 
 // -------------------------------------------------------------------------
 // 辅助函数测试
@@ -192,36 +206,34 @@ fn test_parse_dialogue_function() {
 // Parser 集成测试
 // -------------------------------------------------------------------------
 
+/// 测试 chapter 解析：
+/// - `# Chapter 1` 生成 level=1 的 Chapter 节点
+/// - 超过 6 级标题（7 个 `#`）会被忽略
 #[test]
 fn test_parse_chapter() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "# Chapter 1").unwrap();
-
-    assert_eq!(script.len(), 1);
+    let node = parse_single_node("# Chapter 1");
     assert!(matches!(
-        &script.nodes[0],
+        node,
         ScriptNode::Chapter { title, level: 1 } if title == "Chapter 1"
     ));
-}
 
-#[test]
-fn test_parse_chapter_invalid_is_ignored() {
-    let mut parser = Parser::new();
-    // 7 个 #（超过 6）应被忽略而不是报错
-    let script = parser.parse("test", "####### too deep").unwrap();
+    let script = parse_ok("####### too deep");
     assert_eq!(script.len(), 0);
 }
 
+/// 测试 label 解析：
+/// - 英文标签：`**start**`
+/// - 中文标签：`**选择支1**`
 #[test]
 fn test_parse_label() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "**start**").unwrap();
-
-    assert_eq!(script.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::Label { name } if name == "start"
-    ));
+    let cases = [("**start**", "start"), ("**选择支1**", "选择支1")];
+    for (input, expected) in cases {
+        let node = parse_single_node(input);
+        assert!(
+            matches!(node, ScriptNode::Label { name } if name == expected),
+            "input={input}"
+        );
+    }
 }
 
 #[test]
@@ -252,61 +264,148 @@ fn test_parse_dialogue() {
     ));
 }
 
-#[test]
-fn test_parse_change_bg() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            r#"changeBG <img src="assets/bg.png" /> with dissolve"#,
-        )
-        .unwrap();
-
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ChangeBG { path, transition: Some(t) }
-        if path == "assets/bg.png" && t.name == "dissolve"
-    ));
-}
-
+/// 测试 show 指令：
+/// - 完整格式（含 path/alias/position/transition）
+/// - 简化格式（无 path）
+/// - 空格容错（标准/无空格/多空格）
+/// - 无过渡效果
+/// - 行内代码 effect
+/// - 相对路径
 #[test]
 fn test_parse_show_character() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            r#"show <img src="assets/char.png" /> as royu at center with Dissolve(1.5)"#,
-        )
-        .unwrap();
-
+    let node = parse_single_node(
+        r#"show <img src="assets/char.png" /> as royu at center with Dissolve(1.5)"#,
+    );
     assert!(matches!(
-        &script.nodes[0],
+        node,
         ScriptNode::ShowCharacter { path: Some(path), alias, position: Position::Center, transition: Some(t) }
         if path.as_str() == "assets/char.png" && alias == "royu" && t.name == "Dissolve"
     ));
-}
 
-#[test]
-fn test_parse_show_character_without_path() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", r#"show beifeng at left"#).unwrap();
-
+    let node = parse_single_node(r#"show beifeng at left"#);
     assert!(matches!(
-        &script.nodes[0],
+        node,
         ScriptNode::ShowCharacter { path: None, alias, position: Position::Left, transition: None }
         if alias == "beifeng"
     ));
+
+    let whitespace_cases = [
+        r#"show <img src="assets/bg2.jpg" /> as 红叶 at left"#,
+        r#"show<img src="assets/bg2.jpg" />as 红叶 at left"#,
+        r#"show   <img src="assets/bg2.jpg" />   as 红叶 at left"#,
+    ];
+    for input in whitespace_cases {
+        let node = parse_single_node(input);
+        assert!(
+            matches!(
+                node,
+                ScriptNode::ShowCharacter { alias, position: Position::Left, .. } if alias == "红叶"
+            ),
+            "input={input}"
+        );
+    }
+
+    let node = parse_single_node(r#"show <img src="assets/bg2.jpg" /> as 红叶 at left"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ShowCharacter { alias, path: Some(path), position: Position::Left, transition: None }
+        if alias == "红叶" && path.as_str() == "assets/bg2.jpg"
+    ));
+
+    let node = parse_single_node(
+        r#"show <img src="assets/bg2.jpg" /> as 红叶 at left with `Dissolve(2.0, 0.5)`"#,
+    );
+    if let ScriptNode::ShowCharacter {
+        transition: Some(t),
+        ..
+    } = node
+    {
+        assert!(t.name.contains("Dissolve") || t.name == "`Dissolve(2.0, 0.5)`");
+    } else {
+        panic!("Expected ShowCharacter with transition");
+    }
+
+    let node =
+        parse_single_node(r#"show <img src="../characters/北风.png" /> as beifeng at center"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ShowCharacter { path: Some(path), alias, .. }
+        if path.as_str() == "../characters/北风.png" && alias == "beifeng"
+    ));
 }
 
+/// 测试 hide 指令：
+/// - 带过渡效果（with fade）
+/// - 不带过渡效果
 #[test]
 fn test_parse_hide_character() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "hide royu with fade").unwrap();
-
+    let node = parse_single_node("hide royu with fade");
     assert!(matches!(
-        &script.nodes[0],
+        node,
         ScriptNode::HideCharacter { alias, transition: Some(t) }
         if alias == "royu" && t.name == "fade"
+    ));
+
+    let node = parse_single_node("hide 红叶");
+    assert!(matches!(
+        node,
+        ScriptNode::HideCharacter { alias, transition: None } if alias == "红叶"
+    ));
+}
+
+/// 测试 changeBG 指令：
+/// - 标准解析（with dissolve）
+/// - 不带过渡效果
+/// - 空格容错（无空格/多空格）
+/// - 行内代码 effect
+/// - 相对路径
+#[test]
+fn test_parse_change_bg() {
+    let node = parse_single_node(r#"changeBG <img src="assets/bg.png" /> with dissolve"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ChangeBG { path, transition: Some(t) }
+        if path == "assets/bg.png" && t.name == "dissolve"
+    ));
+
+    let node = parse_single_node(r#"changeBG <img src="assets/bg2.jpg" />"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ChangeBG { path, transition: None } if path == "assets/bg2.jpg"
+    ));
+
+    let whitespace_cases = [
+        r#"changeBG<img src="assets/bg2.jpg" />with dissolve"#,
+        r#"changeBG   <img src="assets/bg2.jpg" />   with dissolve"#,
+    ];
+    for input in whitespace_cases {
+        let node = parse_single_node(input);
+        assert!(
+            matches!(
+                node,
+                ScriptNode::ChangeBG { path, transition: Some(t) }
+                if path == "assets/bg2.jpg" && t.name == "dissolve"
+            ),
+            "input={input}"
+        );
+    }
+
+    let node =
+        parse_single_node(r#"changeBG <img src="assets/bg2.jpg" /> with `Dissolve(2.0, 0.5)`"#);
+    if let ScriptNode::ChangeBG {
+        transition: Some(t),
+        ..
+    } = node
+    {
+        assert!(!t.name.is_empty());
+    } else {
+        panic!("Expected ChangeBG with transition");
+    }
+
+    let node = parse_single_node(r#"changeBG <img src="../backgrounds/bg.jpg" /> with `dissolve`"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ChangeBG { path, .. } if path == "../backgrounds/bg.jpg"
     ));
 }
 
@@ -443,172 +542,6 @@ fn test_parse_dialogue_special_chars() {
     assert_eq!(content, "台词 abab;:.");
 }
 
-/// 测试 show 指令：无空格、有空格、多空格
-#[test]
-fn test_parse_show_whitespace_tolerance() {
-    let mut parser = Parser::new();
-
-    // 标准格式
-    let script = parser
-        .parse(
-            "test",
-            r#"show <img src="assets/bg2.jpg" /> as 红叶 at left"#,
-        )
-        .unwrap();
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ShowCharacter { alias, position: Position::Left, .. }
-        if alias == "红叶"
-    ));
-
-    // 无空格格式
-    let script = parser
-        .parse("test", r#"show<img src="assets/bg2.jpg" />as 红叶 at left"#)
-        .unwrap();
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ShowCharacter { alias, position: Position::Left, .. }
-        if alias == "红叶"
-    ));
-
-    // 多空格格式
-    let script = parser
-        .parse(
-            "test",
-            r#"show   <img src="assets/bg2.jpg" />   as 红叶 at left"#,
-        )
-        .unwrap();
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ShowCharacter { alias, position: Position::Left, .. }
-        if alias == "红叶"
-    ));
-}
-
-/// 测试 show 指令：无过渡效果
-#[test]
-fn test_parse_show_without_effect() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            r#"show <img src="assets/bg2.jpg" /> as 红叶 at left"#,
-        )
-        .unwrap();
-
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ShowCharacter { alias, path: Some(path), position: Position::Left, transition: None }
-        if alias == "红叶" && path.as_str() == "assets/bg2.jpg"
-    ));
-}
-
-/// 测试 show 指令：带行内代码格式的 effect
-#[test]
-fn test_parse_show_with_inline_code_effect() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            r#"show <img src="assets/bg2.jpg" /> as 红叶 at left with `Dissolve(2.0, 0.5)`"#,
-        )
-        .unwrap();
-
-    if let ScriptNode::ShowCharacter {
-        transition: Some(t),
-        ..
-    } = &script.nodes[0]
-    {
-        // 行内代码格式的 effect 应该被解析（去掉反引号）
-        assert!(t.name.contains("Dissolve") || t.name == "`Dissolve(2.0, 0.5)`");
-    } else {
-        panic!("Expected ShowCharacter with transition");
-    }
-}
-
-/// 测试 hide 指令：无过渡效果
-#[test]
-fn test_parse_hide_without_effect() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "hide 红叶").unwrap();
-
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::HideCharacter { alias, transition: None }
-        if alias == "红叶"
-    ));
-}
-
-/// 测试 changeBG 指令：无过渡效果
-#[test]
-fn test_parse_change_bg_without_effect() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse("test", r#"changeBG <img src="assets/bg2.jpg" />"#)
-        .unwrap();
-
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ChangeBG { path, transition: None }
-        if path == "assets/bg2.jpg"
-    ));
-}
-
-/// 测试 changeBG 指令：空格容错
-#[test]
-fn test_parse_change_bg_whitespace_tolerance() {
-    let mut parser = Parser::new();
-
-    // 无空格
-    let script = parser
-        .parse(
-            "test",
-            r#"changeBG<img src="assets/bg2.jpg" />with dissolve"#,
-        )
-        .unwrap();
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ChangeBG { path, transition: Some(t) }
-        if path == "assets/bg2.jpg" && t.name == "dissolve"
-    ));
-
-    // 多空格
-    let script = parser
-        .parse(
-            "test",
-            r#"changeBG   <img src="assets/bg2.jpg" />   with dissolve"#,
-        )
-        .unwrap();
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ChangeBG { path, transition: Some(t) }
-        if path == "assets/bg2.jpg" && t.name == "dissolve"
-    ));
-}
-
-/// 测试 changeBG 指令：行内代码格式的 effect
-#[test]
-fn test_parse_change_bg_with_inline_code_effect() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            r#"changeBG <img src="assets/bg2.jpg" /> with `Dissolve(2.0, 0.5)`"#,
-        )
-        .unwrap();
-
-    if let ScriptNode::ChangeBG {
-        transition: Some(t),
-        ..
-    } = &script.nodes[0]
-    {
-        // 行内代码格式应该被解析
-        assert!(!t.name.is_empty());
-    } else {
-        panic!("Expected ChangeBG with transition");
-    }
-}
-
 /// 测试选择分支：竖排样式
 #[test]
 fn test_parse_branch_vertical() {
@@ -633,18 +566,6 @@ fn test_parse_branch_vertical() {
     } else {
         panic!("Expected Choice node");
     }
-}
-
-/// 测试标签解析：中文标签名
-#[test]
-fn test_parse_label_chinese() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "**选择支1**").unwrap();
-
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::Label { name } if name == "选择支1"
-    ));
 }
 
 /// 测试 img 标签解析：带 style 和 alt 属性
@@ -723,135 +644,75 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
 // goto 语法测试
 //=========================================================================
 
-/// 测试 goto 指令：基本语法
+/// 测试 goto 指令：
+/// - `goto **start**` 基本语法
+/// - `goto **选择支1**` 中文标签
+/// - `goto  **end_scene**` 多空格兼容
 #[test]
-fn test_parse_goto_basic() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "goto **start**").unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::Goto { target_label } if target_label == "start"
-    ));
-}
+fn test_parse_goto() {
+    let cases = [
+        ("goto **start**", "start"),
+        ("goto **选择支1**", "选择支1"),
+        ("goto  **end_scene**", "end_scene"),
+    ];
 
-/// 测试 goto 指令：中文标签
-#[test]
-fn test_parse_goto_chinese_label() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "goto **选择支1**").unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::Goto { target_label } if target_label == "选择支1"
-    ));
-}
-
-/// 测试 goto 指令：带空格
-#[test]
-fn test_parse_goto_with_spaces() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "goto  **end_scene**").unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::Goto { target_label } if target_label == "end_scene"
-    ));
+    for (input, expected) in cases {
+        let node = parse_single_node(input);
+        assert!(
+            matches!(node, ScriptNode::Goto { target_label } if target_label == expected),
+            "input={input}"
+        );
+    }
 }
 
 //=========================================================================
 // audio 语法测试
 //=========================================================================
 
-/// 测试 audio 指令：SFX（无 loop）
+/// 测试 audio/stopBGM 指令：
+/// - audio SFX（无 loop）
+/// - audio BGM（含 loop）
+/// - audio 相对路径
+/// - stopBGM
 #[test]
-fn test_parse_audio_sfx() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse("test", r#"<audio src="sfx/ding.mp3"></audio>"#)
-        .unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::PlayAudio { path, is_bgm } if path == "sfx/ding.mp3" && !is_bgm
-    ));
-}
+fn test_parse_audio_commands() {
+    let play_audio_cases = [
+        (
+            r#"<audio src="sfx/ding.mp3"></audio>"#,
+            "sfx/ding.mp3",
+            false,
+        ),
+        (
+            r#"<audio src="bgm/Signal.mp3"></audio> loop"#,
+            "bgm/Signal.mp3",
+            true,
+        ),
+        (
+            r#"<audio src="../bgm/music.mp3"></audio> loop"#,
+            "../bgm/music.mp3",
+            true,
+        ),
+    ];
 
-/// 测试 audio 指令：BGM（带 loop）
-#[test]
-fn test_parse_audio_bgm() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse("test", r#"<audio src="bgm/Signal.mp3"></audio> loop"#)
-        .unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::PlayAudio { path, is_bgm } if path == "bgm/Signal.mp3" && *is_bgm
-    ));
-}
+    for (input, expected_path, expected_is_bgm) in play_audio_cases {
+        let node = parse_single_node(input);
+        assert!(
+            matches!(
+                node,
+                ScriptNode::PlayAudio { path, is_bgm }
+                    if path == expected_path && is_bgm == expected_is_bgm
+            ),
+            "input={input}"
+        );
+    }
 
-/// 测试 audio 指令：相对路径
-#[test]
-fn test_parse_audio_relative_path() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse("test", r#"<audio src="../bgm/music.mp3"></audio> loop"#)
-        .unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::PlayAudio { path, is_bgm } if path == "../bgm/music.mp3" && *is_bgm
-    ));
-}
-
-/// 测试 stopBGM 指令
-#[test]
-fn test_parse_stop_bgm() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "stopBGM").unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(&script.nodes[0], ScriptNode::StopBgm));
+    let stop_node = parse_single_node("stopBGM");
+    assert!(matches!(stop_node, ScriptNode::StopBgm));
 }
 
 //=========================================================================
 // 相对路径测试
 //=========================================================================
-
-/// 测试 changeBG 相对路径
-#[test]
-fn test_parse_change_bg_relative_path() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            r#"changeBG <img src="../backgrounds/bg.jpg" /> with `dissolve`"#,
-        )
-        .unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ChangeBG { path, .. } if path == "../backgrounds/bg.jpg"
-    ));
-}
-
-/// 测试 show 相对路径
-#[test]
-fn test_parse_show_relative_path() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            r#"show <img src="../characters/北风.png" /> as beifeng at center"#,
-        )
-        .unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ShowCharacter { path: Some(path), alias, .. }
-        if path.as_str() == "../characters/北风.png" && alias == "beifeng"
-    ));
-}
 
 //=========================================================================
 // 综合测试：包含 goto 和 audio 的完整脚本
@@ -916,192 +777,134 @@ stopBGM
 // changeScene / changeBG 职责分离测试
 //=========================================================================
 
-/// 测试 changeBG 不允许 fade 效果
+/// 测试 changeBG 过渡策略：
+/// - 允许：`dissolve`、`Dissolve(1.5)`
+/// - 禁止：`fade`、`fadewhite`、`rule`
 #[test]
-fn test_parse_change_bg_fade_deprecated() {
-    let mut parser = Parser::new();
-    let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with fade"#);
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert!(format!("{:?}", err).contains("fade") || format!("{:?}", err).contains("Fade"));
-}
-
-/// 测试 changeBG 不允许 fadewhite 效果
-#[test]
-fn test_parse_change_bg_fadewhite_deprecated() {
-    let mut parser = Parser::new();
-    let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with fadewhite"#);
-    assert!(result.is_err());
-}
-
-/// 测试 changeBG 不允许其他非 dissolve 效果
-#[test]
-fn test_parse_change_bg_only_dissolve() {
-    let mut parser = Parser::new();
-
-    // dissolve 允许
-    let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with dissolve"#);
-    assert!(result.is_ok());
-
-    // Dissolve(duration) 允许
-    let result = parser.parse(
-        "test",
+fn test_parse_change_bg_transition_policy() {
+    let ok_cases = [
+        r#"changeBG <img src="bg.jpg" /> with dissolve"#,
         r#"changeBG <img src="bg.jpg" /> with Dissolve(1.5)"#,
-    );
-    assert!(result.is_ok());
+    ];
+    for input in ok_cases {
+        let script = parse_ok(input);
+        assert_eq!(script.nodes.len(), 1, "input={input}");
+    }
 
-    // 其他效果不允许
-    let result = parser.parse("test", r#"changeBG <img src="bg.jpg" /> with rule"#);
-    assert!(result.is_err());
+    let err_cases = [
+        (r#"changeBG <img src="bg.jpg" /> with fade"#, true),
+        (r#"changeBG <img src="bg.jpg" /> with fadewhite"#, false),
+        (r#"changeBG <img src="bg.jpg" /> with rule"#, false),
+    ];
+    for (input, check_fade_hint) in err_cases {
+        let err = parse_err(input);
+        if check_fade_hint {
+            let err_text = format!("{err:?}");
+            assert!(err_text.contains("fade") || err_text.contains("Fade"));
+        }
+    }
 }
 
-/// 测试 changeScene 必须带 with 子句
+/// 测试 changeScene 标准过渡：
+/// - `Dissolve(duration: 1)`
+/// - `Fade(duration: 1.5)`
+/// - `FadeWhite(duration: 2)`
 #[test]
-fn test_parse_change_scene_requires_with() {
-    let mut parser = Parser::new();
-    let result = parser.parse("test", r#"changeScene <img src="bg.jpg" />"#);
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert!(format!("{:?}", err).contains("with"));
-}
-
-/// 测试 changeScene with Dissolve
-#[test]
-fn test_parse_change_scene_dissolve() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
+fn test_parse_change_scene_standard_transitions() {
+    let ok_cases = [
+        (
             r#"changeScene <img src="bg.jpg" /> with Dissolve(duration: 1)"#,
-        )
-        .unwrap();
-
-    if let ScriptNode::ChangeScene {
-        path,
-        transition: Some(t),
-    } = &script.nodes[0]
-    {
-        assert_eq!(path, "bg.jpg");
-        assert_eq!(t.name, "Dissolve");
-        assert_eq!(t.get_duration(), Some(1.0));
-    } else {
-        panic!("Expected ChangeScene node");
-    }
-}
-
-/// 测试 changeScene with Fade
-#[test]
-fn test_parse_change_scene_fade() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
+            "Dissolve",
+            Some(1.0),
+        ),
+        (
             r#"changeScene <img src="bg.jpg" /> with Fade(duration: 1.5)"#,
-        )
-        .unwrap();
-
-    if let ScriptNode::ChangeScene {
-        path,
-        transition: Some(t),
-    } = &script.nodes[0]
-    {
-        assert_eq!(path, "bg.jpg");
-        assert_eq!(t.name, "Fade");
-        assert_eq!(t.get_duration(), Some(1.5));
-    } else {
-        panic!("Expected ChangeScene node");
-    }
-}
-
-/// 测试 changeScene with FadeWhite
-#[test]
-fn test_parse_change_scene_fade_white() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
+            "Fade",
+            Some(1.5),
+        ),
+        (
             r#"changeScene <img src="bg.jpg" /> with FadeWhite(duration: 2)"#,
-        )
-        .unwrap();
+            "FadeWhite",
+            Some(2.0),
+        ),
+    ];
 
-    if let ScriptNode::ChangeScene {
-        path,
-        transition: Some(t),
-    } = &script.nodes[0]
-    {
-        assert_eq!(path, "bg.jpg");
-        assert_eq!(t.name, "FadeWhite");
-        assert_eq!(t.get_duration(), Some(2.0));
-    } else {
-        panic!("Expected ChangeScene node");
+    for (input, expected_transition_name, expected_duration) in ok_cases {
+        let node = parse_single_node(input);
+        if let ScriptNode::ChangeScene {
+            path,
+            transition: Some(t),
+        } = node
+        {
+            assert_eq!(path, "bg.jpg", "input={input}");
+            assert_eq!(t.name, expected_transition_name, "input={input}");
+            assert_eq!(t.get_duration(), expected_duration, "input={input}");
+        } else {
+            panic!("Expected ChangeScene node for input={input}");
+        }
     }
 }
 
-/// 测试 changeScene with rule-based effect
+/// 测试 changeScene rule 过渡：
+/// - 带参数：`mask + duration + reversed`
+/// - 无参数：仅 `mask`
 #[test]
-fn test_parse_change_scene_rule() {
-    let mut parser = Parser::new();
-    let script = parser.parse(
-        "test",
-        r#"changeScene <img src="bg.jpg" /> with <img src="rule_10.png" /> (duration: 1, reversed: true)"#
-    ).unwrap();
-
-    if let ScriptNode::ChangeScene {
-        path,
-        transition: Some(t),
-    } = &script.nodes[0]
-    {
-        assert_eq!(path, "bg.jpg");
-        assert_eq!(t.name, "rule");
-        // 检查参数
-        assert_eq!(
-            t.get_named("mask"),
-            Some(&TransitionArg::String("rule_10.png".to_string()))
-        );
-        assert_eq!(t.get_duration(), Some(1.0));
-        assert_eq!(t.get_reversed(), Some(true));
-    } else {
-        panic!("Expected ChangeScene node");
-    }
-}
-
-/// 测试 changeScene with rule-based effect（无参数）
-#[test]
-fn test_parse_change_scene_rule_no_params() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
+fn test_parse_change_scene_rule_transition() {
+    let cases = [
+        (
+            r#"changeScene <img src="bg.jpg" /> with <img src="rule_10.png" /> (duration: 1, reversed: true)"#,
+            "rule_10.png",
+            Some(1.0),
+            Some(true),
+        ),
+        (
             r#"changeScene <img src="bg.jpg" /> with <img src="mask.png" />"#,
-        )
-        .unwrap();
+            "mask.png",
+            None,
+            None,
+        ),
+    ];
 
-    if let ScriptNode::ChangeScene {
-        path,
-        transition: Some(t),
-    } = &script.nodes[0]
-    {
-        assert_eq!(path, "bg.jpg");
-        assert_eq!(t.name, "rule");
-        assert_eq!(
-            t.get_named("mask"),
-            Some(&TransitionArg::String("mask.png".to_string()))
-        );
-    } else {
-        panic!("Expected ChangeScene node");
+    for (input, expected_mask, expected_duration, expected_reversed) in cases {
+        let node = parse_single_node(input);
+        if let ScriptNode::ChangeScene {
+            path,
+            transition: Some(t),
+        } = node
+        {
+            assert_eq!(path, "bg.jpg", "input={input}");
+            assert_eq!(t.name, "rule", "input={input}");
+            assert_eq!(
+                t.get_named("mask"),
+                Some(&TransitionArg::String(expected_mask.to_string())),
+                "input={input}"
+            );
+            assert_eq!(t.get_duration(), expected_duration, "input={input}");
+            assert_eq!(t.get_reversed(), expected_reversed, "input={input}");
+        } else {
+            panic!("Expected ChangeScene node for input={input}");
+        }
     }
 }
 
+/// 测试 changeScene 缺失 with 子句时报错：
+/// - `bg.jpg` 路径
+/// - `assets/bg.png` 路径
 #[test]
 fn test_parse_change_scene_requires_with_clause() {
-    let mut parser = Parser::new();
-    let err = parser
-        .parse("test", r#"changeScene <img src="assets/bg.png" />"#)
-        .unwrap_err();
-    assert!(matches!(
-        err,
-        crate::error::ParseError::MissingParameter { .. }
-    ));
+    let cases = [
+        r#"changeScene <img src="bg.jpg" />"#,
+        r#"changeScene <img src="assets/bg.png" />"#,
+    ];
+
+    for input in cases {
+        let err = parse_err(input);
+        assert!(
+            matches!(err, crate::error::ParseError::MissingParameter { .. }),
+            "input={input}"
+        );
+        assert!(format!("{err:?}").contains("with"), "input={input}");
+    }
 }
 
 #[test]
@@ -1243,131 +1046,122 @@ fn test_extract_transition_from_line_rule_without_src_and_with_invalid_args() {
 // set 指令测试
 //=========================================================================
 
+/// 测试 set 指令：
+/// - 正常分支：String/Bool(true)/Bool(false)/Int
+/// - 错误分支：缺少 `$`、缺少 `=`
 #[test]
-fn test_parse_set_var_string() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", r#"set $name = "Alice""#).unwrap();
-
-    assert_eq!(script.len(), 1);
-    if let ScriptNode::SetVar { name, value } = &script.nodes[0] {
-        assert_eq!(name, "name");
-        assert!(
-            matches!(value, crate::script::Expr::Literal(crate::state::VarValue::String(s)) if s == "Alice")
-        );
-    } else {
-        panic!("Expected SetVar node");
-    }
-}
-
-#[test]
-fn test_parse_set_var_bool() {
-    let mut parser = Parser::new();
-
-    let script = parser.parse("test", "set $is_active = true").unwrap();
-    if let ScriptNode::SetVar { name, value } = &script.nodes[0] {
-        assert_eq!(name, "is_active");
-        assert!(matches!(
-            value,
-            crate::script::Expr::Literal(crate::state::VarValue::Bool(true))
-        ));
-    } else {
-        panic!("Expected SetVar node");
+fn test_parse_set_var() {
+    enum ExpectedValue {
+        String(&'static str),
+        Bool(bool),
+        Int(i64),
     }
 
-    let script = parser.parse("test", "set $is_done = false").unwrap();
-    if let ScriptNode::SetVar { name, value } = &script.nodes[0] {
-        assert_eq!(name, "is_done");
-        assert!(matches!(
-            value,
-            crate::script::Expr::Literal(crate::state::VarValue::Bool(false))
-        ));
-    } else {
-        panic!("Expected SetVar node");
+    let ok_cases = [
+        (
+            r#"set $name = "Alice""#,
+            "name",
+            ExpectedValue::String("Alice"),
+        ),
+        (
+            "set $is_active = true",
+            "is_active",
+            ExpectedValue::Bool(true),
+        ),
+        (
+            "set $is_done = false",
+            "is_done",
+            ExpectedValue::Bool(false),
+        ),
+        ("set $count = 42", "count", ExpectedValue::Int(42)),
+    ];
+
+    for (input, expected_name, expected_value) in ok_cases {
+        let node = parse_single_node(input);
+        if let ScriptNode::SetVar { name, value } = node {
+            assert_eq!(name, expected_name, "input={input}");
+            match expected_value {
+                ExpectedValue::String(s) => {
+                    assert!(
+                        matches!(value, crate::script::Expr::Literal(crate::state::VarValue::String(actual)) if actual == s),
+                        "input={input}"
+                    );
+                }
+                ExpectedValue::Bool(b) => {
+                    assert!(
+                        matches!(value, crate::script::Expr::Literal(crate::state::VarValue::Bool(actual)) if actual == b),
+                        "input={input}"
+                    );
+                }
+                ExpectedValue::Int(i) => {
+                    assert!(
+                        matches!(value, crate::script::Expr::Literal(crate::state::VarValue::Int(actual)) if actual == i),
+                        "input={input}"
+                    );
+                }
+            }
+        } else {
+            panic!("Expected SetVar node for input={input}");
+        }
     }
-}
 
-#[test]
-fn test_parse_set_var_int() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "set $count = 42").unwrap();
+    let err_cases = [
+        ("set name = 123", "invalid-line"),
+        ("set $name 123", "missing-parameter"),
+    ];
 
-    if let ScriptNode::SetVar { name, value } = &script.nodes[0] {
-        assert_eq!(name, "count");
-        assert!(matches!(
-            value,
-            crate::script::Expr::Literal(crate::state::VarValue::Int(42))
-        ));
-    } else {
-        panic!("Expected SetVar node");
+    for (input, expected_kind) in err_cases {
+        let err = parse_err(input);
+        match expected_kind {
+            "invalid-line" => {
+                assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+            }
+            "missing-parameter" => {
+                assert!(matches!(
+                    err,
+                    crate::error::ParseError::MissingParameter { .. }
+                ));
+            }
+            _ => unreachable!(),
+        }
     }
-}
-
-#[test]
-fn test_parse_set_var_missing_dollar() {
-    let mut parser = Parser::new();
-    let err = parser.parse("test", "set name = 123").unwrap_err();
-    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
-}
-
-#[test]
-fn test_parse_set_var_missing_equals() {
-    let mut parser = Parser::new();
-    let err = parser.parse("test", "set $name 123").unwrap_err();
-    assert!(matches!(
-        err,
-        crate::error::ParseError::MissingParameter { .. }
-    ));
 }
 
 //=========================================================================
 // 条件分支测试
 //=========================================================================
 
+/// 测试条件分支解析：
+/// - `if ... endif`（单分支）
+/// - `if/else`
+/// - `if/elseif/else`
+/// - 复合逻辑条件（And）
+/// - 缺失 `endif` 报错
 #[test]
-fn test_parse_simple_if() {
-    let mut parser = Parser::new();
-    let text = r#"
+fn test_parse_conditionals() {
+    let ok_cases = [
+        (
+            r#"
 if $flag == true
   ："条件为真"
 endif
-"#;
-    let script = parser.parse("test", text).unwrap();
-
-    assert_eq!(script.len(), 1);
-    if let ScriptNode::Conditional { branches } = &script.nodes[0] {
-        assert_eq!(branches.len(), 1);
-        assert!(branches[0].condition.is_some());
-        assert_eq!(branches[0].body.len(), 1);
-    } else {
-        panic!("Expected Conditional node");
-    }
-}
-
-#[test]
-fn test_parse_if_else() {
-    let mut parser = Parser::new();
-    let text = r#"
+"#,
+            1usize,
+            false,
+        ),
+        (
+            r#"
 if $name == "Alice"
   ："你好，Alice"
 else
   ："你好，陌生人"
 endif
-"#;
-    let script = parser.parse("test", text).unwrap();
-
-    if let ScriptNode::Conditional { branches } = &script.nodes[0] {
-        assert_eq!(branches.len(), 2);
-        assert!(branches[0].condition.is_some()); // if 分支
-        assert!(branches[1].condition.is_none()); // else 分支
-    } else {
-        panic!("Expected Conditional node");
-    }
-}
-
-#[test]
-fn test_parse_if_elseif_else() {
-    let mut parser = Parser::new();
-    let text = r#"
+"#,
+            2usize,
+            false,
+        ),
+        (
+            r#"
 if $role == "admin"
   ："欢迎管理员"
 elseif $role == "user"
@@ -1375,173 +1169,154 @@ elseif $role == "user"
 else
   ："欢迎访客"
 endif
-"#;
-    let script = parser.parse("test", text).unwrap();
-
-    if let ScriptNode::Conditional { branches } = &script.nodes[0] {
-        assert_eq!(branches.len(), 3);
-        assert!(branches[0].condition.is_some()); // if
-        assert!(branches[1].condition.is_some()); // elseif
-        assert!(branches[2].condition.is_none()); // else
-    } else {
-        panic!("Expected Conditional node");
-    }
-}
-
-#[test]
-fn test_parse_if_with_logical_ops() {
-    let mut parser = Parser::new();
-    let text = r#"
+"#,
+            3usize,
+            false,
+        ),
+        (
+            r#"
 if $a == true and $b == false
   ："复合条件"
 endif
-"#;
-    let script = parser.parse("test", text).unwrap();
+"#,
+            1usize,
+            true,
+        ),
+    ];
 
-    if let ScriptNode::Conditional { branches } = &script.nodes[0] {
-        assert_eq!(branches.len(), 1);
-        // 条件应该是 And 表达式
-        if let Some(crate::script::Expr::And(_, _)) = &branches[0].condition {
-            // OK
+    for (input, expected_branches, expect_and_condition) in ok_cases {
+        let node = parse_single_node(input);
+        if let ScriptNode::Conditional { branches } = node {
+            assert_eq!(branches.len(), expected_branches, "input={input}");
+            if expected_branches >= 2 {
+                assert!(branches[0].condition.is_some(), "input={input}");
+                assert!(
+                    branches[expected_branches - 1].condition.is_none(),
+                    "input={input}"
+                );
+            } else {
+                assert!(branches[0].condition.is_some(), "input={input}");
+                assert_eq!(branches[0].body.len(), 1, "input={input}");
+            }
+
+            if expect_and_condition {
+                assert!(
+                    matches!(branches[0].condition, Some(crate::script::Expr::And(_, _))),
+                    "input={input}"
+                );
+            }
         } else {
-            panic!("Expected And expression");
+            panic!("Expected Conditional node for input={input}");
         }
-    } else {
-        panic!("Expected Conditional node");
     }
-}
 
-#[test]
-fn test_parse_if_missing_endif() {
-    let mut parser = Parser::new();
-    let text = r#"
+    let err = parse_err(
+        r#"
 if $flag == true
   ："没有 endif"
-"#;
-    // 未闭合的条件块会在 parse_conditional 阶段报错
-    let result = parser.parse("test", text);
-    assert!(result.is_err());
-    assert!(matches!(
-        result.unwrap_err(),
-        crate::error::ParseError::InvalidLine { .. }
-    ));
+"#,
+    );
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
 }
 
 //=========================================================================
 // 表达式解析测试
 //=========================================================================
 
+/// 测试表达式解析：
+/// - 比较：`==` / `!=`
+/// - 字面量：`true` / `false`
+/// - 逻辑：`not` / `and` / `or`
+/// - 括号表达式
+/// - 错误：空表达式、右括号缺失
 #[test]
-fn test_parse_expression_variable() {
-    let expr = parse_expression("$foo == \"bar\"", 1).unwrap();
-    assert!(matches!(expr, crate::script::Expr::Eq(_, _)));
-}
+fn test_parse_expression() {
+    let ok_cases = [
+        ("$foo == \"bar\"", "eq"),
+        ("true", "bool-true"),
+        ("false", "bool-false"),
+        ("not $flag", "not"),
+        ("$a == true and $b == false", "and"),
+        ("$a == true or $b == false", "or"),
+        ("($a == true)", "eq"),
+        ("($a == true) and ($b == false)", "and"),
+        ("$name != \"Bob\"", "not-eq"),
+    ];
+    for (input, expected_kind) in ok_cases {
+        let expr = parse_expression(input, 1).unwrap();
+        match expected_kind {
+            "eq" => assert!(
+                matches!(expr, crate::script::Expr::Eq(_, _)),
+                "input={input}"
+            ),
+            "bool-true" => assert!(
+                matches!(
+                    expr,
+                    crate::script::Expr::Literal(crate::state::VarValue::Bool(true))
+                ),
+                "input={input}"
+            ),
+            "bool-false" => assert!(
+                matches!(
+                    expr,
+                    crate::script::Expr::Literal(crate::state::VarValue::Bool(false))
+                ),
+                "input={input}"
+            ),
+            "not" => assert!(matches!(expr, crate::script::Expr::Not(_)), "input={input}"),
+            "and" => assert!(
+                matches!(expr, crate::script::Expr::And(_, _)),
+                "input={input}"
+            ),
+            "or" => assert!(
+                matches!(expr, crate::script::Expr::Or(_, _)),
+                "input={input}"
+            ),
+            "not-eq" => assert!(
+                matches!(expr, crate::script::Expr::NotEq(_, _)),
+                "input={input}"
+            ),
+            _ => unreachable!(),
+        }
+    }
 
-#[test]
-fn test_parse_expression_bool_literal() {
-    let expr = parse_expression("true", 1).unwrap();
-    assert!(matches!(
-        expr,
-        crate::script::Expr::Literal(crate::state::VarValue::Bool(true))
-    ));
-
-    let expr = parse_expression("false", 1).unwrap();
-    assert!(matches!(
-        expr,
-        crate::script::Expr::Literal(crate::state::VarValue::Bool(false))
-    ));
-}
-
-#[test]
-fn test_parse_expression_not() {
-    let expr = parse_expression("not $flag", 1).unwrap();
-    assert!(matches!(expr, crate::script::Expr::Not(_)));
-}
-
-#[test]
-fn test_parse_expression_and_or() {
-    let expr = parse_expression("$a == true and $b == false", 1).unwrap();
-    assert!(matches!(expr, crate::script::Expr::And(_, _)));
-
-    let expr = parse_expression("$a == true or $b == false", 1).unwrap();
-    assert!(matches!(expr, crate::script::Expr::Or(_, _)));
-}
-
-#[test]
-fn test_parse_expression_parentheses() {
-    let expr = parse_expression("($a == true)", 1).unwrap();
-    assert!(matches!(expr, crate::script::Expr::Eq(_, _)));
-
-    let expr = parse_expression("($a == true) and ($b == false)", 1).unwrap();
-    assert!(matches!(expr, crate::script::Expr::And(_, _)));
-}
-
-#[test]
-fn test_parse_expression_not_equal() {
-    let expr = parse_expression("$name != \"Bob\"", 1).unwrap();
-    assert!(matches!(expr, crate::script::Expr::NotEq(_, _)));
-}
-
-#[test]
-fn test_parse_expression_empty_error() {
-    let err = parse_expression("", 1).unwrap_err();
-    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
-}
-
-#[test]
-fn test_parse_expression_unclosed_paren() {
-    let err = parse_expression("($a == true", 1).unwrap_err();
-    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+    let err_cases = ["", "($a == true"];
+    for input in err_cases {
+        let err = parse_expression(input, 1).unwrap_err();
+        assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+    }
 }
 
 // =========================================================================
 // 阶段 24：TextBox / ClearCharacters 指令解析测试
 // =========================================================================
 
+/// 测试 TextBox/ClearCharacters 指令：
+/// - 单行命令：textBoxHide/textBoxShow/textBoxClear/clearCharacters
+/// - 大小写不敏感：TEXTBOXHIDE/TextBoxShow/textboxclear/CLEARCHARACTERS
 #[test]
-fn test_parse_textbox_hide() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "textBoxHide").unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(script.nodes[0], ScriptNode::TextBoxHide));
-}
+fn test_parse_textbox_commands() {
+    let single_line_cases = [
+        ("textBoxHide", ScriptNode::TextBoxHide),
+        ("textBoxShow", ScriptNode::TextBoxShow),
+        ("textBoxClear", ScriptNode::TextBoxClear),
+        ("clearCharacters", ScriptNode::ClearCharacters),
+    ];
 
-#[test]
-fn test_parse_textbox_show() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "textBoxShow").unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(script.nodes[0], ScriptNode::TextBoxShow));
-}
+    for (input, expected) in single_line_cases {
+        let node = parse_single_node(input);
+        assert_eq!(node, expected, "input={input}");
+    }
 
-#[test]
-fn test_parse_textbox_clear() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "textBoxClear").unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(script.nodes[0], ScriptNode::TextBoxClear));
-}
-
-#[test]
-fn test_parse_clear_characters() {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", "clearCharacters").unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(script.nodes[0], ScriptNode::ClearCharacters));
-}
-
-#[test]
-fn test_parse_textbox_commands_case_insensitive() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            "TEXTBOXHIDE\nTextBoxShow\ntextboxclear\nCLEARCHARACTERS",
-        )
-        .unwrap();
+    let script = parse_ok("TEXTBOXHIDE\nTextBoxShow\ntextboxclear\nCLEARCHARACTERS");
     assert_eq!(script.nodes.len(), 4);
-    assert!(matches!(script.nodes[0], ScriptNode::TextBoxHide));
-    assert!(matches!(script.nodes[1], ScriptNode::TextBoxShow));
-    assert!(matches!(script.nodes[2], ScriptNode::TextBoxClear));
-    assert!(matches!(script.nodes[3], ScriptNode::ClearCharacters));
+    let expected = [
+        ScriptNode::TextBoxHide,
+        ScriptNode::TextBoxShow,
+        ScriptNode::TextBoxClear,
+        ScriptNode::ClearCharacters,
+    ];
+    for (index, expected_node) in expected.into_iter().enumerate() {
+        assert_eq!(script.nodes[index], expected_node);
+    }
 }
