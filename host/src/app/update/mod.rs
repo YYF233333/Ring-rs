@@ -1,6 +1,5 @@
-//! 更新逻辑（聚合入口）
+//! 更新逻辑
 //!
-//! 目标：把之前的"巨型 update.rs"按职责拆分：
 //! - `modes`: 各 AppMode 的更新逻辑（Title/InGame/Menu/SaveLoad/Settings/History）
 //! - `script`: VNRuntime tick 与脚本输入处理
 //! - `scene_transition`: changeScene 相关的多阶段过渡驱动
