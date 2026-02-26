@@ -19,7 +19,7 @@ impl TestCtx {
         Self {
             executor: CommandExecutor::new(),
             state: RenderState::new(),
-            /// 创建测试用的 ResourceManager（不需要真实文件）
+            // 创建测试用的 ResourceManager（不需要真实文件）
             rm: ResourceManager::new("assets", 64),
         }
     }

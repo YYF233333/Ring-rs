@@ -13,4 +13,5 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 vn-runtime = { path = "../../vn-runtime" }
 walkdir = "2.5"
+xshell = "0.2"
 

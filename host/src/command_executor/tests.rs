@@ -289,7 +289,8 @@ fn test_execute_play_bgm() {
     assert_eq!(result, ExecuteResult::Ok);
     assert!(ctx.executor.last_output.audio_command.is_some());
 
-    if let Some(AudioCommand::PlayBgm { path, looping, .. }) = &ctx.executor.last_output.audio_command
+    if let Some(AudioCommand::PlayBgm { path, looping, .. }) =
+        &ctx.executor.last_output.audio_command
     {
         assert_eq!(path, "bgm/music.mp3");
         assert!(*looping);
@@ -357,7 +358,10 @@ fn test_execute_batch() {
     // 最后一个需要等待的结果
     assert_eq!(result, ExecuteResult::WaitForClick);
     assert!(ctx.render_state.dialogue.is_some());
-    assert_eq!(ctx.render_state.current_background, Some("bg.png".to_string()));
+    assert_eq!(
+        ctx.render_state.current_background,
+        Some("bg.png".to_string())
+    );
 }
 
 // ========== 阶段 25：效果矩阵测试 ==========

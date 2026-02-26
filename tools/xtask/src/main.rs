@@ -10,13 +10,15 @@
 //! - `script-check`: 检查脚本文件（语法、label、资源引用）
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 
+use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
 use vn_runtime::{
     DiagnosticResult, Parser as ScriptParser, analyze_script, extract_resource_references,
 };
 use walkdir::WalkDir;
+use xshell::Shell;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -73,29 +75,31 @@ struct ScriptCheckArgs {
     assets_root: PathBuf,
 }
 
-fn run(step: &str, cmd: &mut Command) -> anyhow::Result<()> {
+fn run(step: &str, sh: &Shell, program: &str, args: &[&str]) -> anyhow::Result<()> {
     eprintln!("\n==> {step}");
-    let status = cmd.status()?;
-    if !status.success() {
-        anyhow::bail!("{step} failed with {status}");
-    }
+    sh.cmd(program)
+        .args(args)
+        .run()
+        .with_context(|| format!("{step} failed"))?;
     Ok(())
 }
 
-fn ensure_cargo_llvm_cov_available() -> anyhow::Result<()> {
-    let mut cmd = Command::new("cargo");
-    cmd.args(["llvm-cov", "--version"]);
-    let status = cmd.status();
-    match status {
-        Ok(s) if s.success() => Ok(()),
-        _ => anyhow::bail!(
-            "cargo llvm-cov 不可用。\n\
+fn ensure_cargo_llvm_cov_available(sh: &Shell) -> anyhow::Result<()> {
+    if sh
+        .cmd("cargo")
+        .args(["llvm-cov", "--version"])
+        .run()
+        .is_ok()
+    {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "cargo llvm-cov 不可用。\n\
 请先安装：\n\
   - cargo install cargo-llvm-cov\n\
   - rustup component add llvm-tools-preview\n\
 然后重试。"
-        ),
-    }
+    )
 }
 
 fn main() -> ExitCode {
@@ -108,53 +112,61 @@ fn main() -> ExitCode {
 
 fn real_main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    let sh = Shell::new()?;
 
     match cli.command {
         XtaskCommand::CheckAll => {
-            let mut fmt = Command::new("cargo");
-            fmt.args(["fmt", "--all", "--", "--check"]);
-            run("cargo fmt --all -- --check", &mut fmt)?;
-
-            let mut clippy = Command::new("cargo");
-            clippy.args(["clippy", "--workspace", "--all-targets"]);
-            run("cargo clippy --workspace --all-targets", &mut clippy)?;
-
-            let mut test = Command::new("cargo");
-            test.args(["test", "--workspace"]);
-            run("cargo test --workspace", &mut test)?;
+            run(
+                "cargo fmt --all -- --check",
+                &sh,
+                "cargo",
+                &["fmt", "--all", "--", "--check"],
+            )?;
+            run(
+                "cargo clippy --workspace --all-targets",
+                &sh,
+                "cargo",
+                &["clippy", "--workspace", "--all-targets"],
+            )?;
+            run(
+                "cargo test --workspace",
+                &sh,
+                "cargo",
+                &["test", "--workspace"],
+            )?;
         }
         XtaskCommand::CovRuntime => {
-            ensure_cargo_llvm_cov_available()?;
+            ensure_cargo_llvm_cov_available(&sh)?;
 
-            let mut cov = Command::new("cargo");
-            cov.args(["llvm-cov", "-p", "vn-runtime", "--all-features", "--html"]);
             run(
                 "cargo llvm-cov -p vn-runtime --all-features --html",
-                &mut cov,
+                &sh,
+                "cargo",
+                &["llvm-cov", "-p", "vn-runtime", "--all-features", "--html"],
             )?;
 
             eprintln!("\nCoverage HTML: target/llvm-cov/html/index.html");
         }
         XtaskCommand::CovWorkspace => {
-            ensure_cargo_llvm_cov_available()?;
+            ensure_cargo_llvm_cov_available(&sh)?;
 
             // 说明：
             // - workspace 覆盖率不作为主目标，主要用于"趋势观察"
             // - 在口径上排除 tool crates（xtask/asset-packer）以免稀释信号
-            let mut cov = Command::new("cargo");
-            cov.args([
-                "llvm-cov",
-                "--workspace",
-                "--exclude",
-                "xtask",
-                "--exclude",
-                "asset-packer",
-                "--all-features",
-                "--html",
-            ]);
             run(
                 "cargo llvm-cov --workspace --exclude xtask --exclude asset-packer --all-features --html",
-                &mut cov,
+                &sh,
+                "cargo",
+                &[
+                    "llvm-cov",
+                    "--workspace",
+                    "--exclude",
+                    "xtask",
+                    "--exclude",
+                    "asset-packer",
+                    "--all-features",
+                    "--html",
+                ],
             )?;
 
             eprintln!("\nCoverage HTML: target/llvm-cov/html/index.html");
@@ -218,7 +230,11 @@ fn script_check(args: ScriptCheckArgs) -> anyhow::Result<()> {
     let files = match args.path {
         Some(p) => {
             if p.is_file() {
-                vec![p]
+                if is_markdown_file(&p) {
+                    vec![p]
+                } else {
+                    anyhow::bail!("仅支持 .md 脚本文件: {}", p.display());
+                }
             } else if p.is_dir() {
                 collect_script_files(&p)?
             } else {
@@ -271,7 +287,7 @@ fn collect_script_files(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for entry in WalkDir::new(dir).follow_links(false) {
         let entry = entry?;
-        if entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "md") {
+        if entry.file_type().is_file() && is_markdown_file(entry.path()) {
             files.push(entry.path().to_path_buf());
         }
     }
@@ -343,17 +359,23 @@ fn compute_base_path(file: &Path, assets_root: &Path) -> String {
     if let Ok(relative) = file.strip_prefix(assets_root)
         && let Some(parent) = relative.parent()
     {
-        return parent
-            .to_string_lossy()
-            .replace('\\', "/")
-            .trim_start_matches('/')
-            .to_string();
+        return normalize_path(parent.to_string_lossy().as_ref());
     }
 
     // 如果无法获取相对路径，使用文件所在目录
     file.parent()
-        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .map(|p| normalize_path(p.to_string_lossy().as_ref()))
         .unwrap_or_default()
+}
+
+fn normalize_path(path: &str) -> String {
+    path.replace('\\', "/").trim_start_matches('/').to_string()
+}
+
+fn is_markdown_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
 }
 
 /// 输出检查结果

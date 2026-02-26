@@ -23,14 +23,17 @@
 //! packer release --output-dir dist --zip
 //! ```
 
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use walkdir::WalkDir;
+use xshell::Shell;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
+
+const DEFAULT_GAME_NAME: &str = "Ring";
 
 #[derive(Parser)]
 #[command(name = "packer")]
@@ -87,80 +90,71 @@ enum Commands {
 }
 
 fn main() {
+    if let Err(e) = real_main() {
+        eprintln!("❌ {e}");
+        std::process::exit(1);
+    }
+}
+
+fn real_main() -> Result<()> {
     let cli = Cli::parse();
+    validate_level(cli.level)?;
 
     match cli.command {
         None => {
             // 默认行为：打包资源
-            if let Err(e) = pack_assets(&cli.input, &cli.output, cli.level) {
-                eprintln!("❌ 打包失败: {}", e);
-                std::process::exit(1);
-            }
+            pack_assets(&cli.input, &cli.output, cli.level)?;
         }
         Some(Commands::List { zip_file }) => {
-            if let Err(e) = list_zip(&zip_file) {
-                eprintln!("❌ 列出失败: {}", e);
-                std::process::exit(1);
-            }
+            list_zip(&zip_file)?;
         }
         Some(Commands::Verify { zip_file, input }) => {
-            if let Err(e) = verify_zip(&zip_file, input.as_deref()) {
-                eprintln!("❌ 验证失败: {}", e);
-                std::process::exit(1);
-            }
+            verify_zip(&zip_file, input.as_deref())?;
         }
         Some(Commands::Release { output_dir, zip }) => {
-            if let Err(e) = create_release(&cli.input, &cli.output, cli.level, &output_dir, zip) {
-                eprintln!("❌ 创建发行版失败: {}", e);
-                std::process::exit(1);
-            }
+            create_release(&cli.input, &cli.output, cli.level, &output_dir, zip)?;
         }
     }
+
+    Ok(())
+}
+
+fn validate_level(level: u32) -> Result<()> {
+    if level > 9 {
+        bail!("压缩级别必须在 0-9 范围内，当前: {level}");
+    }
+    Ok(())
+}
+
+fn run_cargo_command(step: &str, args: &[&str]) -> Result<()> {
+    let sh = Shell::new()?;
+    println!("{step}");
+    sh.cmd("cargo")
+        .args(args)
+        .run()
+        .with_context(|| format!("{step} 失败"))?;
+    Ok(())
 }
 
 /// 打包资源目录到 ZIP 文件
-fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<(), Box<dyn std::error::Error>> {
+fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<()> {
     println!("📦 打包资源目录: {:?} -> {:?}", input, output);
 
     if !input.exists() {
-        return Err(format!("输入目录不存在: {:?}", input).into());
+        bail!("输入目录不存在: {:?}", input);
     }
 
-    let file = File::create(output)?;
+    let file = File::create(output).with_context(|| format!("无法创建输出 ZIP: {:?}", output))?;
     let mut zip = ZipWriter::new(file);
 
     let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
         .compression_level(Some(level as i64));
 
-    let mut file_count = 0;
-    let mut total_size = 0u64;
+    let mut stats = ZipPackStats::default();
+    add_directory_to_zip(input, input, &mut zip, options, Some(&mut stats))?;
 
-    for entry in WalkDir::new(input).into_iter().filter_map(|e| e.ok()) {
-        let path = entry.path();
-
-        // 跳过目录
-        if path.is_dir() {
-            continue;
-        }
-
-        // 计算相对路径
-        let relative_path = path.strip_prefix(input)?;
-        let name = relative_path.to_string_lossy().replace('\\', "/");
-
-        // 读取文件内容
-        let mut file = File::open(path)?;
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer)?;
-
-        let size = buffer.len() as u64;
-        total_size += size;
-
-        // 添加到 ZIP
-        zip.start_file(&name, options)?;
-        zip.write_all(&buffer)?;
-
-        file_count += 1;
+    for (name, size) in &stats.packed_files {
         println!("  + {} ({} bytes)", name, size);
     }
 
@@ -168,8 +162,11 @@ fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<(), Box<dyn st
 
     println!();
     println!("✅ 打包完成！");
-    println!("   文件数: {}", file_count);
-    println!("   原始大小: {:.2} MB", total_size as f64 / 1024.0 / 1024.0);
+    println!("   文件数: {}", stats.file_count);
+    println!(
+        "   原始大小: {:.2} MB",
+        stats.total_size as f64 / 1024.0 / 1024.0
+    );
     println!("   输出文件: {:?}", output);
 
     // 显示压缩后大小
@@ -177,8 +174,8 @@ fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<(), Box<dyn st
         let compressed_size = metadata.len();
         // 压缩率 = 压缩后大小 / 原始大小 * 100%
         // 例如：原始 100MB，压缩后 50MB，压缩率 = 50%（表示压缩后是原始的 50%）
-        let ratio = if total_size > 0 {
-            compressed_size as f64 / total_size as f64 * 100.0
+        let ratio = if stats.total_size > 0 {
+            compressed_size as f64 / stats.total_size as f64 * 100.0
         } else {
             0.0
         };
@@ -193,11 +190,12 @@ fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<(), Box<dyn st
 }
 
 /// 列出 ZIP 内容
-fn list_zip(zip_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn list_zip(zip_path: &Path) -> Result<()> {
     println!("📋 ZIP 内容: {:?}", zip_path);
     println!();
 
-    let file = File::open(zip_path)?;
+    let file =
+        File::open(zip_path).with_context(|| format!("无法打开 ZIP 文件: {:?}", zip_path))?;
     let mut archive = ZipArchive::new(file)?;
 
     let mut total_size = 0u64;
@@ -235,10 +233,11 @@ fn list_zip(zip_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// 验证 ZIP 完整性
-fn verify_zip(zip_path: &Path, input: Option<&Path>) -> Result<(), Box<dyn std::error::Error>> {
+fn verify_zip(zip_path: &Path, input: Option<&Path>) -> Result<()> {
     println!("🔍 验证 ZIP: {:?}", zip_path);
 
-    let file = File::open(zip_path)?;
+    let file =
+        File::open(zip_path).with_context(|| format!("无法打开 ZIP 文件: {:?}", zip_path))?;
     let mut archive = ZipArchive::new(file)?;
 
     let mut errors = Vec::new();
@@ -279,7 +278,7 @@ fn verify_zip(zip_path: &Path, input: Option<&Path>) -> Result<(), Box<dyn std::
         for error in &errors {
             println!("   - {}", error);
         }
-        Err(format!("{} 个文件有问题", errors.len()).into())
+        bail!("{} 个文件有问题", errors.len())
     }
 }
 
@@ -290,7 +289,7 @@ fn create_release(
     compression_level: u32,
     release_dir: &Path,
     create_zip: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     println!("🚀 创建发行版...");
     println!();
 
@@ -299,7 +298,7 @@ fn create_release(
     let game_name = if config_path.exists() {
         get_game_name(&config_path)?
     } else {
-        "Ring".to_string()
+        DEFAULT_GAME_NAME.to_string()
     };
 
     // 1. 打包资源
@@ -309,13 +308,10 @@ fn create_release(
 
     // 2. 编译 release 版本的 host
     println!("🔨 步骤 2/4: 编译 release 版本的 host...");
-    let build_result = Command::new("cargo")
-        .args(["build", "--release", "--package", "host"])
-        .status()?;
-
-    if !build_result.success() {
-        return Err("编译 host 失败".into());
-    }
+    run_cargo_command(
+        "执行 cargo build --release --package host",
+        &["build", "--release", "--package", "host"],
+    )?;
 
     // 查找编译后的二进制文件
     let host_binary = if cfg!(target_os = "windows") {
@@ -325,7 +321,7 @@ fn create_release(
     };
 
     if !host_binary.exists() {
-        return Err(format!("找不到编译后的二进制文件: {:?}", host_binary).into());
+        bail!("找不到编译后的二进制文件: {:?}", host_binary);
     }
 
     println!("✅ 编译完成: {:?}", host_binary);
@@ -334,7 +330,7 @@ fn create_release(
     // 3. 检查 config.json
     println!("📋 步骤 3/4: 检查配置文件...");
     if !config_path.exists() {
-        return Err("找不到 config.json 文件".into());
+        bail!("找不到 config.json 文件");
     }
     println!("✅ 找到配置文件: {:?}", config_path);
     println!("✅ 游戏名称: {}", game_name);
@@ -351,7 +347,8 @@ fn create_release(
     std::fs::create_dir_all(release_dir)?;
 
     // 复制文件
-    let zip_dest = release_dir.join(zip_output.file_name().unwrap());
+    let zip_file_name = required_file_name(zip_output, "资源 ZIP 输出路径必须是文件")?;
+    let zip_dest = release_dir.join(zip_file_name);
     std::fs::copy(zip_output, &zip_dest)?;
     println!("  ✅ 复制资源包: {:?} -> {:?}", zip_output, zip_dest);
 
@@ -373,17 +370,14 @@ fn create_release(
     println!("  ✅ 复制配置: {:?} -> {:?}", config_path, config_dest);
 
     // 更新 config.json 以使用 ZIP 模式
-    update_config_for_release(
-        &config_dest,
-        zip_output.file_name().unwrap().to_string_lossy().as_ref(),
-    )?;
+    update_config_for_release(&config_dest, zip_file_name.to_string_lossy().as_ref())?;
     println!("  ✅ 更新配置以使用 ZIP 模式");
 
     println!();
     println!("✅ 发行版创建完成！");
     println!("   发行版目录: {:?}", release_dir);
     println!("   包含文件:");
-    println!("     - {}", zip_dest.file_name().unwrap().to_string_lossy());
+    println!("     - {}", zip_file_name.to_string_lossy());
     println!("     - {}", binary_filename);
     println!("     - config.json");
 
@@ -407,7 +401,7 @@ fn create_release(
 /// 从 config.json 获取游戏名称
 /// 如果存在 "name" 字段则使用它，否则使用默认名称 "Ring"
 /// 返回的名称会被清理，移除不适合作为文件名的字符
-fn get_game_name(config_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+fn get_game_name(config_path: &Path) -> Result<String> {
     let mut content = String::new();
     let mut file = File::open(config_path)?;
     file.read_to_string(&mut content)?;
@@ -416,19 +410,11 @@ fn get_game_name(config_path: &Path) -> Result<String, Box<dyn std::error::Error
     let config: serde_json::Value = serde_json::from_str(&content)?;
 
     // 检查是否有 "name" 字段
-    let name = if let Some(name) = config.get("name") {
-        if let Some(name_str) = name.as_str() {
-            if !name_str.is_empty() {
-                name_str
-            } else {
-                "Ring"
-            }
-        } else {
-            "Ring"
-        }
-    } else {
-        "Ring"
-    };
+    let name = config
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .filter(|name| !name.is_empty())
+        .unwrap_or(DEFAULT_GAME_NAME);
 
     // 清理文件名：移除不适合作为文件名的字符
     let sanitized = name
@@ -442,17 +428,14 @@ fn get_game_name(config_path: &Path) -> Result<String, Box<dyn std::error::Error
 
     // 如果清理后为空，使用默认名称
     if sanitized.trim().is_empty() {
-        Ok("Ring".to_string())
+        Ok(DEFAULT_GAME_NAME.to_string())
     } else {
         Ok(sanitized.trim().to_string())
     }
 }
 
 /// 更新配置文件以使用 ZIP 模式
-fn update_config_for_release(
-    config_path: &Path,
-    zip_filename: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn update_config_for_release(config_path: &Path, zip_filename: &str) -> Result<()> {
     let mut content = String::new();
     let mut file = File::open(config_path)?;
     file.read_to_string(&mut content)?;
@@ -481,11 +464,7 @@ fn update_config_for_release(
 }
 
 /// 打包目录到 ZIP 文件
-fn pack_directory(
-    input: &Path,
-    output: &Path,
-    level: u32,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn pack_directory(input: &Path, output: &Path, level: u32) -> Result<()> {
     let file = File::create(output)?;
     let mut zip = ZipWriter::new(file);
 
@@ -493,26 +472,55 @@ fn pack_directory(
         .compression_method(CompressionMethod::Deflated)
         .compression_level(Some(level as i64));
 
+    add_directory_to_zip(input, input, &mut zip, options, None)?;
+
+    zip.finish()?;
+    Ok(())
+}
+
+#[derive(Default)]
+struct ZipPackStats {
+    file_count: usize,
+    total_size: u64,
+    packed_files: Vec<(String, u64)>,
+}
+
+fn add_directory_to_zip(
+    root: &Path,
+    input: &Path,
+    zip: &mut ZipWriter<File>,
+    options: SimpleFileOptions,
+    mut stats: Option<&mut ZipPackStats>,
+) -> Result<()> {
     for entry in WalkDir::new(input).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-
         if path.is_dir() {
             continue;
         }
 
-        let relative_path = path.strip_prefix(input)?;
+        let relative_path = path.strip_prefix(root)?;
         let name = relative_path.to_string_lossy().replace('\\', "/");
 
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
+        let size = buffer.len() as u64;
 
         zip.start_file(&name, options)?;
         zip.write_all(&buffer)?;
-    }
 
-    zip.finish()?;
+        if let Some(stat) = stats.as_deref_mut() {
+            stat.file_count += 1;
+            stat.total_size += size;
+            stat.packed_files.push((name, size));
+        }
+    }
     Ok(())
+}
+
+fn required_file_name<'a>(path: &'a Path, context: &str) -> Result<&'a std::ffi::OsStr> {
+    path.file_name()
+        .with_context(|| format!("{context}: {:?}", path))
 }
 
 /// 格式化文件大小
