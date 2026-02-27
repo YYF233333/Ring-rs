@@ -14,6 +14,7 @@
 
 ## 重要文档（建议阅读顺序）
 
+- **摘要入口（vn-runtime 试点）**：[summary_index.md](summary_index.md)
 - **架构硬约束**：[ARCH.md](../ARCH.md)（Runtime/Host 分离、显式状态、确定性、Command 驱动）
 - **开发路线图**：[ROADMAP.md](../ROADMAP.md)
 - **内容制作入门**：[getting_started.md](getting_started.md)（不改代码写脚本/素材 → 测试 → 打包发布）
@@ -25,6 +26,15 @@
 - **覆盖率与门禁**：[coverage.md](coverage.md)、[CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## `vn-runtime/`：从“脚本”到“Command”的链路
+
+### 摘要优先（先读这些）
+
+- 模块总览：[module_summaries/vn-runtime.md](module_summaries/vn-runtime.md)
+- 子模块：[script](module_summaries/vn-runtime/script.md)
+- 子模块：[runtime](module_summaries/vn-runtime/runtime.md)
+- 子模块：[command](module_summaries/vn-runtime/command.md)
+- 子模块：[diagnostic](module_summaries/vn-runtime/diagnostic.md)
+- 子模块：[parser](module_summaries/vn-runtime/parser.md)
 
 ### 入口与核心文件
 
