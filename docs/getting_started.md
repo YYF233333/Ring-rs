@@ -36,28 +36,13 @@ assets/
 
 ## 2. 配置 `config.json`
 
-按照内容需求修改根目录下的`config.json`，该文件将会被打包至最终发行版。至少需要配置：
+按照内容需求修改仓库根目录下的 `config.json`（打包发行版时也会带上/生成对应配置）。
 
-- `name`：游戏名（也会影响打包后可执行文件名）
-- `start_script_path`：入口脚本路径（相对于 `assets_root`）
+- **最低限度**：`name`、`start_script_path`
+- **常用补充**：`manifest_path`、`default_font`、`window`、`debug`
+- **路径规则（最重要的一条）**：`start_script_path` / `manifest_path` / `default_font` 都是 **相对于 `assets_root`**
 
-示例（开发模式）：
-
-```json
-{
-  "name": "My VN",
-  "assets_root": "assets",
-  "start_script_path": "scripts/main.md",
-  "asset_source": "fs",
-  "window": { "width": 1280, "height": 720, "title": "My VN", "fullscreen": false },
-  "debug": { "script_check": true, "log_level": "info" }
-}
-```
-
-路径规则（重要）：
-
-- `manifest_path`、`default_font`、`start_script_path` 都是 **相对于 `assets_root`**
-- 例：`default_font: "fonts/simhei.ttf"` 表示 `assets/fonts/simhei.ttf`
+建议直接从配置指南的示例复制后再改字段：详见 [config_guide.md](config_guide.md)（含开发模式/发布模式示例、字段含义与校验规则）。
 
 ## 3. 写你的第一份脚本（`assets/scripts/main.md`）
 
@@ -97,13 +82,9 @@ endif
 
 ### 资源路径规则（非常关键）
 
-- **脚本里** `<img src="...">` / `<audio src="...">` 的路径为**相对于脚本文件自身**的相对路径
-  - 例：`<img src="../backgrounds/bg1.jpg"/>`
-  - 好处：在 Typora 里直接预览、拖拽插入也不会乱
-  - 如果使用可视化编辑器（Typora等）开发，请在设置中启用相对路径
-- 引擎会用“脚本所在目录”作为 base path 去解析并规范化，最终落到 **相对于 `assets_root`** 的资源路径
-  - 例如：`assets/scripts/main.md` 里写 `../backgrounds/room.jpg`  
-    最终解析为 `backgrounds/room.jpg`
+- **推荐写法**：脚本里的 `<img src="...">` / `<audio src="...">` 使用 **相对于脚本文件自身** 的相对路径（便于 Typora 预览、拖拽插入不乱）。
+- 引擎会以“脚本所在目录”为基准解析并规范化，最终归一化为 **相对于 `assets_root`** 的资源路径。
+- 完整规则与边界情况请以语法规范为准：[script_syntax_spec.md](script_syntax_spec.md)（路径解析）。
 
 ## 4.（可选但推荐）配置立绘布局 `assets/manifest.json`
 

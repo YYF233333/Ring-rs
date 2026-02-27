@@ -66,27 +66,7 @@
 - 适合发布，资源集中在一个文件
 - 启动时会验证 ZIP 文件是否存在
 
-**完整配置示例**：
-
-```json
-{
-  "assets_root": "assets",
-  "saves_dir": "saves",
-  "manifest_path": "manifest.json",
-  "start_script_path": "scripts/main.md",
-  "asset_source": "zip",
-  "zip_path": "game.zip",
-  "window": {
-    "width": 1280,
-    "height": 720,
-    "title": "My Visual Novel",
-    "fullscreen": false
-  },
-  "resources": {
-    "texture_cache_size_mb": 256
-  }
-}
-```
+其它 `config.json` 字段（如 `start_script_path` / `manifest_path` / `window` / `resources`）请直接参考：[config_guide.md](config_guide.md)。
 
 ---
 
@@ -209,10 +189,12 @@ cargo run -p asset-packer -- verify game.zip --input assets
 ### 发布流程
 
 1. **开发阶段**：使用文件系统模式（`asset_source: "fs"`）
-2. **打包资源**：运行 `cargo run -p asset-packer`
-3. **更新配置**：修改 `config.json`，设置 `asset_source: "zip"` 和 `zip_path: "game.zip"`
+2. **打包资源**：
+   - **推荐的一键发行**：使用 `cargo pack release --output-dir dist --zip`（会自动生成 ZIP 模式的 `dist/config.json`）
+   - **手工打包**：运行 `cargo run -p asset-packer` 生成 `game.zip`
+3. **更新配置（仅手工打包需要）**：修改 `config.json`，设置 `asset_source: "zip"` 和 `zip_path: "game.zip"`
 4. **测试发布**：删除或重命名 `assets` 目录，运行游戏验证 ZIP 模式
-5. **分发**：分发 `exe` + `game.zip` + `config.json`
+5. **分发**：分发 `exe` + `game.zip` + `config.json`（或直接分发 `dist/` 目录产物）
 
 ### 发布目录结构
 

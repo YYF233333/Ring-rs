@@ -52,5 +52,3 @@ workspace 覆盖率很容易被以下内容稀释：
 - `xtask`
 - `asset-packer`
 
-> 未来如果需要更精细的 exclude（例如忽略 `host/src/main.rs` 入口、或某些平台适配代码），再在阶段 21.1 中逐步补齐口径配置。
-

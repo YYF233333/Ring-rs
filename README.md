@@ -11,25 +11,10 @@
 - **资源/打包（fs/zip）**：[docs/resource_management.md](docs/resource_management.md)
 - **立绘布局（manifest）**：[docs/manifest_guide.md](docs/manifest_guide.md)
 
-## 快速开始（运行引擎，测试你的内容）
-
 ### 环境要求
 
 - Rust **stable**（本仓库使用 `edition = "2024"`，建议使用较新的 toolchain）
 - 支持 OpenGL 的图形环境
-
-### 配置 `config.json`
-
-将仓库根目录下的`config.json`中的`start_script_path`修改为实际入口脚本的路径（**相对于 `assets_root` 的路径**）：
-
-```json
-{
-  "assets_root": "assets",
-  "start_script_path": "scripts/main.md"
-}
-```
-
-其余配置详见 [docs/config_guide.md](docs/config_guide.md)
 
 ### 运行
 
@@ -39,50 +24,9 @@
 cargo run
 ```
 
-### 游戏内操作（推进 / Auto / Skip）
+首次做内容/配置/打包发行建议按完整流程走：[docs/getting_started.md](docs/getting_started.md)（包含 `config.json` 配置、脚本检查、打包发布与自检）。
 
-- **推进**：鼠标左键点击，或按 `Space` / `Enter`
-- **快进（连点）**：长按 `Space` / `Enter`
-- **Skip（临时）**：按住 `Ctrl`（左/右均可），松开恢复
-- **Auto（自动播放）**：游戏中按 `A` 开/关；间隔来自运行目录的 `user_settings.json` → `auto_delay`（秒）
-- **菜单**：`Esc`
-
-## 内容制作闭环（检查 → 运行 → 打包发布）
-
-### 1) 静态检查脚本（推荐每次改动都跑）
-
-```bash
-cargo script-check
-```
-
-也可以检查单个文件或目录：
-
-```bash
-cargo script-check assets/scripts/main.md
-```
-
-检查内容：语法错误、未定义 label（`goto`/choice 目标）、资源引用是否存在（背景/立绘/音频）。
-
-### 2) 开发模式运行（资源来自文件系统）
-
-```bash
-cargo run
-```
-
-开发模式默认使用 `asset_source: "fs"`（见 [docs/resource_management.md](docs/resource_management.md)）。
-
-### 3) 打包发布（生成 dist/ 发行版）
-
-```bash
-cargo pack release --zip
-```
-
-该命令会：
-
-- 打包 `assets/` 为 `game.zip`
-- 编译 `host` release
-- 生成 `dist/` 发行版目录（包含 `*.exe`/`game.zip`/`config.json`）
-- 可选将整个发行版目录再打成 `GameName.zip`
+运行配置字段说明见：[docs/config_guide.md](docs/config_guide.md)。
 
 ## 文档入口
 
