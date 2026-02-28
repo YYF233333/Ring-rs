@@ -2,22 +2,41 @@
 
 > 目标：在任务中让 agent 优先通过摘要完成定位与答复，减少源码扫描与上下文消耗。
 
-## 适用范围（当前试点）
+## 适用范围（当前）
 
-- 仅覆盖 `vn-runtime`。
-- `host` 仍在结构调整中，暂不纳入摘要优先流程。
+- 覆盖 `vn-runtime` 与 `host`。
+- 任务默认遵循“摘要优先、源码兜底”。
 
-## 推荐阅读顺序
+## 摘要结构
 
-1. [vn-runtime 模块总览](module_summaries/vn-runtime.md)
-2. 子模块摘要（按任务选读）
+- [vn-runtime 模块总览](module_summaries/vn-runtime.md)
+- `vn-runtime` 子模块摘要（按任务选读）
    - [script](module_summaries/vn-runtime/script.md)
    - [runtime](module_summaries/vn-runtime/runtime.md)
    - [command](module_summaries/vn-runtime/command.md)
    - [diagnostic](module_summaries/vn-runtime/diagnostic.md)
    - [parser](module_summaries/vn-runtime/parser.md)
-3. [仓库导航地图](navigation_map.md)
-4. 仅当需要实现细节时再读源码
+- [host 模块总览](module_summaries/host.md)
+- `host` 子模块摘要（按任务选读）
+   - [app](module_summaries/host/app.md)
+   - [app_update](module_summaries/host/app_update.md)
+   - [app_command_handlers](module_summaries/host/app_command_handlers.md)
+   - [command_executor](module_summaries/host/command_executor.md)
+   - [renderer](module_summaries/host/renderer.md)
+   - [renderer_render_state](module_summaries/host/renderer_render_state.md)
+   - [renderer_animation](module_summaries/host/renderer_animation.md)
+   - [renderer_effects](module_summaries/host/renderer_effects.md)
+   - [renderer_scene_transition](module_summaries/host/renderer_scene_transition.md)
+   - [resources](module_summaries/host/resources.md)
+   - [audio](module_summaries/host/audio.md)
+   - [input](module_summaries/host/input.md)
+   - [ui](module_summaries/host/ui.md)
+   - [screens](module_summaries/host/screens.md)
+   - [config](module_summaries/host/config.md)
+   - [manifest](module_summaries/host/manifest.md)
+   - [save_manager](module_summaries/host/save_manager.md)
+- [仓库导航地图](navigation_map.md)
+- 仅当需要实现细节时再读源码
 
 ## 升级到源码阅读的判定
 
@@ -33,5 +52,5 @@
 
 - 回答中优先引用摘要文档结论，再补充“是否需要看源码”判断。
 - 发现摘要过期时，先在对应文档标记 `stale`，再补充修订。
-- 新增或修改 `vn-runtime` 行为后，必须同步更新对应子模块摘要。
+- 新增或修改 `vn-runtime` / `host` 行为后，必须同步更新对应子模块摘要。
 - 周期性验收可使用：[摘要抽样验收清单](summary_sampling_checklist.md)。

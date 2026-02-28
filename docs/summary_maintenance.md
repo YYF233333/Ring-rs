@@ -1,4 +1,4 @@
-# 摘要维护协议（vn-runtime 试点）
+# 摘要维护协议（vn-runtime + host）
 
 ## 目标
 
@@ -8,15 +8,16 @@
 
 满足任一条件即触发更新：
 
-- `vn-runtime` 公共 API 变化（类型、函数、字段语义）。
-- `script/runtime/command/diagnostic/parser` 任一模块行为变更。
+- `vn-runtime` 或 `host` 公共 API 变化（类型、函数、字段语义）。
+- `vn-runtime` 或 `host` 任一已建摘要模块行为变更。
 - 新增或删除脚本语法节点、命令类型、等待状态、诊断规则。
 - 修复 bug 且行为回归测试有新增/调整。
 
 ## 更新范围规则
 
 - 改动落在哪个子模块，就至少更新该子模块摘要。
-- 跨模块改动需同步更新 `docs/module_summaries/vn-runtime.md` 总览。
+- `vn-runtime` 跨模块改动需同步更新 `docs/module_summaries/vn-runtime.md` 总览。
+- `host` 跨模块改动需同步更新 `docs/module_summaries/host.md` 总览。
 - 如果阅读顺序或使用协议变化，必须同步更新 `AGENTS.md`。
 
 ## 新鲜度与状态

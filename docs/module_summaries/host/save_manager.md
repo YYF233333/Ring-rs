@@ -1,0 +1,53 @@
+# host/save_manager 摘要
+
+## Purpose
+
+`save_manager` 提供 Host 存档文件管理：槽位存档读写、存档列表、Continue 专用存档与展示用元信息提取。
+
+## PublicSurface
+
+- 模块入口：`host/src/save_manager/mod.rs`
+- 核心类型：`SaveManager`、`SaveInfo`
+- 常量：`MAX_SAVE_SLOTS`
+- 关键接口：`save/load/delete/list_saves`、`save_continue/load_continue`
+
+## KeyFlow
+
+1. 启动或保存前通过 `ensure_dir` 确保存档目录存在。
+2. 槽位存档按 `slot_XXX.json` 读写 `vn_runtime::SaveData`。
+3. Continue 存档使用独立文件 `continue.json` 管理恢复入口。
+4. UI 层通过 `SaveInfo` 提供展示信息（时间、章节、脚本、游玩时长）。
+
+## Dependencies
+
+- 依赖 `vn_runtime::{SaveData, SaveError}`
+- 被 `app/save` 与相关页面（存档/读档）消费
+
+## Invariants
+
+- 槽位编号在约定范围内（1..=MAX_SAVE_SLOTS）。
+- Continue 存档与普通槽位存档语义分离。
+
+## FailureModes
+
+- 文件系统 IO 失败导致存读档失败。
+- 存档 JSON 损坏导致解析失败。
+
+## WhenToReadSource
+
+- 需要调整存档布局、命名或兼容策略时。
+- 需要排查 Continue 与普通存档切换行为时。
+
+## RelatedDocs
+
+- [host 总览](../host.md)
+- [save_format](../../save_format.md)
+- [screens 摘要](screens.md)
+
+## LastVerified
+
+2026-02-28
+
+## Owner
+
+Ring-rs 维护者

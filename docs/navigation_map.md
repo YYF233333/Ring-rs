@@ -14,7 +14,7 @@
 
 ## 重要文档（建议阅读顺序）
 
-- **摘要入口（vn-runtime 试点）**：[summary_index.md](summary_index.md)
+- **摘要入口（vn-runtime + host）**：[summary_index.md](summary_index.md)
 - **架构硬约束**：[ARCH.md](../ARCH.md)（Runtime/Host 分离、显式状态、确定性、Command 驱动）
 - **开发路线图**：[ROADMAP.md](../ROADMAP.md)
 - **内容制作入门**：[getting_started.md](getting_started.md)（不改代码写脚本/素材 → 测试 → 打包发布）
@@ -58,6 +58,27 @@
 - **存档兼容**：`save.rs` + [save_format.md](save_format.md)
 
 ## `host/`：把 `Command` 变成“画面/音频/UI”
+
+### 摘要优先（先读这些）
+
+- 模块总览：[module_summaries/host.md](module_summaries/host.md)
+- 子模块：[app](module_summaries/host/app.md)
+- 子模块：[app_update](module_summaries/host/app_update.md)
+- 子模块：[app_command_handlers](module_summaries/host/app_command_handlers.md)
+- 子模块：[command_executor](module_summaries/host/command_executor.md)
+- 子模块：[renderer](module_summaries/host/renderer.md)
+- 子模块：[renderer_render_state](module_summaries/host/renderer_render_state.md)
+- 子模块：[renderer_animation](module_summaries/host/renderer_animation.md)
+- 子模块：[renderer_effects](module_summaries/host/renderer_effects.md)
+- 子模块：[renderer_scene_transition](module_summaries/host/renderer_scene_transition.md)
+- 子模块：[resources](module_summaries/host/resources.md)
+- 子模块：[audio](module_summaries/host/audio.md)
+- 子模块：[input](module_summaries/host/input.md)
+- 子模块：[ui](module_summaries/host/ui.md)
+- 子模块：[screens](module_summaries/host/screens.md)
+- 子模块：[config](module_summaries/host/config.md)
+- 子模块：[manifest](module_summaries/host/manifest.md)
+- 子模块：[save_manager](module_summaries/host/save_manager.md)
 
 ### 应用层（App：生命周期/主循环胶水）
 
