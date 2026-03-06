@@ -37,7 +37,7 @@ cargo run
 - **资源系统与打包**：[docs/resource_management.md](docs/resource_management.md)
 - **存档格式**：[docs/save_format.md](docs/save_format.md)
 - **仓库导航地图（改引擎时看）**：[docs/navigation_map.md](docs/navigation_map.md)
-- **路线图**：[ROADMAP.md](ROADMAP.md)
+- **RFC 计划索引**：[RFCs/README.md](RFCs/README.md)
 
 ## 仓库结构（Workspace）
 

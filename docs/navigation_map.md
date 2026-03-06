@@ -16,7 +16,7 @@
 
 - **摘要入口（vn-runtime + host）**：[summary_index.md](summary_index.md)
 - **架构硬约束**：[ARCH.md](../ARCH.md)（Runtime/Host 分离、显式状态、确定性、Command 驱动）
-- **开发路线图**：[ROADMAP.md](../ROADMAP.md)
+- **RFC 计划索引**：[../RFCs/README.md](../RFCs/README.md)
 - **内容制作入门**：[getting_started.md](getting_started.md)（不改代码写脚本/素材 → 测试 → 打包发布）
 - **运行配置说明**：[config_guide.md](config_guide.md)（`config.json` 字段含义/默认值/校验规则）
 - **脚本语法规范**：[script_syntax_spec.md](script_syntax_spec.md)
