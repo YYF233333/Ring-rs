@@ -1,0 +1,143 @@
+label chapter16:
+    #第三幕第四场
+    scene bg daoluxuejing with Dissolve(1.5)
+    play music "audio/BGM/4.終幕への間奏曲.mp3"
+    旁白 "初雪。今年湖城的雪下的晚的反常。"
+    旁白 "经过反复修改，我终于完成了参赛的作品，尽管感到许多想法并没有能好好地表达，但是还是就这样上交。"
+    旁白 "这按理说应该是我最重要的作品，但是不知为什么，我却对它一点也不自豪，甚至有如释重负的感觉。"
+    scene bg ziwendedaxuesushe_n with tran_black_anticlockwise()
+    子文 "抱歉，元旦放假我可能不能去陪你了，我刚刚上交了参赛的稿件，现在手头还有一大堆的ddl。可能这几天电话都会少打。"
+    红叶 winter_scarf_backhand5 "诶，本来还想去南湖看看雪景呢。但是子文要是没有时间就算了，现在你们还要准备考试吧，我理解的。"
+    子文 "感谢红叶大小姐的理解。"
+    红叶 winter_scarf_backhand4 "唔，这倒是没什么。但是我有点好奇，你交了什么去参加校内评选啊？"
+    子文 "是我构思了好几个月的作品，研究了很多文艺杂志，也在同学中间做了调查，绝对是很多人喜欢的题材。"
+    红叶 winter_scarf_normal1 "那可真的不容易啊。是你自己选的题吗？"
+    子文 "不是的，我自己并不对这个题材多么感兴趣，但是为了参加评比，我不得不稍微收敛一点自己的情绪…"
+    红叶 winter_scarf_backhand2 "这样吗…"
+    子文 "红叶呢，最近忙吗，声优学校也要考试的吧？"
+    红叶 winter_scarf_backhand3 "当然要啊。不过最近录音的次数少多了，下周开始就没有工作了。"
+    子文 "诶？"
+    红叶 winter_scarf_normal2 "也不知道为什么，最近稍微集中一会就会累的不行。导演说我是太久没锻炼，体能下降了。"
+    子文 "别是感冒了吧？可千万注意身体啊，多喝热水。"
+    红叶 winter_scarf_backhand5 "什么时候也不会轮到子文来提醒我的。没事的哦，正好工作少了我也要准备考试。好了，不耽误你赶ddl咯。"
+    stop music
+    旁白 "放下电话之后，我的目光落在了桌上堆积成山的作业上。上次的实验报告因为太过简略，被打了不及格。"
+    子文 "唉…"
+    子文 "真的值得吗？"
+    
+    scene bg ziwendedaxuesushe_n with tran_black_anticlockwise()
+    play music "audio/BGM/17.真実.mp3"
+    旁白 "夜里三点"
+    朝希 "呼啊——，子文，你还在补作业啊？"
+    子文 "有啥办法啊，剩的太多了。该死的怎么会有这么多这么难的内容啊…就算是抄也很难抄的完吧。"
+    朝希 "你这样真的没问题吗？马上就要考试了啊…"
+    子文 "呼啊——你快去睡觉吧，我没问题。"
+    
+    scene bg susheshenye with tran_black_anticlockwise()
+    ###场景切换，夜里12点##
+    朝希 "子文，明天要考试了啊，还不早点睡吗？"
+    子文 "还早着呢…我再复习一会。"
+    朝希 "你真的应该早点开始准备的啊。现在复习，明天上了考场也做不出题的啊？"
+    子文 "你快睡吧。"
+    
+    window hide
+    pause .5
+    scene bg ziwendedaxuesushe_y with Dissolve(2.5)
+    pause .5
+    window auto
+    旁白 "早上5点"
+    子文 "啊，这下通宵了。但是怎么还没复习完啊——"
+    子文 "感觉最近状态好差…是不是，我弄错了什么…"
+    
+    scene bg daxuexiaoyuan_tushuguan_h with tran_black_close()
+    pause
+    scene bg daxuexiaoyuan_tushuguan_y with dissolve
+    pause
+    scene bg daxuexiaoyuan_xiaoyuandaolu_n with tran_rf()
+    pause
+    scene bg ziwendedaxuesushe_n with dissolve
+    ###宿舍##
+    朝希 "子文，期末出总评了！"
+    子文 "嗯？这就出了？"
+    子文 "……"
+    子文 "啊，果然是这样啊。考前一晚上速成果然不行啊…"
+    #
+    ###校内道路##
+    scene bg daxuexiaoyuan_xiaoyuandaolu_a with tran_black_anticlockwise()
+    旁白 "一群人正围着公示栏。"
+    学生A "快看，是文学社的社长获得了优胜…"
+    学生B "完全不奇怪，因为这个人太强了啊，就算是中文系其他人，也很难和他比，差的太多了…"
+    学生C "哇，我的作品竟然能拿三等奖吗？"
+    学生D "你好强啊。我的作品连名字都没有被写出来啊…"
+    旁白 "我凑上去看。我的作品根本没有出现在榜单上，甚至连鼓励奖都没有。"
+    子文 "…"
+    子文 "怎么会…"
+    scene black with dissolve
+    #…
+    ###场景切换到组委会办公室##
+    scene bg zuweihuibangongshi_ with dissolve
+    干事 "总之是这么一个情况。您的作品没有得奖，但是获奖作品特刊还是会发到您手里，这个不用担心…"
+    干事 "嘛，您是理学部的，本来也没有和文学专业的同学比的必要，还请您不要灰心…"
+    scene black with dissolve
+    #子文走出办公室。天空开始慢慢飘落一些雪花。
+    scene bg jijiangxiayu with Dissolve(1.5)
+    旁白 "..."
+    旁白 "我走出了办公室。似乎已经在飘着一些雪花。"
+    旁白 "天空不知什么时候已经变成了铅一样的颜色。我抬头看去，好像有什么东西堵住了胸口。"
+    子文 "..."
+    子文 "是我弄错了什么吗…明明已经…已经拼了这么久…"
+    子文 "我果然还是没有天赋…甚至…甚至连哪怕一点点成果都没有取得…"
+    scene bg zuweihuibangongshi_ with tran_close_open()
+    show fengdao a at s11
+    stop music
+    旁白 "子文到这里的几分钟前。"
+    丰岛 "…"
+    ###丰岛走进办公室##
+    丰岛 a "你好，我是法学部的学生。我没有参加比赛，但是我能不能看一下你们这一次的获奖集刊？"
+    干事 "哦，已经订好了，您可以看一下。"
+    丰岛 c "呵……嗯？"
+    丰岛 c "谢谢，我看完了。"
+    干事 "…其实我们多印了很多，这一本送给您也没关系的…"
+    丰岛 b "不用了，谢谢。我已经看完了。"
+    show fengdao a with dissolve
+    旁白 "..."
+    丰岛 "你会怎么办呢…如果是我，我又会怎么办呢…"
+    
+    scene bg daoluxuejingyintian with tran_with_black(tran_lf())
+    play music "audio/BGM/11.ある冬の寒い夜に.mp3"
+    旁白 "…"
+    旁白 "仅仅是在路上走了一段距离，雪不知什么时候已经变大了。"
+    旁白 "雪花落在眼睛镜片上，瞬间融化。"
+    旁白 "天空格外的黑。吸入冬日凝滞的冰冷空气，堵住了胸腔。"
+    旁白 "路上有一些行人，看起来颇为轻松，大概都是在这一年的最后，完成了工作，准备去放松一番的吧。"
+    子文 "好黑啊…好像，有点模糊了。"
+    旁白 "迎面走过来一对情侣。"
+    男学生A "啊，学期终于结束了，我要出去玩。"
+    女学生A "好啊。我们去南湖看雪景吧。一定会很浪漫的。"
+    子文 "…"
+    子文 "要不给红叶打个电话吧…不，她肯定会看不起我的吧，就我现在这副样子，呵，我有什么脸去见她呢。"
+    旁白 "我抬头，雪花慢慢从天空中飘落。"
+    $renpy.music.set_volume(.5, delay=1.0)
+    旁白 "还是拨通了红叶的电话。通话界面显示接通，但是那一边一丁点声音都没有。"
+    子文 "…红叶吗？"
+    子文 "…怪了。她在录音吗？可是这接通了啊…而且她最近不是没有工作了吗？"
+    子文 "喂，红叶？红叶在吗？"
+    旁白 "..."
+    旁白 "电话另一头仍然是一片死寂。然而通话界面显示着接通。"
+    旁白 "令人绝望的距离感立刻吞没了我。"
+    子文 "喂，红叶，红叶你怎么了？"
+    scene bg daoluxuejingyintian at tran_blur
+    pause .5
+    scene black with dissolve
+    pause .5
+    
+    ###红叶的公寓##
+    scene bg hongyedefangjian_nn with tran_anticlockwise()
+    $renpy.music.set_volume(1.0, delay=1.0)
+    旁白 "赶到红叶的公寓的时候，我的外套上已经沾了一层的冰水。"
+    旁白 "红叶颓然地倒在地上。"
+    子文 "…"
+    旁白 "窗外的雪愈发纷纷地下。"
+    scene black with tran_close(1.0)
+    pause 1.0
+     

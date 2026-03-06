@@ -1,0 +1,155 @@
+label chapter13:
+    #第三幕第二场
+    scene bg huchengshizhongjindianpu_y with dissolve
+    play music "audio/BGM/1.ensolarado.mp3"
+    旁白 "8月底的湖城市中心仍然保留着暑气。"
+    show hongye summer_normal4 at s11("far")
+    旁白 "我站在地铁站出口等待红叶。距离红叶约定的时间已经过去了一会，我才看见红叶慌张地从地铁口跑出来。"
+    show hongye summer_backhand1 at s11
+    红叶 summer_backhand1 "抱歉，录音有一点延误。明明是我约的你，结果我晚到了。"
+    子文 "没事没事，我想想下次还是得去接你。毕竟能早一点看见我的红叶大小姐啊。"
+    旁白 "我接过她的包，很自然地牵起她的手。"
+    红叶 summer_backhand3 "金木水火你！"
+    hide hongye
+    旁白 "她的娇嗔令我心头一热。"
+    scene black with dissolve
+    
+    ##火锅店（注 "寿喜烧）##"
+    scene bg huchengshizhongjindianpu_inside with dissolve
+    show hongye summer_normal5 at s11
+    旁白 "自助火锅店。这还是红叶推荐的店铺。说来惭愧，我连约会去哪里吃饭都不清楚..."
+    红叶 summer_normal5 "啊，这个冰激凌真好吃。"
+    子文 "为什么总是在吃冰激凌啊？"
+    红叶 summer_normal4 "因为好吃而且不限量啊！"
+    子文 "但是也不能不吃别的了吧？"
+    红叶 summer_backhand3 "…再吃一个。"
+    子文 "吃火锅的时候少吃一点冰激凌啊。"
+    hide hongye with dissolve
+
+    ###湖城商店街##
+    scene bg shangdianjiehuanghun with tran_black_anticlockwise()
+    show hongye summer_normal1 at s21
+    红叶 summer_normal1 "啊，我要吃这个。"
+    旁白 "红叶指了指一块一家蛋糕店旁边的广告牌。上面写着“幸福的蜂蜜蛋糕”。"
+    旁白 "看起来就是普通的奶油蛋糕吧…"
+    子文 "不是刚吃过饭吗？"
+    show hongye summer_backhand3 at s11
+    红叶 summer_backhand3 "我不管，我就要吃这个。"
+    子文 "这是有什么特别的吗…‘幸福的蜂蜜蛋糕’？"
+    红叶 summer_normal4 "大概是幸福的味道吧…"
+    子文 "那幸福是什么味道的呢…"
+    红叶 summer_normal5 "唔…不知道，大概和蛋糕一样的味道吧？"
+    hide hongye with dissolve
+    旁白 "我们买了一盒。"
+    show hongye summer_backhand5 at s11
+    红叶 summer_backhand5 "啊，真好吃…"
+    子文 "看起来就是普通的蛋糕吧…该说是女孩子共有的对甜食着迷？"
+    红叶 summer_normal1 "‘所谓幸福，就是在需要的时候，打开便是。’"
+    子文 "啥？"
+    红叶 summer_backhand1 "这不是大作家子文的经典语句吗？"
+    子文 "这都什么时候的事了…我也是从别的地方听来的啊。"
+    红叶 summer_normal4 "那子文觉得幸福是什么味道的呢？"
+    子文 "嗯…似乎很需要想一想。"
+    红叶 summer_normal1"你自己写了不少故事都是这个主题嘛。"
+    子文 "那是一种探讨啦。不如说创作本身很多时候也就是一种探讨。"
+    红叶 summer_normal5 "好像有点理解，又有点没理解…所以来尝尝嘛。"
+    show hongye at hide_left
+    旁白 "红叶往我嘴里塞了一块蛋糕。"
+    旁白 "奶油并不腻，蛋糕清甜可口，而且不觉得油。非常好的味道。"
+    子文 "喂，公共场合在，这样很羞耻的啊。"
+    红叶 summer_backhand3 "这有什么嘛…"
+    
+    ##KTV内（注: 纯K）##
+    scene bg KTV with tran_black_anticlockwise()
+    红叶 summer_normal5 "子文之前很少来吧。"
+    子文 "那好像…确实是没怎么来过KTV。毕竟我是个公鸭嗓，五音不全，节拍全乱，完全唱不了歌嘛。"
+    红叶 summer_normal1 "我以前倒是经常来哦。"
+    子文 "那和谁一起来啊？"
+    红叶 summer_normal4 "就我自己。"
+    子文 "一个人？"
+    红叶 summer_backhand4 "对啊。在疲惫的周五晚上，来唱一晚上的歌。"
+    子文 "一晚上？这真的不会直接瘫倒吗？"
+    红叶 summer_normal4 "瘫倒？"
+    旁白 "红叶看起来有点疑惑。"
+    红叶 summer_backhand1 "这样才更尽兴嘛。而且我不是说过了，对于声优而言，体能是非常重要的啊。"
+    子文 "大概声优确实都是怪物…"
+    旁白 "红叶真的连续唱了10首。"
+    旁白 "我使劲地挥舞荧光棒。"
+    旁白 "听她唱歌确实是一种享受，我甚至怀疑她是专业的歌手。"
+    stop music
+    红叶 summer_normal5 "呼啊——"
+    子文 "我的天啊，这已经是第9首…"
+    红叶 summer_backhand3 "第10首了，子文你到底有没有认真在听啊。"
+    子文 "可别说了。我在这里摇荧光棒都要累死了。红叶你还真的是个超人啊。话说你是有特地练习过吗？"
+    红叶 summer_normal4 "唔，练习说不上吧，就是我经常来唱。"
+    红叶 summer_normal1 "毕竟，作为一个声优，倘若有一天失去了热度，那个时候就得靠这些技能来谋生了啊。"
+    子文 "…还真是辛苦啊，至少我是肯定做不到在KTV连续唱这么久的。"
+    红叶 summer_backhand3 "你要是每天都早起锻炼那你也行。"
+    子文 "呃…"
+    红叶 summer_backhand5 "那么，下一首是《致往昔》——"
+    play music "audio/在りし日のために -inst ver- - 松本文紀_01.flac"
+    旁白 "我安静地听完了。"
+    旁白 "..."
+    红叶 summer_backhand3 "啊——累死了。这首歌真的好难啊。天兰前辈是怎么唱的那么好的。"
+    旁白 "红叶坐到了我身边，把话筒递给我。"
+    红叶 summer_normal3 "今天我状态不佳。让我休息一会。子文你来试试嘛。"
+    子文 "呃…还是算了吧。本来我就不擅长，和红叶大小姐的比起来，简直是煞风景嘛。"
+    红叶 summer_normal5 "啊，真没办法呢。我有点累了，要不今天就这样吧。"
+    红叶 summer_backhand1 "对了，今天在湖边有烟花大会吧。我要去看！"
+    stop music
+    #…
+    ###湖边##
+    scene bg hubianyewan with tran_black_anticlockwise()
+    play music "audio/BGM/10.星粒が降る夜.mp3"
+    show hongye summer_backhand4 at s11
+    红叶 summer_backhand4 "诶，现在居然有卖萤火虫的啊。"
+    旁白 "摊位旁摆的牌子写着“10元一袋”。"
+    #旁白已经聚集了不少人，有些穿着睡衣出来看烟花，顺手买了一袋萤火虫提着。
+    旁白 "于是红叶也买了一袋萤火虫，都装在透明的袋子里，提在手里走到了湖边。"
+    旁白 "我们并排坐下。"
+    红叶 summer_normal1 "夏天要结束了啊…"
+    子文 "想想还真是发生了不少事情啊。"
+    红叶 summer_backhand5 "可不是吗。我现在也不理解我当时怎么就脑子一热接受了子文的告白啊，明明又拖沓又土。"
+    子文 "是这样吗。不过，也确实是我这样一个废柴写作爱好者能干出来的事情呢。"
+    show hongye summer_normal1 at s11
+    旁白 "我们相视而笑。"
+    红叶 summer_backhand1 "所以说，你去湖城大，还是读了理科吗。"
+    子文 "是啊。但是我还是会继续写下去，可能也会尝试到校内选拔去投稿吧。"
+    红叶 summer_normal5 "我很期待哦。如果有新作的话，一定要先拿给我看。"
+    子文 "只要是能拿给红叶看的，肯定会的。"
+    show hongye summer_backhand3 at s11
+    show hongye at leap
+    红叶 summer_backhand3 "啊？你什么意思，合着还有不能给我看的？"
+    stop music 
+    子文 "啊，这个嘛…"
+    红叶 summer_normal3 "有问题。以前都会拿给我看的，现在成了恋人反而不给我看了。这才多久啊！我懂了，你这是写小作文去湖城大撩别的女孩子了！浮气大萝卜！"
+    子文 "喂喂，这联想也太离谱了吧。"
+    红叶 summer_backhand2 "那你整的那么神秘干什么。你现在肯定已经写了一些吧，快给我交出来——"
+    子文 "喂——"
+    旁白 "红叶抢走了我的手机，非常熟练地打开了我平时用来存草稿的备忘录。结果只有一些以二人的日常为蓝本的日常小故事。还有一些平时的小记。"
+    play music "audio/BGM/12.なんでしょう？.mp3"
+    show hongye summer_backhand3 
+    旁白 "“红叶的手好软啊，以前从来没有感觉到。”"
+    旁白 "“棉花糖上沾了红叶的口红…但是我还是吃掉了”"
+    旁白 "“趁红叶睡觉拍到的…（后附红叶的睡颜）”"
+    旁白 "完蛋，全是发电文…"
+    红叶 summer_backhand4 "唔……"
+    子文 "…"
+    红叶 summer_normal1 "我说…"
+    子文 "嗯？"
+    stop music
+    #TODO: 需要一张烟花背景
+    #FIXME:这个确实。得叫一下srp
+    旁白 "烟花升空。"
+    旁白 "红叶搂住了我的胳膊。"
+    play music "audio/BGM/7.街を歩けば.mp3"
+    红叶 summer_normal1 "以后这样的机会也不会很多了吧…子文在湖城大，和我几乎隔着整个市区了…"
+    子文 "是啊，红叶已经正式和事务所签约，恐怕以后连周末也未必有空了吧。"
+    红叶 summer_backhand1 "子文，你还会继续写故事的吧？"
+    子文 "那是当然。答应过你了嘛。"
+    红叶 summer_backhand5 "那就好。只要还在创作，那这个夏天就会永远继续下去。现在的话，就算是多一下下也好…"
+    旁白 "..."
+    scene black with tran_close(1.5)
+    stop music
+    pause 0.5
+     

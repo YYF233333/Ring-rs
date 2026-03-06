@@ -4,7 +4,7 @@
   "saves_dir": "saves",
   "manifest_path": "manifest.json",
   "default_font": "fonts/simhei.ttf",
-  "start_script_path": "scripts/test_comprehensive.md",
+  "start_script_path": "scripts/remake/main.md",
   "window": {
     "width": 1280,
     "height": 720,
