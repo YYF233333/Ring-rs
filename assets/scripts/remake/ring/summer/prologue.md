@@ -2,7 +2,7 @@
 
 changeScene <img src="bg/black" /> with Fade(duration: 0.5)
 changeScene <img src="bg/tushuguanmenqian_y" /> with Dissolve(duration: 1.5)
-<audio src="audio/BGM/1.ensolarado.mp3"></audio> loop
+<audio src="audio/BGM/1.ensolarado.mp3"></audio> ♾️
 
 旁白："五月初。湖城蒸笼一般的天气。"
 旁白："学校里的樱花道。这个时节当然没有樱花，只有郁郁葱葱的树。"
@@ -34,7 +34,7 @@ stageActor 红叶 at center with dissolve
 旁白："红叶看了我一眼后立刻转回去继续配音。"
 旁白："我把包丢在板凳上，开始用社团的耳机听音乐。"
 
-<audio src="audio/BGM/2.昼下がり気分.mp3"></audio> loop
+<audio src="audio/BGM/2.昼下がり気分.mp3"></audio> ♾️
 旁白："她今天也在录音啊。"
 旁白："似乎高三以来，这个活动室已经成了她专属的屋子。基本除了上课和放学时，其他时候她都在这里。"
 旁白："过了一小会，红叶走了出来，伸了一个懒腰。"

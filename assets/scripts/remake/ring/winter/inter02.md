@@ -35,7 +35,7 @@ showStyle 红叶 = winter_normal3
 
 showStyle 天兰 = f
 天兰："抱歉，我冒犯了。但是，做我们这一行的，尤其在现在这样的时代，在这样的一个业界，一旦失去主角的出演机会，此后可能就一蹶不振了。即便能够一直主役，人也是会慢慢变老的。"
-<audio src="audio/BGM/10.星粒が降る夜.mp3"></audio> loop
+<audio src="audio/BGM/10.星粒が降る夜.mp3"></audio> ♾️
 showStyle 天兰 = e
 天兰："等到因为身体原因不得不退居二线甚至就此不再出演的时候，那样的你，还能自信满满地向世界宣告自己的价值吗？还能确信自己能够留住身边的他吗？"
 showStyle 红叶 = winter_backhand2

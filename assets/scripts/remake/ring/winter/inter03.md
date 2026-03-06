@@ -1,7 +1,7 @@
 **chapter19**
 
 changeScene <img src="bg/hubianbaitian" /> with Dissolve(duration: 1.3)
-<audio src="audio/BGM/16.bittersweet.mp3"></audio> loop
+<audio src="audio/BGM/16.bittersweet.mp3"></audio> ♾️
 stageActor 天兰 at right with dissolve
 showStyle 天兰 = c
 stageActor 丰岛 at left with dissolve

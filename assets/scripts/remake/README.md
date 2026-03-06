@@ -52,7 +52,7 @@
 
 - `changeScene <img src="..."/> with Effect(...)`：换场。
 - `changeBG <img src="..."/> with Effect(...)`：同场景内背景/CG切换。
-- `<audio src="..."></audio> loop`、`stopBGM`：BGM 控制。
+- `<audio src="..."></audio> ♾️`、`stopBGM`：BGM 控制（`♾️` 表示循环播放）。
 - `wait N`：定时停顿（秒）。
 - `show <img src="..."/> as 角色 at 位置 with 效果`：角色调度与差分切换统一入口（入场/退场/站位/移动/差分衔接）。
 - `hide 角色 with 效果`：角色退场。

@@ -1,6 +1,6 @@
 **ending**
 
-<audio src="audio/BGM/18-ED2.10℃.mp3"></audio> loop
+<audio src="audio/BGM/18-ED2.10℃.mp3"></audio> ♾️
 
 changeScene <img src="bg/yiyuanwaijing_bleak" /> with Dissolve(duration: 1.5)
 旁白："我向红叶的父母告别，前往会场。"
