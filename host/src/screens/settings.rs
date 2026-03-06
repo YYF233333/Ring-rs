@@ -2,7 +2,7 @@
 
 use crate::app_mode::UserSettings;
 use crate::renderer::TextRenderer;
-use crate::ui::{Button, ButtonStyle, Panel, UiContext, draw_rounded_rect};
+use crate::ui::{Button, ButtonStyle, Panel, Slider, Toggle, UiContext};
 use macroquad::prelude::*;
 
 /// 设置界面操作
@@ -26,7 +26,11 @@ pub struct SettingsScreen {
     /// 是否需要重新初始化
     needs_init: bool,
     /// 滑块状态
-    dragging_slider: Option<&'static str>,
+    bgm_slider: Option<Slider>,
+    sfx_slider: Option<Slider>,
+    text_speed_slider: Option<Slider>,
+    muted_toggle: Option<Toggle>,
+    fullscreen_toggle: Option<Toggle>,
 }
 
 impl SettingsScreen {
@@ -37,24 +41,29 @@ impl SettingsScreen {
             back_button: None,
             apply_button: None,
             needs_init: true,
-            dragging_slider: None,
+            bgm_slider: None,
+            sfx_slider: None,
+            text_speed_slider: None,
+            muted_toggle: None,
+            fullscreen_toggle: None,
         }
     }
 
-    /// 初始化界面
-    pub fn init(&mut self, ctx: &UiContext, settings: &UserSettings) {
-        let theme = &ctx.theme;
-
-        self.settings = settings.clone();
-        self.original_settings = settings.clone();
-
-        // 面板布局
+    fn panel_layout(ctx: &UiContext) -> (f32, f32, f32, f32) {
         let panel_width = 500.0;
         let panel_height = 400.0;
         let panel_x = (ctx.screen_width - panel_width) / 2.0;
         let panel_y = (ctx.screen_height - panel_height) / 2.0;
+        (panel_x, panel_y, panel_width, panel_height)
+    }
 
-        // 按钮
+    fn sync_layout(&mut self, ctx: &UiContext) {
+        let theme = &ctx.theme;
+        let (panel_x, panel_y, panel_width, panel_height) = Self::panel_layout(ctx);
+        let content_x = panel_x + theme.padding;
+        let content_y = panel_y + theme.font_size_large + theme.padding * 2.0;
+        let slider_width = panel_width - theme.padding * 2.0 - 150.0;
+
         let btn_y = panel_y + panel_height - theme.padding - theme.button_height;
         self.back_button = Some(Button::new(
             "返回",
@@ -63,7 +72,6 @@ impl SettingsScreen {
             100.0,
             theme.button_height,
         ));
-
         let mut apply_btn = Button::new(
             "应用",
             panel_x + panel_width - theme.padding - 100.0,
@@ -73,6 +81,58 @@ impl SettingsScreen {
         );
         apply_btn.style = ButtonStyle::Primary;
         self.apply_button = Some(apply_btn);
+
+        let slider_h = theme.tokens.control.toggle_height;
+        let toggle_h = theme.tokens.control.toggle_height;
+        let toggle_w = 100.0;
+
+        if let Some(s) = &mut self.bgm_slider {
+            s.set_rect(Rect::new(content_x + 150.0, content_y, slider_width, slider_h));
+        }
+        if let Some(s) = &mut self.sfx_slider {
+            s.set_rect(Rect::new(
+                content_x + 150.0,
+                content_y + 50.0,
+                slider_width,
+                slider_h,
+            ));
+        }
+        if let Some(s) = &mut self.text_speed_slider {
+            s.set_rect(Rect::new(
+                content_x + 150.0,
+                content_y + 100.0,
+                slider_width,
+                slider_h,
+            ));
+        }
+        if let Some(t) = &mut self.muted_toggle {
+            t.set_rect(Rect::new(content_x + 150.0, content_y + 150.0, toggle_w, toggle_h));
+        }
+        if let Some(t) = &mut self.fullscreen_toggle {
+            t.set_rect(Rect::new(content_x + 150.0, content_y + 200.0, toggle_w, toggle_h));
+        }
+    }
+
+    /// 初始化界面
+    pub fn init(&mut self, ctx: &UiContext, settings: &UserSettings) {
+        self.settings = settings.clone();
+        self.original_settings = settings.clone();
+
+        self.bgm_slider = Some(Slider::new(Rect::new(0.0, 0.0, 0.0, 0.0), 0.0, 1.0, settings.bgm_volume));
+        self.sfx_slider = Some(Slider::new(Rect::new(0.0, 0.0, 0.0, 0.0), 0.0, 1.0, settings.sfx_volume));
+        self.text_speed_slider = Some(Slider::new(
+            Rect::new(0.0, 0.0, 0.0, 0.0),
+            10.0,
+            100.0,
+            settings.text_speed,
+        ));
+        self.muted_toggle = Some(Toggle::new(Rect::new(0.0, 0.0, 0.0, 0.0), settings.muted));
+        self.fullscreen_toggle = Some(Toggle::new(
+            Rect::new(0.0, 0.0, 0.0, 0.0),
+            settings.fullscreen,
+        ));
+
+        self.sync_layout(ctx);
 
         self.needs_init = false;
     }
@@ -84,7 +144,7 @@ impl SettingsScreen {
 
     /// 更新界面
     pub fn update(&mut self, ctx: &UiContext) -> SettingsAction {
-        let theme = &ctx.theme;
+        self.sync_layout(ctx);
 
         // ESC 返回
         if is_key_pressed(KeyCode::Escape) {
@@ -92,62 +152,30 @@ impl SettingsScreen {
             return SettingsAction::Back;
         }
 
-        // 面板布局
-        let panel_width = 500.0;
-        let panel_height = 400.0;
-        let panel_x = (ctx.screen_width - panel_width) / 2.0;
-        let panel_y = (ctx.screen_height - panel_height) / 2.0;
-
-        let content_x = panel_x + theme.padding;
-        let content_y = panel_y + theme.font_size_large + theme.padding * 2.0;
-        let slider_width = panel_width - theme.padding * 2.0 - 150.0;
-
-        // 处理滑块拖动
-        if ctx.mouse_just_released {
-            self.dragging_slider = None;
+        if let Some(s) = &mut self.bgm_slider {
+            if s.update(ctx) {
+                self.settings.bgm_volume = s.value;
+            }
         }
-
-        // BGM 音量滑块
-        let bgm_slider_rect = Rect::new(content_x + 150.0, content_y, slider_width, 30.0);
-        if ctx.mouse_in_rect(bgm_slider_rect) && ctx.mouse_just_pressed {
-            self.dragging_slider = Some("bgm");
+        if let Some(s) = &mut self.sfx_slider {
+            if s.update(ctx) {
+                self.settings.sfx_volume = s.value;
+            }
         }
-        if self.dragging_slider == Some("bgm") {
-            let relative_x = (ctx.mouse_pos.x - bgm_slider_rect.x) / bgm_slider_rect.w;
-            self.settings.bgm_volume = relative_x.clamp(0.0, 1.0);
+        if let Some(s) = &mut self.text_speed_slider {
+            if s.update(ctx) {
+                self.settings.text_speed = s.value;
+            }
         }
-
-        // SFX 音量滑块
-        let sfx_slider_rect = Rect::new(content_x + 150.0, content_y + 50.0, slider_width, 30.0);
-        if ctx.mouse_in_rect(sfx_slider_rect) && ctx.mouse_just_pressed {
-            self.dragging_slider = Some("sfx");
+        if let Some(t) = &mut self.muted_toggle {
+            if t.update(ctx) {
+                self.settings.muted = t.value;
+            }
         }
-        if self.dragging_slider == Some("sfx") {
-            let relative_x = (ctx.mouse_pos.x - sfx_slider_rect.x) / sfx_slider_rect.w;
-            self.settings.sfx_volume = relative_x.clamp(0.0, 1.0);
-        }
-
-        // 文字速度滑块
-        let text_speed_rect = Rect::new(content_x + 150.0, content_y + 100.0, slider_width, 30.0);
-        if ctx.mouse_in_rect(text_speed_rect) && ctx.mouse_just_pressed {
-            self.dragging_slider = Some("text_speed");
-        }
-        if self.dragging_slider == Some("text_speed") {
-            let relative_x = (ctx.mouse_pos.x - text_speed_rect.x) / text_speed_rect.w;
-            // 文字速度范围：10 - 100 字/秒
-            self.settings.text_speed = 10.0 + relative_x.clamp(0.0, 1.0) * 90.0;
-        }
-
-        // 静音按钮
-        let mute_btn_rect = Rect::new(content_x + 150.0, content_y + 150.0, 100.0, 35.0);
-        if ctx.mouse_in_rect(mute_btn_rect) && ctx.mouse_just_released {
-            self.settings.muted = !self.settings.muted;
-        }
-
-        // 全屏按钮
-        let fullscreen_btn_rect = Rect::new(content_x + 150.0, content_y + 200.0, 100.0, 35.0);
-        if ctx.mouse_in_rect(fullscreen_btn_rect) && ctx.mouse_just_released {
-            self.settings.fullscreen = !self.settings.fullscreen;
+        if let Some(t) = &mut self.fullscreen_toggle {
+            if t.update(ctx) {
+                self.settings.fullscreen = t.value;
+            }
         }
 
         // 返回按钮
@@ -171,6 +199,7 @@ impl SettingsScreen {
     /// 绘制界面
     pub fn draw(&self, ctx: &UiContext, text_renderer: &TextRenderer) {
         let theme = &ctx.theme;
+        let (panel_x, panel_y, panel_width, panel_height) = Self::panel_layout(ctx);
 
         // 背景
         draw_rectangle(
@@ -182,8 +211,6 @@ impl SettingsScreen {
         );
 
         // 面板
-        let panel_width = 500.0;
-        let panel_height = 400.0;
         let panel = Panel::centered(
             panel_width,
             panel_height,
@@ -193,8 +220,6 @@ impl SettingsScreen {
         .with_title("设置");
         panel.draw(ctx, text_renderer);
 
-        let panel_x = (ctx.screen_width - panel_width) / 2.0;
-        let panel_y = (ctx.screen_height - panel_height) / 2.0;
         let content_x = panel_x + theme.padding;
         let content_y = panel_y + theme.font_size_large + theme.padding * 2.0;
         let slider_width = panel_width - theme.padding * 2.0 - 150.0;
@@ -207,14 +232,9 @@ impl SettingsScreen {
             theme.font_size_normal,
             theme.text_primary,
         );
-        self.draw_slider(
-            content_x + 150.0,
-            content_y,
-            slider_width,
-            30.0,
-            self.settings.bgm_volume,
-            theme,
-        );
+        if let Some(s) = &self.bgm_slider {
+            s.draw(ctx);
+        }
 
         // SFX 音量
         text_renderer.draw_ui_text(
@@ -224,14 +244,9 @@ impl SettingsScreen {
             theme.font_size_normal,
             theme.text_primary,
         );
-        self.draw_slider(
-            content_x + 150.0,
-            content_y + 50.0,
-            slider_width,
-            30.0,
-            self.settings.sfx_volume,
-            theme,
-        );
+        if let Some(s) = &self.sfx_slider {
+            s.draw(ctx);
+        }
 
         // 文字速度
         text_renderer.draw_ui_text(
@@ -241,15 +256,9 @@ impl SettingsScreen {
             theme.font_size_normal,
             theme.text_primary,
         );
-        let text_speed_value = (self.settings.text_speed - 10.0) / 90.0;
-        self.draw_slider(
-            content_x + 150.0,
-            content_y + 100.0,
-            slider_width,
-            30.0,
-            text_speed_value,
-            theme,
-        );
+        if let Some(s) = &self.text_speed_slider {
+            s.draw(ctx);
+        }
         text_renderer.draw_ui_text(
             &format!("{:.0} 字/秒", self.settings.text_speed),
             content_x + 150.0 + slider_width + 10.0,
@@ -266,14 +275,9 @@ impl SettingsScreen {
             theme.font_size_normal,
             theme.text_primary,
         );
-        self.draw_toggle(
-            content_x + 150.0,
-            content_y + 150.0,
-            100.0,
-            35.0,
-            self.settings.muted,
-            theme,
-        );
+        if let Some(t) = &self.muted_toggle {
+            t.draw(ctx);
+        }
 
         // 全屏
         text_renderer.draw_ui_text(
@@ -283,14 +287,9 @@ impl SettingsScreen {
             theme.font_size_normal,
             theme.text_primary,
         );
-        self.draw_toggle(
-            content_x + 150.0,
-            content_y + 200.0,
-            100.0,
-            35.0,
-            self.settings.fullscreen,
-            theme,
-        );
+        if let Some(t) = &self.fullscreen_toggle {
+            t.draw(ctx);
+        }
 
         // 按钮
         if let Some(ref btn) = self.back_button {
@@ -299,36 +298,6 @@ impl SettingsScreen {
         if let Some(ref btn) = self.apply_button {
             btn.draw(ctx, text_renderer);
         }
-    }
-
-    /// 绘制滑块
-    fn draw_slider(&self, x: f32, y: f32, w: f32, h: f32, value: f32, theme: &crate::ui::Theme) {
-        // 背景
-        draw_rounded_rect(x, y + h / 2.0 - 4.0, w, 8.0, 4.0, theme.bg_secondary);
-        // 填充
-        let fill_w = w * value;
-        draw_rounded_rect(x, y + h / 2.0 - 4.0, fill_w, 8.0, 4.0, theme.accent);
-        // 滑块
-        let knob_x = x + fill_w - 8.0;
-        draw_circle(knob_x.max(x) + 8.0, y + h / 2.0, 10.0, theme.text_primary);
-    }
-
-    /// 绘制开关
-    fn draw_toggle(&self, x: f32, y: f32, w: f32, h: f32, value: bool, theme: &crate::ui::Theme) {
-        let bg_color = if value {
-            theme.accent
-        } else {
-            theme.bg_secondary
-        };
-        draw_rounded_rect(x, y, w, h, h / 2.0, bg_color);
-
-        let knob_x = if value { x + w - h + 4.0 } else { x + 4.0 };
-        draw_circle(
-            knob_x + (h - 8.0) / 2.0,
-            y + h / 2.0,
-            (h - 8.0) / 2.0,
-            theme.text_primary,
-        );
     }
 
     /// 标记需要重新初始化

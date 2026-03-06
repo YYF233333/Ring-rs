@@ -85,8 +85,8 @@ impl Modal {
         let theme = &ctx.theme;
 
         // 计算对话框尺寸和位置
-        let modal_width = 400.0;
-        let modal_height = 200.0;
+        let modal_width = theme.tokens.control.modal_width;
+        let modal_height = theme.tokens.control.modal_height;
         let modal_x = (ctx.screen_width - modal_width) / 2.0;
         let modal_y = (ctx.screen_height - modal_height) / 2.0;
 
@@ -177,8 +177,8 @@ impl Modal {
         );
 
         // 计算对话框尺寸
-        let modal_width = 400.0;
-        let modal_height = 200.0;
+        let modal_width = theme.tokens.control.modal_width;
+        let modal_height = theme.tokens.control.modal_height;
         let modal_x = (ctx.screen_width - modal_width) / 2.0;
         let modal_y = (ctx.screen_height - modal_height) / 2.0;
 

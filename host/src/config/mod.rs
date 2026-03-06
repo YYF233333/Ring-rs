@@ -75,6 +75,10 @@ pub struct AppConfig {
     /// 资源缓存配置
     #[serde(default)]
     pub resources: ResourceConfig,
+
+    /// UI 配置（主题覆盖/皮肤协议）
+    #[serde(default)]
+    pub ui: UiConfig,
 }
 
 /// 窗口配置
@@ -149,6 +153,17 @@ pub struct ResourceConfig {
     pub texture_cache_size_mb: usize,
 }
 
+/// UI 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UiConfig {
+    /// 主题覆盖文件（相对于 assets_root）
+    #[serde(default = "default_ui_theme_path")]
+    pub theme_path: String,
+    /// 皮肤协议文件（相对于 assets_root）
+    #[serde(default = "default_ui_skin_path")]
+    pub skin_path: String,
+}
+
 impl Default for ResourceConfig {
     fn default() -> Self {
         Self {
@@ -198,6 +213,14 @@ fn default_texture_cache_size_mb() -> usize {
     256
 }
 
+fn default_ui_theme_path() -> String {
+    String::new()
+}
+
+fn default_ui_skin_path() -> String {
+    String::new()
+}
+
 fn default_font_path() -> String {
     "fonts/simhei.ttf".to_string()
 }
@@ -221,6 +244,7 @@ impl Default for AppConfig {
             debug: DebugConfig::default(),
             audio: AudioConfig::default(),
             resources: ResourceConfig::default(),
+            ui: UiConfig::default(),
         }
     }
 }
@@ -252,6 +276,15 @@ impl Default for AudioConfig {
             bgm_volume: default_bgm_volume(),
             sfx_volume: default_sfx_volume(),
             muted: false,
+        }
+    }
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            theme_path: default_ui_theme_path(),
+            skin_path: default_ui_skin_path(),
         }
     }
 }

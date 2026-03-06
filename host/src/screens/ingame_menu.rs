@@ -55,91 +55,28 @@ impl InGameMenuScreen {
 
         let mut y = panel_y + theme.padding + theme.font_size_large + theme.spacing;
 
-        // 继续游戏
-        let mut resume_btn = Button::new(
-            "继续游戏",
-            panel_x + theme.padding,
-            y,
-            button_width,
-            button_height,
-        );
-        resume_btn.style = ButtonStyle::Primary;
-        self.buttons.push((InGameMenuAction::Resume, resume_btn));
-        y += button_height + spacing;
+        let entries = [
+            (InGameMenuAction::Resume, "继续游戏", true, false),
+            (InGameMenuAction::Save, "存档", false, false),
+            (InGameMenuAction::Load, "读档", false, false),
+            (InGameMenuAction::Settings, "设置", false, false),
+            (InGameMenuAction::History, "历史记录", false, true),
+            (InGameMenuAction::ReturnToTitle, "返回标题", false, false),
+        ];
 
-        // 存档
-        self.buttons.push((
-            InGameMenuAction::Save,
-            Button::new(
-                "存档",
-                panel_x + theme.padding,
-                y,
-                button_width,
-                button_height,
-            ),
-        ));
-        y += button_height + spacing;
+        for (action, text, primary, extra_gap) in entries {
+            let mut btn = Button::new(text, panel_x + theme.padding, y, button_width, button_height);
+            if primary {
+                btn.style = ButtonStyle::Primary;
+            }
+            self.buttons.push((action, btn));
+            y += button_height + spacing;
+            if extra_gap {
+                y += spacing;
+            }
+        }
 
-        // 读档
-        self.buttons.push((
-            InGameMenuAction::Load,
-            Button::new(
-                "读档",
-                panel_x + theme.padding,
-                y,
-                button_width,
-                button_height,
-            ),
-        ));
-        y += button_height + spacing;
-
-        // 设置
-        self.buttons.push((
-            InGameMenuAction::Settings,
-            Button::new(
-                "设置",
-                panel_x + theme.padding,
-                y,
-                button_width,
-                button_height,
-            ),
-        ));
-        y += button_height + spacing;
-
-        // 历史
-        self.buttons.push((
-            InGameMenuAction::History,
-            Button::new(
-                "历史记录",
-                panel_x + theme.padding,
-                y,
-                button_width,
-                button_height,
-            ),
-        ));
-        y += button_height + spacing * 2.0;
-
-        // 返回标题
-        self.buttons.push((
-            InGameMenuAction::ReturnToTitle,
-            Button::new(
-                "返回标题",
-                panel_x + theme.padding,
-                y,
-                button_width,
-                button_height,
-            ),
-        ));
-        y += button_height + spacing;
-
-        // 退出
-        let mut exit_btn = Button::new(
-            "退出游戏",
-            panel_x + theme.padding,
-            y,
-            button_width,
-            button_height,
-        );
+        let mut exit_btn = Button::new("退出游戏", panel_x + theme.padding, y, button_width, button_height);
         exit_btn.style = ButtonStyle::Danger;
         self.buttons.push((InGameMenuAction::Exit, exit_btn));
 

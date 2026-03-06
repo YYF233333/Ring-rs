@@ -3,7 +3,9 @@
 use crate::app_mode::SaveLoadTab;
 use crate::renderer::TextRenderer;
 use crate::save_manager::{MAX_SAVE_SLOTS, SaveInfo, SaveManager};
-use crate::ui::{Button, ButtonStyle, ListItem, ListView, Modal, ModalResult, Panel, UiContext};
+use crate::ui::{
+    Button, ButtonStyle, ListItem, ListView, Modal, ModalResult, Panel, TabBar, TabItem, UiContext,
+};
 use macroquad::prelude::*;
 use std::path::PathBuf;
 
@@ -21,8 +23,8 @@ pub enum SaveLoadAction {
 pub struct SaveLoadScreen {
     /// 当前标签页
     pub tab: SaveLoadTab,
-    /// 标签按钮
-    tab_buttons: Vec<(SaveLoadTab, Button)>,
+    /// 标签栏
+    tab_bar: Option<TabBar>,
     /// 存档列表
     save_list: ListView,
     /// 操作按钮（保存/读取/删除）
@@ -43,7 +45,7 @@ impl SaveLoadScreen {
     pub fn new() -> Self {
         Self {
             tab: SaveLoadTab::Load,
-            tab_buttons: Vec::new(),
+            tab_bar: None,
             save_list: ListView::new(Rect::new(0.0, 0.0, 0.0, 0.0), 70.0),
             action_buttons: Vec::new(),
             back_button: None,
@@ -70,39 +72,26 @@ impl SaveLoadScreen {
         let panel_x = (ctx.screen_width - panel_width) / 2.0;
         let panel_y = (ctx.screen_height - panel_height) / 2.0;
 
-        // 标签按钮
-        self.tab_buttons.clear();
+        // 标签栏
         let tab_width = 100.0;
-        let tab_height = 40.0;
+        let tab_height = theme.tokens.control.tab_height;
         let tab_y = panel_y + theme.padding;
-
-        let mut save_tab = Button::new(
-            "存档",
+        self.tab_bar = Some(TabBar::new(
+            vec![
+                TabItem {
+                    id: "save".to_string(),
+                    label: "存档".to_string(),
+                },
+                TabItem {
+                    id: "load".to_string(),
+                    label: "读档".to_string(),
+                },
+            ],
+            if self.tab == SaveLoadTab::Save { 0 } else { 1 },
             panel_x + theme.padding,
             tab_y,
             tab_width,
-            tab_height,
-        );
-        save_tab.style = if self.tab == SaveLoadTab::Save {
-            ButtonStyle::Primary
-        } else {
-            ButtonStyle::Secondary
-        };
-        self.tab_buttons.push((SaveLoadTab::Save, save_tab));
-
-        let mut load_tab = Button::new(
-            "读档",
-            panel_x + theme.padding + tab_width + theme.spacing_small,
-            tab_y,
-            tab_width,
-            tab_height,
-        );
-        load_tab.style = if self.tab == SaveLoadTab::Load {
-            ButtonStyle::Primary
-        } else {
-            ButtonStyle::Secondary
-        };
-        self.tab_buttons.push((SaveLoadTab::Load, load_tab));
+        ));
 
         // 列表区域
         let list_x = panel_x + theme.padding;
@@ -110,7 +99,10 @@ impl SaveLoadScreen {
         let list_width = panel_width - theme.padding * 2.0 - 120.0; // 留出右侧按钮空间
         let list_height =
             panel_height - (list_y - panel_y) - theme.padding - theme.button_height - theme.spacing;
-        self.save_list = ListView::new(Rect::new(list_x, list_y, list_width, list_height), 70.0);
+        self.save_list = ListView::new(
+            Rect::new(list_x, list_y, list_width, list_height),
+            theme.tokens.control.list_item_height,
+        );
 
         // 操作按钮（右侧）
         self.action_buttons.clear();
@@ -227,10 +219,14 @@ impl SaveLoadScreen {
 
         // 标签按钮
         let mut new_tab = None;
-        for (tab, button) in &mut self.tab_buttons {
-            if button.update(ctx) {
-                new_tab = Some(*tab);
-            }
+        if let Some(tab_bar) = &mut self.tab_bar
+            && let Some(idx) = tab_bar.update(ctx)
+        {
+            new_tab = Some(if idx == 0 {
+                SaveLoadTab::Save
+            } else {
+                SaveLoadTab::Load
+            });
         }
         if let Some(tab) = new_tab {
             self.switch_tab(tab);
@@ -354,8 +350,8 @@ impl SaveLoadScreen {
         panel.draw(ctx, text_renderer);
 
         // 标签按钮
-        for (_, button) in &self.tab_buttons {
-            button.draw(ctx, text_renderer);
+        if let Some(tab_bar) = &self.tab_bar {
+            tab_bar.draw(ctx, text_renderer);
         }
 
         // 列表

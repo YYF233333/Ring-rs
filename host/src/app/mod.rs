@@ -32,7 +32,7 @@ use crate::resources::ResourceManager;
 use crate::screens::{
     HistoryScreen, InGameMenuScreen, SaveLoadScreen, SettingsScreen, TitleScreen,
 };
-use crate::ui::{Theme, ToastManager, UiContext};
+use crate::ui::{Theme, ToastManager, UiContext, load_skin, load_theme_with_override};
 use crate::{
     AppConfig, AudioManager, CommandExecutor, HostState, InputManager, NavigationStack,
     PlaybackMode, UserSettings,
@@ -156,6 +156,18 @@ impl AppState {
         let scripts = init::scan_script_list(&config, &resource_manager);
         let (width, height) = init::window_size(&config);
         let user_settings = init::load_user_settings(USER_SETTINGS_PATH);
+        let theme = if config.ui.theme_path.trim().is_empty() {
+            Theme::dark()
+        } else {
+            let theme_path = config.assets_root.join(&config.ui.theme_path);
+            load_theme_with_override(Theme::dark(), &theme_path)
+        };
+        let skin = if config.ui.skin_path.trim().is_empty() {
+            None
+        } else {
+            let skin_path = config.assets_root.join(&config.ui.skin_path);
+            load_skin(&skin_path)
+        };
 
         // Dev Mode: 运行脚本检查
         init::run_script_check(&config, &scripts, &resource_manager);
@@ -172,7 +184,11 @@ impl AppState {
             },
             ui: UiSystems {
                 navigation: NavigationStack::new(),
-                ui_context: UiContext::new(Theme::dark()),
+                ui_context: {
+                    let mut ui_ctx = UiContext::new(theme);
+                    ui_ctx.skin = skin;
+                    ui_ctx
+                },
                 toast_manager: ToastManager::new(),
                 title_screen: TitleScreen::new(),
                 ingame_menu: InGameMenuScreen::new(),

@@ -2,7 +2,7 @@
 
 use crate::renderer::TextRenderer;
 use crate::save_manager::{SaveInfo, SaveManager};
-use crate::ui::{Button, ButtonStyle, Theme, UiContext};
+use crate::ui::{Button, ButtonStyle, Theme, UiContext, menu_button_layout};
 use macroquad::prelude::*;
 
 /// 主菜单项
@@ -53,46 +53,28 @@ impl TitleScreen {
 
         // 创建按钮
         self.buttons.clear();
-
-        let button_width = theme.button_min_width;
-        let button_height = theme.button_height;
-        let spacing = theme.spacing;
         let start_y = screen_height * 0.45;
-        let center_x = (screen_width - button_width) / 2.0;
-
-        let mut y = start_y;
+        let labels = ["开始游戏", "继续", "读取存档", "设置", "退出游戏"];
+        let mut menu_buttons = menu_button_layout(&labels, start_y, screen_width, theme);
 
         // 开始游戏
-        let mut start_btn = Button::new("开始游戏", center_x, y, button_width, button_height);
+        let mut start_btn = menu_buttons.remove(0);
         start_btn.style = ButtonStyle::Primary;
         self.buttons.push((TitleAction::StartGame, start_btn));
-        y += button_height + spacing;
 
         // 继续（仅当有 Continue 存档时可用）
-        let mut continue_btn = Button::new("继续", center_x, y, button_width, button_height);
+        let mut continue_btn = menu_buttons.remove(0);
         continue_btn.disabled = !self.has_continue;
         self.buttons.push((TitleAction::Continue, continue_btn));
-        y += button_height + spacing;
 
         // 读取存档
-        self.buttons.push((
-            TitleAction::LoadGame,
-            Button::new("读取存档", center_x, y, button_width, button_height),
-        ));
-        y += button_height + spacing;
+        self.buttons.push((TitleAction::LoadGame, menu_buttons.remove(0)));
 
         // 设置
-        self.buttons.push((
-            TitleAction::Settings,
-            Button::new("设置", center_x, y, button_width, button_height),
-        ));
-        y += button_height + spacing;
+        self.buttons.push((TitleAction::Settings, menu_buttons.remove(0)));
 
         // 退出
-        self.buttons.push((
-            TitleAction::Exit,
-            Button::new("退出游戏", center_x, y, button_width, button_height),
-        ));
+        self.buttons.push((TitleAction::Exit, menu_buttons.remove(0)));
 
         self.needs_init = false;
     }

@@ -14,6 +14,7 @@
 1. `app/update/modes` 按当前 `AppMode` 调用对应页面更新逻辑。
 2. 页面通过 `ui` 组件与 `UiContext` 计算交互状态。
 3. 页面结果驱动导航、设置变更、存档操作等上层行为。
+4. 阶段29中，`Settings` 已迁移为 `Slider/Toggle` 组件调用，`SaveLoad` 标签切换由 `TabBar` 组件承载。
 
 ## Dependencies
 
@@ -25,6 +26,7 @@
 
 - 页面层负责交互编排，不直接处理 Runtime 语义执行。
 - 导航切换通过 `NavigationStack` 统一管理返回路径。
+- 页面层应避免定义控件绘制细节（视觉样式由 `Theme tokens + ui 组件` 提供）。
 
 ## FailureModes
 
@@ -44,7 +46,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-06
 
 ## Owner
 

@@ -47,7 +47,10 @@ impl HistoryScreen {
         let list_width = panel_width - theme.padding * 2.0;
         let list_height =
             panel_height - (list_y - panel_y) - theme.padding - theme.button_height - theme.spacing;
-        self.history_list = ListView::new(Rect::new(list_x, list_y, list_width, list_height), 80.0);
+        self.history_list = ListView::new(
+            Rect::new(list_x, list_y, list_width, list_height),
+            theme.tokens.control.list_item_height + 10.0,
+        );
 
         // 转换历史事件为列表项
         let items: Vec<ListItem> = history

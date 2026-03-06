@@ -1,6 +1,6 @@
 //! # 列表组件
 
-use super::{UiContext, draw_rounded_rect};
+use super::{ScrollBar, UiContext, draw_rounded_rect};
 use macroquad::prelude::*;
 
 /// 列表项
@@ -210,8 +210,8 @@ impl ListView {
                     self.rect.x,
                     item_y,
                     self.rect.w,
-                    self.item_height - 2.0,
-                    theme.corner_radius / 2.0,
+                    self.item_height - theme.tokens.radius.small,
+                    theme.tokens.radius.small,
                     theme.accent,
                 );
             } else if is_hovered && !item.disabled {
@@ -219,8 +219,8 @@ impl ListView {
                     self.rect.x,
                     item_y,
                     self.rect.w,
-                    self.item_height - 2.0,
-                    theme.corner_radius / 2.0,
+                    self.item_height - theme.tokens.radius.small,
+                    theme.tokens.radius.small,
                     theme.button_hover,
                 );
             }
@@ -274,26 +274,15 @@ impl ListView {
             }
         }
 
-        // 绘制滚动条（如果需要）
-        if self.can_scroll() {
-            let scrollbar_height = (self.rect.h / self.total_height()) * self.rect.h;
-            let scrollbar_y = self.rect.y
-                + (self.scroll_offset / (self.total_height() - self.rect.h))
-                    * (self.rect.h - scrollbar_height);
-
-            draw_rounded_rect(
-                self.rect.x + self.rect.w - 6.0,
-                scrollbar_y,
-                4.0,
-                scrollbar_height,
-                2.0,
-                Color::new(
-                    theme.text_secondary.r,
-                    theme.text_secondary.g,
-                    theme.text_secondary.b,
-                    0.5,
-                ),
-            );
-        }
+        let track_w = theme.tokens.control.scroll_bar_width;
+        let scrollbar = ScrollBar::new(
+            self.rect.x + self.rect.w - track_w - theme.tokens.spacing.small * 0.25,
+            self.rect.y,
+            self.rect.h,
+            self.total_height(),
+            self.rect.h,
+            self.scroll_offset,
+        );
+        scrollbar.draw(ctx);
     }
 }

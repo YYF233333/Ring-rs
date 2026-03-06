@@ -108,8 +108,8 @@ impl ToastManager {
     /// 绘制所有 Toast
     pub fn draw(&self, ctx: &UiContext, text_renderer: &crate::renderer::TextRenderer) {
         let theme = &ctx.theme;
-        let toast_height = 50.0;
-        let toast_width = 300.0;
+        let toast_height = theme.tokens.control.toast_height;
+        let toast_width = theme.tokens.control.toast_width;
         let margin = theme.spacing;
         let start_y = theme.spacing_large;
 
@@ -146,11 +146,20 @@ impl ToastManager {
             );
 
             // 绘制图标（简化为文字）
-            let icon = match toast.toast_type {
-                ToastType::Info => "ℹ",
-                ToastType::Success => "✓",
-                ToastType::Warning => "⚠",
-                ToastType::Error => "✗",
+            let icon = if let Some(skin) = &ctx.skin {
+                match toast.toast_type {
+                    ToastType::Info => skin.icons.info.as_deref().unwrap_or("i"),
+                    ToastType::Success => skin.icons.success.as_deref().unwrap_or("v"),
+                    ToastType::Warning => skin.icons.warning.as_deref().unwrap_or("!"),
+                    ToastType::Error => skin.icons.error.as_deref().unwrap_or("x"),
+                }
+            } else {
+                match toast.toast_type {
+                    ToastType::Info => "i",
+                    ToastType::Success => "v",
+                    ToastType::Warning => "!",
+                    ToastType::Error => "x",
+                }
             };
             text_renderer.draw_ui_text(
                 icon,

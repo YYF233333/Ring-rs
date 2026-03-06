@@ -87,7 +87,7 @@ impl Panel {
                 self.rect.w,
                 self.rect.h,
                 theme.corner_radius,
-                2.0,
+                theme.tokens.elevation.panel_border_thickness,
                 theme.accent,
             );
         }
@@ -97,12 +97,13 @@ impl Panel {
             let title_height = theme.font_size_large + theme.padding;
 
             // 标题栏背景
+            let inset = theme.tokens.elevation.panel_border_thickness;
             draw_rounded_rect(
-                self.rect.x + 2.0,
-                self.rect.y + 2.0,
-                self.rect.w - 4.0,
+                self.rect.x + inset,
+                self.rect.y + inset,
+                self.rect.w - inset * 2.0,
                 title_height,
-                theme.corner_radius - 2.0,
+                (theme.corner_radius - inset).max(0.0),
                 theme.bg_secondary,
             );
 
@@ -113,7 +114,12 @@ impl Panel {
                 self.rect.x + self.rect.w - theme.padding,
                 self.rect.y + title_height,
                 1.0,
-                Color::new(theme.accent.r, theme.accent.g, theme.accent.b, 0.3),
+                Color::new(
+                    theme.accent.r,
+                    theme.accent.g,
+                    theme.accent.b,
+                    theme.tokens.elevation.separator_alpha,
+                ),
             );
 
             // 标题文字

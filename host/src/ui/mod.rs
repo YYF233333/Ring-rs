@@ -6,15 +6,27 @@ pub mod button;
 pub mod list;
 pub mod modal;
 pub mod panel;
+pub mod scroll;
+pub mod skin;
+pub mod slider;
+pub mod tab;
 pub mod theme;
+pub mod theme_loader;
 pub mod toast;
+pub mod toggle;
 
-pub use button::{Button, ButtonState, ButtonStyle};
+pub use button::{Button, ButtonState, ButtonStyle, centered_button, menu_button_layout};
 pub use list::{ListItem, ListView};
 pub use modal::{Modal, ModalResult};
 pub use panel::Panel;
+pub use scroll::ScrollBar;
+pub use skin::{UiSkinConfig, load_skin};
+pub use slider::Slider;
+pub use tab::{TabBar, TabItem};
 pub use theme::Theme;
+pub use theme_loader::load_theme_with_override;
 pub use toast::{Toast, ToastManager, ToastType};
+pub use toggle::Toggle;
 
 use macroquad::prelude::*;
 
@@ -34,6 +46,8 @@ pub struct UiContext {
     pub mouse_just_pressed: bool,
     /// 鼠标是否刚释放（本帧）
     pub mouse_just_released: bool,
+    /// UI 皮肤配置（可选）
+    pub skin: Option<UiSkinConfig>,
 }
 
 impl UiContext {
@@ -46,6 +60,7 @@ impl UiContext {
             mouse_pressed: false,
             mouse_just_pressed: false,
             mouse_just_released: false,
+            skin: None,
         }
     }
 
