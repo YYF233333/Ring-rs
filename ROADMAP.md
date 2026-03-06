@@ -187,37 +187,40 @@
 
 **关键入口（预期）**：
 - 语法/解析：`docs/script_syntax_spec.md`、`vn-runtime/src/script/parser/mod.rs`、`vn-runtime/src/script/ast.rs`
-- Command/执行：`vn-runtime/src/command.rs`（`Command::ShowText`）、`vn-runtime/src/runtime/executor.rs`
+- Command/执行：`vn-runtime/src/command/mod.rs`（`Command::ShowText`）、`vn-runtime/src/runtime/executor.rs`
 - Host 执行与音频：`host/src/command_executor/ui.rs`、`host/src/app/command_handlers/audio.rs`、`host/src/audio/mod.rs`
 - 工具链：`tools/xtask/src/main.rs`（`script-check` / `voice-index`）
  
-### 阶段 29：UI 实现规范化（Theme 系统 + 组件库 + 个性化定制） 规划中
+### 阶段 29：UI 实现规范化（对标 Ren'Py：Style 系统 + Screen 组件化 + 皮肤化） 进行中
 
-> **目标**：把当前“手绘式 UI”升级为**可主题化、可复用、可定制**的 UI 系统；统一视觉规范（颜色/字体/间距/圆角/阴影/动效），让 Title/Menu/SaveLoad/Settings/History 等页面在不改业务逻辑的前提下可整体换肤与局部定制。
+> **目标**：在现有 `Theme + 组件 + screens` 基线上，收敛为可维护的 UI 实现规范。参考 Ren'Py 的思路，将“样式定义（style）”“页面结构（screen）”“资源皮肤（displayable assets）”分层，做到换肤不改业务、页面复用不复制代码。
 
-**交付**：
-- **Theme 规范化（Design Tokens）**：定义稳定的主题结构（如 `Palette/Typo/Spacing/Radii/Shadows`），提供默认主题（Dark/Light）与扩展点（游戏自定义主题）
-- **UI 皮肤素材（Skin Assets）管线**：UI（对话框/按钮/图标/面板等）由开发者提供图片素材，我们按“皮肤配置 + 组件模板”自动搭建页面  
-  - 约定资源目录：`ui/`（如 `ui/dialog/`、`ui/icons/`、`ui/buttons/`、`ui/panels/`）  
-  - 皮肤配置：`ui_skin.json`（或并入 `ui_theme.json`），定义图标映射、对话框/面板九宫格（9-slice）切片、按钮状态图（normal/hover/pressed/disabled）、可选动画帧/时长  
-  - 回退策略：缺失素材时使用默认皮肤/占位符并给出诊断；保证“没配全也能跑”，但发布门禁可要求齐全
-- **样式 API 收敛**：组件不再散落硬编码颜色与尺寸，改为从 `UiContext.theme`/tokens 取值；统一状态样式（normal/hover/pressed/disabled/focus）
-- **组件库升级**：梳理并补齐基础组件（Button/List/Panel/Modal/Toast/Scroll/Slider/Toggle/Tab），统一交互与布局约定，减少页面层重复绘制代码
-- **布局与排版一致性**：统一字体加载/回退、字号层级、文本测量与裁剪省略；统一 DPI/分辨率适配策略（同一套布局在 720p/1080p 下可用）
-- **个性化/定制入口**：提供 `ui_theme.json`（或 `config.json.ui`）加载主题覆盖；玩家侧提供 `UserSettings` 的 UI 偏好（如字体大小/UI 缩放/高对比度开关）
-- **文档与示例**：新增 UI 规范文档（tokens/组件用法/页面模板），给内容作者一个“如何换肤”的最短路径
+**现状校准（2026-03）**：
+- 已有主题基础：`host/src/ui/theme.rs` 已包含 Dark/Light、颜色/字号/间距/圆角等字段
+- 已有组件基础：`button/list/modal/panel/toast` 可复用，`UiContext` 已统一输入与屏幕状态
+- 已有页面基线：`title/settings/save_load/history/ingame_menu` 已接入 `Theme` 与通用组件
+- 当前主要问题：页面内仍有大量硬编码布局与绘制细节（尤其 `settings` 中 slider/toggle），主题覆盖与皮肤素材加载尚未形成稳定协议
+
+**交付（分层里程碑）**：
+- **M1 - Style 层（对标 Ren'Py style）**：将 `Theme` 拆分为稳定 token 组（`palette/typography/spacing/radius/elevation`），并支持“默认主题 + 覆盖主题”加载
+- **M2 - Screen 层（对标 Ren'Py screen）**：页面只做状态编排，布局与交互由可复用组件表达；移除页面内重复绘制逻辑
+- **M3 - Widget 层补齐**：在现有 `Button/List/Modal/Panel/Toast` 基础上补齐 `Slider/Toggle/Tab/Scroll`，优先替换 `settings` 内联控件
+- **M4 - Skin 资源层**：约定 `assets/ui/` 目录与 `ui_skin.json`（或并入 `ui_theme.json`）协议，支持按钮状态图、图标映射、面板九宫格（9-slice）
+- **M5 - 诊断与回退**：缺失皮肤资源时回退默认绘制并给出可定位诊断；工具链可扩展 `script-check` 增加 UI 资源检查
+- **M6 - 样板页面重构**：至少完成 `Title + Settings` 的组件化与皮肤化样板，作为其余页面迁移模板
 
 **DoD（摘要）**：
-- 页面与组件的颜色/间距/圆角不再硬编码，全部来自 theme/tokens
-- 主题切换不改业务逻辑（仅替换 theme 配置或加载覆盖）
-- 能仅通过提供 `ui/` 素材 + `ui_skin.json` 完成对话框/按钮/图标等基础皮肤替换；缺失项能被静态检查/运行时诊断定位
-- 至少完成 2 个页面（建议 Title + Settings）的组件化重写作为样板，并能复用到其余页面
+- 页面层不再直接定义视觉常量（颜色/间距/圆角/字号），统一来自 style tokens
+- 主题或皮肤替换不改业务分支逻辑（仅改配置与素材）
+- `settings` 不再维护内联 slider/toggle 绘制逻辑，改用通用组件
+- `assets/ui + ui_skin.json` 可替换基础控件外观，缺失资源有回退与诊断
+- 至少 `Title + Settings` 达到可复用模板标准，并沉淀迁移指引
 
-**关键入口（预期）**：
-- 主题与上下文：`host/src/ui/{theme.rs,mod.rs}`、`host/src/app/mod.rs`（`UiContext`）
-- 组件库：`host/src/ui/{button.rs,list.rs,modal.rs,panel.rs,toast.rs}`（后续新增 slider/toggle/tab/scroll）
+**关键入口（当前 + 预期）**：
+- 主题与上下文：`host/src/ui/{theme.rs,mod.rs}`、`host/src/app/mod.rs`（`UiContext` 注入）
+- 组件库：`host/src/ui/{button.rs,list.rs,modal.rs,panel.rs,toast.rs}`（阶段29补齐 `slider/toggle/tab/scroll`）
 - 页面：`host/src/screens/{title.rs,settings.rs,save_load.rs,history.rs,ingame_menu.rs}`
-- 资源与校验：`host/src/resources/*`、`tools/xtask/src/main.rs`（可扩展 `ui-check`）
+- 资源与校验：`host/src/resources/*`、`tools/xtask/src/main.rs`（扩展 UI 资源诊断能力）
  
 ---
 

@@ -1,0 +1,33 @@
+{
+  "$comment": "立绘资源元数据配置 - 控制角色摆放与缩放",
+  
+  "characters": {
+    "groups": {
+      "北风": {
+        "anchor": { "x": 0.5, "y": 0.35 },
+        "pre_scale": 1.0
+      }
+    },
+    "sprites": {
+      "characters/北风-日常服.png": "北风",
+      "characters/北风-日常服2.png": "北风"
+    }
+  },
+
+  "presets": {
+    "left":       { "x": 0.18, "y": 0.95, "scale": 0.7 },
+    "center":     { "x": 0.50, "y": 0.95, "scale": 0.7 },
+    "right":      { "x": 0.82, "y": 0.95, "scale": 0.7 },
+    "nearleft":   { "x": 0.25, "y": 1.1, "scale": 0.9 },
+    "nearmiddle": { "x": 0.50, "y": 1.1, "scale": 0.9 },
+    "nearright":  { "x": 0.75, "y": 1.1, "scale": 0.9 },
+    "farleft":    { "x": 0.15, "y": 0.80, "scale": 0.5 },
+    "farmiddle":  { "x": 0.50, "y": 0.80, "scale": 0.5 },
+    "farright":   { "x": 0.85, "y": 0.80, "scale": 0.5 }
+  },
+
+  "defaults": {
+    "anchor": { "x": 0.5, "y": 0.5 },
+    "pre_scale": 1.0
+  }
+}
