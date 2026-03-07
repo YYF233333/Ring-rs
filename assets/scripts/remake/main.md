@@ -22,7 +22,7 @@ callScript [chapter11](ring/summer/3-1.md)
 
 if $complete_summer != true
   set $complete_summer = true
-  scene bg:black with dissolve(0.5)
+  changeScene <img src="../../backgrounds/black.png" alt="black" style="zoom:10%;" /> with Dissolve(duration: 0.5)
   callScript [splashscreen](summer/splash.rpy)
   fullRestart
 else
@@ -40,4 +40,3 @@ callScript [chapter18](ring/winter/3-6.md)
 callScript [chapter19](ring/winter/inter03.md)
 callScript [chapter20](ring/winter/3-7.md)
 callScript [ending](ring/winter/ending.md)
-end

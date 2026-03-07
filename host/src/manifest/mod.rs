@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use tracing::warn;
+use crate::resources::normalize_logical_path;
 
 /// 2D 点（归一化坐标）
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -361,15 +362,21 @@ impl Manifest {
     /// 3. 文件名前缀推导
     /// 4. 返回默认配置
     pub fn get_group_config(&self, sprite_path: &str) -> GroupConfig {
+        let normalized_path = normalize_logical_path(sprite_path);
+
         // 1. 显式映射
-        if let Some(group_id) = self.characters.sprites.get(sprite_path)
+        if let Some(group_id) = self
+            .characters
+            .sprites
+            .get(sprite_path)
+            .or_else(|| self.characters.sprites.get(&normalized_path))
             && let Some(config) = self.characters.groups.get(group_id)
         {
             return config.clone();
         }
 
         // 2. 路径推导
-        let group_id = self.infer_group_id(sprite_path);
+        let group_id = self.infer_group_id(&normalized_path);
         if let Some(config) = self.characters.groups.get(&group_id) {
             return config.clone();
         }

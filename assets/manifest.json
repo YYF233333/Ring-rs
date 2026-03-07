@@ -6,11 +6,27 @@
       "北风": {
         "anchor": { "x": 0.5, "y": 0.35 },
         "pre_scale": 1.0
+      },
+      "红叶": {
+        "anchor": { "x": 0.5, "y": 0.35 },
+        "pre_scale": 1.0
       }
     },
     "sprites": {
       "characters/北风-日常服.png": "北风",
-      "characters/北风-日常服2.png": "北风"
+      "characters/北风-日常服2.png": "北风",
+      "characters/立绘红叶/夏装/角色夏收手1.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏收手2.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏收手3.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏收手4.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏收手5.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏收手6.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏正常1.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏正常2.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏正常3.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏正常4.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏正常5.webp": "红叶",
+      "characters/立绘红叶/夏装/角色夏正常6.webp": "红叶"
     }
   },
 

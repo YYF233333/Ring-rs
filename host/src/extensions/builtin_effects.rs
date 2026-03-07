@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use macroquad::prelude::screen_width;
+use macroquad::prelude::screen_height;
 
 use crate::renderer::animation::ObjectId;
 use crate::renderer::effects::{EffectKind, EffectTarget, defaults};
@@ -245,17 +246,130 @@ pub fn apply_character_move(
 
     let core = ctx.core_mut();
     let screen_w = screen_width();
-    let offset_x = screen_w * (old_preset.x - new_preset.x);
+    let screen_h = screen_height();
+    let (offset_x, offset_y, start_scale) =
+        compute_move_transition(&old_preset, &new_preset, screen_w, screen_h);
     let Some(character) = core.render_state.get_character_anim(alias).cloned() else {
         return Ok(());
     };
     let object_id = ensure_character_registered(core, alias, &character);
     character.set("position_x", offset_x);
+    character.set("position_y", offset_y);
+    character.set("scale_x", start_scale);
+    character.set("scale_y", start_scale);
     core.animation_system
-        .animate_object::<AnimatableCharacter>(object_id, "position_x", offset_x, 0.0, duration)
+        .animate_object_with_easing::<AnimatableCharacter>(
+            object_id,
+            "position_x",
+            offset_x,
+            0.0,
+            duration,
+            request.effect.easing,
+        )
         .map_err(|error| ExtensionError::Runtime {
             capability_id: request.capability_id.clone(),
-            message: format!("角色位移动画失败: {error}"),
+            message: format!("角色 X 位移动画失败: {error}"),
+        })?;
+    core.animation_system
+        .animate_object_with_easing::<AnimatableCharacter>(
+            object_id,
+            "position_y",
+            offset_y,
+            0.0,
+            duration,
+            request.effect.easing,
+        )
+        .map_err(|error| ExtensionError::Runtime {
+            capability_id: request.capability_id.clone(),
+            message: format!("角色 Y 位移动画失败: {error}"),
+        })?;
+    core.animation_system
+        .animate_object_with_easing::<AnimatableCharacter>(
+            object_id,
+            "scale_x",
+            start_scale,
+            1.0,
+            duration,
+            request.effect.easing,
+        )
+        .map_err(|error| ExtensionError::Runtime {
+            capability_id: request.capability_id.clone(),
+            message: format!("角色 X 缩放动画失败: {error}"),
+        })?;
+    core.animation_system
+        .animate_object_with_easing::<AnimatableCharacter>(
+            object_id,
+            "scale_y",
+            start_scale,
+            1.0,
+            duration,
+            request.effect.easing,
+        )
+        .map_err(|error| ExtensionError::Runtime {
+            capability_id: request.capability_id.clone(),
+            message: format!("角色 Y 缩放动画失败: {error}"),
         })?;
     Ok(())
+}
+
+fn compute_move_transition(
+    old_preset: &crate::manifest::PositionPreset,
+    new_preset: &crate::manifest::PositionPreset,
+    screen_w: f32,
+    screen_h: f32,
+) -> (f32, f32, f32) {
+    let offset_x = screen_w * (old_preset.x - new_preset.x);
+    let offset_y = screen_h * (old_preset.y - new_preset.y);
+    // 保持视觉连续：切换到新 preset 后先用比例抵消，再插值回 1.0
+    let start_scale = if new_preset.scale.abs() > f32::EPSILON {
+        old_preset.scale / new_preset.scale
+    } else {
+        1.0
+    };
+    (offset_x, offset_y, start_scale)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_move_transition;
+    use crate::manifest::PositionPreset;
+
+    #[test]
+    fn compute_move_transition_includes_offset_and_scale_ratio() {
+        let old_preset = PositionPreset {
+            x: 0.2,
+            y: 0.9,
+            scale: 0.9,
+        };
+        let new_preset = PositionPreset {
+            x: 0.8,
+            y: 0.7,
+            scale: 0.6,
+        };
+
+        let (offset_x, offset_y, start_scale) =
+            compute_move_transition(&old_preset, &new_preset, 1000.0, 500.0);
+
+        assert!((offset_x + 600.0).abs() < 0.01);
+        assert!((offset_y - 100.0).abs() < 0.01);
+        assert!((start_scale - 1.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn compute_move_transition_handles_zero_target_scale() {
+        let old_preset = PositionPreset {
+            x: 0.1,
+            y: 0.2,
+            scale: 0.9,
+        };
+        let new_preset = PositionPreset {
+            x: 0.1,
+            y: 0.2,
+            scale: 0.0,
+        };
+
+        let (_offset_x, _offset_y, start_scale) =
+            compute_move_transition(&old_preset, &new_preset, 1280.0, 720.0);
+        assert!((start_scale - 1.0).abs() < 0.01);
+    }
 }

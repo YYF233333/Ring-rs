@@ -66,3 +66,26 @@ fn test_get_group_config_default() {
     assert!((config.anchor.y - 1.0).abs() < 0.01);
     assert!((config.pre_scale - 1.0).abs() < 0.01);
 }
+
+#[test]
+fn test_get_group_config_explicit_with_relative_segments() {
+    let mut manifest = Manifest::with_defaults();
+
+    manifest.characters.groups.insert(
+        "红叶".to_string(),
+        GroupConfig {
+            anchor: Point2D { x: 0.5, y: 0.35 },
+            pre_scale: 0.1,
+        },
+    );
+    manifest.characters.sprites.insert(
+        "characters/立绘红叶/夏装/角色夏收手4.webp".to_string(),
+        "红叶".to_string(),
+    );
+
+    let config = manifest.get_group_config(
+        "scripts/remake/ring/summer/../../../../characters/立绘红叶/夏装/角色夏收手4.webp",
+    );
+    assert!((config.anchor.y - 0.35).abs() < 0.01);
+    assert!((config.pre_scale - 0.1).abs() < 0.01);
+}
