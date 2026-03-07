@@ -4,7 +4,7 @@
 
 use macroquad::audio::{Sound, load_sound};
 use macroquad::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 mod cache;
@@ -45,6 +45,10 @@ pub struct ResourceManager {
     texture_cache: TextureCache,
     /// 音频资源缓存（路径 -> Sound）
     sounds: HashMap<String, Sound>,
+    /// 纹理加载失败缓存（规范化路径）
+    ///
+    /// 用于避免缺失资源在每帧按需加载时反复重试并刷屏日志。
+    failed_textures: HashSet<String>,
     /// 资源基础路径
     base_path: String,
     /// 资源来源（文件系统/ZIP 等）
@@ -63,6 +67,7 @@ impl ResourceManager {
         Self {
             texture_cache: TextureCache::new(texture_cache_size_mb),
             sounds: HashMap::new(),
+            failed_textures: HashSet::new(),
             source: Arc::new(FsSource::new(&base)),
             base_path: base,
         }
@@ -83,6 +88,7 @@ impl ResourceManager {
         Self {
             texture_cache: TextureCache::new(texture_cache_size_mb),
             sounds: HashMap::new(),
+            failed_textures: HashSet::new(),
             base_path: base_path.into(),
             source,
         }
@@ -99,6 +105,7 @@ impl ResourceManager {
         Self {
             texture_cache: TextureCache::new(texture_cache_size_mb),
             sounds: HashMap::new(),
+            failed_textures: HashSet::new(),
             source: Arc::new(FsSource::new(&base)),
             base_path: base,
         }
@@ -203,16 +210,36 @@ impl ResourceManager {
             return Ok(texture);
         }
 
+        // 对已经失败过的路径直接返回，避免每帧重复 IO + 重复报错
+        if self.failed_textures.contains(&full_path) {
+            return Err(ResourceError::LoadFailed {
+                path: full_path,
+                kind: "texture".to_string(),
+                message: "该纹理此前加载失败，已跳过重复重试".to_string(),
+            });
+        }
+
         // 通过 ResourceSource 读取字节
-        let bytes = self.source.read(path)?;
+        let bytes = match self.source.read(path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                self.failed_textures.insert(full_path.clone());
+                return Err(err);
+            }
+        };
 
         // 统一使用 image crate 解码（支持 PNG/JPEG/GIF/WebP 等）
-        let texture =
-            load_texture_from_bytes(&bytes, &full_path).map_err(|e| ResourceError::LoadFailed {
+        let texture = load_texture_from_bytes(&bytes, &full_path).map_err(|e| {
+            self.failed_textures.insert(full_path.clone());
+            ResourceError::LoadFailed {
                 path: full_path.clone(),
                 kind: "texture".to_string(),
                 message: e,
-            })?;
+            }
+        })?;
+
+        // 成功后确保失败缓存被清除（兼容运行时资源恢复场景）
+        self.failed_textures.remove(&full_path);
 
         // 设置纹理过滤模式（平滑缩放）
         texture.set_filter(FilterMode::Linear);
@@ -290,6 +317,12 @@ impl ResourceManager {
         self.texture_cache.contains(&full_path)
     }
 
+    /// 检查纹理是否已被标记为加载失败（用于抑制重复重试/日志）
+    pub fn has_failed_texture(&self, path: &str) -> bool {
+        let full_path = self.resolve_path(path);
+        self.failed_textures.contains(&full_path)
+    }
+
     /// 检查音频资源是否已加载
     pub fn has_sound(&self, path: &str) -> bool {
         self.sounds.contains_key(path)
@@ -323,6 +356,7 @@ impl ResourceManager {
     pub fn unload_texture(&mut self, path: &str) {
         let full_path = self.resolve_path(path);
         self.texture_cache.remove(&full_path);
+        self.failed_textures.remove(&full_path);
     }
 
     /// 释放指定的音频资源
@@ -334,6 +368,7 @@ impl ResourceManager {
     pub fn clear(&mut self) {
         self.texture_cache.clear();
         self.sounds.clear();
+        self.failed_textures.clear();
     }
 
     /// 获取已加载的图片资源数量

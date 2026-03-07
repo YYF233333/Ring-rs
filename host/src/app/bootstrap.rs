@@ -108,6 +108,7 @@ pub async fn ensure_render_resources(app_state: &mut AppState) {
     // 检查当前背景
     if let Some(ref bg_path) = app_state.core.render_state.current_background
         && !app_state.core.resource_manager.has_texture(bg_path)
+        && !app_state.core.resource_manager.has_failed_texture(bg_path)
     {
         paths_to_load.push(bg_path.clone());
     }
@@ -118,6 +119,10 @@ pub async fn ensure_render_resources(app_state: &mut AppState) {
             .core
             .resource_manager
             .has_texture(&character.texture_path)
+            && !app_state
+                .core
+                .resource_manager
+                .has_failed_texture(&character.texture_path)
         {
             paths_to_load.push(character.texture_path.clone());
         }
@@ -127,6 +132,10 @@ pub async fn ensure_render_resources(app_state: &mut AppState) {
     if let Some(crate::renderer::SceneTransitionType::Rule { mask_path, .. }) =
         app_state.core.renderer.scene_transition.transition_type()
         && !app_state.core.resource_manager.has_texture(mask_path)
+        && !app_state
+            .core
+            .resource_manager
+            .has_failed_texture(mask_path)
     {
         paths_to_load.push(mask_path.clone());
     }

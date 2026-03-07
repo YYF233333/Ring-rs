@@ -49,3 +49,21 @@ fn test_resolve_path() {
     let path = manager.resolve_path("assets/bg.png");
     assert_eq!(path, "assets/bg.png");
 }
+
+#[test]
+fn test_failed_texture_cache_can_suppress_retries() {
+    let mut manager = ResourceManager::new("assets", 256);
+    let missing = "scripts/remake/ring/summer/bg/black";
+    let full = manager.resolve_path(missing);
+
+    manager.failed_textures.insert(full.clone());
+    assert!(manager.has_failed_texture(missing));
+    assert!(!manager.has_texture(missing));
+
+    manager.unload_texture(missing);
+    assert!(!manager.has_failed_texture(missing));
+
+    manager.failed_textures.insert(full);
+    manager.clear();
+    assert!(!manager.has_failed_texture(missing));
+}
