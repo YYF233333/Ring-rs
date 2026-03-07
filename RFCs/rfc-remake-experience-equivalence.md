@@ -2,10 +2,29 @@
 
 ## 元信息
 
+- 编号：RFC-002
 - 状态：Active
 - 作者：Ring-rs 开发组
 - 日期：2026-03-07
 - 相关范围：`assets/scripts/remake/`、`vn-runtime`、`host`、`docs/script_syntax_spec.md`
+
+---
+
+## 0. 阶段 0 对齐结果（2026-03-07）
+
+> 目标：先保证“文档状态 = 仓库现状”，避免实现计划漂移。
+
+### 0.1 对齐结论
+
+- `assets/scripts/remake/ring/` 主线章节语义稿已齐备（summer 12、winter 10）。
+- `show/hide` 收敛与 Effect capability 注册表已落地（见 `rfc-show-unification-ergonomics` 与 `rfc-extension-api-mod-effect-management`）。
+- `assets/scripts/remake/main.md` 已切到 Ring 章节编排，但仍依赖未实现的 `callScript` / `returnFromScript`，当前属于“目标调度稿”。
+- `sceneEffect` 在脚本侧已有使用，但运行时 capability 尚未形成首批稳定契约。
+
+### 0.2 本轮文档修正
+
+- 同步 `assets/scripts/remake/main.md` 顶部说明，明确“Ring 章节已迁移完成 + 跨文件调度仍未落地”的双重现状。
+- 在本 RFC 增补 P0 执行看板，区分已完成、进行中与未开始项。
 
 ---
 
@@ -56,25 +75,30 @@
 
 ### P0-2 演出能力最小闭环
 
-- [ ] 提供统一转场描述能力（替代 `tran_*` 家族）。
-- [ ] 覆盖高频视觉类型：dissolve、黑场过渡、rule/mask、冲击镜头、模糊进出。
+- 状态：进行中（基础闭环已具备，镜头类语义待补齐）
+- [x] 提供统一转场描述能力（替代 `tran_*` 家族）并接入 capability 路由。
+- [x] 覆盖基础高频视觉类型：dissolve、黑场过渡、rule/mask。
+- [ ] 覆盖镜头类高频视觉类型：冲击镜头、模糊进出（`sceneEffect` 首批 capability）。
 - [ ] 支持组合演出编排（如：黑场 + Pause + 反向开场）。
 - [ ] 验收：`prologue`、`3-5`、`3-7`、`ending` 关键段落观感一致。
 
 ### P0-3 文本节奏与窗口控制
 
+- 状态：进行中（窗口显式控制已落地，节奏语义待补齐）
 - [ ] 支持对话节奏控制（等待、续接、加速、打字速度切换）。
-- [ ] 支持脚本驱动窗口显隐策略（关键演出段）。
+- [x] 支持脚本驱动窗口显隐基础策略（`textBoxHide/textBoxShow/textBoxClear`）。
 - [ ] 验收：关键台词段落阅读节奏与原作接近。
 
 ### P0-4 持久化与章节门控
 
+- 状态：未开始
 - [ ] 建立全局持久化域（通关状态、章节解锁、菜单分支）。
 - [ ] 对齐 `complete_summer` 行为（首通后入口变化）。
 - [ ] 验收：首通后重启，菜单与章节状态正确。
 
 ### P0-5 核心系统 UI 可用
 
+- 状态：进行中
 - [ ] 主菜单、设置、历史、存档、读档、快进/自动/跳过稳定可用。
 - [ ] 优先保障信息架构与流程一致，不逐条复刻 Ren'Py screen。
 - [ ] 验收：从标题进入任意章节并完成一次存读档闭环。
@@ -121,4 +145,22 @@
 1. 先打通可玩版本：P0
 2. 再拉齐观感与听感：P1
 3. 最后做规模化与长期维护：P2
+
+---
+
+## 6. P0 执行看板（阶段 0 输出）
+
+### 6.1 优先级与依赖
+
+1. `P0-1` 跨文件脚本调度（新增）：`callScript` / `returnFromScript`、多脚本 label 索引、调用栈与恢复语义
+2. `P0-2` 演出能力最小闭环：先补 `sceneEffect` 首批 capability，再做组合演出
+3. `P0-3` 文本节奏与窗口控制：在已有窗口显隐基础上补 `pause/extend` 等节奏语义
+4. `P0-4` 持久化与章节门控：`complete_summer` 与全局持久化域
+5. `P0-5` 核心系统 UI 可用：按可玩闭环做稳定性收尾
+
+### 6.2 里程碑 DoD（Definition of Done）
+
+- M1（可玩主线）：从 `main.md` 单入口跑通 summer -> winter 主流程，不手动切脚本
+- M2（关键观感）：`prologue`、`3-5`、`3-7`、`ending` 的关键镜头通过抽样回放验收
+- M3（门控闭环）：首通后重启，章节入口和菜单状态正确，且可存读档回归
 

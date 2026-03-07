@@ -1,9 +1,9 @@
 # Ring Remake 主入口（vNext 草案）
 
 > 说明：本文件使用“Ring Script vNext（设想语法）”组织跨文件流程。  
-> 章节正文已搬迁至 `assets/scripts/remake/summer/*.rpy` 与 `assets/scripts/remake/winter/*.rpy`。  
-> 正在翻译中的 Ring 版章节位于 `assets/scripts/remake/ring/`。  
-> 当前运行时尚未支持 `callScript` / `returnFromScript`，因此本入口属于“理论最终运行脚本组”的总调度稿。
+> Ring 语义章节已迁移至 `assets/scripts/remake/ring/`（summer 12 章 + winter 10 章）。  
+> 原始 `summer/*.rpy` 与 `winter/*.rpy` 仅保留用于对照与回归参考。  
+> 当前运行时尚未支持 `callScript` / `returnFromScript`，因此本入口仍属于“目标运行形态”的跨文件总调度稿。
 
 **Summer**
 callScript "ring/summer/prologue.md" as **prologue**
