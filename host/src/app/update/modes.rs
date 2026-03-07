@@ -150,16 +150,23 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
 
 /// Skip 模式更新：立即完成所有演出并推进
 fn update_ingame_skip(app_state: &mut AppState, dt: f32) {
-    // 1. 一次性跳过所有活跃效果
+    let typewriter_was_incomplete = !app_state.core.render_state.is_dialogue_complete();
+
+    // 1. 一次性跳过所有活跃效果（含打字机）
     super::skip_all_active_effects(&mut app_state.core);
 
-    // 2. 如果等待点击，自动推进
+    // 2. 如果本帧刚完成打字机，不立即推进，让已完成的文字渲染一帧
+    if typewriter_was_incomplete {
+        return;
+    }
+
+    // 3. 如果等待点击且对话已完成，自动推进
     if app_state.session.waiting_reason == WaitingReason::WaitForClick {
         super::run_script_tick(app_state, Some(RuntimeInput::Click));
         return;
     }
 
-    // 3. 其他等待类型（选择/时间/信号）仍使用正常输入处理
+    // 4. 其他等待类型（选择/时间/信号）仍使用正常输入处理
     if let Some(input) = app_state
         .input_manager
         .update(&app_state.session.waiting_reason, dt)

@@ -48,9 +48,7 @@ pub fn handle_audio_command(core: &mut CoreSystems, config: &AppConfig) {
                     looping,
                     fade_in: _,
                 } => {
-                    // BGM 切换自带交叉淡化效果（规范要求）
-                    // 如果当前有 BGM 在播放，使用交叉淡化；否则直接播放（带淡入）
-                    const CROSSFADE_DURATION: f32 = 1.0; // 交叉淡化时长
+                    const CROSSFADE_DURATION: f32 = 1.0;
                     if audio_manager.is_bgm_playing() {
                         audio_manager.crossfade_bgm(&path, looping, CROSSFADE_DURATION);
                     } else {

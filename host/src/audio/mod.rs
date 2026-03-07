@@ -441,7 +441,7 @@ impl AudioManager {
             }
         }
 
-        if let Some((path, looping, duration)) = next_bgm_to_play {
+        if let Some((ref path, looping, duration)) = next_bgm_to_play {
             // 先停止当前 BGM
             if let Some(ref sink) = self.bgm_sink {
                 sink.stop();
@@ -450,7 +450,7 @@ impl AudioManager {
             self.current_bgm_path = None;
 
             // 播放新 BGM（带淡入）
-            self.play_bgm(&path, looping, Some(duration));
+            self.play_bgm(path, looping, Some(duration));
         }
     }
 

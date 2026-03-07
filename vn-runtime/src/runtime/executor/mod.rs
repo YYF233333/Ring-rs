@@ -183,10 +183,21 @@ impl Executor {
                     new_transition
                 });
 
-                Ok(ExecuteResult::with_commands(vec![Command::ChangeScene {
+                let commands = vec![Command::ChangeScene {
                     path: resolved_path,
-                    transition: resolved_transition,
-                }]))
+                    transition: resolved_transition.clone(),
+                }];
+
+                if resolved_transition.is_some() {
+                    Ok(ExecuteResult::with_wait(
+                        commands,
+                        WaitingReason::WaitForSignal(
+                            crate::command::SIGNAL_SCENE_TRANSITION.to_string(),
+                        ),
+                    ))
+                } else {
+                    Ok(ExecuteResult::with_commands(commands))
+                }
             }
 
             ScriptNode::ShowCharacter {

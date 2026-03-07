@@ -12,6 +12,12 @@
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
+/// changeScene 过渡完成的信号 ID
+///
+/// 当 changeScene 带过渡效果时，Runtime 进入 `WaitForSignal(SIGNAL_SCENE_TRANSITION)`,
+/// Host 在过渡动画播放完毕后发送此信号以解除等待。
+pub const SIGNAL_SCENE_TRANSITION: &str = "scene_transition";
+
 /// 过渡效果参数
 ///
 /// 解析器从脚本中提取的过渡效果参数，不解释具体语义。

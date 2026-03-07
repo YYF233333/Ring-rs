@@ -636,9 +636,8 @@ impl Phase2Parser {
         // 检查是否有 loop 标识（在 </audio> 后面）
         // 查找 </audio> 的位置
         let is_bgm = if let Some(close_tag_pos) = line.to_lowercase().find("</audio>") {
-            // 检查 </audio> 后面是否有 "loop"
             let after_tag = &line[close_tag_pos + 8..]; // "</audio>" 长度为 8
-            after_tag.to_lowercase().contains("loop")
+            after_tag.to_lowercase().contains("loop") || after_tag.contains('\u{267E}')
         } else {
             false
         };

@@ -13,6 +13,9 @@ pub use script::{handle_script_mode_input, run_script_tick, skip_all_active_effe
 
 use macroquad::prelude::*;
 use tracing::debug;
+use vn_runtime::command::SIGNAL_SCENE_TRANSITION;
+use vn_runtime::input::RuntimeInput;
+use vn_runtime::state::WaitingReason;
 
 use super::AppState;
 use crate::AppMode;
@@ -55,6 +58,17 @@ pub fn update(app_state: &mut AppState) {
             &mut app_state.core.render_state,
             dt,
         );
+
+        // changeScene 过渡完成检测：当 Runtime 等待 scene_transition 信号
+        // 且所有过渡动画均已结束时，自动发送信号解除等待
+        if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
+            && id == SIGNAL_SCENE_TRANSITION
+            && !app_state.core.renderer.is_scene_transition_active()
+            && !app_state.core.renderer.transition.is_active()
+        {
+            let signal_id = id.clone();
+            run_script_tick(app_state, Some(RuntimeInput::Signal { id: signal_id }));
+        }
 
         // 更新章节标记动画（非阻塞、不受快进影响、固定时间自动消失）
         app_state.core.render_state.update_chapter_mark(dt);
