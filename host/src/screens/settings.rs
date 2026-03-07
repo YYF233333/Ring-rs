@@ -87,7 +87,12 @@ impl SettingsScreen {
         let toggle_w = 100.0;
 
         if let Some(s) = &mut self.bgm_slider {
-            s.set_rect(Rect::new(content_x + 150.0, content_y, slider_width, slider_h));
+            s.set_rect(Rect::new(
+                content_x + 150.0,
+                content_y,
+                slider_width,
+                slider_h,
+            ));
         }
         if let Some(s) = &mut self.sfx_slider {
             s.set_rect(Rect::new(
@@ -106,10 +111,20 @@ impl SettingsScreen {
             ));
         }
         if let Some(t) = &mut self.muted_toggle {
-            t.set_rect(Rect::new(content_x + 150.0, content_y + 150.0, toggle_w, toggle_h));
+            t.set_rect(Rect::new(
+                content_x + 150.0,
+                content_y + 150.0,
+                toggle_w,
+                toggle_h,
+            ));
         }
         if let Some(t) = &mut self.fullscreen_toggle {
-            t.set_rect(Rect::new(content_x + 150.0, content_y + 200.0, toggle_w, toggle_h));
+            t.set_rect(Rect::new(
+                content_x + 150.0,
+                content_y + 200.0,
+                toggle_w,
+                toggle_h,
+            ));
         }
     }
 
@@ -118,8 +133,18 @@ impl SettingsScreen {
         self.settings = settings.clone();
         self.original_settings = settings.clone();
 
-        self.bgm_slider = Some(Slider::new(Rect::new(0.0, 0.0, 0.0, 0.0), 0.0, 1.0, settings.bgm_volume));
-        self.sfx_slider = Some(Slider::new(Rect::new(0.0, 0.0, 0.0, 0.0), 0.0, 1.0, settings.sfx_volume));
+        self.bgm_slider = Some(Slider::new(
+            Rect::new(0.0, 0.0, 0.0, 0.0),
+            0.0,
+            1.0,
+            settings.bgm_volume,
+        ));
+        self.sfx_slider = Some(Slider::new(
+            Rect::new(0.0, 0.0, 0.0, 0.0),
+            0.0,
+            1.0,
+            settings.sfx_volume,
+        ));
         self.text_speed_slider = Some(Slider::new(
             Rect::new(0.0, 0.0, 0.0, 0.0),
             10.0,
@@ -152,30 +177,30 @@ impl SettingsScreen {
             return SettingsAction::Back;
         }
 
-        if let Some(s) = &mut self.bgm_slider {
-            if s.update(ctx) {
-                self.settings.bgm_volume = s.value;
-            }
+        if let Some(s) = &mut self.bgm_slider
+            && s.update(ctx)
+        {
+            self.settings.bgm_volume = s.value;
         }
-        if let Some(s) = &mut self.sfx_slider {
-            if s.update(ctx) {
-                self.settings.sfx_volume = s.value;
-            }
+        if let Some(s) = &mut self.sfx_slider
+            && s.update(ctx)
+        {
+            self.settings.sfx_volume = s.value;
         }
-        if let Some(s) = &mut self.text_speed_slider {
-            if s.update(ctx) {
-                self.settings.text_speed = s.value;
-            }
+        if let Some(s) = &mut self.text_speed_slider
+            && s.update(ctx)
+        {
+            self.settings.text_speed = s.value;
         }
-        if let Some(t) = &mut self.muted_toggle {
-            if t.update(ctx) {
-                self.settings.muted = t.value;
-            }
+        if let Some(t) = &mut self.muted_toggle
+            && t.update(ctx)
+        {
+            self.settings.muted = t.value;
         }
-        if let Some(t) = &mut self.fullscreen_toggle {
-            if t.update(ctx) {
-                self.settings.fullscreen = t.value;
-            }
+        if let Some(t) = &mut self.fullscreen_toggle
+            && t.update(ctx)
+        {
+            self.settings.fullscreen = t.value;
         }
 
         // 返回按钮

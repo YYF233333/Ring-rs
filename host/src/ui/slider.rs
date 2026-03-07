@@ -64,7 +64,14 @@ impl Slider {
         let fill_w = self.rect.w * self.normalized_value();
         let y = self.rect.y + self.rect.h / 2.0 - track_h / 2.0;
 
-        draw_rounded_rect(self.rect.x, y, self.rect.w, track_h, radius, theme.bg_secondary);
+        draw_rounded_rect(
+            self.rect.x,
+            y,
+            self.rect.w,
+            track_h,
+            radius,
+            theme.bg_secondary,
+        );
         draw_rounded_rect(self.rect.x, y, fill_w, track_h, radius, theme.accent);
 
         let knob_x = (self.rect.x + fill_w).clamp(self.rect.x, self.rect.x + self.rect.w);

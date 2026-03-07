@@ -14,7 +14,7 @@ use crate::renderer::effects::{EffectKind, EffectRequest, EffectTarget, Resolved
 use crate::renderer::{AnimatableCharacter, position_to_preset_name};
 use macroquad::prelude::screen_width;
 use std::rc::Rc;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use super::super::CoreSystems;
 
@@ -24,6 +24,9 @@ use super::super::CoreSystems;
 /// 对每个请求调用 [`apply_single`] 分发到对应的动画子系统。
 pub fn apply_effect_requests(core: &mut CoreSystems, manifest: &Manifest) {
     let requests = core.command_executor.last_output.effect_requests.clone();
+    if !requests.is_empty() {
+        debug!(count = requests.len(), "开始应用效果请求");
+    }
 
     for request in &requests {
         apply_single(request, core, manifest);

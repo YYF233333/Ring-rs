@@ -27,6 +27,10 @@ impl Phase2Parser {
         }
     }
 
+    pub fn reset_state(&mut self) {
+        self.warnings.clear();
+    }
+
     /// 解析单个块
     pub fn parse_block(&mut self, block: Block) -> Result<Option<ScriptNode>, ParseError> {
         match block {
@@ -66,10 +70,10 @@ impl Phase2Parser {
         if starts_with_ignore_case(line, "changescene") {
             return self.parse_change_scene(line, line_number);
         }
-        if starts_with_ignore_case(line, "show") {
+        if starts_with_command(line, "show") {
             return self.parse_show(line, line_number);
         }
-        if starts_with_ignore_case(line, "hide") {
+        if starts_with_command(line, "hide") {
             return self.parse_hide(line, line_number);
         }
         if starts_with_ignore_case(line, "goto") {
@@ -421,7 +425,11 @@ impl Phase2Parser {
     /// 支持两种格式：
     /// - `show <img src="..."> as alias at position` - 显示新立绘并绑定别名
     /// - `show alias at position` - 使用已绑定的别名改变位置
-    fn parse_show(&self, line: &str, line_number: usize) -> Result<Option<ScriptNode>, ParseError> {
+    fn parse_show(
+        &mut self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
         // 尝试提取图片路径（可选）
         let path = extract_img_src(line).map(|s| s.to_string());
 
@@ -488,7 +496,11 @@ impl Phase2Parser {
     }
 
     /// 解析 hide 指令
-    fn parse_hide(&self, line: &str, line_number: usize) -> Result<Option<ScriptNode>, ParseError> {
+    fn parse_hide(
+        &mut self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
         // hide alias with transition
         let parts: Vec<&str> = line.split_whitespace().collect();
 
@@ -720,6 +732,18 @@ impl Phase2Parser {
         }
 
         Ok(Some(ScriptNode::Choice { style, options }))
+    }
+}
+
+fn starts_with_command(line: &str, command: &str) -> bool {
+    let line = line.trim_start();
+    if line.len() < command.len() || !starts_with_ignore_case(line, command) {
+        return false;
+    }
+    let next = line[command.len()..].chars().next();
+    match next {
+        None => true,
+        Some(ch) => ch.is_whitespace() || ch == '<',
     }
 }
 

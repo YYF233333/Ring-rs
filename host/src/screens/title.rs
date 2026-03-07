@@ -68,13 +68,16 @@ impl TitleScreen {
         self.buttons.push((TitleAction::Continue, continue_btn));
 
         // 读取存档
-        self.buttons.push((TitleAction::LoadGame, menu_buttons.remove(0)));
+        self.buttons
+            .push((TitleAction::LoadGame, menu_buttons.remove(0)));
 
         // 设置
-        self.buttons.push((TitleAction::Settings, menu_buttons.remove(0)));
+        self.buttons
+            .push((TitleAction::Settings, menu_buttons.remove(0)));
 
         // 退出
-        self.buttons.push((TitleAction::Exit, menu_buttons.remove(0)));
+        self.buttons
+            .push((TitleAction::Exit, menu_buttons.remove(0)));
 
         self.needs_init = false;
     }

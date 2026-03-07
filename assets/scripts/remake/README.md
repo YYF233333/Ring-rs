@@ -60,7 +60,7 @@
 - `titleCard ...`、`cutscene ...`：字卡与视频过场语义。
 
 说明：
-- 现有历史翻译稿中仍存在 `showStyle` / `stageActor` 记法；后续按 RFC 统一收敛到 `show`。
+- `showStyle` / `stageActor` 已完成迁移并移除；角色演出统一使用 `show` / `hide`。
 
 ### 3.3 迁移过程约束
 

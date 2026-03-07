@@ -3,7 +3,9 @@
 //! 处理 ShowCharacter 和 HideCharacter 命令。
 
 use crate::renderer::RenderState;
+use crate::renderer::animation::EasingFunction;
 use crate::renderer::effects::{self, EffectKind, EffectRequest, EffectTarget, defaults};
+use tracing::{debug, warn};
 use vn_runtime::command::{Position, Transition};
 
 use super::CommandExecutor;
@@ -38,6 +40,14 @@ impl CommandExecutor {
             let is_same_texture = existing_path == path;
 
             if is_same_texture && is_position_change {
+                debug!(
+                    alias = %alias,
+                    strategy = "move_only",
+                    old_position = ?old_position,
+                    new_position = ?position,
+                    transition = ?transition,
+                    "show 语义策略决策"
+                );
                 // 同一立绘、不同位置：默认瞬移；只有显式 with effect 才做移动动画
                 // 直接更新 position 预设（不重建角色、不重置动画状态）
                 if let Some(character) = render_state.visible_characters.get_mut(alias) {
@@ -66,9 +76,46 @@ impl CommandExecutor {
                 return ExecuteResult::Ok;
             }
 
+            if !is_same_texture && is_position_change {
+                debug!(
+                    alias = %alias,
+                    strategy = "diff_then_move",
+                    old_position = ?old_position,
+                    new_position = ?position,
+                    old_path = %existing_path,
+                    new_path = %path,
+                    transition = ?transition,
+                    "show 语义策略决策"
+                );
+                // 默认复合策略：diffThenMove
+                // 先更新差分，再对同一角色应用位移动画（transition 非 move 时退化为默认 move）
+                if let Some(character) = render_state.visible_characters.get_mut(alias) {
+                    character.texture_path = path.to_string();
+                    character.position = position;
+                }
+                let move_effect = build_move_effect(effect.as_ref());
+                self.last_output.effect_requests.push(EffectRequest {
+                    target: EffectTarget::CharacterMove {
+                        alias: alias.to_string(),
+                        old_position,
+                        new_position: position,
+                    },
+                    effect: move_effect,
+                });
+                return ExecuteResult::Ok;
+            }
+
             // 不同立绘或无位置变更 → 重建角色（走正常逻辑）
             // 如果角色已完全可见且无位置变更，只需更新纹理
             if !is_position_change && current_alpha >= 0.99 {
+                debug!(
+                    alias = %alias,
+                    strategy = "diff_only",
+                    old_path = %existing_path,
+                    new_path = %path,
+                    transition = ?transition,
+                    "show 语义策略决策"
+                );
                 if let Some(character) = render_state.visible_characters.get_mut(alias) {
                     character.texture_path = path.to_string();
                 }
@@ -77,6 +124,13 @@ impl CommandExecutor {
         }
 
         // 新角色或需要重建的角色：创建角色数据
+        debug!(
+            alias = %alias,
+            strategy = "spawn_or_rebuild",
+            position = ?position,
+            transition = ?transition,
+            "show 语义策略决策"
+        );
         render_state.show_character(alias.to_string(), path.to_string(), position);
 
         // 计算 alpha 动画持续时间
@@ -149,5 +203,31 @@ impl CommandExecutor {
         }
 
         ExecuteResult::Ok
+    }
+}
+
+fn build_move_effect(effect: Option<&effects::ResolvedEffect>) -> effects::ResolvedEffect {
+    if let Some(effect) = effect {
+        if effect.is_move_effect() {
+            return effects::ResolvedEffect {
+                kind: effect.kind.clone(),
+                duration: Some(effect.duration_or(defaults::MOVE_DURATION)),
+                easing: effect.easing,
+            };
+        }
+        warn!(
+            effect = ?effect.kind,
+            "复合 show 变更未指定 move 效果，回退到默认 move 动画"
+        );
+        return effects::ResolvedEffect {
+            kind: EffectKind::Move,
+            duration: Some(effect.duration_or(defaults::MOVE_DURATION)),
+            easing: effect.easing,
+        };
+    }
+    effects::ResolvedEffect {
+        kind: EffectKind::Move,
+        duration: Some(defaults::MOVE_DURATION),
+        easing: EasingFunction::EaseInOut,
     }
 }

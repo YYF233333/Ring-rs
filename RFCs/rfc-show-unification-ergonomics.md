@@ -2,7 +2,7 @@
 
 ## 元信息
 
-- 状态：Draft
+- 状态：Accepted
 - 作者：Ring-rs 开发组
 - 日期：2026-03-07
 - 影响范围：`docs/script_syntax_spec.md`、`assets/scripts/remake/ring/**/*.md`、`vn-runtime`、`host`
@@ -46,9 +46,10 @@
 - 公共语法保留：
   - `show <img src="..."/> as 角色 at 位置 with 效果`
   - `hide 角色 with 效果`
-- 公共语法废弃（迁移期兼容）：
+- 已移除旧语法：
   - `showStyle`
   - `stageActor`
+  - 说明：`assets/scripts/remake/ring/**/*.md` 已完成迁移，运行时解析分支已收口。
 
 ### 3.2 统一职责
 
@@ -100,23 +101,23 @@
 
 ## 7. 迁移计划
 
-### Phase A：规范冻结
+### Phase A：规范冻结（已完成）
 
 - 在 `docs/script_syntax_spec.md` 明确 `show` 单入口语义。
 - 标注 `showStyle`、`stageActor` 为 deprecated（仅兼容解析，不建议新增）。
 
-### Phase B：运行时实现
+### Phase B：运行时实现（已完成）
 
 - 建立 `show` 状态机（首次/差分/移动/复合）。
 - 加入默认策略与 fallback。
 - 增加调试日志与诊断字段。
 
-### Phase C：脚本迁移
+### Phase C：脚本迁移（已完成）
 
 - 对 `assets/scripts/remake/ring/**/*.md` 进行渐进迁移。
 - 优先高密度演出章节：`3-5`、`3-7`、`ending`。
 
-### Phase D：收口
+### Phase D：收口（已完成）
 
 - 清理仓库中的 `showStyle` / `stageActor` 使用。
 - 在稳定版本移除对应解析分支。

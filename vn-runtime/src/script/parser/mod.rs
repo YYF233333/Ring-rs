@@ -94,7 +94,7 @@ impl Parser {
         text: &str,
         base_path: &str,
     ) -> Result<Script, ParseError> {
-        self.phase2.warnings.clear();
+        self.phase2.reset_state();
 
         // 阶段 1：块识别
         let blocks = recognize_blocks(text);

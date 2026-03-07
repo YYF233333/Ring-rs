@@ -183,6 +183,10 @@ changeScene <img src="bg.jpg" /> with <img src="rule.png" /> (duration: 1, rever
 show <img src="path/to/sprite.png" /> as alias at position with transition
 ```
 
+```markdown
+show alias at position with transition
+```
+
 参数说明：
 - `<img src="...">`: 立绘图片路径
 - `as alias`: 角色别名，用于后续引用（如 `as royu`）
@@ -208,6 +212,58 @@ show <img src="path/to/sprite.png" /> as alias at position with transition
 show <img src="assets/立绘1-惊讶.png" /> as royu at nearmiddle with dissolve
 ```
 
+#### 5.3.1 运行时隐藏状态（引擎内部）
+
+`show` 的公共入口只有一条，但引擎内部会维护最小隐藏状态以保证行为可预测：
+
+1. alias 绑定表
+   - `alias -> current_sprite_path`
+   - 用于支持 `show alias at ...`（无 `<img>`）时复用当前差分
+2. 槽位状态表
+   - `alias -> { position, visible/fading_out }`
+   - 用于判定“首次入场 / 差分切换 / 移动 / 复合变化”
+
+硬约束：
+- 同脚本输入 + 同初始状态 => 同输出行为（确定性）
+- 隐藏状态只作为引擎实现细节，不改变脚本层单入口语义
+
+#### 5.3.2 `show` 状态机决策
+
+对同一 `alias` 执行 `show` 时，按如下状态机决策：
+
+| 当前状态 | 输入变化 | 默认行为 |
+|---|---|---|
+| Absent | 首次 `show` | 创建角色并入场（可选 alpha 过渡） |
+| Present | 仅差分变化（path 变化，position 不变） | 原地切换差分 |
+| Present | 仅位置变化（path 不变，position 变化） | 默认瞬移；`with move/slide` 才做移动动画 |
+| Present | 差分+位置同帧变化 | 默认 `diffThenMove`（先换差分，再做移动） |
+
+#### 5.3.3 复合行为与 fallback（`diffThenMove`）
+
+当同一条 `show` 同时改变差分和位置时：
+
+1. 先应用新差分（更新 `current_sprite_path`）
+2. 再应用移动动画（旧位置 -> 新位置）
+
+fallback 规则：
+- 若 `with` 不是 `move/slide`（例如 `dissolve`），仍执行移动阶段，按默认 move 时长降级
+- 若缺省 `with`，仍执行移动阶段，使用默认 move 参数
+
+该规则保证“复合变化”观感稳定，不因脚本未精确指定移动效果而退化为跳闪。
+
+#### 5.3.4 `show` 的错误处理
+
+- 使用 `show alias at ...` 时，若 alias 尚未绑定差分，解析/执行报错（需要先通过带 `<img>` 的 `show` 完成绑定）
+- 位置参数非法时报错并带行号
+- 过渡参数非法时报错并带行号
+
+#### 5.3.5 可观测性要求（调试）
+
+调试日志至少应能观测：
+- 本次 `show` 命中的策略分支（spawn/diff_only/move_only/diff_then_move）
+- 关键前后状态（old/new path、old/new position）
+- fallback 触发原因（例如“非 move 效果降级为默认 move”）
+
 ### 5.4 隐藏角色 (hide)
 
 ```markdown
@@ -218,6 +274,17 @@ hide alias with transition
 ```markdown
 hide royu with fade
 ```
+
+#### 5.4.1 `hide` 状态语义
+
+- `hide alias`：立即移除该角色槽位
+- `hide alias with dissolve/fade`：进入 `fading_out`，淡出完成后移除
+- `hide` 后该 alias 的可见状态被清理；后续若使用 `show alias at ...`，需先重新绑定差分
+
+### 5.5 历史语法说明
+
+`showStyle` / `stageActor` 已完成迁移并从规范中移除。  
+当前脚本层角色演出只保留 `show` / `hide` 作为公共入口。
 
 ---
 

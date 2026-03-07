@@ -236,6 +236,48 @@ fn test_execute_show_character_reposition_with_move_triggers_animation() {
 }
 
 #[test]
+fn test_execute_show_character_diff_and_move_uses_diff_then_move() {
+    let mut ctx = TestCtx::new();
+
+    // 初始：角色在 center，旧贴图
+    let cmd = Command::ShowCharacter {
+        path: "characters/char1.png".to_string(),
+        alias: "char1".to_string(),
+        position: Position::Center,
+        transition: None,
+    };
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+
+    // 复合变化：贴图和位置同帧变化，默认走 diffThenMove
+    let cmd = Command::ShowCharacter {
+        path: "characters/char2.png".to_string(),
+        alias: "char1".to_string(),
+        position: Position::Left,
+        transition: Some(Transition::simple("dissolve")),
+    };
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+
+    assert_eq!(ctx.executor.last_output.effect_requests.len(), 1);
+    let req = &ctx.executor.last_output.effect_requests[0];
+    assert!(matches!(
+        &req.target,
+        crate::renderer::effects::EffectTarget::CharacterMove {
+            alias,
+            old_position: Position::Center,
+            new_position: Position::Left
+        } if alias == "char1"
+    ));
+    assert_eq!(req.effect.kind, crate::renderer::effects::EffectKind::Move);
+    assert!(req.effect.duration_or(0.0) > 0.0);
+
+    let char_sprite = ctx.render_state.visible_characters.get("char1").unwrap();
+    assert_eq!(char_sprite.position, Position::Left);
+    assert_eq!(char_sprite.texture_path, "characters/char2.png");
+}
+
+#[test]
 fn test_execute_hide_character() {
     let mut ctx = TestCtx::new();
 

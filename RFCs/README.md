@@ -12,7 +12,7 @@
 
 ## 当前 RFC
 
-- `rfc-show-unification-ergonomics.md`（Active）
+- `rfc-show-unification-ergonomics.md`（Accepted）
 - `rfc-remake-experience-equivalence.md`（Active）
 - `rfc-dialogue-voice-pipeline.md`（Proposed）
 - `rfc-extension-api-mod-effect-management.md`（Proposed）

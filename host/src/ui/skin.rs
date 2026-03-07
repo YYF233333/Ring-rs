@@ -62,4 +62,3 @@ pub fn load_skin(path: &Path) -> Option<UiSkinConfig> {
         }
     }
 }
-

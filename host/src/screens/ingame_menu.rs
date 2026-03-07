@@ -65,7 +65,13 @@ impl InGameMenuScreen {
         ];
 
         for (action, text, primary, extra_gap) in entries {
-            let mut btn = Button::new(text, panel_x + theme.padding, y, button_width, button_height);
+            let mut btn = Button::new(
+                text,
+                panel_x + theme.padding,
+                y,
+                button_width,
+                button_height,
+            );
             if primary {
                 btn.style = ButtonStyle::Primary;
             }
@@ -76,7 +82,13 @@ impl InGameMenuScreen {
             }
         }
 
-        let mut exit_btn = Button::new("退出游戏", panel_x + theme.padding, y, button_width, button_height);
+        let mut exit_btn = Button::new(
+            "退出游戏",
+            panel_x + theme.padding,
+            y,
+            button_width,
+            button_height,
+        );
         exit_btn.style = ButtonStyle::Danger;
         self.buttons.push((InGameMenuAction::Exit, exit_btn));
 

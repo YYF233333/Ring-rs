@@ -158,6 +158,15 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                     &mut app_state.core.render_state,
                     &app_state.core.resource_manager,
                 );
+                let effect_count = app_state
+                    .core
+                    .command_executor
+                    .last_output
+                    .effect_requests
+                    .len();
+                if effect_count > 0 {
+                    debug!(command = ?command, effect_count, "命令产出效果请求");
+                }
 
                 // 应用动画/过渡效果请求（统一入口）
                 apply_effect_requests(&mut app_state.core, &app_state.session.manifest);
