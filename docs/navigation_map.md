@@ -65,6 +65,7 @@
 - 子模块：[app](module_summaries/host/app.md)
 - 子模块：[app_update](module_summaries/host/app_update.md)
 - 子模块：[app_command_handlers](module_summaries/host/app_command_handlers.md)
+- 子模块：[extensions](module_summaries/host/extensions.md)
 - 子模块：[command_executor](module_summaries/host/command_executor.md)
 - 子模块：[renderer](module_summaries/host/renderer.md)
 - 子模块：[renderer_render_state](module_summaries/host/renderer_render_state.md)

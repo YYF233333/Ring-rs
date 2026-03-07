@@ -7,15 +7,15 @@
 ## PublicSurface
 
 - 模块入口：`host/src/renderer/effects/mod.rs`
-- 核心类型：`EffectKind`、`ResolvedEffect`、`EffectRequest`、`EffectTarget`
+- 核心类型：`EffectKind`、`ResolvedEffect`、`EffectRequest`、`EffectTarget`、`EffectParamValue`
 - 关键接口：`resolve(Transition) -> ResolvedEffect`
 
 ## KeyFlow
 
 1. 输入来自 `vn-runtime::command::Transition`。
 2. `resolver` 解析效果名与参数，得到 `ResolvedEffect`。
-3. `command_executor` 根据 `EffectKind` 分发执行路径。
-4. 执行请求封装为 `EffectRequest`，由应用层处理器落地。
+3. `command_executor` 产出 `EffectRequest`，自动携带 `capability_id + params`。
+4. `app/command_handlers/effect_applier` 通过扩展注册表按 capability 分发执行。
 
 ## Dependencies
 
@@ -26,11 +26,13 @@
 
 - 效果映射与默认参数来源唯一，避免多处定义分叉。
 - 解析器只负责语义归一化，不绑定具体目标对象。
+- `EffectRequest.capability_id` 必须可稳定映射到注册表能力，便于扩展化迁移与诊断。
 
 ## FailureModes
 
 - 过渡参数非法或缺失，导致效果降级或未执行。
 - 映射表不完整，导致新效果无法被识别。
+- capability 缺失或执行失败时，需要回退到 legacy 路径并输出 capability 诊断。
 
 ## WhenToReadSource
 
@@ -45,7 +47,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-07
 
 ## Owner
 

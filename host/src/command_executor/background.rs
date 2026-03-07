@@ -31,10 +31,10 @@ impl CommandExecutor {
 
         // 产出背景过渡效果请求
         if let Some(effect) = effect {
-            self.last_output.effect_requests.push(EffectRequest {
-                target: EffectTarget::BackgroundTransition { old_background },
+            self.last_output.effect_requests.push(EffectRequest::new(
+                EffectTarget::BackgroundTransition { old_background },
                 effect,
-            });
+            ));
         }
 
         ExecuteResult::Ok
@@ -67,24 +67,24 @@ impl CommandExecutor {
                         duration = ?effect.duration,
                         "changeScene: Fade 黑屏过渡"
                     );
-                    self.last_output.effect_requests.push(EffectRequest {
-                        target: EffectTarget::SceneTransition {
+                    self.last_output.effect_requests.push(EffectRequest::new(
+                        EffectTarget::SceneTransition {
                             pending_background: path.to_string(),
                         },
                         effect,
-                    });
+                    ));
                 }
                 EffectKind::FadeWhite => {
                     debug!(
                         duration = ?effect.duration,
                         "changeScene: FadeWhite 白屏过渡"
                     );
-                    self.last_output.effect_requests.push(EffectRequest {
-                        target: EffectTarget::SceneTransition {
+                    self.last_output.effect_requests.push(EffectRequest::new(
+                        EffectTarget::SceneTransition {
                             pending_background: path.to_string(),
                         },
                         effect,
-                    });
+                    ));
                 }
                 EffectKind::Rule {
                     mask_path,
@@ -107,35 +107,35 @@ impl CommandExecutor {
                         duration: effect.duration,
                         easing: effect.easing,
                     };
-                    self.last_output.effect_requests.push(EffectRequest {
-                        target: EffectTarget::SceneTransition {
+                    self.last_output.effect_requests.push(EffectRequest::new(
+                        EffectTarget::SceneTransition {
                             pending_background: path.to_string(),
                         },
-                        effect: resolved_effect,
-                    });
+                        resolved_effect,
+                    ));
                 }
                 EffectKind::Dissolve => {
                     // Dissolve 使用 TransitionManager 处理背景过渡
                     render_state.set_background(path.to_string());
                     debug!("changeScene: Dissolve 过渡");
-                    self.last_output.effect_requests.push(EffectRequest {
-                        target: EffectTarget::BackgroundTransition {
+                    self.last_output.effect_requests.push(EffectRequest::new(
+                        EffectTarget::BackgroundTransition {
                             old_background: old_background.clone(),
                         },
                         effect,
-                    });
+                    ));
                 }
                 _ => {
                     // 未知/None/Move 等：使用默认 dissolve
                     render_state.set_background(path.to_string());
                     debug!(kind = ?effect.kind, "changeScene: 降级为 dissolve");
                     effect.kind = EffectKind::Dissolve;
-                    self.last_output.effect_requests.push(EffectRequest {
-                        target: EffectTarget::BackgroundTransition {
+                    self.last_output.effect_requests.push(EffectRequest::new(
+                        EffectTarget::BackgroundTransition {
                             old_background: old_background.clone(),
                         },
                         effect,
-                    });
+                    ));
                 }
             }
         } else {

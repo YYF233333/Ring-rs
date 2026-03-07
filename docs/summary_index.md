@@ -21,6 +21,7 @@
    - [app](module_summaries/host/app.md)
    - [app_update](module_summaries/host/app_update.md)
    - [app_command_handlers](module_summaries/host/app_command_handlers.md)
+   - [extensions](module_summaries/host/extensions.md)
    - [command_executor](module_summaries/host/command_executor.md)
    - [renderer](module_summaries/host/renderer.md)
    - [renderer_render_state](module_summaries/host/renderer_render_state.md)

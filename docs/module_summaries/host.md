@@ -23,6 +23,7 @@
 - [app](host/app.md)：应用层组装、生命周期、主循环胶水
 - [app_update](host/app_update.md)：每帧更新与模式分发
 - [app_command_handlers](host/app_command_handlers.md)：命令副作用处理
+- [extensions](host/extensions.md)：扩展 API 与 capability 注册表
 - [command_executor](host/command_executor.md)：`Command` 执行与状态变更
 - [renderer](host/renderer.md)：渲染主系统与渲染管线
 - [renderer_render_state](host/renderer_render_state.md)：渲染状态模型
@@ -67,7 +68,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-07
 
 ## Owner
 

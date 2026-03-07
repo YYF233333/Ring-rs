@@ -18,7 +18,18 @@
 //! ```
 
 use super::resolver::ResolvedEffect;
+use std::collections::BTreeMap;
 use vn_runtime::command::Position;
+
+/// capability 参数值（用于诊断与扩展调试）。
+#[derive(Debug, Clone, PartialEq)]
+pub enum EffectParamValue {
+    Number(f32),
+    Bool(bool),
+    String(String),
+}
+
+pub type EffectParams = BTreeMap<String, EffectParamValue>;
 
 /// 统一动画/过渡请求
 ///
@@ -26,10 +37,28 @@ use vn_runtime::command::Position;
 /// 由 `CommandExecutor` 生产，由 `EffectApplier` 消费。
 #[derive(Debug, Clone)]
 pub struct EffectRequest {
+    /// capability 路由 ID（扩展 API 稳定入口）
+    pub capability_id: String,
+    /// 规范化参数快照（用于诊断/调试/后续第三方扩展）
+    pub params: EffectParams,
     /// 动画目标（携带上下文数据）
     pub target: EffectTarget,
     /// 已解析的效果（携带效果类型、时长、缓动）
     pub effect: ResolvedEffect,
+}
+
+impl EffectRequest {
+    /// 使用 target + effect 构造统一请求，并自动填充 capability 元数据。
+    pub fn new(target: EffectTarget, effect: ResolvedEffect) -> Self {
+        let capability_id = infer_capability_id(&target, &effect);
+        let params = build_params(&effect);
+        Self {
+            capability_id,
+            params,
+            target,
+            effect,
+        }
+    }
 }
 
 /// 动画/过渡目标
@@ -82,4 +111,88 @@ pub enum EffectTarget {
         /// 待切换的背景路径
         pending_background: String,
     },
+}
+
+fn infer_capability_id(target: &EffectTarget, effect: &ResolvedEffect) -> String {
+    match (&effect.kind, target) {
+        (super::registry::EffectKind::Dissolve, _) => "effect.dissolve".to_string(),
+        (
+            super::registry::EffectKind::Fade | super::registry::EffectKind::FadeWhite,
+            EffectTarget::SceneTransition { .. },
+        ) => "effect.fade".to_string(),
+        (super::registry::EffectKind::Rule { .. }, EffectTarget::SceneTransition { .. }) => {
+            "effect.rule_mask".to_string()
+        }
+        (super::registry::EffectKind::Move, EffectTarget::CharacterMove { .. }) => {
+            "effect.move".to_string()
+        }
+        _ => format!("effect.{}", effect.kind_name()),
+    }
+}
+
+fn build_params(effect: &ResolvedEffect) -> EffectParams {
+    let mut params = BTreeMap::new();
+    if let Some(duration) = effect.duration {
+        params.insert("duration".to_string(), EffectParamValue::Number(duration));
+    }
+    match &effect.kind {
+        super::registry::EffectKind::Rule {
+            mask_path,
+            reversed,
+        } => {
+            params.insert(
+                "mask".to_string(),
+                EffectParamValue::String(mask_path.clone()),
+            );
+            params.insert("reversed".to_string(), EffectParamValue::Bool(*reversed));
+        }
+        _ => {}
+    }
+    params
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::renderer::animation::EasingFunction;
+    use crate::renderer::effects::EffectKind;
+
+    #[test]
+    fn infer_capability_for_rule_scene_transition() {
+        let req = EffectRequest::new(
+            EffectTarget::SceneTransition {
+                pending_background: "bg.png".to_string(),
+            },
+            ResolvedEffect {
+                kind: EffectKind::Rule {
+                    mask_path: "masks/wipe.png".to_string(),
+                    reversed: true,
+                },
+                duration: Some(0.8),
+                easing: EasingFunction::Linear,
+            },
+        );
+        assert_eq!(req.capability_id, "effect.rule_mask");
+        assert!(matches!(
+            req.params.get("reversed"),
+            Some(EffectParamValue::Bool(true))
+        ));
+    }
+
+    #[test]
+    fn infer_capability_for_character_move() {
+        let req = EffectRequest::new(
+            EffectTarget::CharacterMove {
+                alias: "a".to_string(),
+                old_position: Position::Left,
+                new_position: Position::Right,
+            },
+            ResolvedEffect {
+                kind: EffectKind::Move,
+                duration: Some(0.3),
+                easing: EasingFunction::EaseInOut,
+            },
+        );
+        assert_eq!(req.capability_id, "effect.move");
+    }
 }

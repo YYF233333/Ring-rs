@@ -30,5 +30,5 @@ mod request;
 mod resolver;
 
 pub use registry::{EffectKind, defaults};
-pub use request::{EffectRequest, EffectTarget};
+pub use request::{EffectParamValue, EffectRequest, EffectTarget};
 pub use resolver::{ResolvedEffect, resolve};

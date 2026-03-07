@@ -18,6 +18,7 @@ pub mod app_mode;
 pub mod audio;
 pub mod command_executor;
 pub mod config;
+pub mod extensions;
 pub mod input;
 pub mod manifest;
 pub mod renderer;
@@ -41,6 +42,9 @@ pub use app_mode::{
 pub use audio::AudioManager;
 pub use command_executor::{AudioCommand, CommandExecutor, CommandOutput, ExecuteResult};
 pub use config::{AppConfig, AssetSourceType, AudioConfig, DebugConfig, WindowConfig};
+pub use extensions::{
+    CapabilityDispatchResult, EngineContext, ExtensionDiagnostic, ExtensionRegistry,
+};
 pub use input::InputManager;
 pub use manifest::Manifest;
 pub use renderer::effects::{EffectRequest, EffectTarget};

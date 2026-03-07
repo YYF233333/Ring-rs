@@ -2,13 +2,49 @@
 
 ## 元信息
 
-- 状态：Proposed
+- 状态：Active
 - 作者：Ring-rs 开发组
 - 日期：2026-03-07
 - 影响范围：`vn-runtime`、`host`、`docs/script_syntax_spec.md`、`assets/scripts/remake/README.md`
 - 相关 RFC：
   - `RFCs/rfc-show-unification-ergonomics.md`
   - `RFCs/rfc-remake-experience-equivalence.md`
+
+---
+
+## 0. 实施进度（2026-03-07）
+
+> 本节用于同步 RFC 与当前代码状态，避免“文档计划”与“仓库实现”漂移。
+
+### 0.1 已完成
+
+- 已落地 `host/src/extensions/` 扩展 API 基础模块：
+  - `manifest.rs`（扩展元信息）
+  - `capability.rs`（扩展 trait 与错误模型）
+  - `context.rs`（`EngineContext` + 诊断记录）
+  - `registry.rs`（注册、冲突检测、版本兼容、调度）
+  - `builtin_effects.rs`（内建 capability 实现）
+- 已建立 `EffectRequest { capability_id, params, target, effect }` 的统一请求模型。
+- 已将以下能力迁移为内建扩展并接入注册表：
+  - `effect.dissolve`
+  - `effect.fade`
+  - `effect.rule_mask`
+  - `effect.move`
+- `effect_applier` 已改为“capability 路由优先 + capability 级回退”，不再维护直接调用 renderer 的 legacy 执行分支。
+- 诊断日志已包含 `capability_id` 与扩展来源（`extension_name`）。
+
+### 0.2 当前未完成
+
+- `sceneEffect` 相关能力仍以规划为主，尚未形成首批稳定 capability（如 `effect.camera.blur_pulse`）。
+- 第三方扩展加载机制（扫描/装载/生命周期治理）未启用。
+- API 对外冻结策略与兼容窗口仍待最终确认。
+
+### 0.3 阶段结论
+
+- `Phase A`：完成
+- `Phase B`：完成
+- `Phase C`：首轮完成（高频基础效果已扩展化，复杂镜头类能力待增量推进）
+- `Phase D`：未开始（按 RFC 约定本轮不启用）
 
 ---
 
@@ -190,6 +226,6 @@ Core 将请求交给注册表匹配的扩展处理；缺失时走 fallback。
 
 ## 10. 待确认事项
 
-1. 首批纳入扩展化的现有效果清单（建议先 `dissolve/fade/rule`）。
-2. 扩展 API 首个稳定版本号与兼容窗口。
-3. 是否在 `docs/script_syntax_spec.md` 同步增加“能力映射附录”。
+1. `sceneEffect` 首批 capability 清单与参数契约（建议先 `blur_pulse` / `camera_shake`）。
+2. 扩展 API 首个稳定版本的兼容窗口（建议按主版本兼容，1-2 里程碑冻结）。
+3. 第三方扩展开放前的装载策略与诊断规范（目录约定、冲突优先级、禁用策略）。

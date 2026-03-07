@@ -26,6 +26,7 @@ pub use save::*;
 pub use script_loader::*;
 pub use update::*;
 
+use crate::extensions::ExtensionRegistry;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
 use crate::resources::ResourceManager;
@@ -38,6 +39,7 @@ use crate::{
     PlaybackMode, UserSettings,
 };
 use std::collections::HashMap;
+use std::sync::Arc;
 use vn_runtime::VNRuntime;
 use vn_runtime::state::WaitingReason;
 
@@ -63,6 +65,8 @@ pub struct CoreSystems {
     pub character_object_ids: HashMap<String, ObjectId>,
     /// 命令执行器（将 Runtime Command 转换为渲染状态更新）
     pub command_executor: CommandExecutor,
+    /// 扩展 capability 注册表
+    pub extension_registry: Arc<ExtensionRegistry>,
     /// 音频管理器
     pub audio_manager: Option<AudioManager>,
 }
@@ -172,6 +176,11 @@ impl AppState {
         // Dev Mode: 运行脚本检查
         init::run_script_check(&config, &scripts, &resource_manager);
 
+        let extension_registry = Arc::new(
+            crate::extensions::build_builtin_registry(crate::extensions::ENGINE_API_VERSION)
+                .expect("内建扩展注册失败"),
+        );
+
         Self {
             core: CoreSystems {
                 resource_manager,
@@ -180,6 +189,7 @@ impl AppState {
                 animation_system: AnimationSystem::new(),
                 character_object_ids: HashMap::new(),
                 command_executor: CommandExecutor::new(),
+                extension_registry,
                 audio_manager,
             },
             ui: UiSystems {

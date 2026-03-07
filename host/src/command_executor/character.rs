@@ -59,18 +59,18 @@ impl CommandExecutor {
                     && effect.is_move_effect()
                 {
                     let move_duration = effect.duration_or(defaults::MOVE_DURATION);
-                    self.last_output.effect_requests.push(EffectRequest {
-                        target: EffectTarget::CharacterMove {
+                    self.last_output.effect_requests.push(EffectRequest::new(
+                        EffectTarget::CharacterMove {
                             alias: alias.to_string(),
                             old_position,
                             new_position: position,
                         },
-                        effect: effects::ResolvedEffect {
+                        effects::ResolvedEffect {
                             kind: effect.kind.clone(),
                             duration: Some(move_duration),
                             easing: effect.easing,
                         },
-                    });
+                    ));
                 }
 
                 return ExecuteResult::Ok;
@@ -94,14 +94,14 @@ impl CommandExecutor {
                     character.position = position;
                 }
                 let move_effect = build_move_effect(effect.as_ref());
-                self.last_output.effect_requests.push(EffectRequest {
-                    target: EffectTarget::CharacterMove {
+                self.last_output.effect_requests.push(EffectRequest::new(
+                    EffectTarget::CharacterMove {
                         alias: alias.to_string(),
                         old_position,
                         new_position: position,
                     },
-                    effect: move_effect,
-                });
+                    move_effect,
+                ));
                 return ExecuteResult::Ok;
             }
 
@@ -143,16 +143,16 @@ impl CommandExecutor {
 
         if alpha_duration > 0.0 {
             let resolved = effect.unwrap(); // safe: alpha_duration > 0 implies effect is Some
-            self.last_output.effect_requests.push(EffectRequest {
-                target: EffectTarget::CharacterShow {
+            self.last_output.effect_requests.push(EffectRequest::new(
+                EffectTarget::CharacterShow {
                     alias: alias.to_string(),
                 },
-                effect: effects::ResolvedEffect {
+                effects::ResolvedEffect {
                     kind: resolved.kind,
                     duration: Some(alpha_duration),
                     easing: resolved.easing,
                 },
-            });
+            ));
         } else {
             // 无过渡效果：直接设置角色为完全可见
             if let Some(anim) = render_state.get_character_anim(alias) {
@@ -187,16 +187,16 @@ impl CommandExecutor {
             // 有过渡效果：标记为淡出，由 AnimationSystem 处理
             render_state.mark_character_fading_out(alias);
             let resolved = effect.unwrap(); // safe: alpha_duration > 0 implies effect is Some
-            self.last_output.effect_requests.push(EffectRequest {
-                target: EffectTarget::CharacterHide {
+            self.last_output.effect_requests.push(EffectRequest::new(
+                EffectTarget::CharacterHide {
                     alias: alias.to_string(),
                 },
-                effect: effects::ResolvedEffect {
+                effects::ResolvedEffect {
                     kind: resolved.kind,
                     duration: Some(alpha_duration),
                     easing: resolved.easing,
                 },
-            });
+            ));
         } else {
             // 无过渡效果：立即移除
             render_state.hide_character(alias);

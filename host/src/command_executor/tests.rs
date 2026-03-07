@@ -138,6 +138,7 @@ fn test_execute_show_background_with_transition() {
         }
         other => panic!("Expected BackgroundTransition, got {:?}", other),
     }
+    assert_eq!(req.capability_id, "effect.dissolve");
     assert_eq!(req.effect.kind, EffectKind::Dissolve);
 }
 
@@ -229,6 +230,7 @@ fn test_execute_show_character_reposition_with_move_triggers_animation() {
         }
         other => panic!("Expected CharacterMove, got {:?}", other),
     }
+    assert_eq!(req.capability_id, "effect.move");
     assert!(req.effect.duration_or(0.0) > 0.0);
 
     let char_sprite = ctx.render_state.visible_characters.get("char1").unwrap();
@@ -570,6 +572,7 @@ fn test_change_scene_fade_produces_scene_transition() {
         }
         other => panic!("Expected SceneTransition, got {:?}", other),
     }
+    assert_eq!(req.capability_id, "effect.fade");
     assert_eq!(req.effect.kind, EffectKind::Fade);
     // duration 未显式指定时为 None；EffectApplier 会使用 defaults::FADE_DURATION
     assert!(
@@ -653,6 +656,7 @@ fn test_change_scene_rule_produces_scene_transition() {
         }
         other => panic!("Expected Rule effect, got {:?}", other),
     }
+    assert_eq!(req.capability_id, "effect.rule_mask");
     assert!((req.effect.duration_or(0.0) - 0.8).abs() < 0.01);
 }
 

@@ -82,7 +82,7 @@
 - 多脚本 label 全局索引与跨文件跳转
 
 2) 演出基础闭环
-- 统一转场描述（覆盖 dissolve/fade/black/rule 关键类型）
+- [x] 统一转场描述（已覆盖 dissolve/fade/fadewhite/rule + show/hide 的 move/slide；Host 侧已接入 capability 注册表）
 - `scene/show/hide` 的资源 alias 映射（兼容重制期命名）
 
 3) 文本节奏与窗口控制

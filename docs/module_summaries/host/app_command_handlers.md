@@ -14,17 +14,18 @@
 
 1. `command_executor` 执行命令后产出输出结构（音频命令、效果请求等）。
 2. `command_handlers/audio` 消费音频输出并驱动 `AudioManager`。
-3. `command_handlers/effect_applier` 消费效果请求并驱动动画/过渡系统。
+3. `command_handlers/effect_applier` 消费效果请求，先按 capability 路由到扩展注册表，再按统一回退映射降级。
 
 ## Dependencies
 
 - 上游依赖：`command_executor`
-- 下游依赖：`audio`、`renderer`、`renderer/effects`
+- 下游依赖：`audio`、`renderer`、`renderer/effects`、`extensions`
 
 ## Invariants
 
 - `command_handlers` 只处理副作用，不承担命令语义解析。
 - 效果应用路径统一走 `effect_applier`，减少分散分支。
+- 诊断必须包含 `capability_id` 与扩展来源，便于定位扩展行为。
 
 ## FailureModes
 
@@ -44,7 +45,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-07
 
 ## Owner
 

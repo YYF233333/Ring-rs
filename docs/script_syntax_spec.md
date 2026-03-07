@@ -538,6 +538,23 @@ pub enum TransitionArg {
 - `with dissolve/fade` 不触发位置移动（仅影响 alpha）
 - 未知效果名降级为 `dissolve`
 
+### 7.4 Capability 映射附录（引擎内部）
+
+从 2026-03 起，Host 将效果请求统一路由到扩展 capability 注册表（内建扩展优先，缺失/失败时走 capability 级回退路径）。
+
+| 脚本语义（示例） | Transition 归一化 | capability_id | 默认来源 |
+|------------------|-------------------|---------------|----------|
+| `show ... with dissolve` | `EffectKind::Dissolve` | `effect.dissolve` | `builtin.effect.dissolve` |
+| `hide ... with fade`（立绘上下文） | `EffectKind::Fade`（alpha 语义） | `effect.dissolve` | `builtin.effect.dissolve` |
+| `changeScene ... with Fade(...)` | `EffectKind::Fade` | `effect.fade` | `builtin.effect.fade` |
+| `changeScene ... with FadeWhite(...)` | `EffectKind::FadeWhite` | `effect.fade` | `builtin.effect.fade` |
+| `changeScene ... with <img src="mask.png"/> (...)` | `EffectKind::Rule` | `effect.rule_mask` | `builtin.effect.rule_mask` |
+| `show ... with move/slide` | `EffectKind::Move` | `effect.move` | `builtin.effect.move` |
+
+诊断约定：
+- 诊断日志必须至少包含 `capability_id` 与扩展来源（`extension_name`）。
+- capability 缺失或执行失败时，不阻断主线，按统一回退映射降级到可执行 capability。
+
 > **注意**：旧语法 `changeBG with fade/fadewhite` 已废弃，请使用 `changeScene with Fade(...)`/`FadeWhite(...)`。
 
 #### 7.3.1 `Fade` / `FadeWhite` 效果（纯色遮罩）

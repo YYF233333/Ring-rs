@@ -64,6 +64,18 @@ impl ResolvedEffect {
             EffectKind::Fade | EffectKind::FadeWhite | EffectKind::Rule { .. }
         )
     }
+
+    /// 返回效果类型的规范化名称。
+    pub fn kind_name(&self) -> &'static str {
+        match self.kind {
+            EffectKind::None => "none",
+            EffectKind::Dissolve => "dissolve",
+            EffectKind::Fade => "fade",
+            EffectKind::FadeWhite => "fadewhite",
+            EffectKind::Rule { .. } => "rule_mask",
+            EffectKind::Move => "move",
+        }
+    }
 }
 
 /// 将 `Transition` 解析为 `ResolvedEffect`
