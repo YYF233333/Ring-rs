@@ -122,14 +122,3 @@
 2. 再拉齐观感与听感：P1
 3. 最后做规模化与长期维护：P2
 
----
-
-## 6. 首批体验验收样本
-
-- `assets/ref-project/scripts/summer/prologue.rpy`
-- `assets/ref-project/scripts/summer/3-1.rpy`
-- `assets/ref-project/scripts/winter/3-5.rpy`
-- `assets/ref-project/scripts/winter/ending.rpy`
-- `assets/ref-project/screens.rpy`
-
-覆盖面：主线叙事、高密度演出、文本节奏、菜单系统、终章视频。
