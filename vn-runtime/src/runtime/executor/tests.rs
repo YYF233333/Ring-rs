@@ -748,3 +748,33 @@ fn test_execute_conditional_with_goto() {
     assert!(result.waiting.is_none());
     assert_eq!(result.jump_to, Some(2)); // "end" 标签的索引
 }
+
+#[test]
+fn test_execute_call_script_control_flow() {
+    let (mut executor, mut state, script) = test_ctx("scripts/remake");
+    let node = ScriptNode::CallScript {
+        path: "ring/summer/prologue.md".to_string(),
+        display_label: Some("start".to_string()),
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(result.commands.is_empty());
+    assert!(result.waiting.is_none());
+    assert!(result.jump_to.is_none());
+    assert!(matches!(
+        result.script_control,
+        Some(ScriptControlFlow::Call { target_path, display_label: Some(label) })
+            if target_path == "ring/summer/prologue.md" && label == "start"
+    ));
+}
+
+#[test]
+fn test_execute_return_from_script_control_flow() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::ReturnFromScript;
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(matches!(
+        result.script_control,
+        Some(ScriptControlFlow::Return)
+    ));
+}

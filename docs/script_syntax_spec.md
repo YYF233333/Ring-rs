@@ -373,11 +373,40 @@ textBoxShow
 
 ## 控制逻辑
 
+### 跨文件脚本调度（阶段 0 新增）
+
+```markdown
+callScript [prologue](scripts/remake/ring/summer/prologue.md)
+callScript [chapter1](scripts/remake/ring/summer/1-1.md)
+returnFromScript
+```
+
+语义约定：
+
+- `callScript [label](path)`：调用目标脚本，并将“当前脚本下一条指令”压入调用栈；`label` 仅作展示，不参与入口选择，调用统一从目标文件开头执行。
+- `returnFromScript`：从当前脚本返回最近一次调用点；若调用栈为空则报运行时错误。
+- 非入口脚本执行到文件末尾时，自动等价于 `returnFromScript`。
+- 入口脚本执行到文件末尾时，运行结束并返回主界面。
+- 路径按“相对当前脚本目录”解析，行为与 `changeBG/show` 的资源相对路径解析一致。
+
+### 注释说明行
+
+```markdown
+> 说明：这是一行脚本说明注释
+```
+
+- 以 `>` 开头的行被视为注释说明文本，解析阶段会直接跳过，不产生 warning。
+
 ### 无条件跳转
 
 ```markdown
 goto **label**
 ```
+
+约束：
+
+- `goto` 仅允许跳转到**当前脚本文件内**的标签。
+- 暂不支持跨文件 `goto`（如 `goto **summer::start**`），请使用 `callScript` + `returnFromScript`。
 
 ### 变量设置
 
@@ -746,7 +775,7 @@ enum Block {
 1. `#` 开头 → 章节标记
 2. `**...**` 格式 → 标签定义
 3. 指令关键字开头（大小写不敏感）→ 演出指令
-   - `changeBG`, `changeScene`, `show`, `hide`
+   - `changeBG`, `changeScene`, `show`, `hide`, `goto`, `callScript`, `returnFromScript`
 4. 包含 `：` 或 `:` → 对话/旁白
 5. 其他 → 未知行，记录警告但不中断解析
 

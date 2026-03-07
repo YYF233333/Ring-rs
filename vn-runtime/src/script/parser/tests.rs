@@ -690,6 +690,51 @@ fn test_parse_goto() {
     }
 }
 
+#[test]
+fn test_parse_goto_cross_file_is_banned() {
+    let err = parse_err("goto **summer::start**");
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+#[test]
+fn test_parse_call_script_and_return_from_script() {
+    let node = parse_single_node(r#"callScript [prologue](ring/summer/prologue.md)"#);
+    assert!(matches!(
+        node,
+        ScriptNode::CallScript { path, display_label: Some(label) }
+            if path == "ring/summer/prologue.md" && label == "prologue"
+    ));
+
+    let node = parse_single_node(r#"callScript [chapter1](ring/summer/1-1.md)"#);
+    assert!(matches!(
+        node,
+        ScriptNode::CallScript { path, display_label: Some(label) }
+            if path == "ring/summer/1-1.md" && label == "chapter1"
+    ));
+
+    let node = parse_single_node("returnFromScript");
+    assert!(matches!(node, ScriptNode::ReturnFromScript));
+}
+
+#[test]
+fn test_parse_call_script_requires_quoted_path() {
+    let err = parse_err("callScript ring/summer/prologue.md");
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+
+    let err = parse_err(r#"callScript "ring/summer/prologue.md""#);
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+#[test]
+fn test_parse_blockquote_comment_line() {
+    let mut parser = Parser::new();
+    let script = parser
+        .parse("test", "> 说明：这里是注释，不应参与脚本解析")
+        .unwrap();
+    assert_eq!(script.nodes.len(), 0);
+    assert!(parser.warnings().is_empty());
+}
+
 //=========================================================================
 // audio 语法测试
 //=========================================================================

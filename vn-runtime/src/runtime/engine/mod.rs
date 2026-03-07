@@ -17,9 +17,10 @@ use crate::command::Command;
 use crate::error::RuntimeError;
 use crate::history::{History, HistoryEvent};
 use crate::input::RuntimeInput;
-use crate::runtime::executor::Executor;
+use crate::runtime::executor::{Executor, ScriptControlFlow};
 use crate::script::{Script, ScriptNode};
 use crate::state::{RuntimeState, WaitingReason};
+use std::collections::HashMap;
 
 /// VN Runtime 执行引擎
 ///
@@ -42,6 +43,8 @@ use crate::state::{RuntimeState, WaitingReason};
 pub struct VNRuntime {
     /// 当前脚本
     script: Script,
+    /// 已注册脚本（key=逻辑路径或脚本 id）
+    script_registry: HashMap<String, Script>,
     /// 运行时状态
     state: RuntimeState,
     /// 节点执行器
@@ -57,9 +60,12 @@ impl VNRuntime {
     ///
     /// - `script`: 已解析的脚本
     pub fn new(script: Script) -> Self {
+        let mut script_registry = HashMap::new();
+        script_registry.insert(script.id.clone(), script.clone());
         let state = RuntimeState::new(&script.id);
         Self {
             script,
+            script_registry,
             state,
             history: History::new(),
             executor: Executor::new(),
@@ -74,12 +80,27 @@ impl VNRuntime {
     /// - `state`: 保存的运行时状态
     /// - `history`: 历史记录
     pub fn restore(script: Script, state: RuntimeState, history: History) -> Self {
+        let mut script_registry = HashMap::new();
+        script_registry.insert(script.id.clone(), script.clone());
         Self {
             script,
+            script_registry,
             state,
             history,
             executor: Executor::new(),
         }
+    }
+
+    /// 注册一个可被 callScript 调用的脚本
+    ///
+    /// `logical_path` 应为相对 assets_root 的规范化路径，例如 `scripts/remake/main.md`。
+    pub fn register_script(&mut self, logical_path: impl Into<String>, script: Script) {
+        let key = logical_path.into();
+        self.script_registry.insert(key, script.clone());
+        // 兼容按 script_id 查询（用于旧状态）
+        self.script_registry
+            .entry(script.id.clone())
+            .or_insert(script);
     }
 
     /// 核心驱动函数
@@ -116,7 +137,13 @@ impl VNRuntime {
             let node = match self.script.get_node(self.state.position.node_index) {
                 Some(node) => node.clone(),
                 None => {
-                    // 脚本执行完毕
+                    // 当前脚本执行完毕：
+                    // - 若在调用栈中，则自动 return 到调用点
+                    // - 否则视为入口脚本结束
+                    if !self.state.call_stack.is_empty() {
+                        self.handle_script_control(ScriptControlFlow::Return)?;
+                        continue;
+                    }
                     return Ok((commands, WaitingReason::None));
                 }
             };
@@ -132,6 +159,11 @@ impl VNRuntime {
             }
 
             commands.extend(result.commands);
+
+            if let Some(control) = result.script_control {
+                self.handle_script_control(control)?;
+                continue;
+            }
 
             // 处理跳转（记录历史）
             if let Some(target) = result.jump_to {
@@ -224,6 +256,83 @@ impl VNRuntime {
                 expected: format!("{:?}", waiting),
                 actual: format!("{:?}", input),
             }),
+        }
+    }
+
+    fn handle_script_control(&mut self, control: ScriptControlFlow) -> Result<(), RuntimeError> {
+        match control {
+            ScriptControlFlow::Call {
+                target_path,
+                display_label,
+            } => {
+                let resolved_path = self.script.resolve_path(&target_path);
+                let target_script = self.script_registry.get(&resolved_path).cloned().ok_or(
+                    RuntimeError::ScriptNotLoaded {
+                        path: resolved_path.clone(),
+                    },
+                )?;
+
+                let return_position = crate::state::ScriptPosition::with_path(
+                    self.state.position.script_id.clone(),
+                    self.state.position.script_path.clone(),
+                    self.state.position.node_index + 1,
+                );
+                self.state.call_stack.push(return_position);
+
+                // `callScript [label](path)` 中的 label 仅用于展示，不参与入口寻址。
+                let target_index = 0;
+
+                self.history.push(HistoryEvent::jump(format!(
+                    "call {}{}",
+                    resolved_path,
+                    display_label
+                        .as_ref()
+                        .map(|l| format!(" [{}]", l))
+                        .unwrap_or_default()
+                )));
+
+                self.script = target_script;
+                self.state.position.script_id = self.script.id.clone();
+                self.state.position.script_path = resolved_path;
+                self.state.position.node_index = target_index;
+                Ok(())
+            }
+            ScriptControlFlow::Return => {
+                let return_position =
+                    self.state
+                        .call_stack
+                        .pop()
+                        .ok_or_else(|| RuntimeError::InvalidState {
+                            message: "returnFromScript 但调用栈为空".to_string(),
+                        })?;
+
+                let next_script = if !return_position.script_path.is_empty() {
+                    self.script_registry
+                        .get(&return_position.script_path)
+                        .cloned()
+                        .or_else(|| {
+                            self.script_registry
+                                .get(&return_position.script_id)
+                                .cloned()
+                        })
+                        .ok_or_else(|| RuntimeError::ScriptNotLoaded {
+                            path: return_position.script_path.clone(),
+                        })?
+                } else {
+                    self.script_registry
+                        .get(&return_position.script_id)
+                        .cloned()
+                        .ok_or(RuntimeError::ScriptNotLoaded {
+                            path: return_position.script_id.clone(),
+                        })?
+                };
+
+                self.history.push(HistoryEvent::jump("return".to_string()));
+
+                self.script = next_script;
+                self.state.position = return_position;
+                Ok(())
+            }
         }
     }
 

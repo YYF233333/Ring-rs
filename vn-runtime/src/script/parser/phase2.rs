@@ -48,6 +48,11 @@ impl Phase2Parser {
     ) -> Result<Option<ScriptNode>, ParseError> {
         let line = line.trim();
 
+        // Markdown 注释块（以 > 开头）作为说明文字，解析时静默跳过。
+        if line.starts_with('>') {
+            return Ok(None);
+        }
+
         // 1. 章节标记 (# Title, ## Title, etc.)
         if line.starts_with('#') {
             return self.parse_chapter(line);
@@ -78,6 +83,12 @@ impl Phase2Parser {
         }
         if starts_with_ignore_case(line, "goto") {
             return self.parse_goto(line, line_number);
+        }
+        if starts_with_ignore_case(line, "callscript") {
+            return self.parse_call_script(line, line_number);
+        }
+        if starts_with_ignore_case(line, "returnfromscript") {
+            return Ok(Some(ScriptNode::ReturnFromScript));
         }
         // stopBGM - 停止 BGM
         if starts_with_ignore_case(line, "stopbgm") {
@@ -550,7 +561,59 @@ impl Phase2Parser {
             });
         }
 
+        // 暂不支持跨文件 goto（例如 script::label），避免引入命名空间与重名歧义。
+        if target_label.contains("::") {
+            return Err(ParseError::InvalidLine {
+                line: line_number,
+                message: "暂不支持跨文件 goto，请使用 callScript/returnFromScript 组织流程"
+                    .to_string(),
+            });
+        }
+
         Ok(Some(ScriptNode::Goto { target_label }))
+    }
+
+    /// 解析 callScript 指令
+    ///
+    /// 语法:
+    /// - `callScript [label](path/to/script.md)`
+    ///
+    /// 说明：
+    /// - `label` 仅为展示名称，不作为入口标签；调用始终从目标脚本开头执行。
+    fn parse_call_script(
+        &self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        let content = line
+            .get("callScript".len()..)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "callScript".to_string(),
+                param: "目标脚本路径".to_string(),
+            })?;
+
+        let (display_label, path, after_link) =
+            parse_markdown_link(content).ok_or_else(|| ParseError::InvalidLine {
+                line: line_number,
+                message:
+                    "callScript 必须使用 Markdown 链接格式，例如 callScript [chapter1](ring/summer/1-1.md)"
+                        .to_string(),
+            })?;
+
+        if !after_link.trim().is_empty() {
+            return Err(ParseError::InvalidLine {
+                line: line_number,
+                message: "callScript 链接后不允许额外参数".to_string(),
+            });
+        }
+
+        Ok(Some(ScriptNode::CallScript {
+            path: path.to_string(),
+            display_label: Some(display_label.to_string()),
+        }))
     }
 
     /// 解析 audio 标签
@@ -745,6 +808,32 @@ fn starts_with_command(line: &str, command: &str) -> bool {
         None => true,
         Some(ch) => ch.is_whitespace() || ch == '<',
     }
+}
+
+fn parse_markdown_link(input: &str) -> Option<(&str, &str, &str)> {
+    let trimmed = input.trim_start();
+    if !trimmed.starts_with('[') {
+        return None;
+    }
+
+    let label_end = trimmed.find(']')?;
+    let label = &trimmed[1..label_end];
+    if label.trim().is_empty() {
+        return None;
+    }
+
+    let after_label = &trimmed[label_end + 1..];
+    if !after_label.starts_with('(') {
+        return None;
+    }
+    let path_end = after_label.find(')')?;
+    let path = &after_label[1..path_end];
+    if path.trim().is_empty() {
+        return None;
+    }
+
+    let rest = &after_label[path_end + 1..];
+    Some((label.trim(), path.trim(), rest))
 }
 
 impl Default for Phase2Parser {

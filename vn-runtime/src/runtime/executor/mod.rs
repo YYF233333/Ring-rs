@@ -13,6 +13,18 @@ use crate::error::RuntimeError;
 use crate::script::{EvalError, Script, ScriptNode, evaluate, evaluate_to_bool};
 use crate::state::{RuntimeState, WaitingReason};
 
+/// 脚本控制流动作（不经过 Host 命令层）
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScriptControlFlow {
+    /// 调用其他脚本
+    Call {
+        target_path: String,
+        display_label: Option<String>,
+    },
+    /// 返回调用点
+    Return,
+}
+
 /// 执行结果
 pub struct ExecuteResult {
     /// 产生的命令
@@ -21,6 +33,8 @@ pub struct ExecuteResult {
     pub waiting: Option<WaitingReason>,
     /// 跳转目标（如果需要跳转）
     pub jump_to: Option<usize>,
+    /// 脚本控制流动作（callScript / returnFromScript）
+    pub script_control: Option<ScriptControlFlow>,
 }
 
 impl ExecuteResult {
@@ -30,6 +44,7 @@ impl ExecuteResult {
             commands: Vec::new(),
             waiting: None,
             jump_to: None,
+            script_control: None,
         }
     }
 
@@ -39,6 +54,7 @@ impl ExecuteResult {
             commands,
             waiting: None,
             jump_to: None,
+            script_control: None,
         }
     }
 
@@ -48,6 +64,7 @@ impl ExecuteResult {
             commands,
             waiting: Some(waiting),
             jump_to: None,
+            script_control: None,
         }
     }
 
@@ -57,6 +74,16 @@ impl ExecuteResult {
             commands: Vec::new(),
             waiting: None,
             jump_to: Some(jump_to),
+            script_control: None,
+        }
+    }
+
+    fn with_script_control(script_control: ScriptControlFlow) -> Self {
+        Self {
+            commands: Vec::new(),
+            waiting: None,
+            jump_to: None,
+            script_control: Some(script_control),
         }
     }
 }
@@ -280,6 +307,20 @@ impl Executor {
                 Ok(ExecuteResult::with_jump(target_index))
             }
 
+            ScriptNode::CallScript {
+                path,
+                display_label,
+            } => Ok(ExecuteResult::with_script_control(
+                ScriptControlFlow::Call {
+                    target_path: path.clone(),
+                    display_label: display_label.clone(),
+                },
+            )),
+
+            ScriptNode::ReturnFromScript => Ok(ExecuteResult::with_script_control(
+                ScriptControlFlow::Return,
+            )),
+
             ScriptNode::SetVar { name, value } => {
                 // 求值表达式
                 let val = evaluate(value, state).map_err(eval_error_to_runtime)?;
@@ -356,6 +397,16 @@ impl Executor {
                     commands: all_commands,
                     waiting: None,
                     jump_to: result.jump_to,
+                    script_control: None,
+                });
+            }
+
+            if result.script_control.is_some() {
+                return Ok(ExecuteResult {
+                    commands: all_commands,
+                    waiting: None,
+                    jump_to: None,
+                    script_control: result.script_control,
                 });
             }
 
@@ -365,6 +416,7 @@ impl Executor {
                     commands: all_commands,
                     waiting: result.waiting,
                     jump_to: None,
+                    script_control: None,
                 });
             }
         }

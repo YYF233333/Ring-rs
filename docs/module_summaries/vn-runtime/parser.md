@@ -16,6 +16,7 @@
 2. `phase2` 将块解析为 `ScriptNode`。
 3. 解析过程中同步构建 source map（节点索引 -> 源文件行号）。
 4. 使用 `Script::with_source_map` 产出最终脚本对象。
+5. 阶段 0 新增 `callScript` / `returnFromScript` 单行语法解析。
 
 ## Dependencies
 
@@ -48,7 +49,7 @@
 
 ## LastVerified
 
-2026-02-27
+2026-03-07
 
 ## Owner
 

@@ -181,6 +181,12 @@ pub struct RuntimeState {
     /// 脚本变量
     pub variables: HashMap<String, VarValue>,
 
+    /// 脚本调用栈（用于 callScript / returnFromScript）
+    ///
+    /// 栈顶为最近一次调用的返回位置。
+    #[serde(default)]
+    pub call_stack: Vec<ScriptPosition>,
+
     /// 当前等待状态
     pub waiting: WaitingReason,
 
@@ -198,6 +204,7 @@ impl RuntimeState {
         Self {
             position: ScriptPosition::start(script_id),
             variables: HashMap::new(),
+            call_stack: Vec::new(),
             waiting: WaitingReason::None,
             visible_characters: HashMap::new(),
             current_background: None,
@@ -276,6 +283,7 @@ mod tests {
         let mut state = RuntimeState::new("main");
         assert_eq!(state.position.script_id, "main");
         assert_eq!(state.position.node_index, 0);
+        assert!(state.call_stack.is_empty());
         assert!(!state.waiting.is_waiting());
 
         state.set_var("counter", VarValue::Int(42));

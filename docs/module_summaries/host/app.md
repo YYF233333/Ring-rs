@@ -15,7 +15,7 @@
 1. `AppState::new` 创建资源/音频/渲染/执行器并加载 manifest、脚本列表与用户设置。
 2. `update` 路径推进输入、Runtime tick、命令执行和过渡/动画系统。
 3. `draw` 路径将当前 `RenderState` 交给 `Renderer` 输出画面。
-4. `save` 与 `script_loader` 提供会话存档与脚本加载辅助能力。
+4. `save` 与 `script_loader` 提供会话存档与脚本加载辅助能力（阶段 0 新增 callScript 可达脚本预注册）。
 
 ## Dependencies
 
@@ -46,7 +46,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-07
 
 ## Owner
 

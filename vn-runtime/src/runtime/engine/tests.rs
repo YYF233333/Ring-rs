@@ -470,3 +470,194 @@ fn test_record_history_for_background_and_bgm() {
         HistoryEvent::BgmChange { path: None, .. }
     ));
 }
+
+#[test]
+fn test_call_script_and_return_flow() {
+    let main_script = Script::new(
+        "main",
+        vec![
+            ScriptNode::CallScript {
+                path: "ring/child.md".to_string(),
+                display_label: Some("entry".to_string()),
+            },
+            ScriptNode::Dialogue {
+                speaker: None,
+                content: "主线继续".to_string(),
+            },
+        ],
+        "scripts/remake",
+    );
+
+    let child_script = Script::new(
+        "child",
+        vec![
+            ScriptNode::Label {
+                name: "entry".to_string(),
+            },
+            ScriptNode::Dialogue {
+                speaker: Some("子脚本".to_string()),
+                content: "子流程".to_string(),
+            },
+            ScriptNode::ReturnFromScript,
+        ],
+        "scripts/remake/ring",
+    );
+
+    let mut runtime = VNRuntime::new(main_script);
+    runtime
+        .state_mut()
+        .position
+        .set_path("scripts/remake/main.md".to_string());
+    runtime.register_script("scripts/remake/ring/child.md", child_script);
+
+    // 执行 callScript，立即进入子脚本并执行首句对话
+    let (commands1, waiting1) = runtime.tick(None).unwrap();
+    assert_eq!(commands1.len(), 1);
+    assert!(matches!(
+        &commands1[0],
+        Command::ShowText { speaker: Some(s), content } if s == "子脚本" && content == "子流程"
+    ));
+    assert!(matches!(waiting1, WaitingReason::WaitForClick));
+    assert_eq!(runtime.state().position.script_id, "child");
+    assert_eq!(runtime.state().call_stack.len(), 1);
+
+    // 点击后执行 returnFromScript，回到主脚本并继续执行下一句对话
+    let (commands2, waiting2) = runtime.tick(Some(RuntimeInput::Click)).unwrap();
+    assert_eq!(commands2.len(), 1);
+    assert!(matches!(
+        &commands2[0],
+        Command::ShowText { speaker: None, content } if content == "主线继续"
+    ));
+    assert!(matches!(waiting2, WaitingReason::WaitForClick));
+    assert_eq!(runtime.state().position.script_id, "main");
+    assert!(runtime.state().call_stack.is_empty());
+}
+
+#[test]
+fn test_call_script_missing_target_returns_error() {
+    let script = Script::new(
+        "main",
+        vec![ScriptNode::CallScript {
+            path: "missing.md".to_string(),
+            display_label: None,
+        }],
+        "scripts/remake",
+    );
+    let mut runtime = VNRuntime::new(script);
+    runtime
+        .state_mut()
+        .position
+        .set_path("scripts/remake/main.md".to_string());
+
+    let err = runtime.tick(None).unwrap_err();
+    assert!(matches!(err, RuntimeError::ScriptNotLoaded { .. }));
+}
+
+#[test]
+fn test_call_script_auto_return_on_child_eof() {
+    let main_script = Script::new(
+        "main",
+        vec![
+            ScriptNode::CallScript {
+                path: "ring/child_no_return.md".to_string(),
+                display_label: Some("entry".to_string()),
+            },
+            ScriptNode::Dialogue {
+                speaker: None,
+                content: "主线恢复".to_string(),
+            },
+        ],
+        "scripts/remake",
+    );
+
+    let child_script = Script::new(
+        "child_no_return",
+        vec![
+            ScriptNode::Label {
+                name: "entry".to_string(),
+            },
+            ScriptNode::Dialogue {
+                speaker: Some("子脚本".to_string()),
+                content: "子结尾自动返回".to_string(),
+            },
+        ],
+        "scripts/remake/ring",
+    );
+
+    let mut runtime = VNRuntime::new(main_script);
+    runtime
+        .state_mut()
+        .position
+        .set_path("scripts/remake/main.md".to_string());
+    runtime.register_script("scripts/remake/ring/child_no_return.md", child_script);
+
+    let (commands1, waiting1) = runtime.tick(None).unwrap();
+    assert_eq!(commands1.len(), 1);
+    assert!(matches!(
+        &commands1[0],
+        Command::ShowText { speaker: Some(s), content } if s == "子脚本" && content == "子结尾自动返回"
+    ));
+    assert!(matches!(waiting1, WaitingReason::WaitForClick));
+
+    // 点击后子脚本到 EOF，应自动 return 并继续主脚本。
+    let (commands2, waiting2) = runtime.tick(Some(RuntimeInput::Click)).unwrap();
+    assert_eq!(commands2.len(), 1);
+    assert!(matches!(
+        &commands2[0],
+        Command::ShowText { speaker: None, content } if content == "主线恢复"
+    ));
+    assert!(matches!(waiting2, WaitingReason::WaitForClick));
+    assert_eq!(runtime.state().position.script_id, "main");
+}
+
+#[test]
+fn test_call_script_label_is_display_only() {
+    let main_script = Script::new(
+        "main",
+        vec![ScriptNode::CallScript {
+            path: "ring/child_label_display_only.md".to_string(),
+            display_label: Some("entry".to_string()),
+        }],
+        "scripts/remake",
+    );
+
+    let child_script = Script::new(
+        "child_label_display_only",
+        vec![
+            ScriptNode::Dialogue {
+                speaker: Some("子脚本".to_string()),
+                content: "从文件开头执行".to_string(),
+            },
+            ScriptNode::Label {
+                name: "entry".to_string(),
+            },
+            ScriptNode::Dialogue {
+                speaker: Some("子脚本".to_string()),
+                content: "旧语义会先到这里".to_string(),
+            },
+        ],
+        "scripts/remake/ring",
+    );
+
+    let mut runtime = VNRuntime::new(main_script);
+    runtime
+        .state_mut()
+        .position
+        .set_path("scripts/remake/main.md".to_string());
+    runtime.register_script(
+        "scripts/remake/ring/child_label_display_only.md",
+        child_script,
+    );
+
+    let (commands, waiting) = runtime.tick(None).unwrap();
+    assert_eq!(commands.len(), 1);
+    assert!(matches!(
+        &commands[0],
+        Command::ShowText { speaker: Some(s), content } if s == "子脚本" && content == "从文件开头执行"
+    ));
+    assert!(matches!(waiting, WaitingReason::WaitForClick));
+    assert_eq!(
+        runtime.state().position.script_id,
+        "child_label_display_only"
+    );
+}

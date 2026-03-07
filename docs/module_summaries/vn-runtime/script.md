@@ -16,6 +16,7 @@
 2. 生成 `Script`（节点序列 + base_path + source_map）。
 3. `runtime/executor` 消费 `ScriptNode` 产生命令。
 4. 条件分支与变量赋值依赖 `expr` 求值器。
+5. 阶段 0 新增跨文件控制流节点：`CallScript`、`ReturnFromScript`。
 
 ## Dependencies
 
@@ -45,7 +46,7 @@
 
 ## LastVerified
 
-2026-02-27
+2026-03-07
 
 ## Owner
 

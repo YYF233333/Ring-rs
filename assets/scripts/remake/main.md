@@ -3,40 +3,41 @@
 > 说明：本文件使用“Ring Script vNext（设想语法）”组织跨文件流程。  
 > Ring 语义章节已迁移至 `assets/scripts/remake/ring/`（summer 12 章 + winter 10 章）。  
 > 原始 `summer/*.rpy` 与 `winter/*.rpy` 仅保留用于对照与回归参考。  
-> 当前运行时尚未支持 `callScript` / `returnFromScript`，因此本入口仍属于“目标运行形态”的跨文件总调度稿。
+> 以上说明为注释文本；脚本解析阶段应跳过 `>` 开头行。  
+> 当前跨文件流程使用 `callScript [label](path)`；非入口文件到末尾自动 return，入口文件到末尾自动结束并返回主界面。
 
 **Summer**
-callScript "ring/summer/prologue.md" as **prologue**
-callScript "ring/summer/1-1.md" as **chapter1**
-callScript "ring/summer/1-2.md" as **chapter2**
-callScript "ring/summer/1-3.md" as **chapter3**
-callScript "ring/summer/1-4.md" as **chapter4**
-callScript "ring/summer/1-5.md" as **chapter5**
-callScript "ring/summer/2-1.md" as **chapter6**
-callScript "ring/summer/2-2.md" as **chapter7**
-callScript "ring/summer/2-3.md" as **chapter8**
-callScript "ring/summer/2-4.md" as **chapter9**
-callScript "ring/summer/2-5.md" as **chapter10**
-callScript "ring/summer/3-1.md" as **chapter11**
+callScript [prologue](ring/summer/prologue.md)
+callScript [chapter1](ring/summer/1-1.md)
+callScript [chapter2](ring/summer/1-2.md)
+callScript [chapter3](ring/summer/1-3.md)
+callScript [chapter4](ring/summer/1-4.md)
+callScript [chapter5](ring/summer/1-5.md)
+callScript [chapter6](ring/summer/2-1.md)
+callScript [chapter7](ring/summer/2-2.md)
+callScript [chapter8](ring/summer/2-3.md)
+callScript [chapter9](ring/summer/2-4.md)
+callScript [chapter10](ring/summer/2-5.md)
+callScript [chapter11](ring/summer/3-1.md)
 
 if $complete_summer != true
   set $complete_summer = true
   scene bg:black with dissolve(0.5)
-  callScript "summer/splash.rpy" as **splashscreen**
+  callScript [splashscreen](summer/splash.rpy)
   fullRestart
 else
   goto **Winter**
 endif
 
 **Winter**
-callScript "ring/winter/inter01.md" as **chapter12**
-callScript "ring/winter/3-2.md" as **chapter13**
-callScript "ring/winter/3-3.md" as **chapter14**
-callScript "ring/winter/inter02.md" as **chapter15**
-callScript "ring/winter/3-4.md" as **chapter16**
-callScript "ring/winter/3-5.md" as **chapter17**
-callScript "ring/winter/3-6.md" as **chapter18**
-callScript "ring/winter/inter03.md" as **chapter19**
-callScript "ring/winter/3-7.md" as **chapter20**
-callScript "ring/winter/ending.md" as **ending**
+callScript [chapter12](ring/winter/inter01.md)
+callScript [chapter13](ring/winter/3-2.md)
+callScript [chapter14](ring/winter/3-3.md)
+callScript [chapter15](ring/winter/inter02.md)
+callScript [chapter16](ring/winter/3-4.md)
+callScript [chapter17](ring/winter/3-5.md)
+callScript [chapter18](ring/winter/3-6.md)
+callScript [chapter19](ring/winter/inter03.md)
+callScript [chapter20](ring/winter/3-7.md)
+callScript [ending](ring/winter/ending.md)
 end

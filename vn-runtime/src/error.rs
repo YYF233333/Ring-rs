@@ -63,6 +63,10 @@ pub enum RuntimeError {
     #[error("无效的状态操作: {message}")]
     InvalidState { message: String },
 
+    /// 目标脚本未加载
+    #[error("脚本 '{path}' 未加载，无法执行 callScript")]
+    ScriptNotLoaded { path: String },
+
     /// 表达式求值错误
     #[error("表达式求值错误: {message}")]
     EvalError { message: String },

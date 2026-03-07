@@ -152,7 +152,7 @@
 
 ### 6.1 优先级与依赖
 
-1. `P0-1` 跨文件脚本调度（新增）：`callScript` / `returnFromScript`、多脚本 label 索引、调用栈与恢复语义
+1. `P0-1` 跨文件脚本调度（新增）：`callScript` / `returnFromScript`、调用栈与恢复语义（首轮已落地；当前策略为“禁用跨文件 goto”，不做全局 label 命名空间索引）
 2. `P0-2` 演出能力最小闭环：先补 `sceneEffect` 首批 capability，再做组合演出
 3. `P0-3` 文本节奏与窗口控制：在已有窗口显隐基础上补 `pause/extend` 等节奏语义
 4. `P0-4` 持久化与章节门控：`complete_summer` 与全局持久化域

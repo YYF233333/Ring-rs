@@ -1,9 +1,10 @@
 //! 脚本扫描与加载
 
 use crate::resources::ResourceManager;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tracing::{error, info, warn};
-use vn_runtime::{Parser, VNRuntime};
+use vn_runtime::{Parser, Script, ScriptNode, VNRuntime};
 
 use super::AppState;
 
@@ -83,8 +84,19 @@ pub fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &st
             }
 
             // 创建 VNRuntime 并设置脚本路径
-            let mut runtime = VNRuntime::new(script);
+            let mut runtime = VNRuntime::new(script.clone());
+            runtime.register_script(normalized_path.clone(), script.clone());
             runtime.state_mut().position.set_path(&normalized_path);
+
+            // 预加载 callScript 可达脚本，避免运行时首次调用失败
+            let mut visited = HashSet::new();
+            visited.insert(normalized_path.clone());
+            preload_called_scripts(
+                &mut runtime,
+                &app_state.core.resource_manager,
+                &script,
+                &mut visited,
+            );
             app_state.session.vn_runtime = Some(runtime);
             true
         }
@@ -138,4 +150,60 @@ pub fn collect_prefetch_paths(commands: &[vn_runtime::Command]) -> Vec<String> {
     }
 
     paths
+}
+
+fn preload_called_scripts(
+    runtime: &mut VNRuntime,
+    resource_manager: &ResourceManager,
+    script: &Script,
+    visited_paths: &mut HashSet<String>,
+) {
+    for call in collect_call_nodes(&script.nodes) {
+        let ScriptNode::CallScript { path, .. } = call else {
+            continue;
+        };
+
+        let resolved_path = script.resolve_path(path);
+        if !visited_paths.insert(resolved_path.clone()) {
+            continue;
+        }
+
+        let script_text = match resource_manager.read_text(&resolved_path) {
+            Ok(text) => text,
+            Err(e) => {
+                warn!(path = %resolved_path, error = %e, "callScript 目标脚本预加载失败");
+                continue;
+            }
+        };
+
+        let script_id = crate::resources::extract_script_id(&resolved_path);
+        let base_dir = crate::resources::extract_base_dir(&resolved_path);
+        let mut parser = Parser::new();
+        let child_script = match parser.parse_with_base_path(&script_id, &script_text, &base_dir) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                warn!(path = %resolved_path, error = %e, "callScript 目标脚本解析失败");
+                continue;
+            }
+        };
+
+        runtime.register_script(resolved_path.clone(), child_script.clone());
+        preload_called_scripts(runtime, resource_manager, &child_script, visited_paths);
+    }
+}
+
+fn collect_call_nodes(nodes: &[ScriptNode]) -> Vec<&ScriptNode> {
+    let mut result = Vec::new();
+    for node in nodes {
+        match node {
+            ScriptNode::CallScript { .. } => result.push(node),
+            ScriptNode::Conditional { branches } => {
+                for branch in branches {
+                    result.extend(collect_call_nodes(&branch.body));
+                }
+            }
+            _ => {}
+        }
+    }
+    result
 }

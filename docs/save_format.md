@@ -39,6 +39,7 @@ saves/
       "node_index": 15
     },
     "variables": {},
+    "call_stack": [],
     "waiting": "WaitForClick",
     "visible_characters": {},
     "current_background": "backgrounds/scene.jpg"
@@ -96,6 +97,7 @@ Runtime 的核心状态。
 | `position.script_id` | string | 当前脚本 ID |
 | `position.node_index` | number | 当前节点索引 |
 | `variables` | object | 脚本变量 |
+| `call_stack` | array | 跨文件调用栈（`callScript` 返回点） |
 | `waiting` | string | 等待状态 |
 | `visible_characters` | object | 当前显示的角色 |
 | `current_background` | string? | 当前背景路径 |

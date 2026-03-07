@@ -16,7 +16,8 @@
 2. 若仍在等待，直接返回当前等待原因。
 3. 否则循环取 `ScriptNode`，交给 `Executor::execute`。
 4. 汇总 `commands`，处理 `jump_to` 与 `waiting`。
-5. 记录历史事件（对话、章节、背景、BGM、跳转/选项）。
+5. 处理脚本控制流（`callScript` / `returnFromScript`）并维护调用栈。
+6. 记录历史事件（对话、章节、背景、BGM、跳转/选项）。
 
 ## Dependencies
 
@@ -30,12 +31,14 @@
 - `tick` 是唯一推进入口。
 - 等待状态由 `WaitingReason` 显式建模。
 - 输入与等待状态不匹配时返回 `RuntimeError::StateMismatch`。
+- 跨文件调用通过 `RuntimeState.call_stack` 显式建模，可序列化恢复。
 
 ## FailureModes
 
 - `ChoiceSelected` 索引越界。
 - `Goto`/Choice 目标 label 不存在。
 - 条件表达式求值失败。
+- `callScript` 目标脚本未注册。
 
 ## WhenToReadSource
 
@@ -50,7 +53,7 @@
 
 ## LastVerified
 
-2026-02-27
+2026-03-07
 
 ## Owner
 

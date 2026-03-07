@@ -78,8 +78,9 @@
 ### 4.1 P0（先保证完整可玩 + 关键观感）
 
 1) 跨文件脚本调度
-- `callScript` / `returnFromScript`（或等价 call stack）
-- 多脚本 label 全局索引与跨文件跳转
+- [x] `callScript` / `returnFromScript`（含 call stack）
+- [x] 明确禁用跨文件 `goto`（避免重名与命名空间索引复杂度）
+- [x] `callScript` 采用 Markdown 链接格式（`callScript [label](path)`）；非入口脚本 EOF 自动 return
 
 2) 演出基础闭环
 - [x] 统一转场描述（已覆盖 dissolve/fade/fadewhite/rule + show/hide 的 move/slide；Host 侧已接入 capability 注册表）

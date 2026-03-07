@@ -142,6 +142,22 @@ pub enum ScriptNode {
         target_label: String,
     },
 
+    /// 调用其他脚本
+    ///
+    /// 对应 `callScript [label](path/to/script.md)` 语法
+    /// `label` 仅用于展示，不参与入口标签寻址；始终从脚本开头执行。
+    CallScript {
+        /// 目标脚本路径（相对当前脚本目录）
+        path: String,
+        /// 展示名称（保留在 AST 中，供日志/调试使用）
+        display_label: Option<String>,
+    },
+
+    /// 从当前脚本返回到调用点
+    ///
+    /// 对应 `returnFromScript` 语法
+    ReturnFromScript,
+
     /// 设置变量
     ///
     /// 对应 `set $var = value` 语法
@@ -209,7 +225,12 @@ impl ScriptNode {
     pub fn is_control_flow(&self) -> bool {
         matches!(
             self,
-            Self::Label { .. } | Self::Goto { .. } | Self::SetVar { .. } | Self::Conditional { .. }
+            Self::Label { .. }
+                | Self::Goto { .. }
+                | Self::CallScript { .. }
+                | Self::ReturnFromScript
+                | Self::SetVar { .. }
+                | Self::Conditional { .. }
         )
     }
 }
