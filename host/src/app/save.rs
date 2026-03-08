@@ -5,7 +5,9 @@ use tracing::{error, info, warn};
 use vn_runtime::state::WaitingReason;
 
 use super::AppState;
-use super::script_loader::{load_script_from_logical_path, load_script_from_save_path};
+use super::script_loader::{
+    load_script_from_logical_path, load_script_from_save_path, load_script_into_registry,
+};
 
 /// 构建当前游戏状态的存档数据
 pub fn build_save_data(app_state: &AppState, slot: u32) -> Option<vn_runtime::SaveData> {
@@ -116,6 +118,20 @@ pub fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::S
     if let Some(ref mut runtime) = app_state.session.vn_runtime {
         runtime.restore_state(save_data.runtime_state);
         runtime.restore_history(save_data.history);
+
+        // 加载 call_stack 中引用的脚本（读档恢复调用栈）
+        let call_stack_paths: Vec<String> = runtime
+            .state()
+            .call_stack
+            .iter()
+            .map(|pos| pos.script_path.clone())
+            .filter(|p| !p.is_empty())
+            .collect();
+        for path in call_stack_paths {
+            if !load_script_into_registry(runtime, &app_state.core.resource_manager, &path) {
+                warn!(path = %path, "call_stack 脚本加载失败，读档后返回可能异常");
+            }
+        }
     }
 
     // 恢复渲染状态

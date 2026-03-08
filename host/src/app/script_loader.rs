@@ -121,6 +121,50 @@ pub fn load_script_from_save_path(app_state: &mut AppState, script_path: &str) -
     load_script_from_logical_path(app_state, script_path)
 }
 
+/// 将指定逻辑路径的脚本加载并注册到现有 runtime 中（如果尚未注册）
+///
+/// 用于读档时恢复 call_stack 中引用的父脚本。
+/// 内部也会递归预加载新脚本中的 callScript 目标。
+///
+/// # 返回
+/// 是否加载成功（已注册的脚本视为成功）
+pub fn load_script_into_registry(
+    runtime: &mut VNRuntime,
+    resource_manager: &ResourceManager,
+    logical_path: &str,
+) -> bool {
+    use crate::resources::{extract_base_dir, extract_script_id, normalize_logical_path};
+
+    let normalized_path = normalize_logical_path(logical_path);
+
+    let script_text = match resource_manager.read_text(&normalized_path) {
+        Ok(text) => text,
+        Err(e) => {
+            error!(path = %normalized_path, error = %e, "call_stack 脚本加载失败");
+            return false;
+        }
+    };
+
+    let script_id = extract_script_id(&normalized_path);
+    let base_dir = extract_base_dir(&normalized_path);
+    let mut parser = Parser::new();
+    match parser.parse_with_base_path(&script_id, &script_text, &base_dir) {
+        Ok(script) => {
+            runtime.register_script(normalized_path.clone(), script.clone());
+
+            let mut visited = HashSet::new();
+            visited.insert(normalized_path);
+            preload_called_scripts(runtime, resource_manager, &script, &mut visited);
+
+            true
+        }
+        Err(e) => {
+            error!(path = %logical_path, error = %e, "call_stack 脚本解析失败");
+            false
+        }
+    }
+}
+
 /// 从命令列表中收集需要预取的资源路径
 pub fn collect_prefetch_paths(commands: &[vn_runtime::Command]) -> Vec<String> {
     use vn_runtime::Command;
