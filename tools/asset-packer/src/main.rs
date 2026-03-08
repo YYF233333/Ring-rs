@@ -349,8 +349,8 @@ fn create_release(
     // 复制文件
     let zip_file_name = required_file_name(zip_output, "资源 ZIP 输出路径必须是文件")?;
     let zip_dest = release_dir.join(zip_file_name);
-    std::fs::copy(zip_output, &zip_dest)?;
-    println!("  ✅ 复制资源包: {:?} -> {:?}", zip_output, zip_dest);
+    std::fs::rename(zip_output, &zip_dest)?;
+    println!("  ✅ 移动资源包: {:?} -> {:?}", zip_output, zip_dest);
 
     // 根据游戏名称重命名二进制文件
     let binary_filename = if cfg!(target_os = "windows") {
