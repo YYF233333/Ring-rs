@@ -188,6 +188,11 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                 app_state.input_manager.reset_choice(*choice_count);
             }
 
+            // 如果是时间等待，初始化 wait_timer
+            if let WaitingReason::WaitForTime(duration) = &waiting {
+                app_state.session.wait_timer = duration.as_secs_f32();
+            }
+
             // 检查脚本是否执行完毕
             let is_finished = app_state
                 .session

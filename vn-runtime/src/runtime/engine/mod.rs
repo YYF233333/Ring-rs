@@ -245,7 +245,12 @@ impl VNRuntime {
                 Ok(())
             }
 
-            // WaitForTime 由 Host 处理，收到任何输入都不解除
+            // WaitForTime: Click 可以打断等待（用于 wait 指令的交互打断）
+            (WaitingReason::WaitForTime(_), RuntimeInput::Click) => {
+                self.state.clear_wait();
+                Ok(())
+            }
+            // WaitForTime: 其他输入忽略
             (WaitingReason::WaitForTime(_), _) => Ok(()),
 
             // 不等待时收到输入，忽略

@@ -358,6 +358,11 @@ impl Executor {
                 state.visible_characters.clear();
                 Ok(ExecuteResult::with_commands(vec![Command::ClearCharacters]))
             }
+
+            ScriptNode::Wait { duration } => Ok(ExecuteResult::with_wait(
+                vec![],
+                WaitingReason::WaitForTime(std::time::Duration::from_secs_f64(*duration)),
+            )),
         }
     }
 

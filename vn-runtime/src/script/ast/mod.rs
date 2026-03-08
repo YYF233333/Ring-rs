@@ -198,6 +198,15 @@ pub enum ScriptNode {
     ///
     /// 对应 `clearCharacters` 语法
     ClearCharacters,
+
+    /// 等待指定时长
+    ///
+    /// 对应 `wait <duration>` 语法。
+    /// 等待结束后自动执行下一条；等待期间可被点击或快进打断。
+    Wait {
+        /// 等待时长（秒）
+        duration: f64,
+    },
 }
 
 impl ScriptNode {
@@ -205,7 +214,10 @@ impl ScriptNode {
     ///
     /// 用于执行引擎判断是否需要暂停执行。
     pub fn causes_wait(&self) -> bool {
-        matches!(self, Self::Dialogue { .. } | Self::Choice { .. })
+        matches!(
+            self,
+            Self::Dialogue { .. } | Self::Choice { .. } | Self::Wait { .. }
+        )
     }
 
     /// 判断节点是否是跳转目标

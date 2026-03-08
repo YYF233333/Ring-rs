@@ -59,6 +59,18 @@ pub fn update(app_state: &mut AppState) {
             dt,
         );
 
+        // WaitForTime 计时推进：每帧递减 wait_timer，到期后自动解除等待
+        if matches!(
+            app_state.session.waiting_reason,
+            WaitingReason::WaitForTime(_)
+        ) {
+            app_state.session.wait_timer -= dt;
+            if app_state.session.wait_timer <= 0.0 {
+                app_state.session.wait_timer = 0.0;
+                run_script_tick(app_state, Some(RuntimeInput::Click));
+            }
+        }
+
         // changeScene 过渡完成检测：当 Runtime 等待 scene_transition 信号
         // 且所有过渡动画均已结束时，自动发送信号解除等待
         if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason

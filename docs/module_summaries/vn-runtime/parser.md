@@ -17,6 +17,7 @@
 3. 解析过程中同步构建 source map（节点索引 -> 源文件行号）。
 4. 使用 `Script::with_source_map` 产出最终脚本对象。
 5. 阶段 0 新增 `callScript` / `returnFromScript` 单行语法解析。
+6. `wait <duration>` 解析为 `ScriptNode::Wait`。
 
 ## Dependencies
 

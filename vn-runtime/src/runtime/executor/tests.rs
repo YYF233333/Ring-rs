@@ -778,3 +778,17 @@ fn test_execute_return_from_script_control_flow() {
         Some(ScriptControlFlow::Return)
     ));
 }
+
+#[test]
+fn test_execute_wait() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::Wait { duration: 1.5 };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(result.commands.is_empty());
+    assert_eq!(
+        result.waiting,
+        Some(WaitingReason::WaitForTime(
+            std::time::Duration::from_secs_f64(1.5)
+        ))
+    );
+}

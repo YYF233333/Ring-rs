@@ -402,7 +402,7 @@ fn test_wait_for_signal_clears_only_on_expected_id() {
 }
 
 #[test]
-fn test_wait_for_time_ignores_input() {
+fn test_wait_for_time_click_interrupts() {
     use std::time::Duration;
 
     let script = create_test_script();
@@ -412,8 +412,28 @@ fn test_wait_for_time_ignores_input() {
         .state_mut()
         .wait(WaitingReason::WaitForTime(Duration::from_millis(500)));
 
-    // 任意输入都不解除
-    let (commands, waiting) = runtime.tick(Some(RuntimeInput::Click)).unwrap();
+    // Click 可以打断 WaitForTime
+    let (_commands, waiting) = runtime.tick(Some(RuntimeInput::Click)).unwrap();
+    assert!(!waiting.is_waiting() || matches!(waiting, WaitingReason::WaitForClick));
+}
+
+#[test]
+fn test_wait_for_time_ignores_non_click_input() {
+    use std::time::Duration;
+
+    let script = create_test_script();
+    let mut runtime = VNRuntime::new(script);
+
+    runtime
+        .state_mut()
+        .wait(WaitingReason::WaitForTime(Duration::from_millis(500)));
+
+    // Signal 不解除 WaitForTime
+    let (commands, waiting) = runtime
+        .tick(Some(RuntimeInput::Signal {
+            id: "test".to_string(),
+        }))
+        .unwrap();
     assert!(commands.is_empty());
     assert!(matches!(waiting, WaitingReason::WaitForTime(_)));
 }

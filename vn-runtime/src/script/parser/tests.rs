@@ -1390,3 +1390,39 @@ fn test_parse_textbox_commands() {
         assert_eq!(script.nodes[index], expected_node);
     }
 }
+
+#[test]
+fn test_parse_wait() {
+    let node = parse_single_node("wait 1.0");
+    assert_eq!(node, ScriptNode::Wait { duration: 1.0 });
+
+    let node2 = parse_single_node("wait 0.5");
+    assert_eq!(node2, ScriptNode::Wait { duration: 0.5 });
+
+    let node3 = parse_single_node("Wait 2");
+    assert_eq!(node3, ScriptNode::Wait { duration: 2.0 });
+
+    // 缺少参数
+    let err = parse_err("wait");
+    assert!(
+        format!("{:?}", err).contains("MissingParameter"),
+        "expected MissingParameter, got: {:?}",
+        err
+    );
+
+    // 非数字
+    let err2 = parse_err("wait abc");
+    assert!(
+        format!("{:?}", err2).contains("InvalidParameter"),
+        "expected InvalidParameter, got: {:?}",
+        err2
+    );
+
+    // 负数
+    let err3 = parse_err("wait -1");
+    assert!(
+        format!("{:?}", err3).contains("InvalidParameter"),
+        "expected InvalidParameter for negative, got: {:?}",
+        err3
+    );
+}

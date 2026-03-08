@@ -3,8 +3,8 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use macroquad::prelude::screen_width;
 use macroquad::prelude::screen_height;
+use macroquad::prelude::screen_width;
 
 use crate::renderer::animation::ObjectId;
 use crate::renderer::effects::{EffectKind, EffectTarget, defaults};

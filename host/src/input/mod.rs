@@ -106,10 +106,10 @@ impl InputManager {
                 self.handle_choice_input()
             }
             WaitingReason::WaitForTime(_) => {
-                // 时间等待由 Host 处理，不需要用户输入
+                // 时间等待可被点击打断（不支持长按快进，仅单次点击）
                 self.hold_timer = 0.0;
                 self.last_hold_trigger_time = 0.0;
-                None
+                self.handle_time_wait_input()
             }
             WaitingReason::WaitForSignal(_) => {
                 // 信号等待由外部系统触发，暂不处理
@@ -161,6 +161,21 @@ impl InputManager {
             // 没有按下：重置长按计时器
             self.hold_timer = 0.0;
             self.last_hold_trigger_time = 0.0;
+        }
+
+        None
+    }
+
+    /// 处理时间等待期间的打断输入（仅单次点击，不支持长按快进）
+    fn handle_time_wait_input(&mut self) -> Option<RuntimeInput> {
+        let current_time = get_time();
+        let clicked = is_mouse_button_pressed(MouseButton::Left)
+            || is_key_pressed(KeyCode::Space)
+            || is_key_pressed(KeyCode::Enter);
+
+        if clicked && current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
+            self.last_click_time = current_time;
+            return Some(RuntimeInput::Click);
         }
 
         None

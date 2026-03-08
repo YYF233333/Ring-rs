@@ -372,6 +372,26 @@ textBoxShow
 ："新的场景开始了。"
 ```
 
+## 节奏控制
+
+### 等待 (wait)
+
+```markdown
+wait 1.0
+wait 0.5
+```
+
+参数说明：
+- 第一个参数为等待时长（秒），必须为正数
+
+语义约定：
+- 等待结束后自动执行下一条指令（不需要玩家点击）
+- 等待期间可被**点击打断**，打断后立即执行下一条
+- **Skip 模式**下直接跳过（不实际等待），避免拖慢快进节奏
+- **Auto 模式**下正常等待，到期自动推进
+
+---
+
 ## 控制逻辑
 
 ### 跨文件脚本调度（阶段 0 新增）
@@ -776,7 +796,7 @@ enum Block {
 1. `#` 开头 → 章节标记
 2. `**...**` 格式 → 标签定义
 3. 指令关键字开头（大小写不敏感）→ 演出指令
-   - `changeBG`, `changeScene`, `show`, `hide`, `goto`, `callScript`, `returnFromScript`
+   - `changeBG`, `changeScene`, `show`, `hide`, `goto`, `callScript`, `returnFromScript`, `wait`
 4. 包含 `：` 或 `:` → 对话/旁白
 5. 其他 → 未知行，记录警告但不中断解析
 

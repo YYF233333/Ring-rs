@@ -166,6 +166,16 @@ fn update_ingame_skip(app_state: &mut AppState, dt: f32) {
         return;
     }
 
+    // 3b. WaitForTime 在 Skip 模式下直接跳过
+    if matches!(
+        app_state.session.waiting_reason,
+        WaitingReason::WaitForTime(_)
+    ) {
+        app_state.session.wait_timer = 0.0;
+        super::run_script_tick(app_state, Some(RuntimeInput::Click));
+        return;
+    }
+
     // 4. 其他等待类型（选择/时间/信号）仍使用正常输入处理
     if let Some(input) = app_state
         .input_manager

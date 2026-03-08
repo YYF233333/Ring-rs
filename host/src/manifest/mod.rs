@@ -9,12 +9,12 @@
 //! - **PreScale**: 预处理缩放，载入时应用，使不同尺寸立绘归一化
 //! - **Preset**: 站位预设，定义屏幕位置和额外缩放
 
+use crate::resources::normalize_logical_path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use tracing::warn;
-use crate::resources::normalize_logical_path;
 
 /// 2D 点（归一化坐标）
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

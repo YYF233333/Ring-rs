@@ -113,6 +113,8 @@ pub struct GameSession {
     pub playback_mode: PlaybackMode,
     /// Auto 模式的等待计时器（秒）
     pub auto_timer: f32,
+    /// wait 指令剩余时间（秒），WaitForTime 期间递减
+    pub wait_timer: f32,
 }
 
 // ─── AppState ────────────────────────────────────────────────────────────────────
@@ -214,6 +216,7 @@ impl AppState {
                 manifest,
                 playback_mode: PlaybackMode::Normal,
                 auto_timer: 0.0,
+                wait_timer: 0.0,
             },
             config,
             host_state: HostState::new(),

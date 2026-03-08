@@ -114,6 +114,10 @@ impl Phase2Parser {
         if starts_with_ignore_case(line, "clearcharacters") {
             return Ok(Some(ScriptNode::ClearCharacters));
         }
+        // wait - 等待指定时长
+        if starts_with_command(line, "wait") {
+            return self.parse_wait(line, line_number);
+        }
 
         // 4. HTML 标签解析
         // <audio src="..."></audio> 或 <audio src="..."></audio> loop
@@ -646,6 +650,36 @@ impl Phase2Parser {
             path: path.to_string(),
             is_bgm,
         }))
+    }
+
+    /// 解析 wait 指令
+    ///
+    /// 语法: `wait <duration>`，duration 为秒数（正数）
+    fn parse_wait(&self, line: &str, line_number: usize) -> Result<Option<ScriptNode>, ParseError> {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 2 {
+            return Err(ParseError::MissingParameter {
+                line: line_number,
+                command: "wait".to_string(),
+                param: "等待时长（秒）".to_string(),
+            });
+        }
+
+        let duration: f64 = parts[1].parse().map_err(|_| ParseError::InvalidParameter {
+            line: line_number,
+            param: "duration".to_string(),
+            message: format!("无法解析为数字: '{}'", parts[1]),
+        })?;
+
+        if duration <= 0.0 {
+            return Err(ParseError::InvalidParameter {
+                line: line_number,
+                param: "duration".to_string(),
+                message: format!("等待时长必须为正数，实际: {}", duration),
+            });
+        }
+
+        Ok(Some(ScriptNode::Wait { duration }))
     }
 
     /// 从行中提取 with 子句的过渡效果

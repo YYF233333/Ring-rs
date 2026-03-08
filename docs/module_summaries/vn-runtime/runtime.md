@@ -31,6 +31,7 @@
 - `tick` 是唯一推进入口。
 - 等待状态由 `WaitingReason` 显式建模。
 - 输入与等待状态不匹配时返回 `RuntimeError::StateMismatch`。
+- `WaitForTime` 可被 `Click` 打断（用于 `wait` 指令的交互打断）。
 - 跨文件调用通过 `RuntimeState.call_stack` 显式建模，可序列化恢复。
 
 ## FailureModes
