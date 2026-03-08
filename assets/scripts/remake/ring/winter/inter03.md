@@ -1,7 +1,7 @@
 **chapter19**
 
 changeScene <img src="bg/hubianbaitian" /> with Dissolve(duration: 1.3)
-<audio src="audio/BGM/16.bittersweet.mp3"></audio> ♾️
+<audio src="../../../../audio/BGM/16.bittersweet.mp3"></audio> ♾️
 show 天兰 at right with dissolve
 show <img src="c" /> as 天兰 at right
 show 丰岛 at left with dissolve
@@ -69,6 +69,6 @@ show <img src="b" /> as 天兰 at right
 hide 天兰 with dissolve
 hide 丰岛 with dissolve
 旁白："……"
-changeScene <img src="bg/black" /> with Dissolve(duration: 0.6)
+changeScene <img src="../../../../backgrounds/black.png" alt="black" style="zoom:10%;" /> with Dissolve(duration: 0.6)
 stopBGM
 wait 0.5

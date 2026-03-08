@@ -124,6 +124,8 @@ show <img src="../../../../characters/立绘红叶/夏装/角色夏收手1.webp"
 旁白："我仔细想想，似乎也确实是一种解决方案，但是——"
 旁白："剧本怎么办呢？我现在，还能创作吗？"
 
+textBoxHide
+clearCharacters
 stopBGM
 changeScene <img src="../../../../backgrounds/black.png" alt="black" style="zoom:10%;" /> with Fade(duration: 0.5)
 wait 0.5

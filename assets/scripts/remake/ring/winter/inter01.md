@@ -1,6 +1,6 @@
 **chapter12**
 
-changeScene <img src="bg/black" /> with Fade(duration: 0.5)
+changeScene <img src="../../../../backgrounds/black.png" alt="black" style="zoom:10%;" /> with Fade(duration: 0.5)
 changeScene <img src="bg/fengdaodebangongshi_" /> with Dissolve(duration: 1.5)
 旁白："装修略显古旧的狭窄图书室，两个男人正在对话。一个男人坐在桌前翻看大量稿件，一个男人似乎非常悠闲地站在书架前，随手翻看着书。"
 titleCard "6月12日" duration: 0.8
@@ -44,4 +44,4 @@ show <img src="d" /> as 丰岛 at center
 旁白："丰岛轻笑起来。"
 
 hide 丰岛 with dissolve
-changeScene <img src="bg/black" /> with Dissolve(duration: 0.6)
+changeScene <img src="../../../../backgrounds/black.png" alt="black" style="zoom:10%;" /> with Dissolve(duration: 0.6)

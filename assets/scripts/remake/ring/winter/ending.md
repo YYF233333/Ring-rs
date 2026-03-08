@@ -1,6 +1,6 @@
 **ending**
 
-<audio src="audio/BGM/18-ED2.10℃.mp3"></audio> ♾️
+<audio src="../../../../audio/BGM/18-ED2.10℃.mp3"></audio> ♾️
 
 changeScene <img src="bg/yiyuanwaijing_bleak" /> with Dissolve(duration: 1.5)
 旁白："我向红叶的父母告别，前往会场。"
@@ -34,68 +34,68 @@ show <img src="c" /> as 丰岛 at center
 changeScene <img src="bg/yiyuan_bingfang_y" /> with Fade(duration: 0.8)
 旁白："次日，病房内。"
 show 红叶 at center with dissolve
-show <img src="pajamas_normal1" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常1.webp" style="zoom:10%;" /> as 红叶 at center
 旁白："红叶正在吃我刚买来的蜂蜜蛋糕。手术仅仅过了一天，她的胃口就已经恢复了。"
 旁白："我难以掩饰欣喜的笑容。"
-show <img src="pajamas_normal3" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常3.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："我说，子文啊……"
 子文："啊……什么？"
-show <img src="pajamas_backhand3" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手3.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："你从刚才开始就坐在那边傻笑，到底在笑些啥？"
 子文："……我那叫傻笑吗？"
-show <img src="pajamas_normal1" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常1.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："是啊，你的表情从来藏不住。"
 子文："我想到高兴的事情。"
-show <img src="pajamas_normal4" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常4.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："嗯？啥事啊这么开心？"
 子文："没啥事，就是开心。"
-show <img src="pajamas_backhand1" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手1.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："你过来。"
 子文："……我不。"
-show <img src="pajamas_backhand3" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手3.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："耳朵伸过来一下。哎呀你怕什么，我又不会吃了你。"
 
 changeBG <img src="cg/cg2_1" /> with Dissolve(duration: 0.6)
 旁白："我靠近过去。红叶再次给了我一个膝枕。"
 子文："噢噢噢噢噢你干啥？"
-show <img src="pajamas_normal1" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常1.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："嗯？和之前那次的比，不舒服吗？"
 子文："舒服啊，很舒服啊。难道有人能拒绝红叶的膝枕吗？"
-show <img src="pajamas_backhand3" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手3.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："……你重新组织一下语言。"
 子文："……难道我能拒绝我可爱的恋人的膝枕吗？"
 
 changeBG <img src="cg/cg2_2" /> with Dissolve(duration: 0.6)
-show <img src="pajamas_normal5" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常5.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："这才对嘛。"
 旁白："闭上眼睛。红叶轻轻地抚摸着我的头发。"
-show <img src="pajamas_normal1" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常1.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："需要一个今日限定膝枕ASMR吗？"
 子文："别了吧，太羞耻了。"
-show <img src="pajamas_backhand5" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手5.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："这里也没有其他人哦。"
 子文："……不要。"
-show <img src="pajamas_backhand3" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手3.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："什么嘛，其实你很想要吧。"
 旁白："我没有回答。红叶的声音柔和起来。"
 
 changeBG <img src="cg/cg2_1" /> with Dissolve(duration: 0.5)
-show <img src="pajamas_normal4" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常4.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："所以你是要转去中文系吗？"
 子文："是的。我想，有了这篇作品，学校不会拒绝我。"
-show <img src="pajamas_backhand1" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手1.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："你以后要继续写下去吗？"
 子文："那是当然了。唔，这么一说，就算不转也会继续写下去啊。因为这个故事，无论如何都只会是属于我们二人的即兴剧。"
 旁白："我坐起来。"
 子文："说起来，你之前告诉我，是有三个愿望是吧？现在已经告诉了我两个，并且也都……算是实现了。那么第三个愿望是什么呢？"
 
 changeBG <img src="cg/cg2_2" /> with Dissolve(duration: 0.5)
-show <img src="pajamas_normal5" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣正常5.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："嗯……不告诉你。"
 子文："喂，哪有这样许愿的啊？"
 
 changeBG <img src="cg/cg2_1" /> with Dissolve(duration: 0.5)
-show <img src="pajamas_backhand3" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手3.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："现在就是不告诉你。以后你会知道的。"
 旁白："红叶温柔地看着我，她的侧脸被夕阳照亮，我不禁看入迷了。"
 
@@ -133,15 +133,15 @@ show <img src="b" /> as 天兰 at left
 
 sceneEffect flashbackIn(duration: 0.5)
 changeScene <img src="bg/xiaocanguan_n" /> with Dissolve(duration: 0.6)
-show <img src="pajamas_backhand3" /> as 红叶 at center with dissolve
-show <img src="summer_backhand4" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/睡衣/角色睡衣收手3.webp" style="zoom:10%;" /> as 红叶 at center with dissolve
+show <img src="../../../../characters/立绘红叶/夏装/角色夏收手4.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："天兰前辈，我有一个问题……"
 show <img src="a" /> as 天兰 at left
 show <img src="a" /> as 天兰 at left with dissolve
 天兰："嗯？"
-show <img src="summer_normal4" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/夏装/角色夏正常4.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："您刚才说美是完全不可触及的东西……但是我分明感受到了，在故事中有一种类似旋律的东西，就像是故事的氛围之类的东西，直击我的内心。"
-show <img src="summer_backhand2" /> as 红叶 at center
+show <img src="../../../../characters/立绘红叶/夏装/角色夏收手2.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："爱与美，为什么一定是对立的东西，也许有相当大的部分，是重叠的呢……在一个广播剧中，旋律与言语，到底哪个更重要一点呢？"
 show <img src="d" /> as 天兰 at left
 天兰："……嗯……"
@@ -160,11 +160,11 @@ show <img src="b" /> as 丰岛 at right
 show <img src="b" /> as 天兰 at left
 天兰："色彩满溢的世界之中，七朵樱花飘舞而过，而我将向其追逐。"
 
-changeScene <img src="bg/black" /> with Dissolve(duration: 0.5)
+changeScene <img src="../../../../backgrounds/black.png" alt="black" style="zoom:10%;" /> with Dissolve(duration: 0.5)
 changeBG <img src="cg/cg3_1" /> with Dissolve(duration: 1.5)
 红叶："下一幕会是什么样子呢？是会满溢着悲伤，还是会闪烁着幸福呢？"
 子文："谁知道呢。但是有一点是确定的，那就是——"
-changeScene <img src="bg/white" /> with FadeWhite(duration: 1.3)
+changeScene <img src="../../../../backgrounds/white.png" alt="white" style="zoom:10%;" /> with FadeWhite(duration: 1.3)
 titleCard "我们正是这部即兴剧的创作者。" duration: 1.7
 cutscene "audio/ending_HVC_bgm.webm"
 stopBGM
