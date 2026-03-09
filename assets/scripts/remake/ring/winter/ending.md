@@ -165,7 +165,7 @@ changeBG <img src="cg/cg3_1" /> with Dissolve(duration: 1.5)
 红叶："下一幕会是什么样子呢？是会满溢着悲伤，还是会闪烁着幸福呢？"
 子文："谁知道呢。但是有一点是确定的，那就是——"
 changeScene <img src="../../../../backgrounds/white.png" alt="white" style="zoom:10%;" /> with FadeWhite(duration: 1.3)
-titleCard "我们正是这部即兴剧的创作者。" duration: 1.7
+titleCard "我们正是这部即兴剧的创作者。" (duration: 1.7)
 cutscene "audio/ending_HVC_bgm.webm"
 stopBGM
 end

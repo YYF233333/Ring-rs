@@ -69,13 +69,13 @@ show <img src="../../../../characters/立绘红叶/夏装/角色夏收手1.webp"
 show <img src="../../../../characters/立绘红叶/夏装/角色夏收手4.webp" style="zoom:10%;" /> as 红叶 at center with move
 红叶："子文君？"
 
-bgmDuck "audio/BGM/2.昼下がり気分.mp3"
+bgmDuck
 旁白："我摘下耳机。"
 子文："啊，为什么红叶会知道啊。"
 
 show <img src="../../../../characters/立绘红叶/夏装/角色夏正常5.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："上周社团的老师就告知了我来着……说每次去找你本人都找不到，只好让我代为转告……"
-bgmUnduck "audio/BGM/2.昼下がり気分.mp3"
+bgmUnduck
 旁白："我再次戴起耳机，没有回答。"
 
 show <img src="../../../../characters/立绘红叶/夏装/角色夏收手1.webp" style="zoom:10%;" /> as 红叶 at center
@@ -89,14 +89,14 @@ show <img src="../../../../characters/立绘红叶/夏装/角色夏收手4.webp"
 子文："音乐。都是很冷门的内容，你肯定不会喜欢的。"
 红叶："是吗……可是电脑上显示正在播放的是这星期的电台……"
 
-bgmDuck "audio/BGM/2.昼下がり気分.mp3"
+bgmDuck
 旁白："我立刻摘掉耳机。"
 子文："这不是欣赏一下红叶大小姐辛劳的成果嘛。"
 
 show <img src="../../../../characters/立绘红叶/夏装/角色夏收手1.webp" style="zoom:10%;" /> as 红叶 at center
 红叶："那子文君觉得怎么样呢，这还是我第一次尝试这样的声线。"
 旁白："我稍微想了一会。"
-bgmUnduck "audio/BGM/2.昼下がり気分.mp3"
+bgmUnduck
 
 子文："很精彩啊，偏冷淡磁性的声线，端庄的知性大姐姐。不过我感觉还是能立刻听出来就是你。这里面一些非常“红叶”的东西还是没有变化。"
 show <img src="../../../../characters/立绘红叶/夏装/角色夏收手4.webp" style="zoom:10%;" /> as 红叶 at center

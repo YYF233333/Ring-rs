@@ -3,7 +3,7 @@
 changeScene <img src="../../../../backgrounds/black.png" alt="black" style="zoom:10%;" /> with Fade(duration: 0.5)
 changeScene <img src="bg/fengdaodebangongshi_" /> with Dissolve(duration: 1.5)
 旁白："装修略显古旧的狭窄图书室，两个男人正在对话。一个男人坐在桌前翻看大量稿件，一个男人似乎非常悠闲地站在书架前，随手翻看着书。"
-titleCard "6月12日" duration: 0.8
+titleCard "6月12日" (duration: 0.8)
 
 记录员："丰岛先生，这次的稿件已经全部归档完毕了。"
 show <img src="f" /> as 丰岛 at right with dissolve
