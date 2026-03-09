@@ -281,11 +281,6 @@ hide royu with fade
 - `hide alias with dissolve/fade`：进入 `fading_out`，淡出完成后移除
 - `hide` 后该 alias 的可见状态被清理；后续若使用 `show alias at ...`，需先重新绑定差分
 
-### 5.5 历史语法说明
-
-`showStyle` / `stageActor` 已完成迁移并从规范中移除。  
-当前脚本层角色演出只保留 `show` / `hide` 作为公共入口。
-
 ---
 
 ## 六、分支选择

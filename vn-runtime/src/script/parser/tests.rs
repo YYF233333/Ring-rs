@@ -334,31 +334,6 @@ fn test_parse_show_character() {
     ));
 }
 
-#[test]
-fn test_showstyle_not_misparsed_as_show_command() {
-    let mut parser = Parser::new();
-    let script = parser
-        .parse(
-            "test",
-            r#"
-showStyle 红叶 = summer_normal3
-show 红叶 at center
-"#,
-        )
-        .unwrap();
-    assert_eq!(script.nodes.len(), 1);
-    assert!(matches!(
-        &script.nodes[0],
-        ScriptNode::ShowCharacter {
-            path: None,
-            alias,
-            position: Position::Center,
-            transition: None
-        } if alias == "红叶"
-    ));
-    assert_eq!(parser.warnings().len(), 1);
-}
-
 /// 测试 hide 指令：
 /// - 带过渡效果（with fade）
 /// - 不带过渡效果

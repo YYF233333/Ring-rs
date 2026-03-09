@@ -59,8 +59,6 @@
 - `sceneEffect ...`：镜头语言抽象（摇镜、模糊、推拉、遮罩等）。
 - `titleCard ...`、`cutscene ...`：字卡与视频过场语义。
 
-说明：
-- `showStyle` / `stageActor` 已完成迁移并移除；角色演出统一使用 `show` / `hide`。
 
 ### 3.3 迁移过程约束
 
