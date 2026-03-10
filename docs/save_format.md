@@ -6,11 +6,29 @@ Ring-rs 的存档系统使用 JSON 格式，支持版本兼容性检测和专用
 
 ```
 saves/
+├── persistent.json   # 持久化变量（$persistent.key，跨会话保留）
 ├── continue.json     # 专用"继续"存档（退出/返回标题时自动维护）
 ├── slot_001.json     # 玩家手动存档（槽位 1-99）
 ├── slot_002.json
 └── ...
 ```
+
+### persistent.json（持久化变量）
+
+存储通过 `$persistent.key` 访问的全局变量，独立于游戏会话：
+
+```json
+{
+  "complete_summer": true,
+  "player_choice": "route_a"
+}
+```
+
+- **key 为 bare key**（不含 `persistent.` 前缀）
+- **写入时机**：执行 `fullRestart` 指令时由 host 写入
+- **读取时机**：游戏启动时自动加载，注入到新会话的 `persistent_variables`
+- **读档恢复**：以 `persistent.json` 为权威，覆盖存档中可能携带的旧值
+- **文件不存在**：视为空 store，不报错
 
 ### Continue 存档
 

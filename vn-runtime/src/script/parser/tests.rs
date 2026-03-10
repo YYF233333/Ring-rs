@@ -1172,6 +1172,50 @@ fn test_parse_set_var() {
     }
 }
 
+#[test]
+fn test_parse_set_persistent_var() {
+    // 正常用例：$persistent.key = value
+    let node = parse_single_node("set $persistent.complete_summer = true");
+    if let ScriptNode::SetVar { name, value } = node {
+        assert_eq!(name, "persistent.complete_summer");
+        assert!(
+            matches!(
+                value,
+                crate::script::Expr::Literal(crate::state::VarValue::Bool(true))
+            ),
+            "expected Bool(true)"
+        );
+    } else {
+        panic!("Expected SetVar node");
+    }
+
+    // 持久变量名中含有数字和下划线也应通过
+    let node2 = parse_single_node(r#"set $persistent.my_var_2 = "hello""#);
+    if let ScriptNode::SetVar { name, .. } = node2 {
+        assert_eq!(name, "persistent.my_var_2");
+    } else {
+        panic!("Expected SetVar node");
+    }
+
+    // 格式错误：persistent. 后无 key 名
+    let err1 = parse_err("set $persistent. = true");
+    assert!(matches!(err1, crate::error::ParseError::InvalidLine { .. }));
+
+    // 格式错误：persistent. 后含点号
+    let err2 = parse_err("set $persistent.a.b = true");
+    assert!(matches!(err2, crate::error::ParseError::InvalidLine { .. }));
+}
+
+#[test]
+fn test_parse_full_restart() {
+    let node = parse_single_node("fullRestart");
+    assert_eq!(node, ScriptNode::FullRestart);
+
+    // 大小写不敏感
+    let node2 = parse_single_node("FULLRESTART");
+    assert_eq!(node2, ScriptNode::FullRestart);
+}
+
 //=========================================================================
 // 条件分支测试
 //=========================================================================
@@ -1286,6 +1330,10 @@ fn test_parse_expression() {
         ("($a == true)", "eq"),
         ("($a == true) and ($b == false)", "and"),
         ("$name != \"Bob\"", "not-eq"),
+        // 持久变量命名空间在表达式中正常解析
+        ("$persistent.complete_summer != true", "not-eq"),
+        ("$persistent.complete_summer == true", "eq"),
+        ("not $persistent.complete_summer", "not"),
     ];
     for (input, expected_kind) in ok_cases {
         let expr = parse_expression(input, 1).unwrap();

@@ -288,6 +288,14 @@ pub enum Command {
 
     /// 清除所有角色立绘
     ClearCharacters,
+
+    /// 完整重启游戏会话
+    ///
+    /// Host 收到此命令后应：
+    /// 1. 将 `RuntimeState.persistent_variables` 持久化到 `saves/persistent.json`
+    /// 2. 清空当前游戏会话
+    /// 3. 返回标题画面
+    FullRestart,
 }
 
 #[cfg(test)]

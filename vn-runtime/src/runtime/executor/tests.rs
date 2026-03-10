@@ -792,3 +792,46 @@ fn test_execute_wait() {
         ))
     );
 }
+
+#[test]
+fn test_execute_set_var_persistent_prefix_routes_to_persistent_variables() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::SetVar {
+        name: "persistent.complete_summer".to_string(),
+        value: crate::script::Expr::Literal(crate::state::VarValue::Bool(true)),
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(result.commands.is_empty());
+    // 写入了 persistent_variables，bare key 不含前缀
+    assert_eq!(
+        state.get_persistent_var("complete_summer"),
+        Some(&crate::state::VarValue::Bool(true))
+    );
+    // 会话变量未被污染
+    assert_eq!(state.get_var("complete_summer"), None);
+    assert_eq!(state.get_var("persistent.complete_summer"), None);
+}
+
+#[test]
+fn test_execute_set_var_regular_does_not_write_persistent() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::SetVar {
+        name: "foo".to_string(),
+        value: crate::script::Expr::Literal(crate::state::VarValue::Int(99)),
+    };
+    executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(state.get_var("foo"), Some(&crate::state::VarValue::Int(99)));
+    // 持久变量未被污染
+    assert_eq!(state.get_persistent_var("foo"), None);
+}
+
+#[test]
+fn test_execute_full_restart_emits_command() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::FullRestart;
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands, vec![Command::FullRestart]);
+    assert!(result.waiting.is_none());
+    assert!(result.jump_to.is_none());
+    assert!(result.script_control.is_none());
+}

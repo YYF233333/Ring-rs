@@ -27,6 +27,7 @@ pub use script_loader::*;
 pub use update::*;
 
 use crate::extensions::ExtensionRegistry;
+use crate::persistent::PersistentStore;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
 use crate::resources::ResourceManager;
@@ -143,6 +144,8 @@ pub struct AppState {
     pub user_settings: UserSettings,
     /// 存档管理器
     pub save_manager: crate::save_manager::SaveManager,
+    /// 持久化变量存储（跨会话保留，fullRestart 时写入磁盘）
+    pub persistent_store: PersistentStore,
     /// 当前存档槽位
     pub current_save_slot: u32,
     /// 可用脚本列表（路径；展示用 ID 可从路径提取）
@@ -159,6 +162,7 @@ impl AppState {
         let audio_manager = init::create_audio_manager(&config);
         let manifest = init::load_manifest(&config, &resource_manager);
         let save_manager = init::create_save_manager(&config);
+        let persistent_store = init::load_persistent_store(&config);
         let scripts = init::scan_script_list(&config, &resource_manager);
         let (width, height) = init::window_size(&config);
         let user_settings = init::load_user_settings(USER_SETTINGS_PATH);
@@ -223,6 +227,7 @@ impl AppState {
             input_manager: InputManager::new(),
             user_settings,
             save_manager,
+            persistent_store,
             current_save_slot: 1,
             scripts,
             play_start_time: std::time::Instant::now(),

@@ -26,6 +26,7 @@
 - Runtime 与 Host 的语义边界在 `Command` 层收敛。
 - `Transition` 参数仅做结构化，不解释具体效果语义。
 - 任何新增脚本语义，若影响宿主行为，通常需要新增/扩展 `Command`。
+- `Command::FullRestart`：Host 收到后负责持久化 `persistent_variables`、清空会话并返回标题；`CommandExecutor` 层是 no-op，由 `run_script_tick` 拦截处理。
 
 ## FailureModes
 
@@ -45,7 +46,7 @@
 
 ## LastVerified
 
-2026-02-27
+2026-03-10
 
 ## Owner
 

@@ -90,6 +90,10 @@ impl Phase2Parser {
         if starts_with_ignore_case(line, "returnfromscript") {
             return Ok(Some(ScriptNode::ReturnFromScript));
         }
+        // fullRestart - 完整重启游戏会话
+        if starts_with_ignore_case(line, "fullrestart") {
+            return Ok(Some(ScriptNode::FullRestart));
+        }
         // stopBGM - 停止 BGM
         if starts_with_ignore_case(line, "stopbgm") {
             return Ok(Some(ScriptNode::StopBgm));
@@ -196,11 +200,20 @@ impl Phase2Parser {
             });
         }
 
-        // 验证变量名格式
-        if !var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        // 验证变量名格式：普通变量名为 [a-zA-Z0-9_]+，
+        // 持久变量名格式为 persistent.[a-zA-Z0-9_]+
+        let is_valid = if let Some(bare) = var_name.strip_prefix("persistent.") {
+            !bare.is_empty() && bare.chars().all(|c| c.is_alphanumeric() || c == '_')
+        } else {
+            var_name.chars().all(|c| c.is_alphanumeric() || c == '_')
+        };
+        if !is_valid {
             return Err(ParseError::InvalidLine {
                 line: line_number,
-                message: format!("变量名只能包含字母、数字和下划线，实际: '{}'", var_name),
+                message: format!(
+                    "变量名格式无效。普通变量名只能含字母、数字和下划线；持久变量须为 persistent.<name> 格式，实际: '{}'",
+                    var_name
+                ),
             });
         }
 

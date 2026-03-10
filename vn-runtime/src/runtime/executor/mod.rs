@@ -333,12 +333,16 @@ impl Executor {
             )),
 
             ScriptNode::SetVar { name, value } => {
-                // 求值表达式
                 let val = evaluate(value, state).map_err(eval_error_to_runtime)?;
-                // 设置变量
-                state.set_var(name.clone(), val);
+                if let Some(bare) = name.strip_prefix("persistent.") {
+                    state.set_persistent_var(bare, val);
+                } else {
+                    state.set_var(name.clone(), val);
+                }
                 Ok(ExecuteResult::empty())
             }
+
+            ScriptNode::FullRestart => Ok(ExecuteResult::with_commands(vec![Command::FullRestart])),
 
             ScriptNode::Conditional { branches } => {
                 // 顺序求值每个分支条件，找到第一个为真的分支

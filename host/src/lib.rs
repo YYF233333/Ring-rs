@@ -21,6 +21,7 @@ pub mod config;
 pub mod extensions;
 pub mod input;
 pub mod manifest;
+pub mod persistent;
 pub mod renderer;
 pub mod resources;
 pub mod save_manager;

@@ -1,6 +1,7 @@
 //! 脚本模式输入与 VNRuntime tick
 
 use tracing::{debug, error, info};
+use vn_runtime::command::Command;
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 
@@ -153,6 +154,22 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
             // 执行所有命令
             for command in &commands {
                 debug!(command = ?command, "执行命令");
+
+                // FullRestart：持久化 persistent_variables，清空会话，返回标题
+                if matches!(command, Command::FullRestart) {
+                    info!("收到 FullRestart 命令，持久化变量并返回标题");
+                    let persistent_vars = app_state
+                        .session
+                        .vn_runtime
+                        .as_ref()
+                        .map(|r| r.state().persistent_variables.clone())
+                        .unwrap_or_default();
+                    app_state.persistent_store.merge_from(&persistent_vars);
+                    app_state.persistent_store.save_or_log();
+                    return_to_title_from_game(app_state, false);
+                    return;
+                }
+
                 let result = app_state.core.command_executor.execute(
                     command,
                     &mut app_state.core.render_state,

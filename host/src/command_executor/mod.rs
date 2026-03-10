@@ -92,6 +92,9 @@ impl CommandExecutor {
             Command::TextBoxShow => self.execute_text_box_show(render_state),
             Command::TextBoxClear => self.execute_text_box_clear(render_state),
             Command::ClearCharacters => self.execute_clear_characters(render_state),
+            // FullRestart 由 host 上层（run_script_tick）在命令循环前拦截处理，
+            // CommandExecutor 层不需要做任何事。
+            Command::FullRestart => ExecuteResult::Ok,
         };
 
         self.last_output.result = result.clone();

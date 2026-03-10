@@ -207,6 +207,12 @@ pub enum ScriptNode {
         /// 等待时长（秒）
         duration: f64,
     },
+
+    /// 完整重启游戏会话
+    ///
+    /// 对应 `fullRestart` 语法。
+    /// 触发后 host 将持久化 `persistent_variables`，清空会话状态并返回标题画面。
+    FullRestart,
 }
 
 impl ScriptNode {

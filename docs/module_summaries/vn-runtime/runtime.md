@@ -33,6 +33,10 @@
 - 输入与等待状态不匹配时返回 `RuntimeError::StateMismatch`。
 - `WaitForTime` 可被 `Click` 打断（用于 `wait` 指令的交互打断）。
 - 跨文件调用通过 `RuntimeState.call_stack` 显式建模，可序列化恢复。
+- `RuntimeState` 包含两个变量域：
+  - `variables`：会话变量（随存档序列化，`fullRestart` 后清空）
+  - `persistent_variables`：持久变量（bare key，由 host 在启动时注入、`fullRestart` 时持久化）
+- `EvalContext::get_var` 严格按命名空间路由：`persistent.key` 查 `persistent_variables`，其余查 `variables`，无跨域回退。
 
 ## FailureModes
 
@@ -54,7 +58,7 @@
 
 ## LastVerified
 
-2026-03-07
+2026-03-10
 
 ## Owner
 

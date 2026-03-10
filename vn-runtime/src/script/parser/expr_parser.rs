@@ -230,11 +230,23 @@ impl<'a> ExprParser<'a> {
     }
 
     /// 解析标识符
+    ///
+    /// 支持普通标识符 `[a-zA-Z0-9_]+` 以及持久变量命名空间 `persistent.[a-zA-Z0-9_]+`。
     fn parse_identifier(&mut self) -> Result<String, ParseError> {
         let start = self.pos;
 
         while self.pos < self.input.len() {
             let c = self.input[self.pos..].chars().next().unwrap();
+            // 允许 '.' 仅用于 persistent. 前缀：如果当前累积的 token 恰好是 "persistent" 且下一个字符是 '.'，继续
+            if c == '.' {
+                let so_far = &self.input[start..self.pos];
+                if so_far == "persistent" {
+                    self.pos += c.len_utf8();
+                    continue;
+                } else {
+                    break;
+                }
+            }
             if c.is_alphanumeric() || c == '_' {
                 self.pos += c.len_utf8();
             } else {

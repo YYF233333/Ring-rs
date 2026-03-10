@@ -119,6 +119,9 @@ pub fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::S
         runtime.restore_state(save_data.runtime_state);
         runtime.restore_history(save_data.history);
 
+        // persistent_store 是权威来源，覆盖存档中可能携带的旧 persistent_variables
+        runtime.state_mut().persistent_variables = app_state.persistent_store.variables.clone();
+
         // 加载 call_stack 中引用的脚本（读档恢复调用栈）
         let call_stack_paths: Vec<String> = runtime
             .state()
@@ -231,6 +234,11 @@ pub fn start_new_game(app_state: &mut AppState) {
         app_state.core.render_state = RenderState::new();
         app_state.session.script_finished = false;
         app_state.play_start_time = std::time::Instant::now();
+
+        // 将持久化变量注入到新游戏 runtime（确保章节门控变量可见）
+        if let Some(ref mut runtime) = app_state.session.vn_runtime {
+            runtime.state_mut().persistent_variables = app_state.persistent_store.variables.clone();
+        }
 
         // 执行第一次 tick
         run_script_tick(app_state, None);

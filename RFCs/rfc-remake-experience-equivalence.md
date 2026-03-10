@@ -33,7 +33,7 @@
 - 窗口显隐控制（`textBoxHide/textBoxShow/textBoxClear`）已实现。
 - 存档/读档系统已完整实现（含版本兼容、元数据、槽位管理）。
 - 主菜单、设置、历史、存档/读档 UI 页面均已实现。
-- **核心缺口**：`sceneEffect` 命令尚未解析执行；节奏标签 `{w}/{nw}/{cps}`、`pause/extend` 未支持；持久化域（`persistent.*`）与章节门控（`complete_summer`）未实现；`fullRestart` 未支持。
+- **核心缺口**：`sceneEffect` 命令尚未解析执行；节奏标签 `{w}/{nw}/{cps}`、`pause/extend` 未支持。持久化域（`persistent.*`）与 `fullRestart` 已于 2026-03-10 完成。
 
 ---
 
@@ -77,6 +77,7 @@
 - [x] 存档/读档系统（含版本兼容、元数据、槽位 UI）。
 - [x] 核心 UI 页面：主菜单、设置、历史、存档/读档、游内菜单。
 - [x] Host 侧 capability 注册表与效果扩展 API 框架。
+- [x] 全局持久化域（`$persistent.key` / `saves/persistent.json` / `fullRestart`）与 `complete_summer` 章节门控。
 
 ### 3.2 运行稿说明
 
@@ -119,12 +120,12 @@
 
 #### P0-4 持久化与章节门控
 
-- 状态：**进行中**（单次会话存档已实现，跨会话全局持久化域与门控未实现）
+- 状态：**✅ 已完成**（2026-03-10）
 - [x] 存档/读档系统（槽位、元数据、版本兼容）。
-- [ ] **建立全局持久化域**（`persistent.*`：通关状态、章节解锁、菜单分支）。
-- [ ] **`fullRestart` 等价流程**（重置运行时 + 回标题，不破坏 persistent）。
-- [ ] **对齐 `complete_summer` 行为**（首通后入口变化、章节门控逻辑）。
-- [ ] 验收：首通后重启，菜单与章节状态正确。
+- [x] **建立全局持久化域**（`$persistent.key` 命名空间，`saves/persistent.json`，严格双域隔离）。
+- [x] **`fullRestart` 等价流程**（持久化 persistent_variables → 清空会话 → 返回标题）。
+- [x] **对齐 `complete_summer` 行为**（`main.md` 已切换至 `$persistent.complete_summer`，首通门控逻辑完整）。
+- [x] 验收：首通后重启，菜单与章节状态正确（persistent.json 权威，读档时覆盖）。
 
 #### P0-5 核心系统 UI 可用
 
@@ -194,12 +195,11 @@
 
 | 优先级 | 子项 | 关键任务 | 状态 |
 |--------|------|---------|------|
-| 1 | P0-4 持久化与章节门控 | `persistent.*` 全局域 + `fullRestart` + `complete_summer` | 未开始 |
-| 2 | P0-2 演出闭环 | `sceneEffect` 首批 capability（解析 + 执行） | 未开始 |
-| 3 | P0-2 演出闭环 | `titleCard` 命令支持 | 未开始 |
-| 4 | P0-3 节奏控制 | `pause` 指令 + `{w}`/`{nw}` 节奏标签 | 未开始 |
-| 5 | P0-3 节奏控制 | `extend` 台词续接语义 | 未开始 |
-| 6 | P0-5 核心 UI | 快进/自动/跳过稳定性收尾验证 | 进行中 |
+| 1 | P0-2 演出闭环 | `sceneEffect` 首批 capability（解析 + 执行） | 未开始 |
+| 2 | P0-2 演出闭环 | `titleCard` 命令支持 | 未开始 |
+| 3 | P0-3 节奏控制 | `pause` 指令 + `{w}`/`{nw}` 节奏标签 | 未开始 |
+| 4 | P0-3 节奏控制 | `extend` 台词续接语义 | 未开始 |
+| 5 | P0-5 核心 UI | 快进/自动/跳过稳定性收尾验证 | 进行中 |
 
 ### 6.2 已完成项（本轮确认）
 
@@ -210,10 +210,12 @@
 | P0-3 wait | `wait` 指令完整实现（含 Skip 跳过） |
 | P0-3 窗口显隐 | `textBoxHide/textBoxShow/textBoxClear` 已实现 |
 | P0-4 存读档基础 | 单次会话存档/读档闭环完整 |
+| P0-4 持久化域 | `$persistent.key` 双域严格隔离、`saves/persistent.json`、`fullRestart` 完整实现（2026-03-10） |
+| P0-4 章节门控 | `main.md` 切换至 `$persistent.complete_summer`，首通后门控逻辑完整（2026-03-10） |
 | P0-5 基础 UI | 主菜单/设置/历史/存档/读档/游内菜单已实现 |
 
 ### 6.3 里程碑 DoD（Definition of Done）
 
-- **M1（可玩主线）**：从 `main.md` 单入口跑通 summer → winter 主流程，不手动切脚本 ← *P0-1 已完成，依赖 P0-4 全流程闭环*
+- **M1（可玩主线）**：从 `main.md` 单入口跑通 summer → winter 主流程，不手动切脚本 ← *P0-1/P0-4 已完成，主线调度闭环*
 - **M2（关键观感）**：`prologue`、`3-5`、`3-7`、`ending` 的关键镜头通过抽样回放验收 ← *依赖 P0-2 sceneEffect*
-- **M3（门控闭环）**：首通后重启，章节入口和菜单状态正确，且可存读档回归 ← *依赖 P0-4 全部完成*
+- **M3（门控闭环）**：首通后重启，章节入口和菜单状态正确，且可存读档回归 ← **✅ P0-4 已完成，可手动验收**

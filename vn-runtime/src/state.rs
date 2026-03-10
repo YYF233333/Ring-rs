@@ -170,7 +170,8 @@ impl ScriptPosition {
 /// # 设计说明
 ///
 /// - `position`：脚本执行位置
-/// - `variables`：脚本变量（用于条件分支等）
+/// - `variables`：会话变量（用于条件分支等，游戏重启时清空）
+/// - `persistent_variables`：持久变量（跨会话保留，key 不含 `persistent.` 前缀）
 /// - `waiting`：当前等待状态
 /// - `visible_characters`：当前显示的角色（用于状态恢复）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -178,8 +179,14 @@ pub struct RuntimeState {
     /// 脚本执行位置
     pub position: ScriptPosition,
 
-    /// 脚本变量
+    /// 会话变量（游戏重启时清空）
     pub variables: HashMap<String, VarValue>,
+
+    /// 持久变量（跨会话保留，key 为 bare key，不含 `persistent.` 前缀）
+    ///
+    /// 通过 `$persistent.key` 语法访问，由 host 在启动时注入、在 fullRestart 时持久化。
+    #[serde(default)]
+    pub persistent_variables: HashMap<String, VarValue>,
 
     /// 脚本调用栈（用于 callScript / returnFromScript）
     ///
@@ -204,6 +211,7 @@ impl RuntimeState {
         Self {
             position: ScriptPosition::start(script_id),
             variables: HashMap::new(),
+            persistent_variables: HashMap::new(),
             call_stack: Vec::new(),
             waiting: WaitingReason::None,
             visible_characters: HashMap::new(),
@@ -211,14 +219,24 @@ impl RuntimeState {
         }
     }
 
-    /// 设置变量
+    /// 设置会话变量
     pub fn set_var(&mut self, name: impl Into<String>, value: VarValue) {
         self.variables.insert(name.into(), value);
     }
 
-    /// 获取变量
+    /// 获取会话变量
     pub fn get_var(&self, name: &str) -> Option<&VarValue> {
         self.variables.get(name)
+    }
+
+    /// 设置持久变量（bare key，不含 `persistent.` 前缀）
+    pub fn set_persistent_var(&mut self, bare_key: impl Into<String>, value: VarValue) {
+        self.persistent_variables.insert(bare_key.into(), value);
+    }
+
+    /// 获取持久变量（bare key，不含 `persistent.` 前缀）
+    pub fn get_persistent_var(&self, bare_key: &str) -> Option<&VarValue> {
+        self.persistent_variables.get(bare_key)
     }
 
     /// 进入等待状态
@@ -234,10 +252,19 @@ impl RuntimeState {
 
 /// 为 RuntimeState 实现 EvalContext trait
 ///
-/// 这使得表达式求值器可以访问运行时变量
+/// 这使得表达式求值器可以访问运行时变量。
+///
+/// 命名空间严格隔离：
+/// - `persistent.foo` → 查 `persistent_variables["foo"]`，找不到返回 None
+/// - `foo` → 查 `variables["foo"]`，找不到返回 None
+/// 两域互不回退。
 impl crate::script::EvalContext for RuntimeState {
     fn get_var(&self, name: &str) -> Option<&VarValue> {
-        self.variables.get(name)
+        if let Some(bare) = name.strip_prefix("persistent.") {
+            self.persistent_variables.get(bare)
+        } else {
+            self.variables.get(name)
+        }
     }
 }
 
@@ -305,5 +332,47 @@ mod tests {
         let json = serde_json::to_string(&state).unwrap();
         let deserialized: RuntimeState = serde_json::from_str(&json).unwrap();
         assert_eq!(state, deserialized);
+    }
+
+    #[test]
+    fn test_persistent_var_strict_isolation() {
+        use crate::script::EvalContext;
+
+        let mut state = RuntimeState::new("main");
+
+        // 设置会话变量和持久变量
+        state.set_var("foo", VarValue::Bool(true));
+        state.set_persistent_var("complete_summer", VarValue::Bool(true));
+
+        // EvalContext::get_var 严格路由：persistent.key → persistent_variables
+        assert_eq!(
+            EvalContext::get_var(&state, "persistent.complete_summer"),
+            Some(&VarValue::Bool(true))
+        );
+        // EvalContext::get_var 严格路由：key → variables（不查 persistent）
+        assert_eq!(
+            EvalContext::get_var(&state, "foo"),
+            Some(&VarValue::Bool(true))
+        );
+
+        // 跨域不可见：会话变量不能通过 persistent.foo 访问
+        assert_eq!(EvalContext::get_var(&state, "persistent.foo"), None);
+        // 跨域不可见：持久变量不能通过 bare key 访问
+        assert_eq!(EvalContext::get_var(&state, "complete_summer"), None);
+    }
+
+    #[test]
+    fn test_persistent_var_helpers() {
+        let mut state = RuntimeState::new("main");
+
+        assert_eq!(state.get_persistent_var("key"), None);
+
+        state.set_persistent_var("key", VarValue::Int(42));
+        assert_eq!(state.get_persistent_var("key"), Some(&VarValue::Int(42)));
+
+        // persistent_variables 默认序列化：旧存档无此字段时反序列化正常
+        let json = r#"{"position":{"script_id":"main","script_path":"","node_index":0},"variables":{},"call_stack":[],"waiting":"None","visible_characters":{},"current_background":null}"#;
+        let deserialized: RuntimeState = serde_json::from_str(json).unwrap();
+        assert!(deserialized.persistent_variables.is_empty());
     }
 }

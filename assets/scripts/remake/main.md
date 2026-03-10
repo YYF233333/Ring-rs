@@ -20,8 +20,8 @@ callScript [chapter9](ring/summer/2-4.md)
 callScript [chapter10](ring/summer/2-5.md)
 callScript [chapter11](ring/summer/3-1.md)
 
-if $complete_summer != true
-  set $complete_summer = true
+if $persistent.complete_summer != true
+  set $persistent.complete_summer = true
   changeScene <img src="../../backgrounds/black.png" alt="black" style="zoom:10%;" /> with Dissolve(duration: 0.5)
   callScript [splashscreen](summer/splash.rpy)
   fullRestart

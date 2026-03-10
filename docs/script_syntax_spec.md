@@ -405,6 +405,29 @@ returnFromScript
 - 入口脚本执行到文件末尾时，运行结束并返回主界面。
 - 路径按“相对当前脚本目录”解析，行为与 `changeBG/show` 的资源相对路径解析一致。
 
+### fullRestart
+
+```markdown
+fullRestart
+```
+
+执行 `fullRestart` 后，Host 将：
+
+1. 把 runtime 当前的 `persistent_variables` 合并写入 `saves/persistent.json`
+2. 清空当前游戏会话（会话变量、调用栈、等待状态等）
+3. 返回标题画面
+
+**常见用法**：首通章节后持久化进度标记，再重启让玩家从另一分支继续：
+
+```markdown
+if $persistent.complete_summer != true
+  set $persistent.complete_summer = true
+  fullRestart
+else
+  goto **Winter**
+endif
+```
+
 ### 注释说明行
 
 ```markdown
@@ -453,10 +476,29 @@ set $is_ready = $completed
 **变量命名规则**：
 
 - 变量名必须以 `$` 开头
-- 变量名只能包含字母、数字和下划线
+- 普通变量名只能包含字母、数字和下划线，例如 `$my_var`
 - 变量名区分大小写
 
-**注意**：变量会随存档持久化，读档后变量状态会被恢复。
+**注意**：普通变量属于会话变量，随存档保存；游戏重启（`fullRestart`）后会被清空。
+
+### 持久化变量（$persistent.key）
+
+持久化变量通过 `$persistent.key` 命名空间访问，跨游戏会话保留（即使执行 `fullRestart` 也不清空）：
+
+```markdown
+set $persistent.complete_summer = true
+
+if $persistent.complete_summer != true
+  ...
+endif
+```
+
+**规则**：
+
+- 命名空间严格隔离：`$persistent.key` 只查持久变量，`$key` 只查会话变量，互不可见
+- 持久变量以 bare key（去掉 `persistent.` 前缀）存储于 `saves/persistent.json`
+- 启动游戏时自动加载，执行 `fullRestart` 时自动写入
+- 读档恢复时，`persistent.json` 中的值覆盖存档中可能携带的旧值（以磁盘为权威）
 
 ### 条件分支
 

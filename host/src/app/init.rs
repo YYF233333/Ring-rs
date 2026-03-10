@@ -4,6 +4,7 @@
 //! 让 `app/mod.rs` 保持可读，后续扩展更容易定位修改点。
 
 use crate::manifest::Manifest;
+use crate::persistent::PersistentStore;
 use crate::resources::path::{extract_base_dir, normalize_logical_path};
 use crate::resources::{ResourceManager, extract_script_id};
 use crate::save_manager::SaveManager;
@@ -117,6 +118,12 @@ pub fn create_save_manager(config: &AppConfig) -> SaveManager {
     let save_manager = SaveManager::new(&saves_dir);
     info!(saves_dir = %saves_dir, "存档管理器初始化成功");
     save_manager
+}
+
+/// 加载持久化变量 store（文件不存在时返回空 store）
+pub fn load_persistent_store(config: &AppConfig) -> PersistentStore {
+    let saves_dir = saves_dir_string(config);
+    PersistentStore::load(&saves_dir)
 }
 
 pub fn scan_script_list(config: &AppConfig, resource_manager: &ResourceManager) -> Vec<PathBuf> {
