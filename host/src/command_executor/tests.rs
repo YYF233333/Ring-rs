@@ -385,6 +385,30 @@ fn test_execute_play_sfx() {
     }
 }
 
+#[test]
+fn test_execute_bgm_duck() {
+    let mut ctx = TestCtx::new();
+
+    let result = ctx.execute(&Command::BgmDuck);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert!(matches!(
+        ctx.executor.last_output.audio_command,
+        Some(AudioCommand::BgmDuck)
+    ));
+}
+
+#[test]
+fn test_execute_bgm_unduck() {
+    let mut ctx = TestCtx::new();
+
+    let result = ctx.execute(&Command::BgmUnduck);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert!(matches!(
+        ctx.executor.last_output.audio_command,
+        Some(AudioCommand::BgmUnduck)
+    ));
+}
+
 // test_transition_progress 已移除：transition timer 已从 CommandExecutor 删除
 
 #[test]

@@ -152,6 +152,16 @@ pub enum ScriptNode {
     /// 对应 `stopBGM` 语法
     StopBgm,
 
+    /// 压低 BGM 音量
+    ///
+    /// 对应 `bgmDuck` 语法
+    BgmDuck,
+
+    /// 恢复 BGM 音量
+    ///
+    /// 对应 `bgmUnduck` 语法
+    BgmUnduck,
+
     /// 无条件跳转
     ///
     /// 对应 `goto **label**` 语法

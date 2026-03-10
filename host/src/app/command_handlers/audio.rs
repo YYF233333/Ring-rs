@@ -21,7 +21,9 @@ pub fn handle_audio_command(core: &mut CoreSystems, config: &AppConfig) {
             let path_to_cache = match &cmd {
                 AudioCommand::PlayBgm { path, .. } => Some(path.clone()),
                 AudioCommand::PlaySfx { path } => Some(path.clone()),
-                AudioCommand::StopBgm { .. } => None,
+                AudioCommand::StopBgm { .. } | AudioCommand::BgmDuck | AudioCommand::BgmUnduck => {
+                    None
+                }
             };
 
             if let Some(path) = path_to_cache {
@@ -57,6 +59,12 @@ pub fn handle_audio_command(core: &mut CoreSystems, config: &AppConfig) {
                 }
                 AudioCommand::StopBgm { fade_out } => {
                     audio_manager.stop_bgm(fade_out);
+                }
+                AudioCommand::BgmDuck => {
+                    audio_manager.duck();
+                }
+                AudioCommand::BgmUnduck => {
+                    audio_manager.unduck();
                 }
                 AudioCommand::PlaySfx { path } => {
                     audio_manager.play_sfx(&path);

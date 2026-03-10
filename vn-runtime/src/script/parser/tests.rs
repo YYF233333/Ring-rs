@@ -755,6 +755,22 @@ fn test_parse_audio_commands() {
     assert!(matches!(stop_node, ScriptNode::StopBgm));
 }
 
+#[test]
+fn test_parse_bgm_duck_unduck() {
+    let duck = parse_single_node("bgmDuck");
+    assert!(matches!(duck, ScriptNode::BgmDuck));
+
+    let unduck = parse_single_node("bgmUnduck");
+    assert!(matches!(unduck, ScriptNode::BgmUnduck));
+
+    // case insensitive
+    let duck_lower = parse_single_node("bgmduck");
+    assert!(matches!(duck_lower, ScriptNode::BgmDuck));
+
+    let unduck_upper = parse_single_node("BGMUNDUCK");
+    assert!(matches!(unduck_upper, ScriptNode::BgmUnduck));
+}
+
 //=========================================================================
 // 相对路径测试
 //=========================================================================

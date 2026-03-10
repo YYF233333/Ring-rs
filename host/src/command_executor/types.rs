@@ -33,6 +33,10 @@ pub enum AudioCommand {
     },
     /// 停止 BGM
     StopBgm { fade_out: Option<f32> },
+    /// 压低 BGM 音量
+    BgmDuck,
+    /// 恢复 BGM 音量
+    BgmUnduck,
     /// 播放 SFX
     PlaySfx { path: String },
 }

@@ -102,6 +102,13 @@ impl Phase2Parser {
         if starts_with_ignore_case(line, "stopbgm") {
             return Ok(Some(ScriptNode::StopBgm));
         }
+        // bgmDuck / bgmUnduck - BGM 音量压低与恢复
+        if starts_with_ignore_case(line, "bgmunduck") {
+            return Ok(Some(ScriptNode::BgmUnduck));
+        }
+        if starts_with_ignore_case(line, "bgmduck") {
+            return Ok(Some(ScriptNode::BgmDuck));
+        }
         // set - 变量赋值
         if starts_with_ignore_case(line, "set ") {
             return self.parse_set_var(line, line_number);

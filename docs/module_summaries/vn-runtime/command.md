@@ -18,6 +18,7 @@
 5. 信号常量 `SIGNAL_SCENE_EFFECT`、`SIGNAL_TITLE_CARD` 用于场景效果与标题卡等待。
 6. `InlineEffect` / `InlineEffectKind` 定义内联节奏标签数据模型（字符位置 + 效果类型：Wait/SetCpsAbsolute/SetCpsRelative/ResetCps）。
 7. `Command::ShowText` 扩展 `inline_effects` 和 `no_wait` 字段；新增 `Command::ExtendText` variant。
+8. `Command::BgmDuck` / `Command::BgmUnduck`：BGM 音量临时压低与恢复（即时指令，不产生等待态）。
 
 ## Dependencies
 

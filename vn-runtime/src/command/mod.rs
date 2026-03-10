@@ -312,6 +312,12 @@ pub enum Command {
         fade_out: Option<f64>,
     },
 
+    /// 压低 BGM 音量（duck）
+    BgmDuck,
+
+    /// 恢复 BGM 音量（unduck）
+    BgmUnduck,
+
     /// 播放音效
     PlaySfx {
         /// 音效文件路径

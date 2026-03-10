@@ -8,14 +8,15 @@
 
 - 模块入口：`host/src/audio/mod.rs`
 - 核心类型：`AudioManager`
-- 关键接口：`play_bgm`、`stop_bgm`、`crossfade_bgm`、`play_sfx`、`update`
+- 关键接口：`play_bgm`、`stop_bgm`、`crossfade_bgm`、`play_sfx`、`duck`、`unduck`、`update`
 
 ## KeyFlow
 
 1. 根据运行模式（FS/ZIP）解析并加载音频输入源。
 2. BGM 路径进入独立播放器并维护 `FadeState`。
-3. 每帧 `update(dt)` 推进淡入淡出状态机。
+3. 每帧 `update(dt)` 推进淡入淡出状态机与 duck multiplier 过渡。
 4. SFX 采用一次性播放器通道播放并自动释放。
+5. `duck()` / `unduck()` 通过独立的 `duck_multiplier` 平滑压低/恢复 BGM 音量（叠加于 FadeState 之上，互不干扰）。
 
 ## Dependencies
 
@@ -26,6 +27,7 @@
 
 - BGM 与 SFX 音量配置独立，静音状态统一影响有效输出。
 - 淡入淡出状态在 `update` 中推进，避免多处并发改写。
+- Duck multiplier 作为独立乘数叠加于所有 BGM 音量输出（含 FadeIn/FadeOut），不修改 `bgm_volume` 本身。
 
 ## FailureModes
 
@@ -46,7 +48,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-10
 
 ## Owner
 

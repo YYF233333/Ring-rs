@@ -46,6 +46,10 @@ pub struct AudioManager {
     /// 音频字节缓存（逻辑路径 -> 字节数据）
     /// 用于 ZIP 模式，避免重复从 ResourceManager 读取
     audio_cache: HashMap<String, Vec<u8>>,
+    /// Duck 当前乘数 (1.0 = 正常, DUCK_VOLUME_RATIO = 压低)
+    duck_multiplier: f32,
+    /// Duck 目标乘数
+    duck_target: f32,
 }
 
 /// 淡入淡出状态
@@ -92,6 +96,8 @@ impl AudioManager {
             base_path: PathBuf::from(base_path),
             use_zip_mode: false,
             audio_cache: HashMap::new(),
+            duck_multiplier: 1.0,
+            duck_target: 1.0,
         })
     }
 
@@ -111,6 +117,8 @@ impl AudioManager {
             base_path: PathBuf::from(base_path),
             use_zip_mode: true,
             audio_cache: HashMap::new(),
+            duck_multiplier: 1.0,
+            duck_target: 1.0,
         })
     }
 
@@ -197,11 +205,10 @@ impl AudioManager {
         // 创建新的播放器并连接到输出 mixer
         let sink = Player::connect_new(self.device_sink.mixer());
 
-        // 设置初始音量
         let initial_volume = if fade_in.is_some() {
             0.0
         } else {
-            self.get_effective_bgm_volume()
+            self.get_effective_bgm_volume() * self.duck_multiplier
         };
         sink.set_volume(initial_volume);
 
@@ -247,15 +254,12 @@ impl AudioManager {
         if let Some(duration) = fade_out
             && duration > 0.0
         {
-            let current_volume = self
-                .bgm_sink
-                .as_ref()
-                .map(|s| s.volume())
-                .unwrap_or(self.get_effective_bgm_volume());
+            // sink volume 包含 duck_multiplier，还原为 base volume
+            let base_volume = self.current_base_bgm_volume();
 
             self.fade_state = FadeState::FadeOut {
-                current_volume,
-                rate: current_volume / duration,
+                current_volume: base_volume,
+                rate: base_volume / duration,
                 stop_after: true,
                 next_bgm: None,
             };
@@ -287,16 +291,11 @@ impl AudioManager {
             return;
         }
 
-        // 设置淡出状态，并记录要播放的新 BGM
-        let current_volume = self
-            .bgm_sink
-            .as_ref()
-            .map(|s| s.volume())
-            .unwrap_or(self.get_effective_bgm_volume());
+        let base_volume = self.current_base_bgm_volume();
 
         self.fade_state = FadeState::FadeOut {
-            current_volume,
-            rate: current_volume / fade_duration,
+            current_volume: base_volume,
+            rate: base_volume / fade_duration,
             stop_after: false,
             next_bgm: Some((path.to_string(), looping)),
         };
@@ -381,6 +380,8 @@ impl AudioManager {
         let mut fade_completed = false;
         let mut should_stop = false;
 
+        let dm = self.duck_multiplier;
+
         match &mut self.fade_state {
             FadeState::None => {}
             FadeState::FadeIn {
@@ -390,16 +391,14 @@ impl AudioManager {
             } => {
                 *current_volume += *rate * dt;
                 if *current_volume >= *target_volume {
-                    // 淡入完成
                     if let Some(ref sink) = self.bgm_sink {
-                        sink.set_volume(*target_volume);
+                        sink.set_volume(*target_volume * dm);
                     }
                     fade_completed = true;
                     debug!("BGM 淡入完成");
                 } else {
-                    // 更新音量
                     if let Some(ref sink) = self.bgm_sink {
-                        sink.set_volume(*current_volume);
+                        sink.set_volume(*current_volume * dm);
                     }
                 }
             }
@@ -411,7 +410,6 @@ impl AudioManager {
             } => {
                 *current_volume -= *rate * dt;
                 if *current_volume <= 0.0 {
-                    // 淡出完成
                     if let Some((path, looping)) = next_bgm.take() {
                         let duration = if *rate > 0.0 { 1.0 / *rate } else { 0.5 };
                         next_bgm_to_play = Some((path, looping, duration));
@@ -419,15 +417,13 @@ impl AudioManager {
                     should_stop = *stop_after;
                     fade_completed = true;
                 } else {
-                    // 更新音量
                     if let Some(ref sink) = self.bgm_sink {
-                        sink.set_volume(*current_volume);
+                        sink.set_volume(*current_volume * dm);
                     }
                 }
             }
         }
 
-        // 在 match 结束后执行延后操作
         if fade_completed {
             self.fade_state = FadeState::None;
 
@@ -442,15 +438,29 @@ impl AudioManager {
         }
 
         if let Some((ref path, looping, duration)) = next_bgm_to_play {
-            // 先停止当前 BGM
             if let Some(ref sink) = self.bgm_sink {
                 sink.stop();
             }
             self.bgm_sink = None;
             self.current_bgm_path = None;
 
-            // 播放新 BGM（带淡入）
             self.play_bgm(path, looping, Some(duration));
+        }
+
+        // Duck multiplier 平滑过渡
+        let diff = self.duck_target - self.duck_multiplier;
+        if diff.abs() > 0.001 {
+            let step = Self::DUCK_FADE_SPEED * dt;
+            if diff > 0.0 {
+                self.duck_multiplier = (self.duck_multiplier + step).min(self.duck_target);
+            } else {
+                self.duck_multiplier = (self.duck_multiplier - step).max(self.duck_target);
+            }
+            if matches!(self.fade_state, FadeState::None)
+                && let Some(ref sink) = self.bgm_sink
+            {
+                sink.set_volume(self.get_effective_bgm_volume() * self.duck_multiplier);
+            }
         }
     }
 
@@ -458,10 +468,8 @@ impl AudioManager {
     pub fn set_bgm_volume(&mut self, volume: f32) {
         self.bgm_volume = volume.clamp(0.0, 1.0);
 
-        // 更新当前 BGM 的音量
         if let Some(ref sink) = self.bgm_sink {
-            let effective_volume = if self.muted { 0.0 } else { self.bgm_volume };
-            sink.set_volume(effective_volume);
+            sink.set_volume(self.get_effective_bgm_volume() * self.duck_multiplier);
         }
     }
 
@@ -484,10 +492,8 @@ impl AudioManager {
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
 
-        // 更新当前 BGM 的音量
         if let Some(ref sink) = self.bgm_sink {
-            let effective_volume = if muted { 0.0 } else { self.bgm_volume };
-            sink.set_volume(effective_volume);
+            sink.set_volume(self.get_effective_bgm_volume() * self.duck_multiplier);
         }
     }
 
@@ -527,10 +533,41 @@ impl AudioManager {
         }
     }
 
-    /// 获取有效的 BGM 音量（考虑静音状态）
+    /// 压低 BGM 音量（duck），平滑过渡到 30% 音量
+    pub fn duck(&mut self) {
+        self.duck_target = Self::DUCK_VOLUME_RATIO;
+        debug!("BGM duck -> {:.0}%", self.duck_target * 100.0);
+    }
+
+    /// 恢复 BGM 音量（unduck），平滑过渡回正常音量
+    pub fn unduck(&mut self) {
+        self.duck_target = 1.0;
+        debug!("BGM unduck -> 100%");
+    }
+
+    /// 获取有效的 BGM 音量（考虑静音状态，不含 duck）
     fn get_effective_bgm_volume(&self) -> f32 {
         if self.muted { 0.0 } else { self.bgm_volume }
     }
+
+    /// 从 sink 当前音量反推 base volume（去除 duck_multiplier）
+    fn current_base_bgm_volume(&self) -> f32 {
+        let sink_vol = self
+            .bgm_sink
+            .as_ref()
+            .map(|s| s.volume())
+            .unwrap_or(self.get_effective_bgm_volume());
+        if self.duck_multiplier > 0.001 {
+            sink_vol / self.duck_multiplier
+        } else {
+            self.get_effective_bgm_volume()
+        }
+    }
+
+    /// Duck 音量比例
+    const DUCK_VOLUME_RATIO: f32 = 0.3;
+    /// Duck 过渡速度（每秒变化量，越大越快）
+    const DUCK_FADE_SPEED: f32 = 3.0;
 }
 
 #[cfg(test)]
@@ -564,6 +601,33 @@ mod tests {
             assert!(manager.is_muted());
             manager.toggle_mute();
             assert!(!manager.is_muted());
+        }
+    }
+
+    #[test]
+    fn test_duck_unduck_state() {
+        if let Ok(mut manager) = AudioManager::new("assets") {
+            assert_eq!(manager.duck_multiplier, 1.0);
+            assert_eq!(manager.duck_target, 1.0);
+
+            manager.duck();
+            assert_eq!(manager.duck_target, AudioManager::DUCK_VOLUME_RATIO);
+            // multiplier hasn't changed yet (needs update ticks)
+            assert_eq!(manager.duck_multiplier, 1.0);
+
+            // Simulate enough update ticks for convergence
+            for _ in 0..100 {
+                manager.update(0.05);
+            }
+            assert!((manager.duck_multiplier - AudioManager::DUCK_VOLUME_RATIO).abs() < 0.01);
+
+            manager.unduck();
+            assert_eq!(manager.duck_target, 1.0);
+
+            for _ in 0..100 {
+                manager.update(0.05);
+            }
+            assert!((manager.duck_multiplier - 1.0).abs() < 0.01);
         }
     }
 }

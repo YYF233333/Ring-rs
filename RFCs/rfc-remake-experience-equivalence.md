@@ -5,7 +5,7 @@
 - 编号：RFC-002
 - 状态：Active
 - 作者：Ring-rs 开发组
-- 日期：2026-03-07（最后更新：2026-03-10，阶段 4 状态对齐）
+- 日期：2026-03-07（最后更新：2026-03-10，阶段 5 P1 规划）
 - 相关范围：`assets/scripts/remake/`、`vn-runtime`、`host`、`docs/script_syntax_spec.md`
 
 ---
@@ -64,6 +64,28 @@
   - 点击行为分级：inline 点击等待时跳过当前等待点（不完成全部文本）。
 - `extend` 台词续接全链路已完成（AST + Parser + Command + Executor + Host 打字机续接 + 历史追加）。
 - **剩余缺口**：镜头类高级效果留 P1-1；脚本内容迁移（.rpy -> .md 节奏标签适配）为独立任务。
+
+### 0.5 阶段 4 对齐结论（2026-03-10）
+
+> 目标：脚本节奏标签内容适配。
+
+**本轮完成**：
+
+- 12 个 .md 脚本文件的节奏标签迁移已全部完成。
+  - 覆盖范围：prologue、1-2、1-3、1-5、2-1、2-2、2-3、3-1、3-5、3-6、3-7、ending。
+  - 将 Ren'Py 的 `{w}`/`{nw}`/`{cps=}` 映射为 Ring 的 `{wait}`/`-->`/`{speed}`/`extend`。
+  - 还原了原作中的细微节奏控制（慢打省略号、语速变化、戏剧性停顿）。
+  - `cargo script-check` 确认 0 新增错误。
+- **P0 引擎能力 + 内容适配全部完成**。端到端验收推迟至 P1 完成后统一进行。
+
+### 0.6 阶段 5 P1 规划（2026-03-10）
+
+> 目标：进入 P1 实施阶段，优先实现 bgmDuck/bgmUnduck；cutscene 实现复杂，降级为可选项排在最后。
+
+**现状分析**：
+
+- `bgmDuck`/`bgmUnduck`：4 个脚本 5 处使用（prologue/1-5/3-4/3-6），vn-runtime 与 host 均无实现。AudioManager 已有 volume/FadeState 基础设施。
+- `cutscene`：ending.md 1 处使用（`cutscene "audio/ending_HVC_bgm.webm"`），vn-runtime 与 host 均无实现。需视频解码与渲染集成，实现复杂度高，已降级为可选项（最低优先级）。当前解析器跳过该行不中断流程。
 
 ---
 
@@ -141,13 +163,14 @@
 
 #### P0-3 文本节奏与窗口控制
 
-- 状态：**已完成**（引擎能力全部落地，脚本内容适配为独立任务）
+- 状态：**已完成**（引擎能力 + 脚本内容适配全部落地）
 - [x] 支持 `wait` 等待指令（到期自动推进、点击打断、Skip 模式跳过）。
 - [x] 支持脚本驱动窗口显隐基础策略（`textBoxHide/textBoxShow/textBoxClear`）。
 - [x] **`pause` 指令支持**（纯点击等待，复用 WaitForClick，2026-03-10）。
 - [x] **节奏标签支持**（`{wait}`/`{wait Ns}`/`{speed N}`/`{speed Nx}`/`{/speed}`/`-->` 全链路，2026-03-10，详见 `rfc-rhythm-tags.md`）。
 - [x] **`extend` 台词续接**（AST/Parser/Command/Executor/Host 打字机续接 + 历史追加，2026-03-10）。
-- [ ] 验收：关键台词段落阅读节奏与原作接近（依赖脚本内容迁移到节奏标签语法）。
+- [x] **脚本节奏标签适配**（12 个 .md 文件迁移完成，2026-03-10）。
+- [ ] 验收：关键台词段落阅读节奏与原作接近（端到端验收推迟至 P1 后统一进行）。
 
 #### P0-4 持久化与章节门控
 
@@ -183,14 +206,15 @@
 
 #### P1-3 音频高级体验
 
-- [ ] `bgmDuck` / `bgmUnduck` 正式实现（BGM 临时压低与恢复）。
+- [x] **`bgmDuck` / `bgmUnduck` 正式实现**（AST/Parser/Command/Executor/AudioManager 全链路，duck_multiplier 独立叠加于 FadeState，2026-03-10）。
 - [ ] 支持 BGM 平滑暂停/恢复与跨段衔接。
 - [ ] 三通道混音（music/sound/voice）与设置页联动。
 - [ ] 验收：关键段（如 `prologue`）BGM 情绪曲线一致。
 
-#### P1-4 视频与终章表现
+#### P1-4 视频与终章表现（可选，最低优先级）
 
 - [ ] `cutscene` 命令：支持过场视频播放、跳过与播放后流程回归。
+- 暂缓：实现复杂度高（需外部视频解码依赖或帧序列预处理），且仅 `ending.md` 1 处使用，对核心可玩性影响有限。当前解析器会跳过该行（输出警告），剧情流程不中断。
 - [ ] 验收：`ending` 视频段完整可用，跳过不破坏剧情状态。
 
 ### 4.3 P2：长期可维护与生产效率
@@ -223,14 +247,13 @@
 
 ### 6.1 P0 剩余任务
 
-P0 引擎能力已基本齐备，剩余为验收与内容适配：
+P0 引擎能力与内容适配已全部完成，仅余端到端验收（推迟至 P1 后统一进行）：
 
-| 优先级 | 子项 | 关键任务 | 状态 |
-|--------|------|---------|------|
-| 1 | P0-2 演出闭环 | 关键段落验收（prologue/3-5/3-7/ending 观感） | 待验收 |
-| 2 | P0-3 节奏控制 | 脚本内容迁移：.md 适配节奏标签语法 | 未开始 |
-| 3 | P0-5 核心 UI | Skip/Auto/跳过端到端稳定性验收 | 待验收 |
-| 4 | P0-5 核心 UI | 存读档端到端闭环验收 | 待验收 |
+| 子项 | 关键任务 | 状态 |
+|------|---------|------|
+| P0-2 演出闭环 | 关键段落验收（prologue/3-5/3-7/ending 观感） | 推迟至 P1 后 |
+| P0-5 核心 UI | Skip/Auto/跳过端到端稳定性验收 | 推迟至 P1 后 |
+| P0-5 核心 UI | 存读档端到端闭环验收 | 推迟至 P1 后 |
 
 ### 6.2 已完成项（全量）
 
@@ -245,6 +268,7 @@ P0 引擎能力已基本齐备，剩余为验收与内容适配：
 | P0-3 窗口显隐 | `textBoxHide/textBoxShow/textBoxClear` 已实现 |
 | P0-3 节奏标签 | `{wait}`/`{speed}`/`-->` 全链路 + 打字机扩展（2026-03-10） |
 | P0-3 extend | 台词续接全链路（AST/Parser/Command/Executor/Host，2026-03-10） |
+| P0-3 脚本适配 | 12 个 .md 文件节奏标签迁移完成（2026-03-10） |
 | P0-4 存读档基础 | 单次会话存档/读档闭环完整 |
 | P0-4 持久化域 | `$persistent.key` 双域严格隔离、`saves/persistent.json`、`fullRestart` 完整实现（2026-03-10） |
 | P0-4 章节门控 | `main.md` 切换至 `$persistent.complete_summer`，首通后门控逻辑完整（2026-03-10） |
@@ -254,27 +278,92 @@ P0 引擎能力已基本齐备，剩余为验收与内容适配：
 ### 6.3 里程碑 DoD（Definition of Done）
 
 - **M1（可玩主线）**：从 `main.md` 单入口跑通 summer -> winter 主流程，不手动切脚本 ← **✅ P0-1/P0-4 已完成，主线调度闭环**
-- **M2（关键观感）**：`prologue`、`3-5`、`3-7`、`ending` 的关键镜头通过抽样回放验收 ← *引擎能力已就绪（sceneEffect/titleCard/节奏标签），待端到端验收*
+- **M2（关键观感）**：`prologue`、`3-5`、`3-7`、`ending` 的关键镜头通过抽样回放验收 ← *引擎能力 + 脚本适配已完成，bgmDuck/cutscene 实现后统一验收*
 - **M3（门控闭环）**：首通后重启，章节入口和菜单状态正确，且可存读档回归 ← **✅ P0-4 已完成，可手动验收**
 
 ---
 
-## 7. 下一步计划
+## 7. 下一步计划（P1 实施）
 
-### 7.1 P0 收尾（验收 + 内容适配）
+### 7.0 P0 收尾状态
 
-P0 的引擎能力已全部落地。当前阶段从"实现"转入"验收与内容适配"：
+- P0 引擎能力与脚本节奏标签内容适配**已全部完成**（阶段 4）。
+- 端到端验收（演出观感、Skip/Auto、存读档闭环）**推迟至 P1 主体完成后统一进行**（`cutscene` 已降级为可选项，不再阻塞验收）。
 
-1. **脚本节奏标签适配**：将 `assets/scripts/remake/ring/` 下 23 个 .md 脚本从纯文本对话迁移到节奏标签语法（`{wait}`/`{speed}`/`-->`/`extend`），还原原作阅读节奏。这是独立的内容任务，不涉及引擎代码修改。
-2. **端到端验收**：手动运行 prologue/3-5/3-7/ending 等关键章节，验证演出效果、Skip/Auto 行为、存读档闭环。记录发现的问题并逐项修复。
+### 7.1 P1 实施顺序
 
-### 7.2 P1 优先级建议
+| 顺序 | 子项 | 状态/理由 |
+|------|------|----------|
+| 1 | P1-3 `bgmDuck/bgmUnduck` | ✅ 已完成（2026-03-10） |
+| 2 | P1-1 镜头高级效果 | focusPush/panRight 等，提升观感但不阻塞可玩 |
+| 3 | P1-2 角色演出语义层 | 站位预设等，长期价值高但短期可手动编排 |
+| 最后（可选） | P1-4 `cutscene` 视频播放 | 实现复杂（需外部视频解码），仅 1 处使用；当前解析器跳过该行，剧情流程不中断，不阻塞主线验收 |
 
-P0 收尾后进入 P1，建议顺序：
+### 7.2 P1-3 bgmDuck/bgmUnduck 实施计划
 
-| 顺序 | 子项 | 理由 |
-|------|------|------|
-| 1 | P1-3 `bgmDuck/bgmUnduck` | 4 个脚本已使用，阻塞内容验收；实现复杂度低 |
-| 2 | P1-4 `cutscene` 视频播放 | ending.md 已使用，阻塞 ending 完整验收 |
-| 3 | P1-1 镜头高级效果 | focusPush/panRight 等，提升观感但不阻塞可玩 |
-| 4 | P1-2 角色演出语义层 | 站位预设等，长期价值高但短期可手动编排 |
+**语义**：`bgmDuck` 将当前 BGM 音量临时压低（如压至 30%），用于突出对话/音效；`bgmUnduck` 恢复到原音量。均为即时指令（不产生等待态）。
+
+**脚本使用分布**（5 处）：
+
+| 脚本 | 模式 |
+|------|------|
+| prologue.md:70,91 | bgmDuck ... 对话 ... bgmUnduck（2 对） |
+| 1-5.md:113 | bgmDuck ... 对话 ... bgmUnduck（1 对） |
+| 3-4.md:128 | bgmDuck ... 对话 ... bgmUnduck（1 对） |
+| 3-6.md:132 | bgmDuck ... 对话 ... bgmUnduck（1 对） |
+
+**全链路实现步骤**：
+
+1. **AST**（`vn-runtime/src/script/ast/mod.rs`）：新增 `ScriptNode::BgmDuck` / `ScriptNode::BgmUnduck`。
+2. **Parser**（`vn-runtime/src/script/parser/phase2.rs`）：解析 `bgmDuck` / `bgmUnduck` 行。
+3. **Command**（`vn-runtime/src/command/mod.rs`）：新增 `Command::BgmDuck` / `Command::BgmUnduck`。
+4. **Executor**（`vn-runtime/src/runtime/executor/mod.rs`）：AST -> Command 映射。
+5. **CommandExecutor**（`host/src/command_executor/audio.rs` 或 `mod.rs`）：产出音频输出事件。
+6. **AudioManager**（`host/src/audio/mod.rs`）：新增 `duck()` / `unduck()` 方法，利用现有 `FadeState` 实现平滑音量过渡。
+   - duck：记住当前音量 → 渐变到 duck_volume（如 0.3）
+   - unduck：渐变回记忆音量
+7. **Skip 兼容**：duck/unduck 为即时指令，不阻塞，Skip 模式无需特殊处理。
+8. **单元测试**：Parser 解析测试 + Executor 映射测试 + AudioManager duck/unduck 状态测试。
+
+**参数设计**：初版使用固定 duck 比例（0.3），后续可扩展为 `bgmDuck(volume: 0.3, duration: 0.5)`。
+
+### 7.3 P1-4 cutscene 视频播放实施计划
+
+**语义**：`cutscene "path"` 播放一段过场视频，全屏覆盖，播放完毕或玩家点击跳过后回归正常流程。
+
+**脚本使用**（1 处）：
+
+| 脚本 | 用法 |
+|------|------|
+| ending.md:168 | `cutscene "audio/ending_HVC_bgm.webm"` |
+
+**技术选型**：
+
+- macroquad 本身不内置视频解码。需引入外部方案。
+- 候选方案：
+  - **方案 A：ffmpeg 系绑定**（如 `ffmpeg-next`）：功能全但依赖重，跨平台编译复杂。
+  - **方案 B：纯 Rust 解码**（如 `vid` / `vpx-rs`）：依赖轻但格式支持有限（WebM/VP8/VP9）。
+  - **方案 C：平台原生 API 或外部播放器**：最简实现，但体验不一致。
+  - **方案 D：预转帧序列**：将视频预处理为图片序列 + 音频，运行时按帧播放。最可控但资源大。
+- **建议**：先调研 `ffmpeg-next` 在 Windows/macroquad 下的集成可行性；若过重则回退方案 D。
+
+**全链路实现步骤**：
+
+1. **AST**（`vn-runtime/src/script/ast/mod.rs`）：新增 `ScriptNode::Cutscene { path: String }`。
+2. **Parser**（`vn-runtime/src/script/parser/phase2.rs`）：解析 `cutscene "path"` 行。
+3. **Command**（`vn-runtime/src/command/mod.rs`）：新增 `Command::Cutscene { path: String }`。
+4. **Executor**（`vn-runtime/src/runtime/executor/mod.rs`）：AST -> Command + 进入 `WaitForSignal("cutscene")` 等待态。
+5. **Host 视频播放系统**（新模块 `host/src/video/`）：
+   - 视频加载与解码（选定方案后实现）。
+   - 每帧取当前画面纹理，全屏绘制。
+   - 音频轨道提取并播放。
+6. **Host 集成**（`host/src/app/update/`）：
+   - 收到 `Cutscene` 命令后进入视频播放模式。
+   - 播放完成或玩家按键/点击 → 发送 `Signal("cutscene")` 恢复流程。
+   - Skip 模式下立即跳过。
+7. **单元测试**：Parser 解析测试 + Executor 映射测试（视频播放需集成测试）。
+
+**风险**：
+
+- 视频解码库选型直接影响包体大小与跨平台兼容性，需先做技术验证。
+- WebM 格式解码在纯 Rust 生态中支持不够成熟，可能需要权衡格式转换。

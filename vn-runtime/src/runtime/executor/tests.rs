@@ -355,6 +355,28 @@ fn test_execute_stop_bgm() {
 }
 
 #[test]
+fn test_execute_bgm_duck() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    let result = executor
+        .execute(&ScriptNode::BgmDuck, &mut state, &script)
+        .unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(&result.commands[0], Command::BgmDuck));
+}
+
+#[test]
+fn test_execute_bgm_unduck() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    let result = executor
+        .execute(&ScriptNode::BgmUnduck, &mut state, &script)
+        .unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(&result.commands[0], Command::BgmUnduck));
+}
+
+#[test]
 fn test_path_resolution() {
     let (mut executor, mut state, script) = test_ctx("assets/scripts");
 

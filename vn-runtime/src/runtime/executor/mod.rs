@@ -326,6 +326,10 @@ impl Executor {
                 }]))
             }
 
+            ScriptNode::BgmDuck => Ok(ExecuteResult::with_commands(vec![Command::BgmDuck])),
+
+            ScriptNode::BgmUnduck => Ok(ExecuteResult::with_commands(vec![Command::BgmUnduck])),
+
             ScriptNode::Goto { target_label } => {
                 // 查找标签位置
                 let target_index =

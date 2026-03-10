@@ -102,6 +102,8 @@ impl CommandExecutor {
             }
             Command::PlayBgm { path, looping } => self.execute_play_bgm(path, *looping),
             Command::StopBgm { fade_out } => self.execute_stop_bgm(*fade_out),
+            Command::BgmDuck => self.execute_bgm_duck(),
+            Command::BgmUnduck => self.execute_bgm_unduck(),
             Command::PlaySfx { path } => self.execute_play_sfx(path),
             Command::TextBoxHide => self.execute_text_box_hide(render_state),
             Command::TextBoxShow => self.execute_text_box_show(render_state),
