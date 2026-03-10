@@ -6,14 +6,16 @@
 
 ## PublicSurface
 
-- 模块入口：`host/src/renderer/mod.rs`
+- 模块入口：`host/src/renderer/mod.rs`（Renderer struct + `build_draw_commands` 顶层编排）
+- 绘制命令生成：`host/src/renderer/draw_commands.rs`（背景/角色/场景遮罩 -> DrawCommand）
+- 场景效果与过渡：`host/src/renderer/scene_effects.rs`（shake/blur/dissolve/fade 状态机）
 - 核心类型：`Renderer`、`DrawMode`
 - 关键公开子系统：`animation`、`effects`、`render_state`、`scene_transition`
-- 对外接口：`render`、`update_transition`、`start_scene_*`、`skip_scene_transition_to_end`
+- 对外接口：`build_draw_commands`、`update_transition`、`start_scene_*`、`skip_scene_transition_to_end`
 
 ## KeyFlow
 
-1. `render` 按层级绘制：背景 -> 角色 -> UI（对话/选项/章节标记）-> 场景遮罩。
+1. `build_draw_commands` 按层级生成 DrawCommand：背景 -> 角色 -> 暗化/模糊遮罩 -> 场景过渡遮罩。
 2. 普通背景过渡由 `TransitionManager` 驱动 alpha 混合。
 3. `changeScene` 场景过渡由 `SceneTransitionManager` 管理多阶段流程。
 4. Rule 过渡场景下，`ImageDissolve` shader 根据进度渲染遮罩效果。
@@ -50,7 +52,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-11
 
 ## Owner
 

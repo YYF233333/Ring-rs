@@ -11,6 +11,10 @@
 //!
 //! 其余配置/基础设施字段保留在 `AppState` 顶层。
 
+pub mod app_mode;
+pub mod persistent;
+pub mod state;
+
 mod bootstrap;
 mod command_handlers;
 mod draw;
@@ -26,16 +30,15 @@ pub use save::*;
 pub use script_loader::*;
 pub use update::*;
 
+use self::app_mode::{NavigationStack, PlaybackMode, UserSettings};
+use self::persistent::PersistentStore;
+use self::state::HostState;
 use crate::extensions::ExtensionRegistry;
-use crate::persistent::PersistentStore;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
 use crate::resources::ResourceManager;
 use crate::ui::{Theme, ToastManager, UiContext, load_skin, load_theme_with_override};
-use crate::{
-    AppConfig, AudioManager, CommandExecutor, HostState, InputManager, NavigationStack,
-    PlaybackMode, UserSettings,
-};
+use crate::{AppConfig, AudioManager, CommandExecutor, InputManager};
 use std::collections::HashMap;
 use std::sync::Arc;
 use vn_runtime::VNRuntime;

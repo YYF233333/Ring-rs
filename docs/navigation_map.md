@@ -82,6 +82,9 @@
 - 子模块：[config](module_summaries/host/config.md)
 - 子模块：[manifest](module_summaries/host/manifest.md)
 - 子模块：[save_manager](module_summaries/host/save_manager.md)
+- 子模块：[host_app](module_summaries/host/host_app.md)
+- 子模块：[egui_actions](module_summaries/host/egui_actions.md)
+- 子模块：[egui_screens](module_summaries/host/egui_screens.md)
 
 ### 应用层（App：生命周期/主循环胶水）
 
@@ -124,10 +127,13 @@
   - **GpuTexture**：wgpu 纹理封装（Arc-wrapped）
   - **math**：公共渲染工具（QuadVertex、orthographic_projection、quad_vertices）
 - **渲染逻辑**：`host/src/renderer/`
+  - **Renderer struct + 顶层编排**：`host/src/renderer/mod.rs`
+  - **绘制命令生成**：`host/src/renderer/draw_commands.rs`（背景/角色/场景遮罩 -> DrawCommand）
+  - **场景效果与过渡**：`host/src/renderer/scene_effects.rs`（shake/blur/dissolve/fade 过渡）
   - **统一效果解析与请求**：`host/src/renderer/effects/`（EffectKind、ResolvedEffect、resolve()、EffectRequest、EffectTarget）
   - **动画系统**：`host/src/renderer/animation/`（AnimationSystem、Animatable trait）
 - **资源管理**：`host/src/resources/`（路径、来源、缓存、GpuResourceContext）
-- **音频系统**：`host/src/audio/`
+- **音频系统**：`host/src/audio/`（mod.rs: 结构/音量/duck; playback.rs: BGM/SFX 播放与淡入淡出）
 - **UI 基础设施**：`host/src/ui/`（theme/toast/skin）
 - **输入（winit 事件驱动）**：`host/src/input/`
 - **配置/manifest/save manager**：`host/src/config/`、`host/src/manifest/`、`host/src/save_manager/`
@@ -141,7 +147,7 @@
 
 ### 常见改动：推进模式 / Skip / Auto（阶段 26）
 
-- **推进模式状态**：`host/src/app_mode.rs`（`PlaybackMode::{Normal,Auto,Skip}`；UserSettings 的 `auto_delay`；Auto 开关不持久化）
+- **推进模式状态**：`host/src/app/app_mode.rs`（`PlaybackMode::{Normal,Auto,Skip}`；UserSettings 的 `auto_delay`；Auto 开关不持久化）
 - **推进控制主循环**：`host/src/app/update/modes.rs`（Ctrl 按住临时 Skip；Auto 的节拍与推进条件）
 - **统一跳过入口（收敛语义）**：`host/src/app/update/script.rs::skip_all_active_effects()`（动画/changeBG/changeScene/打字机）
 - **changeScene 完整跳过（不丢背景）**：

@@ -1,0 +1,39 @@
+# egui_actions 摘要
+
+## Purpose
+
+定义 `EguiAction` 枚举及其处理函数，将 egui UI 层的交互意图与 `AppState` 的状态变更解耦。
+
+## PublicSurface
+
+- 文件：`host/src/egui_actions.rs`
+- `EguiAction` 枚举：`None`、`StartGame`、`ContinueGame`、`NavigateTo`、`GoBack`、`ReturnToTitle`、`Exit`、`ApplySettings`、`OpenSave`、`OpenLoad`、`SaveToSlot`、`LoadFromSlot`、`DeleteSlot`
+- `handle_egui_action(app_state, action, save_load_tab, event_loop)` 消费 `EguiAction` 并执行对应状态变更
+
+## KeyFlow
+
+1. `egui_screens` 中的 UI 构建函数返回 `EguiAction`
+2. `host_app` 在帧末尾调用 `handle_egui_action` 将动作翻译为 `AppState` 操作（导航、存档、设置保存等）
+
+## Dependencies
+
+- `host::app`（`AppState`、存档/加载/重启函数）
+- `winit::event_loop::ActiveEventLoop`（用于 `Exit` 动作）
+
+## Invariants
+
+- `EguiAction` 是 UI 层到应用层的单向通信通道
+- 所有 UI 交互副作用集中在 `handle_egui_action` 中处理
+
+## WhenToReadSource
+
+- 需要添加新的 UI 交互动作时
+- 需要修改现有动作的副作用逻辑时
+
+## LastVerified
+
+2026-03-11
+
+## Owner
+
+Ring-rs 维护者

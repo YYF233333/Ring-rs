@@ -783,3 +783,378 @@ fn test_explicit_duration_overrides_default_for_all_targets() {
         scene_dur
     );
 }
+
+// ========== Phase 2.2: 边界测试补充 ==========
+
+#[test]
+fn test_scene_effect_dim_produces_effect_request() {
+    use crate::renderer::effects::{EffectKind, EffectTarget};
+    use vn_runtime::command::TransitionArg;
+
+    let mut ctx = TestCtx::new();
+    let cmd = Command::SceneEffect {
+        name: "dim".to_string(),
+        args: vec![
+            (Some("duration".to_string()), TransitionArg::Number(1.5)),
+            (Some("level".to_string()), TransitionArg::Number(0.7)),
+        ],
+    };
+
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert_eq!(ctx.executor.last_output.effect_requests.len(), 1);
+
+    let req = &ctx.executor.last_output.effect_requests[0];
+    assert!(matches!(
+        &req.target,
+        EffectTarget::SceneEffect { effect_name } if effect_name == "dim"
+    ));
+    assert!(matches!(
+        &req.effect.kind,
+        EffectKind::SceneEffect { name } if name == "dim"
+    ));
+    assert_eq!(req.effect.duration, Some(1.5));
+}
+
+#[test]
+fn test_scene_effect_shake_no_duration() {
+    use vn_runtime::command::TransitionArg;
+
+    let mut ctx = TestCtx::new();
+    let cmd = Command::SceneEffect {
+        name: "shake".to_string(),
+        args: vec![(Some("amplitude".to_string()), TransitionArg::Number(10.0))],
+    };
+
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert_eq!(ctx.executor.last_output.effect_requests.len(), 1);
+    assert_eq!(
+        ctx.executor.last_output.effect_requests[0].effect.duration,
+        None
+    );
+}
+
+#[test]
+fn test_scene_effect_extra_params_forwarded() {
+    use vn_runtime::command::TransitionArg;
+
+    let mut ctx = TestCtx::new();
+    let cmd = Command::SceneEffect {
+        name: "blur".to_string(),
+        args: vec![
+            (Some("duration".to_string()), TransitionArg::Number(0.5)),
+            (Some("amount".to_string()), TransitionArg::Number(3.0)),
+            (Some("animated".to_string()), TransitionArg::Bool(true)),
+        ],
+    };
+
+    ctx.execute(&cmd);
+    let req = &ctx.executor.last_output.effect_requests[0];
+    assert!(req.params.contains_key("amount"));
+    assert!(req.params.contains_key("animated"));
+    // duration is in params as it's built from the effect
+    // but "duration" from args is filtered out of extra_params in execute_scene_effect
+}
+
+#[test]
+fn test_title_card_sets_render_state_and_effect() {
+    use crate::renderer::effects::EffectTarget;
+
+    let mut ctx = TestCtx::new();
+    let cmd = Command::TitleCard {
+        text: "Chapter 1".to_string(),
+        duration: 3.0,
+    };
+
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+
+    let tc = ctx.render_state.title_card.as_ref().unwrap();
+    assert_eq!(tc.text, "Chapter 1");
+    assert!((tc.duration - 3.0).abs() < 0.01);
+
+    assert_eq!(ctx.executor.last_output.effect_requests.len(), 1);
+    assert!(matches!(
+        &ctx.executor.last_output.effect_requests[0].target,
+        EffectTarget::TitleCard { text } if text == "Chapter 1"
+    ));
+}
+
+#[test]
+fn test_play_bgm_default_fade_in() {
+    let mut ctx = TestCtx::new();
+    let cmd = Command::PlayBgm {
+        path: "bgm/test.mp3".to_string(),
+        looping: false,
+    };
+
+    ctx.execute(&cmd);
+    if let Some(AudioCommand::PlayBgm {
+        looping, fade_in, ..
+    }) = &ctx.executor.last_output.audio_command
+    {
+        assert!(!*looping);
+        assert_eq!(*fade_in, Some(0.5));
+    } else {
+        panic!("Expected PlayBgm");
+    }
+}
+
+#[test]
+fn test_stop_bgm_no_fade() {
+    let mut ctx = TestCtx::new();
+    let cmd = Command::StopBgm { fade_out: None };
+
+    ctx.execute(&cmd);
+    if let Some(AudioCommand::StopBgm { fade_out }) = &ctx.executor.last_output.audio_command {
+        assert_eq!(*fade_out, None);
+    } else {
+        panic!("Expected StopBgm");
+    }
+}
+
+#[test]
+fn test_show_character_duplicate_same_position_same_texture() {
+    let mut ctx = TestCtx::new();
+
+    let cmd = Command::ShowCharacter {
+        path: "characters/char1.png".to_string(),
+        alias: "char1".to_string(),
+        position: Position::Center,
+        transition: None,
+    };
+    ctx.execute(&cmd);
+    assert!(ctx.render_state.visible_characters.contains_key("char1"));
+
+    // Show same character, same position, same texture: diff_only path (alpha >= 0.99)
+    ctx.execute(&cmd);
+    assert!(ctx.executor.last_output.effect_requests.is_empty());
+    assert_eq!(
+        ctx.render_state
+            .visible_characters
+            .get("char1")
+            .unwrap()
+            .position,
+        Position::Center
+    );
+}
+
+#[test]
+fn test_show_character_texture_change_same_position() {
+    let mut ctx = TestCtx::new();
+
+    let cmd1 = Command::ShowCharacter {
+        path: "characters/char1_a.png".to_string(),
+        alias: "char1".to_string(),
+        position: Position::Center,
+        transition: None,
+    };
+    ctx.execute(&cmd1);
+
+    let cmd2 = Command::ShowCharacter {
+        path: "characters/char1_b.png".to_string(),
+        alias: "char1".to_string(),
+        position: Position::Center,
+        transition: None,
+    };
+    ctx.execute(&cmd2);
+
+    // Texture should be updated
+    let sprite = ctx.render_state.visible_characters.get("char1").unwrap();
+    assert_eq!(sprite.texture_path, "characters/char1_b.png");
+    assert_eq!(sprite.position, Position::Center);
+}
+
+#[test]
+fn test_hide_nonexistent_character_no_panic() {
+    let mut ctx = TestCtx::new();
+
+    let cmd = Command::HideCharacter {
+        alias: "nonexistent".to_string(),
+        transition: None,
+    };
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+}
+
+#[test]
+fn test_hide_character_with_dissolve_marks_fading() {
+    let mut ctx = TestCtx::new();
+
+    ctx.render_state.show_character(
+        "char1".to_string(),
+        "characters/char1.png".to_string(),
+        Position::Center,
+    );
+
+    let cmd = Command::HideCharacter {
+        alias: "char1".to_string(),
+        transition: Some(Transition::simple("dissolve")),
+    };
+    ctx.execute(&cmd);
+
+    // Character should still be in visible_characters (fading out)
+    assert!(ctx.render_state.visible_characters.contains_key("char1"));
+    assert_eq!(ctx.executor.last_output.effect_requests.len(), 1);
+}
+
+#[test]
+fn test_change_scene_no_transition_immediate() {
+    let mut ctx = TestCtx::new();
+    ctx.render_state.set_background("old.png".to_string());
+
+    let cmd = Command::ChangeScene {
+        path: "new.png".to_string(),
+        transition: None,
+    };
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert_eq!(
+        ctx.render_state.current_background,
+        Some("new.png".to_string())
+    );
+    assert!(ctx.executor.last_output.effect_requests.is_empty());
+}
+
+#[test]
+fn test_change_scene_fade_white() {
+    use crate::renderer::effects::{EffectKind, EffectTarget};
+
+    let mut ctx = TestCtx::new();
+    let cmd = Command::ChangeScene {
+        path: "new_bg.png".to_string(),
+        transition: Some(Transition::simple("fadeWhite")),
+    };
+
+    ctx.execute(&cmd);
+    assert_eq!(ctx.executor.last_output.effect_requests.len(), 1);
+
+    let req = &ctx.executor.last_output.effect_requests[0];
+    assert!(matches!(
+        &req.target,
+        EffectTarget::SceneTransition { pending_background } if pending_background == "new_bg.png"
+    ));
+    assert_eq!(req.effect.kind, EffectKind::FadeWhite);
+}
+
+#[test]
+fn test_show_background_no_transition_no_effect() {
+    let mut ctx = TestCtx::new();
+    let cmd = Command::ShowBackground {
+        path: "bg.png".to_string(),
+        transition: None,
+    };
+
+    ctx.execute(&cmd);
+    assert!(ctx.executor.last_output.effect_requests.is_empty());
+    assert_eq!(
+        ctx.render_state.current_background,
+        Some("bg.png".to_string())
+    );
+}
+
+#[test]
+fn test_text_box_hide_show_clear() {
+    let mut ctx = TestCtx::new();
+    assert!(ctx.render_state.ui_visible);
+
+    ctx.execute(&Command::TextBoxHide);
+    assert!(!ctx.render_state.ui_visible);
+
+    ctx.execute(&Command::TextBoxShow);
+    assert!(ctx.render_state.ui_visible);
+
+    // Set up some dialogue first
+    let cmd = Command::ShowText {
+        speaker: Some("A".to_string()),
+        content: "hello".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
+    };
+    ctx.execute(&cmd);
+    assert!(ctx.render_state.dialogue.is_some());
+
+    ctx.execute(&Command::TextBoxClear);
+    assert!(ctx.render_state.dialogue.is_none());
+}
+
+#[test]
+fn test_clear_characters() {
+    let mut ctx = TestCtx::new();
+
+    ctx.render_state.show_character(
+        "a".to_string(),
+        "characters/a.png".to_string(),
+        Position::Left,
+    );
+    ctx.render_state.show_character(
+        "b".to_string(),
+        "characters/b.png".to_string(),
+        Position::Right,
+    );
+    assert_eq!(ctx.render_state.visible_characters.len(), 2);
+
+    ctx.execute(&Command::ClearCharacters);
+    assert!(ctx.render_state.visible_characters.is_empty());
+}
+
+#[test]
+fn test_full_restart_is_noop() {
+    let mut ctx = TestCtx::new();
+    let result = ctx.execute(&Command::FullRestart);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert!(ctx.executor.last_output.effect_requests.is_empty());
+    assert!(ctx.executor.last_output.audio_command.is_none());
+}
+
+#[test]
+fn test_batch_error_stops_execution() {
+    let mut ctx = TestCtx::new();
+
+    // Batch with ShowBackground (Ok) then ShowText (WaitForClick)
+    // Should return last wait result
+    let commands = vec![
+        Command::ShowBackground {
+            path: "bg.png".to_string(),
+            transition: None,
+        },
+        Command::ShowCharacter {
+            path: "char.png".to_string(),
+            alias: "c".to_string(),
+            position: Position::Center,
+            transition: None,
+        },
+        Command::ShowText {
+            speaker: None,
+            content: "text".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
+        },
+    ];
+
+    let result = ctx.execute_batch(&commands);
+    assert_eq!(result, ExecuteResult::WaitForClick);
+    assert!(ctx.render_state.visible_characters.contains_key("c"));
+}
+
+#[test]
+fn test_extend_text() {
+    let mut ctx = TestCtx::new();
+
+    let cmd = Command::ShowText {
+        speaker: Some("A".to_string()),
+        content: "hello".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
+    };
+    ctx.execute(&cmd);
+
+    let cmd = Command::ExtendText {
+        content: " world".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
+    };
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::WaitForClick);
+}

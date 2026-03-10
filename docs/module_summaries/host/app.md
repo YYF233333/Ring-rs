@@ -8,6 +8,7 @@
 
 - 模块入口：`host/src/app/mod.rs`
 - 关键类型：`AppState`、`CoreSystems`、`UiSystems`、`GameSession`
+- 状态/配置子模块：`app_mode`（AppMode/NavigationStack/UserSettings）、`state`（HostState）、`persistent`（PersistentStore）
 - 关键子模块：`bootstrap`、`init`、`draw`、`save`、`script_loader`、`update`、`command_handlers`
 
 ## KeyFlow
@@ -46,7 +47,7 @@
 
 ## LastVerified
 
-2026-03-07
+2026-03-11
 
 ## Owner
 

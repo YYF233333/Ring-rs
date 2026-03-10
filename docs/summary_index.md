@@ -36,6 +36,9 @@
    - [config](module_summaries/host/config.md)
    - [manifest](module_summaries/host/manifest.md)
    - [save_manager](module_summaries/host/save_manager.md)
+   - [host_app](module_summaries/host/host_app.md)
+   - [egui_actions](module_summaries/host/egui_actions.md)
+   - [egui_screens](module_summaries/host/egui_screens.md)
 - [仓库导航地图](navigation_map.md)
 - 仅当需要实现细节时再读源码
 

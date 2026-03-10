@@ -3,8 +3,8 @@
 //! 目标：把 `AppState::new` 中"资源/音频/manifest/脚本/用户设置"等初始化逻辑按职责拆开，
 //! 让 `app/mod.rs` 保持可读，后续扩展更容易定位修改点。
 
+use super::persistent::PersistentStore;
 use crate::manifest::Manifest;
-use crate::persistent::PersistentStore;
 use crate::resources::path::{extract_base_dir, normalize_logical_path};
 use crate::resources::{ResourceManager, extract_script_id};
 use crate::save_manager::SaveManager;

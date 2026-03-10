@@ -68,3 +68,92 @@ pub fn quad_vertices(x: f32, y: f32, w: f32, h: f32, uv: bool, color: [f32; 4]) 
 
     [tl, tr, br, tl, br, bl]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn apply_proj(m: &[f32; 16], x: f32, y: f32) -> (f32, f32) {
+        let out_x = m[0] * x + m[4] * y + m[12];
+        let out_y = m[1] * x + m[5] * y + m[13];
+        (out_x, out_y)
+    }
+
+    #[test]
+    fn ortho_top_left_maps_to_neg1_pos1() {
+        let m = orthographic_projection(800.0, 600.0);
+        let (x, y) = apply_proj(&m, 0.0, 0.0);
+        assert!((x - (-1.0)).abs() < 1e-6);
+        assert!((y - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn ortho_bottom_right_maps_to_pos1_neg1() {
+        let m = orthographic_projection(800.0, 600.0);
+        let (x, y) = apply_proj(&m, 800.0, 600.0);
+        assert!((x - 1.0).abs() < 1e-6);
+        assert!((y - (-1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn ortho_center_maps_to_origin() {
+        let m = orthographic_projection(1920.0, 1080.0);
+        let (x, y) = apply_proj(&m, 960.0, 540.0);
+        assert!(x.abs() < 1e-6);
+        assert!(y.abs() < 1e-6);
+    }
+
+    #[test]
+    fn quad_vertices_produces_six_vertices() {
+        let verts = quad_vertices(10.0, 20.0, 100.0, 50.0, true, [1.0; 4]);
+        assert_eq!(verts.len(), 6);
+    }
+
+    #[test]
+    fn quad_vertices_triangle_winding() {
+        let v = quad_vertices(0.0, 0.0, 100.0, 50.0, true, [1.0; 4]);
+        // Triangle 1: TL(0,0) - TR(100,0) - BR(100,50)
+        assert_eq!(v[0].pos, [0.0, 0.0]);
+        assert_eq!(v[1].pos, [100.0, 0.0]);
+        assert_eq!(v[2].pos, [100.0, 50.0]);
+        // Triangle 2: TL(0,0) - BR(100,50) - BL(0,50)
+        assert_eq!(v[3].pos, [0.0, 0.0]);
+        assert_eq!(v[4].pos, [100.0, 50.0]);
+        assert_eq!(v[5].pos, [0.0, 50.0]);
+    }
+
+    #[test]
+    fn quad_vertices_uv_enabled() {
+        let v = quad_vertices(0.0, 0.0, 1.0, 1.0, true, [1.0; 4]);
+        assert_eq!(v[0].uv, [0.0, 0.0]); // TL
+        assert_eq!(v[1].uv, [1.0, 0.0]); // TR
+        assert_eq!(v[2].uv, [1.0, 1.0]); // BR
+        assert_eq!(v[5].uv, [0.0, 1.0]); // BL
+    }
+
+    #[test]
+    fn quad_vertices_uv_disabled() {
+        let v = quad_vertices(0.0, 0.0, 1.0, 1.0, false, [1.0; 4]);
+        for vert in &v {
+            assert_eq!(vert.uv, [0.0, 0.0]);
+        }
+    }
+
+    #[test]
+    fn quad_vertices_color_passthrough() {
+        let color = [0.5, 0.6, 0.7, 0.8];
+        let v = quad_vertices(0.0, 0.0, 1.0, 1.0, true, color);
+        for vert in &v {
+            assert_eq!(vert.color, color);
+        }
+    }
+
+    #[test]
+    fn quad_vertices_offset_position() {
+        let v = quad_vertices(50.0, 30.0, 200.0, 100.0, false, [1.0; 4]);
+        assert_eq!(v[0].pos, [50.0, 30.0]); // TL
+        assert_eq!(v[1].pos, [250.0, 30.0]); // TR
+        assert_eq!(v[2].pos, [250.0, 130.0]); // BR
+        assert_eq!(v[5].pos, [50.0, 130.0]); // BL
+    }
+}

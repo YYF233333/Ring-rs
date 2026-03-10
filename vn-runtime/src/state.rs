@@ -257,6 +257,7 @@ impl RuntimeState {
 /// 命名空间严格隔离：
 /// - `persistent.foo` → 查 `persistent_variables["foo"]`，找不到返回 None
 /// - `foo` → 查 `variables["foo"]`，找不到返回 None
+///
 /// 两域互不回退。
 impl crate::script::EvalContext for RuntimeState {
     fn get_var(&self, name: &str) -> Option<&VarValue> {

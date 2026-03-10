@@ -19,7 +19,6 @@
 //! Host 层不包含脚本逻辑，只负责执行 Runtime 发出的 Command。
 
 pub mod app;
-pub mod app_mode;
 pub mod audio;
 pub mod backend;
 pub mod command_executor;
@@ -27,24 +26,15 @@ pub mod config;
 pub mod extensions;
 pub mod input;
 pub mod manifest;
-pub mod persistent;
 pub mod renderer;
 pub mod resources;
 pub mod save_manager;
-pub mod state;
 pub mod ui;
 
-pub use renderer::{
-    AnimationSystem, DrawMode, RenderState, Renderer, TransitionManager, TransitionType,
-};
-pub use resources::{
-    CacheStats, FsSource, ResourceError, ResourceManager, ResourceSource, TextureCache, ZipSource,
-};
-pub use state::HostState;
-// Trait-based 动画系统 API
-pub use app_mode::{
+pub use app::app_mode::{
     AppMode, InputCapture, NavigationStack, PlaybackMode, SaveLoadTab, UserSettings,
 };
+pub use app::state::HostState;
 pub use audio::AudioManager;
 pub use command_executor::{AudioCommand, CommandExecutor, CommandOutput, ExecuteResult};
 pub use config::{AppConfig, AssetSourceType, AudioConfig, DebugConfig, WindowConfig};
@@ -53,12 +43,12 @@ pub use extensions::{
 };
 pub use input::InputManager;
 pub use manifest::Manifest;
+pub use renderer::ObjectId;
 pub use renderer::effects::{EffectRequest, EffectTarget};
-pub use renderer::{
-    AnimPropertyKey, Animatable, ObjectId, PropertyAccessor, SimplePropertyAccessor,
+pub use renderer::{AnimationSystem, RenderState, Renderer};
+pub use resources::{
+    CacheStats, FsSource, ResourceError, ResourceManager, ResourceSource, TextureCache, ZipSource,
 };
-pub use renderer::{AnimatableBackgroundTransition, BackgroundTransitionData};
-pub use renderer::{AnimatableCharacter, CharacterAnimData};
 pub use save_manager::SaveManager;
 
 // 阶段 27：子系统容器类型

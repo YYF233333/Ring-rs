@@ -6,7 +6,8 @@
 
 ## PublicSurface
 
-- 模块入口：`host/src/audio/mod.rs`
+- 模块入口：`host/src/audio/mod.rs`（AudioManager struct、音量/duck/静音控制）
+- 播放逻辑：`host/src/audio/playback.rs`（play_bgm、stop_bgm、crossfade_bgm、play_sfx、update + 淡入淡出状态机）
 - 核心类型：`AudioManager`
 - 关键接口：`play_bgm`、`stop_bgm`、`crossfade_bgm`、`play_sfx`、`duck`、`unduck`、`update`
 
@@ -48,7 +49,7 @@
 
 ## LastVerified
 
-2026-03-10
+2026-03-11
 
 ## Owner
 
