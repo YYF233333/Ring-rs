@@ -16,13 +16,44 @@ pub mod math;
 pub mod sprite_renderer;
 
 pub use gpu_texture::GpuTexture;
-pub use sprite_renderer::{DrawCommand, SpriteRenderer};
+pub use sprite_renderer::SpriteRenderer;
 
+pub use crate::rendering_types::DrawCommand;
+
+use crate::rendering_types::{Texture, TextureFactory};
 use std::sync::Arc;
 use tracing::{info, warn};
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::window::Window;
+
+// ── WgpuTextureFactory ───────────────────────────────────────────────────────
+
+/// wgpu 纹理工厂（[`TextureFactory`] 的 wgpu 实现）
+struct WgpuTextureFactory {
+    device: Arc<wgpu::Device>,
+    queue: Arc<wgpu::Queue>,
+    sprite_renderer: Arc<SpriteRenderer>,
+}
+
+impl TextureFactory for WgpuTextureFactory {
+    fn create_texture(
+        &self,
+        width: u32,
+        height: u32,
+        rgba_data: &[u8],
+        label: Option<&str>,
+    ) -> Arc<dyn Texture> {
+        self.sprite_renderer.create_texture(
+            &self.device,
+            &self.queue,
+            width,
+            height,
+            rgba_data,
+            label,
+        )
+    }
+}
 
 // ── GpuContext ────────────────────────────────────────────────────────────────
 
@@ -268,13 +299,14 @@ impl WgpuBackend {
         self.window.request_redraw();
     }
 
-    /// 创建 GPU 资源上下文（注入到 ResourceManager 中）
-    pub fn gpu_resource_context(&self) -> crate::resources::GpuResourceContext {
-        crate::resources::GpuResourceContext {
+    /// 创建纹理上下文（注入到 ResourceManager 中）
+    pub fn texture_context(&self) -> crate::rendering_types::TextureContext {
+        let factory = Arc::new(WgpuTextureFactory {
             device: Arc::clone(&self.gpu.device),
             queue: Arc::clone(&self.gpu.queue),
             sprite_renderer: Arc::clone(&self.sprite_renderer),
-        }
+        });
+        crate::rendering_types::TextureContext::new(factory)
     }
 
     // ── 纹理工厂 ─────────────────────────────────────────────────────────────
@@ -394,10 +426,14 @@ impl WgpuBackend {
                     height,
                 } = cmd
                 {
+                    let gpu_mask = mask_texture
+                        .as_any()
+                        .downcast_ref::<GpuTexture>()
+                        .expect("WgpuBackend requires GpuTexture for dissolve mask");
                     self.dissolve_renderer.draw(
                         &self.gpu.queue,
                         &mut rpass,
-                        mask_texture,
+                        gpu_mask,
                         sw as f32,
                         sh as f32,
                         *progress,

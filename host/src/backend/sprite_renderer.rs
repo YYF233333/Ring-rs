@@ -14,6 +14,7 @@ use wgpu::util::DeviceExt;
 
 use super::gpu_texture::{GpuTexture, create_gpu_texture};
 use super::math::{QuadVertex, orthographic_projection, quad_vertices};
+use crate::rendering_types::DrawCommand;
 
 const MAX_SPRITES: usize = 128;
 const VERTS_PER_SPRITE: usize = 6;
@@ -276,8 +277,12 @@ impl SpriteRenderer {
         for cmd in sprites {
             match cmd {
                 DrawCommand::Sprite { texture, .. } => {
+                    let gpu_tex = texture
+                        .as_any()
+                        .downcast_ref::<GpuTexture>()
+                        .expect("WgpuBackend requires GpuTexture");
                     pass.set_pipeline(&self.textured_pipeline);
-                    pass.set_bind_group(1, &texture.bind_group, &[]);
+                    pass.set_bind_group(1, &gpu_tex.bind_group, &[]);
                 }
                 DrawCommand::Rect { .. } => {
                     pass.set_pipeline(&self.solid_pipeline);
@@ -287,65 +292,6 @@ impl SpriteRenderer {
             }
             pass.draw(vertex_offset..vertex_offset + VERTS_PER_SPRITE as u32, 0..1);
             vertex_offset += VERTS_PER_SPRITE as u32;
-        }
-    }
-}
-
-// ── 绘制命令 ────────────────────────────────────────────────────────────────
-
-/// 绘制命令
-pub enum DrawCommand {
-    /// 绘制纹理 sprite
-    Sprite {
-        texture: Arc<GpuTexture>,
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
-        color: [f32; 4],
-    },
-    /// 绘制纯色矩形
-    Rect {
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
-        color: [f32; 4],
-    },
-    /// 遮罩溶解叠加（由 DissolveRenderer 处理，SpriteRenderer 跳过）
-    Dissolve {
-        mask_texture: Arc<GpuTexture>,
-        progress: f32,
-        ramp: f32,
-        reversed: bool,
-        overlay_color: [f32; 4],
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
-    },
-}
-
-impl DrawCommand {
-    /// 提取 sprite/rect 的绘制参数 (x, y, w, h, color, has_uv)
-    fn sprite_params(&self) -> Option<(f32, f32, f32, f32, [f32; 4], bool)> {
-        match self {
-            DrawCommand::Sprite {
-                x,
-                y,
-                width,
-                height,
-                color,
-                ..
-            } => Some((*x, *y, *width, *height, *color, true)),
-            DrawCommand::Rect {
-                x,
-                y,
-                width,
-                height,
-                color,
-            } => Some((*x, *y, *width, *height, *color, false)),
-            DrawCommand::Dissolve { .. } => None,
         }
     }
 }

@@ -27,6 +27,7 @@ pub mod extensions;
 pub mod input;
 pub mod manifest;
 pub mod renderer;
+pub mod rendering_types;
 pub mod resources;
 pub mod save_manager;
 pub mod ui;
@@ -46,6 +47,9 @@ pub use manifest::Manifest;
 pub use renderer::ObjectId;
 pub use renderer::effects::{EffectRequest, EffectTarget};
 pub use renderer::{AnimationSystem, RenderState, Renderer};
+pub use rendering_types::{
+    DrawCommand, NullTexture, NullTextureFactory, Texture, TextureContext, TextureFactory,
+};
 pub use resources::{
     CacheStats, FsSource, ResourceError, ResourceManager, ResourceSource, TextureCache, ZipSource,
 };

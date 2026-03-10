@@ -68,7 +68,7 @@ impl ApplicationHandler for HostApp {
         app_state
             .core
             .resource_manager
-            .set_gpu_context(backend.gpu_resource_context());
+            .set_texture_context(backend.texture_context());
 
         let (w, h) = backend.size();
         app_state.core.renderer.set_screen_size(w as f32, h as f32);

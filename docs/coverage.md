@@ -11,6 +11,7 @@
   - 原因：`vn-runtime` 不依赖窗口/音频/渲染设备，最适合做到高覆盖率，并且对逻辑回归最敏感
 - **次口径（Secondary）**：workspace 覆盖率（趋势观察）
   - 说明：`host` 受图形设备/平台差异影响较大，不追求“接近 100%”，更关注关键链路的 headless 测试与“可测试边界”
+  - RFC-008 引入了 `NullTexture` / `NullTextureFactory`，使 `renderer::build_draw_commands`、`ResourceManager::load_texture`、`CommandExecutor` 集成链路可在无 GPU 环境下测试
 
 ---
 

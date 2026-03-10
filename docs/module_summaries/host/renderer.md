@@ -22,7 +22,8 @@
 
 ## Dependencies
 
-- 依赖 `resources::ResourceManager` 获取纹理
+- 依赖 `rendering_types::{DrawCommand, Texture}`（渲染抽象层，不直接依赖 backend）
+- 依赖 `resources::ResourceManager` 获取纹理（返回 `Arc<dyn Texture>`）
 - 依赖 `manifest::Manifest` 获取立绘锚点/站位配置
 - 依赖 `render_state` 与动画/过渡子模块
 

@@ -19,7 +19,8 @@
 
 ## Dependencies
 
-- 依赖 `macroquad`、`image` 完成纹理创建与解码
+- 依赖 `rendering_types::{Texture, TextureContext}` 完成纹理创建（不直接依赖 backend/wgpu）
+- 依赖 `image` crate 完成图片解码
 - 被 `renderer`、`app`、`audio`、`manifest`、脚本加载路径广泛调用
 
 ## Invariants

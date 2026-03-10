@@ -2,8 +2,8 @@
 //!
 //! 将 RenderState 中的背景、角色、场景遮罩转换为 DrawCommand 列表。
 
-use crate::backend::{DrawCommand, GpuTexture};
 use crate::manifest::Manifest;
+use crate::rendering_types::{DrawCommand, Texture};
 use crate::resources::ResourceManager;
 
 use super::scene_transition::SceneTransitionPhase;
@@ -32,7 +32,7 @@ impl Renderer {
         {
             let alpha = self.transition.old_content_alpha();
             if alpha > 0.0 {
-                let (dw, dh, x, y) = self.calculate_draw_rect_for(&texture, DrawMode::Cover);
+                let (dw, dh, x, y) = self.calculate_draw_rect_for(&*texture, DrawMode::Cover);
                 commands.push(DrawCommand::Sprite {
                     texture,
                     x: x + shake_x,
@@ -49,7 +49,7 @@ impl Renderer {
             && let Some(texture) = resource_manager.peek_texture(bg_path)
         {
             let alpha = self.transition.new_content_alpha();
-            let (dw, dh, x, y) = self.calculate_draw_rect_for(&texture, DrawMode::Cover);
+            let (dw, dh, x, y) = self.calculate_draw_rect_for(&*texture, DrawMode::Cover);
             commands.push(DrawCommand::Sprite {
                 texture,
                 x: x + shake_x,
@@ -211,7 +211,7 @@ impl Renderer {
     /// 计算纹理绘制矩形（dest_w, dest_h, x, y）
     pub(super) fn calculate_draw_rect_for(
         &self,
-        texture: &GpuTexture,
+        texture: &dyn Texture,
         mode: DrawMode,
     ) -> (f32, f32, f32, f32) {
         let sw = self.screen_width;

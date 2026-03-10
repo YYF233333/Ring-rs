@@ -2,8 +2,7 @@
 //!
 //! 资源管理系统，负责图片资源的加载、缓存和管理。
 
-use crate::backend::GpuTexture;
-use crate::backend::sprite_renderer::SpriteRenderer;
+use crate::rendering_types::{Texture, TextureContext};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -19,29 +18,17 @@ pub use path::{
 };
 pub use source::{FsSource, ResourceSource, ZipSource};
 
-/// 从字节数据加载图片并转换为 GPU 纹理
+/// 从字节数据加载图片并创建纹理
 fn load_texture_from_bytes(
     bytes: &[u8],
     path: &str,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    sprite_renderer: &SpriteRenderer,
-) -> Result<Arc<GpuTexture>, String> {
+    ctx: &TextureContext,
+) -> Result<Arc<dyn Texture>, String> {
     let img = image::load_from_memory(bytes)
         .map_err(|e| format!("Cannot decode image {}: {}", path, e))?;
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
-    Ok(sprite_renderer.create_texture(device, queue, width, height, &rgba, Some(path)))
-}
-
-/// GPU 资源上下文
-///
-/// 持有 GPU 设备引用，供 ResourceManager 创建纹理时使用。
-/// 使用 Arc 在 ResourceManager 和 WgpuBackend 之间共享。
-pub struct GpuResourceContext {
-    pub(crate) device: Arc<wgpu::Device>,
-    pub(crate) queue: Arc<wgpu::Queue>,
-    pub(crate) sprite_renderer: Arc<SpriteRenderer>,
+    Ok(ctx.create_texture(width, height, &rgba, Some(path)))
 }
 
 /// 资源管理器
@@ -57,8 +44,8 @@ pub struct ResourceManager {
     base_path: String,
     /// 资源来源（文件系统/ZIP 等）
     source: Arc<dyn ResourceSource>,
-    /// GPU 资源上下文（延迟注入，在 WgpuBackend 创建后设置）
-    gpu: Option<GpuResourceContext>,
+    /// 纹理上下文（延迟注入，在 WgpuBackend 创建后设置）
+    texture_ctx: Option<TextureContext>,
 }
 
 impl ResourceManager {
@@ -70,7 +57,7 @@ impl ResourceManager {
             failed_textures: HashSet::new(),
             source: Arc::new(FsSource::new(&base)),
             base_path: base,
-            gpu: None,
+            texture_ctx: None,
         }
     }
 
@@ -85,7 +72,7 @@ impl ResourceManager {
             failed_textures: HashSet::new(),
             base_path: base_path.into(),
             source,
-            gpu: None,
+            texture_ctx: None,
         }
     }
 
@@ -97,15 +84,15 @@ impl ResourceManager {
             failed_textures: HashSet::new(),
             source: Arc::new(FsSource::new(&base)),
             base_path: base,
-            gpu: None,
+            texture_ctx: None,
         }
     }
 
-    /// 注入 GPU 资源上下文
+    /// 注入纹理上下文
     ///
-    /// 在 WgpuBackend 创建后调用，使 load_texture 能够创建 GPU 纹理。
-    pub fn set_gpu_context(&mut self, gpu: GpuResourceContext) {
-        self.gpu = Some(gpu);
+    /// 在 WgpuBackend 创建后调用，使 load_texture 能够创建纹理。
+    pub fn set_texture_context(&mut self, ctx: TextureContext) {
+        self.texture_ctx = Some(ctx);
     }
 
     /// 解析资源路径（将相对路径转换为完整路径）
@@ -172,7 +159,7 @@ impl ResourceManager {
     ///
     /// 如果资源已缓存，直接返回缓存的资源。
     /// 否则通过 ResourceSource 加载并缓存。
-    pub fn load_texture(&mut self, path: &str) -> Result<Arc<GpuTexture>, ResourceError> {
+    pub fn load_texture(&mut self, path: &str) -> Result<Arc<dyn Texture>, ResourceError> {
         let full_path = self.resolve_path(path);
 
         if let Some(texture) = self.texture_cache.get(&full_path) {
@@ -195,21 +182,17 @@ impl ResourceManager {
             }
         };
 
-        let gpu = self.gpu.as_ref().ok_or_else(|| ResourceError::LoadFailed {
-            path: full_path.clone(),
-            kind: "texture".to_string(),
-            message: "GPU context not set. Call set_gpu_context() after WgpuBackend init."
-                .to_string(),
-        })?;
+        let ctx = self
+            .texture_ctx
+            .as_ref()
+            .ok_or_else(|| ResourceError::LoadFailed {
+                path: full_path.clone(),
+                kind: "texture".to_string(),
+                message: "Texture context not set. Call set_texture_context() after backend init."
+                    .to_string(),
+            })?;
 
-        let texture = load_texture_from_bytes(
-            &bytes,
-            &full_path,
-            &gpu.device,
-            &gpu.queue,
-            &gpu.sprite_renderer,
-        )
-        .map_err(|e| {
+        let texture = load_texture_from_bytes(&bytes, &full_path, ctx).map_err(|e| {
             self.failed_textures.insert(full_path.clone());
             ResourceError::LoadFailed {
                 path: full_path.clone(),
@@ -225,13 +208,13 @@ impl ResourceManager {
     }
 
     /// 获取已缓存的图片资源（不加载），更新 LRU
-    pub fn get_texture(&mut self, path: &str) -> Option<Arc<GpuTexture>> {
+    pub fn get_texture(&mut self, path: &str) -> Option<Arc<dyn Texture>> {
         let full_path = self.resolve_path(path);
         self.texture_cache.get(&full_path)
     }
 
     /// 只读获取已缓存的图片资源（不更新 LRU）
-    pub fn peek_texture(&self, path: &str) -> Option<Arc<GpuTexture>> {
+    pub fn peek_texture(&self, path: &str) -> Option<Arc<dyn Texture>> {
         let full_path = self.resolve_path(path);
         self.texture_cache.peek(&full_path)
     }
@@ -271,6 +254,12 @@ impl ResourceManager {
 
     pub fn texture_count(&self) -> usize {
         self.texture_cache.len()
+    }
+
+    /// 获取纹理缓存的可变引用（仅用于测试注入）
+    #[cfg(test)]
+    pub fn texture_cache_mut(&mut self) -> &mut TextureCache {
+        &mut self.texture_cache
     }
 
     pub fn texture_cache_stats(&self) -> CacheStats {

@@ -4,6 +4,8 @@
 
 use std::sync::Arc;
 
+use crate::rendering_types::Texture;
+
 /// GPU 纹理
 ///
 /// 包含 wgpu 纹理及其关联的视图和绑定组。
@@ -53,6 +55,27 @@ impl GpuTexture {
     /// 估算显存占用（字节）：width * height * 4 (RGBA8)
     pub fn size_bytes(&self) -> usize {
         (self.width as usize) * (self.height as usize) * 4
+    }
+}
+
+impl Texture for GpuTexture {
+    fn width(&self) -> f32 {
+        self.width as f32
+    }
+    fn height(&self) -> f32 {
+        self.height as f32
+    }
+    fn width_u32(&self) -> u32 {
+        self.width
+    }
+    fn height_u32(&self) -> u32 {
+        self.height
+    }
+    fn size_bytes(&self) -> usize {
+        GpuTexture::size_bytes(self)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

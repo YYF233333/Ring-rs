@@ -2,7 +2,7 @@
 //!
 //! 带 LRU 驱逐和显存预算的纹理缓存。
 
-use crate::backend::GpuTexture;
+use crate::rendering_types::Texture;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
@@ -10,10 +10,9 @@ use std::sync::Arc;
 pub const DEFAULT_TEXTURE_BUDGET_MB: usize = 256;
 
 /// 缓存条目
-#[derive(Debug)]
 struct CacheEntry {
     /// 纹理对象
-    texture: Arc<GpuTexture>,
+    texture: Arc<dyn Texture>,
     /// 估算的显存占用（字节）
     size_bytes: usize,
     /// 引用计数（pin 状态）
@@ -21,7 +20,7 @@ struct CacheEntry {
 }
 
 impl CacheEntry {
-    fn new(texture: Arc<GpuTexture>) -> Self {
+    fn new(texture: Arc<dyn Texture>) -> Self {
         let size_bytes = texture.size_bytes();
         Self {
             texture,
@@ -81,7 +80,7 @@ impl TextureCache {
     }
 
     /// 获取纹理（如果存在则更新 LRU）
-    pub fn get(&mut self, key: &str) -> Option<Arc<GpuTexture>> {
+    pub fn get(&mut self, key: &str) -> Option<Arc<dyn Texture>> {
         if let Some(entry) = self.entries.get(key) {
             self.hits += 1;
             let texture = Arc::clone(&entry.texture);
@@ -94,7 +93,7 @@ impl TextureCache {
     }
 
     /// 只读获取纹理（不更新 LRU，用于渲染时快速查询）
-    pub fn peek(&self, key: &str) -> Option<Arc<GpuTexture>> {
+    pub fn peek(&self, key: &str) -> Option<Arc<dyn Texture>> {
         self.entries.get(key).map(|e| Arc::clone(&e.texture))
     }
 
@@ -106,7 +105,7 @@ impl TextureCache {
     /// 插入纹理
     ///
     /// 如果超出预算，会先驱逐旧资源。
-    pub fn insert(&mut self, key: String, texture: Arc<GpuTexture>) {
+    pub fn insert(&mut self, key: String, texture: Arc<dyn Texture>) {
         let entry = CacheEntry::new(texture);
         let new_size = entry.size_bytes;
 

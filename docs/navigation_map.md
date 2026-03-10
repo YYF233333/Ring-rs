@@ -116,15 +116,22 @@
 > - `command_executor` 更偏“把 Command 翻译成**状态变更 + 需要外部系统执行的输出**”
 > - `app/command_handlers` 更偏“消费输出，驱动**音频/过渡/动画系统**做事”
 
-### 渲染后端 / 资源 / 音频 / UI
+### 渲染抽象层 / 后端 / 资源 / 音频 / UI
 
+- **渲染抽象层（RFC-008）**：`host/src/rendering_types.rs`
+  - **Texture trait**：纹理抽象接口（`width/height/size_bytes/as_any`）
+  - **TextureFactory trait**：纹理创建工厂接口
+  - **TextureContext**：持有 `Arc<dyn TextureFactory>`，注入到 ResourceManager
+  - **DrawCommand**：绘制命令（Sprite/Rect/Dissolve），使用 `Arc<dyn Texture>`
+  - **NullTexture / NullTextureFactory**：headless 后端，用于无 GPU 环境的单元测试
 - **GPU 后端（winit + wgpu + egui）**：`host/src/backend/`
   - **WgpuBackend**：渲染后端门面，编排帧渲染流程
+  - **WgpuTextureFactory**：`TextureFactory` 的 wgpu 实现（内部类型）
   - **GpuContext**：GPU 设备/队列/表面管理
   - **EguiIntegration**：egui 输入/输出/渲染桥接
-  - **SpriteRenderer**：2D textured quad batch 渲染器（WGSL shader）
-  - **DissolveRenderer**：mask-based dissolve 效果渲染器（WGSL shader）
-  - **GpuTexture**：wgpu 纹理封装（Arc-wrapped）
+  - **SpriteRenderer**：2D textured quad batch 渲染器（WGSL shader，通过 downcast 访问 GpuTexture）
+  - **DissolveRenderer**：mask-based dissolve 效果渲染器（WGSL shader，通过 downcast 访问 GpuTexture）
+  - **GpuTexture**：wgpu 纹理封装，实现 `Texture` trait
   - **math**：公共渲染工具（QuadVertex、orthographic_projection、quad_vertices）
 - **渲染逻辑**：`host/src/renderer/`
   - **Renderer struct + 顶层编排**：`host/src/renderer/mod.rs`
@@ -132,7 +139,7 @@
   - **场景效果与过渡**：`host/src/renderer/scene_effects.rs`（shake/blur/dissolve/fade 过渡）
   - **统一效果解析与请求**：`host/src/renderer/effects/`（EffectKind、ResolvedEffect、resolve()、EffectRequest、EffectTarget）
   - **动画系统**：`host/src/renderer/animation/`（AnimationSystem、Animatable trait）
-- **资源管理**：`host/src/resources/`（路径、来源、缓存、GpuResourceContext）
+- **资源管理**：`host/src/resources/`（路径、来源、缓存、TextureContext）
 - **音频系统**：`host/src/audio/`（mod.rs: 结构/音量/duck; playback.rs: BGM/SFX 播放与淡入淡出）
 - **UI 基础设施**：`host/src/ui/`（theme/toast/skin）
 - **输入（winit 事件驱动）**：`host/src/input/`

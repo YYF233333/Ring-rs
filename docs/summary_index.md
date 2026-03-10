@@ -23,6 +23,7 @@
    - [app_command_handlers](module_summaries/host/app_command_handlers.md)
    - [extensions](module_summaries/host/extensions.md)
    - [command_executor](module_summaries/host/command_executor.md)
+   - [rendering_types](module_summaries/host/rendering_types.md)
    - [renderer](module_summaries/host/renderer.md)
    - [renderer_render_state](module_summaries/host/renderer_render_state.md)
    - [renderer_animation](module_summaries/host/renderer_animation.md)

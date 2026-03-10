@@ -3,7 +3,7 @@
 //! 生成 sprite 绘制命令，由 WgpuBackend 消费。
 //! UI（对话框、选项、屏幕）由 egui 在 main.rs 渲染循环中构建。
 
-use crate::backend::DrawCommand;
+use crate::rendering_types::DrawCommand;
 
 use super::AppState;
 
