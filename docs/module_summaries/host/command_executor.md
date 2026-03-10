@@ -9,7 +9,7 @@
 - 模块入口：`host/src/command_executor/mod.rs`
 - 核心类型：`CommandExecutor`
 - 关键接口：`execute`、`execute_batch`
-- 子模块：`audio`、`background`、`character`、`ui`、`types`
+- 子模块：`audio`、`background`、`character`、`ui`、`types`、`effects`
 
 ## KeyFlow
 
@@ -17,6 +17,7 @@
 2. 执行函数更新 `RenderState`，并将副作用写入 `last_output`。
 3. `execute_batch` 顺序执行命令，汇总等待态或提前返回错误。
 4. 上层 `app`/`command_handlers` 根据输出继续驱动音频与效果系统。
+5. `effects` 子模块处理 `SceneEffect`、`TitleCard` 命令，产出效果请求与等待信号。
 
 ## Dependencies
 
@@ -48,7 +49,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-10
 
 ## Owner
 

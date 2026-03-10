@@ -8,6 +8,8 @@
 
 - 模块入口：`host/src/renderer/effects/mod.rs`
 - 核心类型：`EffectKind`、`ResolvedEffect`、`EffectRequest`、`EffectTarget`、`EffectParamValue`
+- `EffectTarget` 含 `SceneEffect { effect_name }`、`TitleCard { text }` 等 variants
+- `EffectKind` 含 `SceneEffect { name }` variant
 - 关键接口：`resolve(Transition) -> ResolvedEffect`
 
 ## KeyFlow
@@ -16,6 +18,7 @@
 2. `resolver` 解析效果名与参数，得到 `ResolvedEffect`。
 3. `command_executor` 产出 `EffectRequest`，自动携带 `capability_id + params`。
 4. `app/command_handlers/effect_applier` 通过扩展注册表按 capability 分发执行。
+5. 已注册能力：`effect.scene.shake`、`effect.scene.blur`、`effect.scene.dim`、`effect.scene.title_card`。
 
 ## Dependencies
 
@@ -47,7 +50,7 @@
 
 ## LastVerified
 
-2026-03-07
+2026-03-10
 
 ## Owner
 

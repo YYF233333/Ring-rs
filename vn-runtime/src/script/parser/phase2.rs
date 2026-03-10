@@ -122,6 +122,24 @@ impl Phase2Parser {
         if starts_with_command(line, "wait") {
             return self.parse_wait(line, line_number);
         }
+        // pause - 纯点击等待
+        if starts_with_ignore_case(line, "pause")
+            && (line.len() == 5
+                || line
+                    .as_bytes()
+                    .get(5)
+                    .is_none_or(|b| b.is_ascii_whitespace()))
+        {
+            return Ok(Some(ScriptNode::Pause));
+        }
+        // sceneEffect - 场景效果（镜头语言）
+        if starts_with_ignore_case(line, "sceneeffect") {
+            return self.parse_scene_effect(line, line_number);
+        }
+        // titleCard - 章节字卡
+        if starts_with_ignore_case(line, "titlecard") {
+            return self.parse_title_card(line, line_number);
+        }
 
         // 4. HTML 标签解析
         // <audio src="..."></audio> 或 <audio src="..."></audio> loop
@@ -693,6 +711,117 @@ impl Phase2Parser {
         }
 
         Ok(Some(ScriptNode::Wait { duration }))
+    }
+
+    /// 解析场景效果命令
+    ///
+    /// 语法: `sceneEffect name` 或 `sceneEffect name(args...)`
+    fn parse_scene_effect(
+        &self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        let content = line
+            .get("sceneEffect".len()..)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "sceneEffect".to_string(),
+                param: "effect name".to_string(),
+            })?;
+
+        let effect = parse_transition(content).ok_or_else(|| ParseError::InvalidParameter {
+            line: line_number,
+            param: "effect".to_string(),
+            message: format!("unable to parse scene effect: '{}'", content),
+        })?;
+
+        Ok(Some(ScriptNode::SceneEffect { effect }))
+    }
+
+    /// 解析章节字卡命令
+    ///
+    /// 语法: `titleCard "text" (duration: N)`
+    fn parse_title_card(
+        &self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        let content = line
+            .get("titleCard".len()..)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "titleCard".to_string(),
+                param: "text and duration".to_string(),
+            })?;
+
+        // 提取引号中的文本
+        let quote_start = content
+            .find('"')
+            .ok_or_else(|| ParseError::InvalidParameter {
+                line: line_number,
+                param: "text".to_string(),
+                message: "titleCard requires quoted text".to_string(),
+            })?;
+        let quote_end =
+            content[quote_start + 1..]
+                .find('"')
+                .ok_or_else(|| ParseError::InvalidParameter {
+                    line: line_number,
+                    param: "text".to_string(),
+                    message: "missing closing quote".to_string(),
+                })?
+                + quote_start
+                + 1;
+        let text = content[quote_start + 1..quote_end].to_string();
+
+        // 提取 (duration: N) 参数
+        let rest = content[quote_end + 1..].trim();
+        let duration = if let Some(paren_start) = rest.find('(') {
+            let paren_end = rest
+                .rfind(')')
+                .ok_or_else(|| ParseError::InvalidParameter {
+                    line: line_number,
+                    param: "duration".to_string(),
+                    message: "missing closing parenthesis".to_string(),
+                })?;
+            let args_str = &rest[paren_start + 1..paren_end];
+            let args =
+                parse_transition_args(args_str).map_err(|e| ParseError::InvalidParameter {
+                    line: line_number,
+                    param: "duration".to_string(),
+                    message: e,
+                })?;
+
+            args.iter()
+                .find(|(k, _)| k.as_deref() == Some("duration"))
+                .and_then(|(_, v)| match v {
+                    TransitionArg::Number(n) => Some(*n),
+                    _ => None,
+                })
+                .or_else(|| {
+                    args.first().and_then(|(_, v)| match v {
+                        TransitionArg::Number(n) => Some(*n),
+                        _ => None,
+                    })
+                })
+                .unwrap_or(1.0)
+        } else {
+            1.0
+        };
+
+        if duration <= 0.0 {
+            return Err(ParseError::InvalidParameter {
+                line: line_number,
+                param: "duration".to_string(),
+                message: format!("duration must be positive, got: {}", duration),
+            });
+        }
+
+        Ok(Some(ScriptNode::TitleCard { text, duration }))
     }
 
     /// 从行中提取 with 子句的过渡效果

@@ -111,6 +111,22 @@ pub enum EffectTarget {
         /// 待切换的背景路径
         pending_background: String,
     },
+
+    /// 场景效果（镜头语言：shake/blur/dim 等）
+    ///
+    /// EffectApplier 将：根据 effect_name 分发到对应的场景效果处理器
+    SceneEffect {
+        /// 效果名称（如 "shakeSmall", "blurIn", "dimStep"）
+        effect_name: String,
+    },
+
+    /// 标题字卡
+    ///
+    /// EffectApplier 将：设置渲染器的标题字卡状态并启动淡入淡出动画
+    TitleCard {
+        /// 显示文本
+        text: String,
+    },
 }
 
 fn infer_capability_id(target: &EffectTarget, effect: &ResolvedEffect) -> String {
@@ -126,7 +142,26 @@ fn infer_capability_id(target: &EffectTarget, effect: &ResolvedEffect) -> String
         (super::registry::EffectKind::Move, EffectTarget::CharacterMove { .. }) => {
             "effect.move".to_string()
         }
+        (_, EffectTarget::SceneEffect { effect_name }) => {
+            let category = scene_effect_category(effect_name);
+            format!("effect.scene.{}", category)
+        }
+        (_, EffectTarget::TitleCard { .. }) => "effect.scene.title_card".to_string(),
         _ => format!("effect.{}", effect.kind_name()),
+    }
+}
+
+/// 根据效果名推断场景效果类别
+fn scene_effect_category(effect_name: &str) -> &str {
+    let name_lower = effect_name.to_lowercase();
+    if name_lower.contains("shake") || name_lower.contains("bounce") {
+        "shake"
+    } else if name_lower.contains("blur") || name_lower.contains("flashback") {
+        "blur"
+    } else if name_lower.contains("dim") {
+        "dim"
+    } else {
+        "generic"
     }
 }
 
@@ -135,20 +170,35 @@ fn build_params(effect: &ResolvedEffect) -> EffectParams {
     if let Some(duration) = effect.duration {
         params.insert("duration".to_string(), EffectParamValue::Number(duration));
     }
-    match &effect.kind {
-        super::registry::EffectKind::Rule {
-            mask_path,
-            reversed,
-        } => {
-            params.insert(
-                "mask".to_string(),
-                EffectParamValue::String(mask_path.clone()),
-            );
-            params.insert("reversed".to_string(), EffectParamValue::Bool(*reversed));
-        }
-        _ => {}
+    if let super::registry::EffectKind::Rule {
+        mask_path,
+        reversed,
+    } = &effect.kind
+    {
+        params.insert(
+            "mask".to_string(),
+            EffectParamValue::String(mask_path.clone()),
+        );
+        params.insert("reversed".to_string(), EffectParamValue::Bool(*reversed));
     }
     params
+}
+
+/// 创建 `EffectRequest` 并注入额外参数
+///
+/// 用于场景效果等需要在 capability 路由中携带自定义参数的场景。
+impl EffectRequest {
+    pub fn with_extra_params(
+        target: EffectTarget,
+        effect: ResolvedEffect,
+        extra: impl IntoIterator<Item = (String, EffectParamValue)>,
+    ) -> Self {
+        let mut req = Self::new(target, effect);
+        for (k, v) in extra {
+            req.params.insert(k, v);
+        }
+        req
+    }
 }
 
 #[cfg(test)]

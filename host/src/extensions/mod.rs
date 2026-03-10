@@ -8,7 +8,8 @@ mod registry;
 
 pub use builtin_effects::{
     CAP_EFFECT_DISSOLVE, CAP_EFFECT_FADE, CAP_EFFECT_MOVE, CAP_EFFECT_RULE_MASK,
-    apply_character_move, build_builtin_registry,
+    CAP_EFFECT_SCENE_BLUR, CAP_EFFECT_SCENE_DIM, CAP_EFFECT_SCENE_SHAKE,
+    CAP_EFFECT_SCENE_TITLE_CARD, apply_character_move, build_builtin_registry,
 };
 pub use capability::{CapabilityId, EffectExtension, ExtensionError};
 pub use context::{DiagnosticLevel, EngineContext, ExtensionDiagnostic};

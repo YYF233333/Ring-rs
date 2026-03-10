@@ -37,7 +37,10 @@ pub use animation::{
 pub use background_transition::{AnimatableBackgroundTransition, BackgroundTransitionData};
 pub use character_animation::{AnimatableCharacter, CharacterAnimData};
 pub use image_dissolve::ImageDissolve;
-pub use render_state::{CharacterSprite, ChoiceItem, ChoicesState, DialogueState, RenderState};
+pub use render_state::{
+    CharacterSprite, ChoiceItem, ChoicesState, DialogueState, RenderState, SceneEffectState,
+    TitleCardState,
+};
 pub use scene_transition::{
     AnimatableSceneTransition, SceneTransitionManager, SceneTransitionPhase, SceneTransitionType,
 };
@@ -61,6 +64,30 @@ pub struct Renderer {
     design_height: f32,
     /// 旧背景路径（用于过渡效果）
     old_background: Option<String>,
+    /// 场景震动效果状态
+    shake: ShakeState,
+    /// 场景模糊过渡状态
+    blur_transition: BlurTransitionState,
+}
+
+/// 震动效果状态
+#[derive(Debug, Clone, Default)]
+struct ShakeState {
+    active: bool,
+    amplitude_x: f32,
+    amplitude_y: f32,
+    elapsed: f32,
+    duration: f32,
+}
+
+/// 模糊过渡状态
+#[derive(Debug, Clone, Default)]
+struct BlurTransitionState {
+    active: bool,
+    from: f32,
+    to: f32,
+    elapsed: f32,
+    duration: f32,
 }
 
 impl Renderer {
@@ -74,6 +101,8 @@ impl Renderer {
             design_width,
             design_height,
             old_background: None,
+            shake: ShakeState::default(),
+            blur_transition: BlurTransitionState::default(),
         }
     }
 
@@ -103,29 +132,172 @@ impl Renderer {
         // 清空屏幕
         clear_background(BLACK);
 
-        // 1. 渲染背景（带过渡效果）
+        // 场景效果：震动偏移（应用于背景+角色+UI）
+        let (shake_x, shake_y) = self.current_shake_offset();
+
+        // 1. 渲染背景（带过渡效果 + 震动偏移）
+        if shake_x.abs() > 0.01 || shake_y.abs() > 0.01 {
+            push_camera_state();
+            set_camera(&Camera2D {
+                offset: vec2(
+                    shake_x / screen_width() * 2.0,
+                    shake_y / screen_height() * 2.0,
+                ),
+                ..Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()))
+            });
+        }
+
         self.render_background_with_transition(state, resource_manager);
 
         // 2. 渲染角色（从角色自身的动画状态获取变换）
         self.render_characters(state, resource_manager, manifest);
 
+        if shake_x.abs() > 0.01 || shake_y.abs() > 0.01 {
+            pop_camera_state();
+        }
+
+        // 场景效果：暗化遮罩
+        if state.scene_effect.dim_level > 0.01 {
+            let alpha = state.scene_effect.dim_level.clamp(0.0, 1.0);
+            draw_rectangle(
+                0.0,
+                0.0,
+                screen_width(),
+                screen_height(),
+                Color::new(0.0, 0.0, 0.0, alpha),
+            );
+        }
+
+        // 场景效果：模糊近似（半透明白色叠加模拟）
+        if state.scene_effect.blur_amount > 0.01 {
+            let alpha = (state.scene_effect.blur_amount * 0.3).clamp(0.0, 0.3);
+            draw_rectangle(
+                0.0,
+                0.0,
+                screen_width(),
+                screen_height(),
+                Color::new(1.0, 1.0, 1.0, alpha),
+            );
+        }
+
         // 3-5. 渲染 UI 层（仅当 ui_visible 为 true）
         if state.ui_visible {
-            // 获取 UI 透明度（用于 changeScene 后的 UI 淡入效果）
             let ui_alpha = self.get_scene_transition_ui_alpha();
-
-            // 3. 渲染对话框
             self.render_dialogue_with_alpha(state, ui_alpha);
-
-            // 4. 渲染选择界面
             self.render_choices_with_alpha(state, ui_alpha);
-
-            // 5. 渲染章节标记
             self.render_chapter_mark_with_alpha(state, ui_alpha);
         }
 
-        // 6. 渲染场景遮罩（changeScene 的 Fade/FadeWhite/Rule 效果）
+        // 6. 渲染标题字卡
+        if let Some(ref tc) = state.title_card {
+            self.render_title_card(tc);
+        }
+
+        // 7. 渲染场景遮罩（changeScene 的 Fade/FadeWhite/Rule 效果）
         self.render_scene_mask(state, resource_manager);
+    }
+
+    // ============ 场景效果方法 ============
+
+    /// 启动震动效果
+    pub fn start_shake(&mut self, amplitude_x: f32, amplitude_y: f32, duration: f32) {
+        self.shake = ShakeState {
+            active: true,
+            amplitude_x,
+            amplitude_y,
+            elapsed: 0.0,
+            duration,
+        };
+    }
+
+    /// 启动模糊过渡
+    pub fn start_blur_transition(&mut self, from: f32, to: f32, duration: f32) {
+        self.blur_transition = BlurTransitionState {
+            active: true,
+            from,
+            to,
+            elapsed: 0.0,
+            duration,
+        };
+    }
+
+    /// 更新场景效果（每帧调用）
+    pub fn update_scene_effects(&mut self, dt: f32, scene_effect: &mut SceneEffectState) -> bool {
+        let mut any_active = false;
+
+        if self.shake.active {
+            self.shake.elapsed += dt;
+            if self.shake.elapsed >= self.shake.duration {
+                self.shake.active = false;
+                scene_effect.shake_offset_x = 0.0;
+                scene_effect.shake_offset_y = 0.0;
+            } else {
+                let progress = self.shake.elapsed / self.shake.duration;
+                let decay = 1.0 - progress;
+                let t = self.shake.elapsed * 30.0;
+                scene_effect.shake_offset_x = t.sin() * self.shake.amplitude_x * decay;
+                scene_effect.shake_offset_y = (t * 1.3).cos() * self.shake.amplitude_y * decay;
+                any_active = true;
+            }
+        }
+
+        if self.blur_transition.active {
+            self.blur_transition.elapsed += dt;
+            if self.blur_transition.elapsed >= self.blur_transition.duration {
+                self.blur_transition.active = false;
+                scene_effect.blur_amount = self.blur_transition.to;
+            } else {
+                let progress =
+                    (self.blur_transition.elapsed / self.blur_transition.duration).clamp(0.0, 1.0);
+                let smoothed = progress * progress * (3.0 - 2.0 * progress);
+                scene_effect.blur_amount = self.blur_transition.from
+                    + (self.blur_transition.to - self.blur_transition.from) * smoothed;
+                any_active = true;
+            }
+        }
+
+        any_active
+    }
+
+    /// 检查场景效果是否仍在播放
+    pub fn is_scene_effect_active(&self) -> bool {
+        self.shake.active || self.blur_transition.active
+    }
+
+    fn current_shake_offset(&self) -> (f32, f32) {
+        if self.shake.active {
+            let progress = self.shake.elapsed / self.shake.duration;
+            let decay = 1.0 - progress;
+            let t = self.shake.elapsed * 30.0;
+            (
+                t.sin() * self.shake.amplitude_x * decay,
+                (t * 1.3).cos() * self.shake.amplitude_y * decay,
+            )
+        } else {
+            (0.0, 0.0)
+        }
+    }
+
+    fn render_title_card(&self, tc: &TitleCardState) {
+        let progress = tc.elapsed / tc.duration;
+        let alpha = if progress < 0.2 {
+            progress / 0.2
+        } else if progress > 0.8 {
+            (1.0 - progress) / 0.2
+        } else {
+            1.0
+        }
+        .clamp(0.0, 1.0);
+
+        if alpha < 0.01 {
+            return;
+        }
+
+        let font_size = 40.0;
+        let text_width = measure_text(&tc.text, None, font_size as u16, 1.0).width;
+        let x = (screen_width() - text_width) / 2.0;
+        let y = screen_height() / 2.0;
+        draw_text(&tc.text, x, y, font_size, Color::new(1.0, 1.0, 1.0, alpha));
     }
 
     /// 更新过渡效果

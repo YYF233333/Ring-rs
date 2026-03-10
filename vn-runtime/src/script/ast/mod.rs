@@ -208,6 +208,32 @@ pub enum ScriptNode {
         duration: f64,
     },
 
+    /// 纯点击等待
+    ///
+    /// 对应 `pause` 语法。
+    /// 不显示文本、不启动定时器，等待玩家点击后继续。Skip 模式下自动跳过。
+    Pause,
+
+    /// 场景效果（镜头语言）
+    ///
+    /// 对应 `sceneEffect name(args...)` 语法。
+    /// 复用 `Transition` 结构承载效果名与参数。
+    SceneEffect {
+        /// 效果描述（name + args）
+        effect: Transition,
+    },
+
+    /// 章节字卡
+    ///
+    /// 对应 `titleCard "文本" (duration: N)` 语法。
+    /// 全屏居中显示文字，淡入淡出后自动消失。
+    TitleCard {
+        /// 显示文本
+        text: String,
+        /// 显示时长（秒）
+        duration: f64,
+    },
+
     /// 完整重启游戏会话
     ///
     /// 对应 `fullRestart` 语法。
@@ -222,7 +248,11 @@ impl ScriptNode {
     pub fn causes_wait(&self) -> bool {
         matches!(
             self,
-            Self::Dialogue { .. } | Self::Choice { .. } | Self::Wait { .. }
+            Self::Dialogue { .. }
+                | Self::Choice { .. }
+                | Self::Wait { .. }
+                | Self::Pause
+                | Self::TitleCard { .. }
         )
     }
 

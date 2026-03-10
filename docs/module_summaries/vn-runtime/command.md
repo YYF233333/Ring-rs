@@ -14,6 +14,8 @@
 1. `Executor` 根据 `ScriptNode` 构造 `Command`。
 2. `VNRuntime::tick` 按执行顺序返回 `Vec<Command>`。
 3. Host 侧执行器将命令映射到渲染/音频/UI 系统。
+4. `Command` 包含 `SceneEffect { name, args }`、`TitleCard { text, duration }` 等 variants。
+5. 信号常量 `SIGNAL_SCENE_EFFECT`、`SIGNAL_TITLE_CARD` 用于场景效果与标题卡等待。
 
 ## Dependencies
 

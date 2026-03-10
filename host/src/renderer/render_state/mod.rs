@@ -27,6 +27,36 @@ pub struct RenderState {
 
     /// UI 是否可见（用于 changeScene 时隐藏 UI）
     pub ui_visible: bool,
+
+    /// 当前标题字卡状态
+    pub title_card: Option<TitleCardState>,
+
+    /// 当前场景效果状态（shake/blur/dim 等）
+    pub scene_effect: SceneEffectState,
+}
+
+/// 标题字卡状态
+#[derive(Debug, Clone)]
+pub struct TitleCardState {
+    /// 显示文本
+    pub text: String,
+    /// 总显示时长（秒）
+    pub duration: f32,
+    /// 已经过的时间（秒）
+    pub elapsed: f32,
+}
+
+/// 场景效果状态（镜头语言）
+#[derive(Debug, Clone, Default)]
+pub struct SceneEffectState {
+    /// 震动 X 偏移（像素）
+    pub shake_offset_x: f32,
+    /// 震动 Y 偏移（像素）
+    pub shake_offset_y: f32,
+    /// 模糊程度（0.0 = 无模糊，1.0 = 全模糊）
+    pub blur_amount: f32,
+    /// 暗化程度（0.0 = 正常，1.0 = 全黑）
+    pub dim_level: f32,
 }
 
 impl Default for RenderState {
@@ -38,6 +68,8 @@ impl Default for RenderState {
             chapter_mark: None,
             choices: None,
             ui_visible: true,
+            title_card: None,
+            scene_effect: SceneEffectState::default(),
         }
     }
 }

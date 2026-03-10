@@ -1449,3 +1449,106 @@ fn test_parse_wait() {
         err3
     );
 }
+
+#[test]
+fn test_parse_pause() {
+    let node = parse_single_node("pause");
+    assert_eq!(node, ScriptNode::Pause);
+
+    let node2 = parse_single_node("Pause");
+    assert_eq!(node2, ScriptNode::Pause);
+}
+
+#[test]
+fn test_parse_scene_effect_no_args() {
+    let node = parse_single_node("sceneEffect shakeSmall");
+    match node {
+        ScriptNode::SceneEffect { effect } => {
+            assert_eq!(effect.name, "shakeSmall");
+            assert!(effect.args.is_empty());
+        }
+        other => panic!("Expected SceneEffect, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_scene_effect_with_duration() {
+    let node = parse_single_node("sceneEffect blurIn(duration: 0.75)");
+    match node {
+        ScriptNode::SceneEffect { effect } => {
+            assert_eq!(effect.name, "blurIn");
+            assert_eq!(effect.get_duration(), Some(0.75));
+        }
+        other => panic!("Expected SceneEffect, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_scene_effect_with_level() {
+    let node = parse_single_node("sceneEffect dimStep(level: 3)");
+    match node {
+        ScriptNode::SceneEffect { effect } => {
+            assert_eq!(effect.name, "dimStep");
+            assert!(matches!(
+                effect.get_named("level"),
+                Some(crate::command::TransitionArg::Number(n)) if (*n - 3.0).abs() < f64::EPSILON
+            ));
+        }
+        other => panic!("Expected SceneEffect, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_scene_effect_case_insensitive() {
+    let node = parse_single_node("SceneEffect bounceSmall");
+    match node {
+        ScriptNode::SceneEffect { effect } => {
+            assert_eq!(effect.name, "bounceSmall");
+        }
+        other => panic!("Expected SceneEffect, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_scene_effect_missing_name() {
+    let err = parse_err("sceneEffect");
+    assert!(
+        format!("{:?}", err).contains("MissingParameter"),
+        "expected MissingParameter, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn test_parse_title_card() {
+    let node = parse_single_node(r#"titleCard "Hello World" (duration: 1.5)"#);
+    match node {
+        ScriptNode::TitleCard { text, duration } => {
+            assert_eq!(text, "Hello World");
+            assert!((duration - 1.5).abs() < f64::EPSILON);
+        }
+        other => panic!("Expected TitleCard, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_title_card_default_duration() {
+    let node = parse_single_node(r#"titleCard "No Duration""#);
+    match node {
+        ScriptNode::TitleCard { text, duration } => {
+            assert_eq!(text, "No Duration");
+            assert!((duration - 1.0).abs() < f64::EPSILON);
+        }
+        other => panic!("Expected TitleCard, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_title_card_missing_text() {
+    let err = parse_err("titleCard");
+    assert!(
+        format!("{:?}", err).contains("MissingParameter"),
+        "expected MissingParameter, got: {:?}",
+        err
+    );
+}

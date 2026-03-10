@@ -18,6 +18,15 @@ use std::str::FromStr;
 /// Host 在过渡动画播放完毕后发送此信号以解除等待。
 pub const SIGNAL_SCENE_TRANSITION: &str = "scene_transition";
 
+/// sceneEffect 动画完成的信号 ID
+///
+/// 当 sceneEffect 带 duration 时，Runtime 进入 `WaitForSignal(SIGNAL_SCENE_EFFECT)`,
+/// Host 在动画完成后发送此信号以解除等待。
+pub const SIGNAL_SCENE_EFFECT: &str = "scene_effect";
+
+/// titleCard 显示完成的信号 ID
+pub const SIGNAL_TITLE_CARD: &str = "title_card";
+
 /// 过渡效果参数
 ///
 /// 解析器从脚本中提取的过渡效果参数，不解释具体语义。
@@ -288,6 +297,27 @@ pub enum Command {
 
     /// 清除所有角色立绘
     ClearCharacters,
+
+    /// 场景效果（镜头语言）
+    ///
+    /// Host 收到此命令后应按 `name` 分发到对应的效果处理器。
+    /// 参数格式复用 `Transition` 的 args 结构。
+    SceneEffect {
+        /// 效果名称（如 "shakeSmall", "blurIn"）
+        name: String,
+        /// 效果参数
+        args: Vec<(Option<String>, TransitionArg)>,
+    },
+
+    /// 章节字卡
+    ///
+    /// Host 收到后全屏居中显示文字，淡入淡出后自动消失。
+    TitleCard {
+        /// 显示文本
+        text: String,
+        /// 显示时长（秒）
+        duration: f64,
+    },
 
     /// 完整重启游戏会话
     ///

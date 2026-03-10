@@ -45,6 +45,13 @@ pub enum EffectKind {
     ///
     /// 适用于：立绘位置变更（`show alias at pos with move`）
     Move,
+    /// 场景效果（镜头语言，如 shake/blur/dim）
+    ///
+    /// 适用于：`sceneEffect` 命令。`name` 标识具体效果。
+    SceneEffect {
+        /// 效果名称（如 "shakeSmall", "blurIn", "dimStep"）
+        name: String,
+    },
 }
 
 /// 各效果的默认持续时间（秒）
@@ -68,4 +75,10 @@ pub mod defaults {
     pub const CHARACTER_ALPHA_DURATION: f32 = DISSOLVE_DURATION;
     /// 背景过渡（dissolve）默认时长
     pub const BACKGROUND_DISSOLVE_DURATION: f32 = DISSOLVE_DURATION;
+    /// 震动效果默认时长
+    pub const SHAKE_DURATION: f32 = 0.3;
+    /// 弹跳效果默认时长
+    pub const BOUNCE_DURATION: f32 = 0.3;
+    /// 标题字卡默认时长
+    pub const TITLE_CARD_DURATION: f32 = 1.0;
 }

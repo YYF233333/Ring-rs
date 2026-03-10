@@ -13,7 +13,7 @@ pub use script::{handle_script_mode_input, run_script_tick, skip_all_active_effe
 
 use macroquad::prelude::*;
 use tracing::debug;
-use vn_runtime::command::SIGNAL_SCENE_TRANSITION;
+use vn_runtime::command::{SIGNAL_SCENE_EFFECT, SIGNAL_SCENE_TRANSITION, SIGNAL_TITLE_CARD};
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 
@@ -80,6 +80,36 @@ pub fn update(app_state: &mut AppState) {
         {
             let signal_id = id.clone();
             run_script_tick(app_state, Some(RuntimeInput::Signal { id: signal_id }));
+        }
+
+        // 场景效果更新（shake/blur 动画推进）
+        app_state
+            .core
+            .renderer
+            .update_scene_effects(dt, &mut app_state.core.render_state.scene_effect);
+
+        // sceneEffect 完成检测：当 Runtime 等待 scene_effect 信号
+        // 且所有场景效果动画均已结束时，自动发送信号
+        if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
+            && id == SIGNAL_SCENE_EFFECT
+            && !app_state.core.renderer.is_scene_effect_active()
+        {
+            let signal_id = id.clone();
+            run_script_tick(app_state, Some(RuntimeInput::Signal { id: signal_id }));
+        }
+
+        // titleCard 计时更新与完成检测
+        if let Some(ref mut tc) = app_state.core.render_state.title_card {
+            tc.elapsed += dt;
+            if tc.elapsed >= tc.duration {
+                app_state.core.render_state.title_card = None;
+                if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
+                    && id == SIGNAL_TITLE_CARD
+                {
+                    let signal_id = id.clone();
+                    run_script_tick(app_state, Some(RuntimeInput::Signal { id: signal_id }));
+                }
+            }
         }
 
         // 更新章节标记动画（非阻塞、不受快进影响、固定时间自动消失）

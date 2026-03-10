@@ -166,6 +166,7 @@ fn build_fallback_request(request: &EffectRequest) -> Option<EffectRequest> {
             CAP_EFFECT_FADE,
             Some(EffectKind::Fade),
         )),
+        (EffectTarget::SceneEffect { .. }, _) | (EffectTarget::TitleCard { .. }, _) => None,
     }
 }
 

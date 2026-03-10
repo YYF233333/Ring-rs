@@ -8,7 +8,7 @@
 //! - 产生对应的 Command
 //! - 决定是否需要等待
 
-use crate::command::{Choice, Command};
+use crate::command::{Choice, Command, SIGNAL_SCENE_EFFECT, SIGNAL_TITLE_CARD};
 use crate::error::RuntimeError;
 use crate::script::{EvalError, Script, ScriptNode, evaluate, evaluate_to_bool};
 use crate::state::{RuntimeState, WaitingReason};
@@ -366,6 +366,35 @@ impl Executor {
             ScriptNode::Wait { duration } => Ok(ExecuteResult::with_wait(
                 vec![],
                 WaitingReason::WaitForTime(std::time::Duration::from_secs_f64(*duration)),
+            )),
+
+            ScriptNode::Pause => Ok(ExecuteResult::with_wait(
+                vec![],
+                WaitingReason::WaitForClick,
+            )),
+
+            ScriptNode::SceneEffect { effect } => {
+                let has_duration = effect.get_named("duration").is_some();
+                let cmd = Command::SceneEffect {
+                    name: effect.name.clone(),
+                    args: effect.args.clone(),
+                };
+                if has_duration {
+                    Ok(ExecuteResult::with_wait(
+                        vec![cmd],
+                        WaitingReason::WaitForSignal(SIGNAL_SCENE_EFFECT.to_string()),
+                    ))
+                } else {
+                    Ok(ExecuteResult::with_commands(vec![cmd]))
+                }
+            }
+
+            ScriptNode::TitleCard { text, duration } => Ok(ExecuteResult::with_wait(
+                vec![Command::TitleCard {
+                    text: text.clone(),
+                    duration: *duration,
+                }],
+                WaitingReason::WaitForSignal(SIGNAL_TITLE_CARD.to_string()),
             )),
         }
     }

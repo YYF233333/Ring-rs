@@ -18,6 +18,9 @@
 4. 使用 `Script::with_source_map` 产出最终脚本对象。
 5. 阶段 0 新增 `callScript` / `returnFromScript` 单行语法解析。
 6. `wait <duration>` 解析为 `ScriptNode::Wait`。
+7. phase2 解析 `pause` -> `ScriptNode::Pause`。
+8. phase2 解析 `sceneEffect name(args...)` -> `ScriptNode::SceneEffect { effect: Transition }`。
+9. phase2 解析 `titleCard "text" (duration: N)` -> `ScriptNode::TitleCard { text, duration }`。
 
 ## Dependencies
 
@@ -50,7 +53,7 @@
 
 ## LastVerified
 
-2026-03-07
+2026-03-10
 
 ## Owner
 

@@ -74,6 +74,7 @@ impl ResolvedEffect {
             EffectKind::FadeWhite => "fadewhite",
             EffectKind::Rule { .. } => "rule_mask",
             EffectKind::Move => "move",
+            EffectKind::SceneEffect { .. } => "scene_effect",
         }
     }
 }

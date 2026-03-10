@@ -835,3 +835,68 @@ fn test_execute_full_restart_emits_command() {
     assert!(result.jump_to.is_none());
     assert!(result.script_control.is_none());
 }
+
+#[test]
+fn test_execute_pause_waits_for_click() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::Pause;
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(result.commands.is_empty());
+    assert_eq!(result.waiting, Some(WaitingReason::WaitForClick));
+}
+
+#[test]
+fn test_execute_scene_effect_no_duration() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::SceneEffect {
+        effect: Transition::simple("shakeSmall"),
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::SceneEffect { name, .. } if name == "shakeSmall"
+    ));
+    assert!(result.waiting.is_none());
+}
+
+#[test]
+fn test_execute_scene_effect_with_duration_waits() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::SceneEffect {
+        effect: Transition::with_named_args(
+            "blurIn",
+            vec![(Some("duration".to_string()), TransitionArg::Number(0.5))],
+        ),
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::SceneEffect { name, .. } if name == "blurIn"
+    ));
+    assert!(matches!(
+        result.waiting,
+        Some(WaitingReason::WaitForSignal(ref id)) if id == "scene_effect"
+    ));
+}
+
+#[test]
+fn test_execute_title_card_waits_for_signal() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::TitleCard {
+        text: "Chapter 1".to_string(),
+        duration: 1.5,
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::TitleCard { text, duration }
+            if text == "Chapter 1" && (*duration - 1.5).abs() < f64::EPSILON
+    ));
+    assert!(matches!(
+        result.waiting,
+        Some(WaitingReason::WaitForSignal(ref id)) if id == "title_card"
+    ));
+}

@@ -43,7 +43,18 @@ pub fn skip_all_active_effects(core: &mut CoreSystems) {
         core.render_state.ui_visible = true;
     }
 
-    // 4. 完成打字机
+    // 4. 跳过场景效果（shake/blur）
+    if core.renderer.is_scene_effect_active() {
+        core.renderer
+            .update_scene_effects(999.0, &mut core.render_state.scene_effect);
+    }
+
+    // 5. 跳过标题字卡
+    if core.render_state.title_card.is_some() {
+        core.render_state.title_card = None;
+    }
+
+    // 6. 完成打字机
     if !core.render_state.is_dialogue_complete() {
         core.render_state.complete_typewriter();
     }

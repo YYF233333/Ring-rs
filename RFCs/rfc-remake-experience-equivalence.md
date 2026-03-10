@@ -35,6 +35,22 @@
 - 主菜单、设置、历史、存档/读档 UI 页面均已实现。
 - **核心缺口**：`sceneEffect` 命令尚未解析执行；节奏标签 `{w}/{nw}/{cps}`、`pause/extend` 未支持。持久化域（`persistent.*`）与 `fullRestart` 已于 2026-03-10 完成。
 
+### 0.3 阶段 2 对齐结论（2026-03-10）
+
+> 目标：P0 剩余核心缺口首批实施。
+
+**本轮完成**：
+
+- `sceneEffect` 命令全链路（AST/Parser/Command/Executor/Host/Renderer）已完成。
+  - 首批 capability：`effect.scene.shake`（shakeSmall/shakeVertical/bounceSmall）、`effect.scene.blur`（blurIn/blurOut）、`effect.scene.dim`（dimStep/dimReset）。
+  - 渲染层：shake 偏移、blur 近似、dim 遮罩已实现。
+  - 有 duration 的效果自动进入 `WaitForSignal("scene_effect")`，动画完成后自动解除。
+  - Skip 模式下场景效果自动跳过。
+- `pause` 指令全链路已完成（纯点击等待，复用 `WaitForClick`）。
+- `titleCard` 命令全链路已完成（全屏字卡 + 淡入淡出 + `WaitForSignal("title_card")`）。
+- 新增 13 个单元测试覆盖解析与执行。
+- **剩余缺口**：节奏标签 `{w}/{nw}/{cps}` 与 `extend` 台词续接未支持；镜头类高级效果（focusPush/panRight/pushIn 等）留待 P1-1。
+
 ---
 
 ## 1. 背景
@@ -83,7 +99,7 @@
 
 - 当前 `assets/scripts/remake/ring/` 为重制语义稿。
 - 命令体系按"人体工学优先、引擎吸收复杂度"推进（详见 `RFCs/rfc-show-unification-ergonomics.md`）。
-- 脚本中使用了尚未实现的 `sceneEffect`、`titleCard`、`cutscene` 等命令，这些命令在运行时会被忽略（不中断流程）。
+- 脚本中使用了尚未实现的 `cutscene` 等命令，这些命令在运行时会被忽略（不中断流程）。`sceneEffect` 与 `titleCard` 已于 2026-03-10 实现。
 
 ---
 
@@ -100,20 +116,21 @@
 
 #### P0-2 演出能力最小闭环
 
-- 状态：**进行中**（基础闭环已具备，镜头类语义待实现）
+- 状态：**进行中**（首批 sceneEffect/titleCard 已落地，高级镜头类与组合编排待补）
 - [x] 提供统一转场描述能力（替代 `tran_*` 家族）并接入 capability 路由。
 - [x] 覆盖基础高频视觉类型：dissolve、黑场过渡、rule/mask。
-- [ ] **`sceneEffect` 命令解析与执行**（镜头语言：摇镜、模糊、冲击、推拉等，首批 capability）。
-- [ ] **`titleCard` 命令支持**（章节标题字卡显示与淡出）。
+- [x] **`sceneEffect` 首批 capability**（shake/blur/dim 解析执行渲染全链路，2026-03-10）。
+- [x] **`titleCard` 命令支持**（全屏字卡 + 淡入淡出，2026-03-10）。
+- [ ] 高级镜头效果（focusPush/panRight/pushIn/skyPan/imageWipe 等，留 P1-1）。
 - [ ] 支持组合演出编排（如：黑场 + Pause + 反向开场）。
 - [ ] 验收：`prologue`、`3-5`、`3-7`、`ending` 关键段落观感一致。
 
 #### P0-3 文本节奏与窗口控制
 
-- 状态：**进行中**（`wait` 与窗口显隐已落地，节奏标签与 `pause/extend` 待补）
+- 状态：**进行中**（`wait`/`pause` 与窗口显隐已落地，节奏标签与 `extend` 待补）
 - [x] 支持 `wait` 等待指令（到期自动推进、点击打断、Skip 模式跳过）。
 - [x] 支持脚本驱动窗口显隐基础策略（`textBoxHide/textBoxShow/textBoxClear`）。
-- [ ] **`pause` 指令支持**（无定时、纯点击等待，区别于 `wait`）。
+- [x] **`pause` 指令支持**（纯点击等待，复用 WaitForClick，2026-03-10）。
 - [ ] **节奏标签支持**（`{w}`/`{nw}`/`{cps}` 等高频标签的语义化替代或兼容）。
 - [ ] `extend`（续接台词，不清屏追加）语义支持。
 - [ ] 验收：关键台词段落阅读节奏与原作接近。

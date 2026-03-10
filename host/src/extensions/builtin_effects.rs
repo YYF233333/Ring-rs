@@ -19,6 +19,10 @@ pub const CAP_EFFECT_DISSOLVE: &str = "effect.dissolve";
 pub const CAP_EFFECT_FADE: &str = "effect.fade";
 pub const CAP_EFFECT_RULE_MASK: &str = "effect.rule_mask";
 pub const CAP_EFFECT_MOVE: &str = "effect.move";
+pub const CAP_EFFECT_SCENE_SHAKE: &str = "effect.scene.shake";
+pub const CAP_EFFECT_SCENE_BLUR: &str = "effect.scene.blur";
+pub const CAP_EFFECT_SCENE_DIM: &str = "effect.scene.dim";
+pub const CAP_EFFECT_SCENE_TITLE_CARD: &str = "effect.scene.title_card";
 
 #[derive(Debug)]
 struct BuiltinEffectExtension {
@@ -54,6 +58,10 @@ impl EffectExtension for BuiltinEffectExtension {
             CAP_EFFECT_FADE => apply_fade_family(request, ctx),
             CAP_EFFECT_RULE_MASK => apply_rule_mask(request, ctx),
             CAP_EFFECT_MOVE => apply_character_move(request, ctx),
+            CAP_EFFECT_SCENE_SHAKE => apply_scene_shake(request, ctx),
+            CAP_EFFECT_SCENE_BLUR => apply_scene_blur(request, ctx),
+            CAP_EFFECT_SCENE_DIM => apply_scene_dim(request, ctx),
+            CAP_EFFECT_SCENE_TITLE_CARD => apply_title_card(request, ctx),
             other => Err(ExtensionError::CapabilityNotFound {
                 capability_id: other.to_string(),
             }),
@@ -85,11 +93,22 @@ pub fn build_builtin_registry(
         vec![CAP_EFFECT_MOVE],
         engine_api_version,
     ));
+    let scene_effects = Arc::new(BuiltinEffectExtension::new(
+        "builtin.effect.scene",
+        vec![
+            CAP_EFFECT_SCENE_SHAKE,
+            CAP_EFFECT_SCENE_BLUR,
+            CAP_EFFECT_SCENE_DIM,
+            CAP_EFFECT_SCENE_TITLE_CARD,
+        ],
+        engine_api_version,
+    ));
 
     registry.register_extension(dissolve)?;
     registry.register_extension(fade)?;
     registry.register_extension(rule)?;
     registry.register_extension(move_extension)?;
+    registry.register_extension(scene_effects)?;
     Ok(registry)
 }
 
@@ -309,6 +328,101 @@ pub fn apply_character_move(
             capability_id: request.capability_id.clone(),
             message: format!("角色 Y 缩放动画失败: {error}"),
         })?;
+    Ok(())
+}
+
+// ============ 场景效果实现 ============
+
+fn apply_scene_shake(
+    request: &crate::renderer::effects::EffectRequest,
+    ctx: &mut EngineContext<'_>,
+) -> Result<(), ExtensionError> {
+    let EffectTarget::SceneEffect { effect_name } = &request.target else {
+        return Err(ExtensionError::UnsupportedTarget {
+            capability_id: request.capability_id.clone(),
+            target: format!("{:?}", request.target),
+        });
+    };
+
+    let duration = request.effect.duration_or(defaults::SHAKE_DURATION);
+    let core = ctx.core_mut();
+    let name_lower = effect_name.to_lowercase();
+
+    if name_lower.contains("vertical") {
+        core.renderer.start_shake(0.0, 8.0, duration);
+    } else if name_lower.contains("bounce") {
+        core.renderer.start_shake(0.0, 5.0, duration);
+    } else {
+        core.renderer.start_shake(6.0, 4.0, duration);
+    }
+
+    Ok(())
+}
+
+fn apply_scene_blur(
+    request: &crate::renderer::effects::EffectRequest,
+    ctx: &mut EngineContext<'_>,
+) -> Result<(), ExtensionError> {
+    let EffectTarget::SceneEffect { effect_name } = &request.target else {
+        return Err(ExtensionError::UnsupportedTarget {
+            capability_id: request.capability_id.clone(),
+            target: format!("{:?}", request.target),
+        });
+    };
+
+    let duration = request.effect.duration_or(0.5);
+    let core = ctx.core_mut();
+    let name_lower = effect_name.to_lowercase();
+
+    if name_lower.contains("out") {
+        core.render_state.scene_effect.blur_amount = 0.0;
+        core.renderer.start_blur_transition(1.0, 0.0, duration);
+    } else {
+        core.render_state.scene_effect.blur_amount = 1.0;
+        core.renderer.start_blur_transition(0.0, 1.0, duration);
+    }
+
+    Ok(())
+}
+
+fn apply_scene_dim(
+    request: &crate::renderer::effects::EffectRequest,
+    ctx: &mut EngineContext<'_>,
+) -> Result<(), ExtensionError> {
+    let EffectTarget::SceneEffect { effect_name } = &request.target else {
+        return Err(ExtensionError::UnsupportedTarget {
+            capability_id: request.capability_id.clone(),
+            target: format!("{:?}", request.target),
+        });
+    };
+
+    let core = ctx.core_mut();
+    let name_lower = effect_name.to_lowercase();
+
+    if name_lower.contains("reset") {
+        core.render_state.scene_effect.dim_level = 0.0;
+    } else {
+        let level = request
+            .params
+            .get("level")
+            .and_then(|v| match v {
+                crate::renderer::effects::EffectParamValue::Number(n) => Some(*n),
+                _ => None,
+            })
+            .unwrap_or(1.0);
+        let dim = (level / 7.0).clamp(0.0, 1.0);
+        core.render_state.scene_effect.dim_level = dim;
+    }
+
+    Ok(())
+}
+
+fn apply_title_card(
+    _request: &crate::renderer::effects::EffectRequest,
+    _ctx: &mut EngineContext<'_>,
+) -> Result<(), ExtensionError> {
+    // TitleCard 的状态已在 execute_title_card 中设置到 render_state.title_card，
+    // 渲染和计时由 Renderer::render() 和 update loop 驱动。
     Ok(())
 }
 
