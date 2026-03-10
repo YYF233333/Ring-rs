@@ -8,7 +8,7 @@
 
 - 入口：`vn-runtime/src/script/parser/mod.rs`
 - 核心接口：`Parser::parse`、`Parser::parse_with_base_path`、`Parser::warnings`
-- 子模块：`phase1`、`phase2`、`helpers`、`expr_parser`
+- 子模块：`phase1`、`phase2`、`helpers`、`expr_parser`、`inline_tags`
 
 ## KeyFlow
 
@@ -21,6 +21,9 @@
 7. phase2 解析 `pause` -> `ScriptNode::Pause`。
 8. phase2 解析 `sceneEffect name(args...)` -> `ScriptNode::SceneEffect { effect: Transition }`。
 9. phase2 解析 `titleCard "text" (duration: N)` -> `ScriptNode::TitleCard { text, duration }`。
+10. `inline_tags` 子模块提供 `parse_inline_tags(raw) -> (String, Vec<InlineEffect>)`，提取 `{wait}`/`{speed}`/`{/speed}` 标签为位置索引效果列表，返回纯文本。
+11. phase2 解析对话行时调用 `parse_inline_tags` 处理内联标签，并检测 `-->` 行尾修饰符设置 `no_wait`。
+12. phase2 解析 `extend "text"` -> `ScriptNode::Extend { content, inline_effects, no_wait }`。
 
 ## Dependencies
 

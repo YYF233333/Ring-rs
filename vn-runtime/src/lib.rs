@@ -75,7 +75,9 @@ pub mod script;
 pub mod state;
 
 // 重导出核心类型
-pub use command::{Choice, Command, Position, Transition, TransitionArg};
+pub use command::{
+    Choice, Command, InlineEffect, InlineEffectKind, Position, Transition, TransitionArg,
+};
 pub use diagnostic::{
     Diagnostic, DiagnosticLevel, DiagnosticResult, ResourceReference, ResourceType, analyze_script,
     extract_resource_references, get_defined_labels, get_jump_targets,
@@ -100,6 +102,8 @@ mod tests {
         let _cmd = Command::ShowText {
             speaker: Some("Test".to_string()),
             content: "Hello".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
         };
 
         let _input = RuntimeInput::Click;

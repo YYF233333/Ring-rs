@@ -45,6 +45,7 @@
 - **执行器（AST → Command）**：`vn-runtime/src/runtime/executor.rs`
 - **脚本 AST**：`vn-runtime/src/script/ast.rs`
 - **脚本解析器**：`vn-runtime/src/script/parser/mod.rs`
+- **内联标签解析（节奏标签）**：`vn-runtime/src/script/parser/inline_tags.rs`
 - **脚本诊断（静态分析）**：`vn-runtime/src/diagnostic.rs`
 - **存档模型**：`vn-runtime/src/save.rs`
 - **历史记录**：`vn-runtime/src/history.rs`
@@ -52,6 +53,7 @@
 ### 常见改动：我应该改哪里？
 
 - **新增脚本语法（解析层）**：`vn-runtime/src/script/parser/mod.rs` → `vn-runtime/src/script/ast.rs`
+- **新增/修改内联标签（节奏标签）**：`vn-runtime/src/script/parser/inline_tags.rs`
 - **把 AST 变成命令（语义层）**：`runtime/executor.rs`
 - **新增/修改命令类型（通信契约）**：`command.rs`（同时要改 `host/` 的执行端）
 - **调整运行时状态/等待机制**：`state.rs`、`runtime/engine.rs`
@@ -119,6 +121,13 @@
 - **UI 组件**：`host/src/ui/`（button/list/modal/panel/theme/toast）
 - **输入**：`host/src/input/`
 - **配置/manifest/save manager**：`host/src/config/`、`host/src/manifest/`、`host/src/save_manager/`
+
+### 常见改动：节奏标签 / 打字机行为
+
+- **内联标签数据模型**：`vn-runtime/src/command/mod.rs`（`InlineEffect`、`InlineEffectKind`）
+- **打字机 inline_wait / effective_cps / no_wait**：`host/src/renderer/render_state/mod.rs`（`DialogueState` 扩展字段、`advance_typewriter`、`extend_dialogue`）
+- **节奏标签帧更新**：`host/src/app/update/modes.rs`（inline_wait 定时器、effective_cps 倍率、no_wait 自动推进）
+- **点击 inline_wait 跳过**：`host/src/app/update/script.rs`（`is_inline_click_wait` 判定分支）
 
 ### 常见改动：推进模式 / Skip / Auto（阶段 26）
 

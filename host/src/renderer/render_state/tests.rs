@@ -75,7 +75,12 @@ fn test_typewriter_effect() {
     let mut state = RenderState::new();
 
     // 开始打字机效果
-    state.start_typewriter(Some("北风".to_string()), "你好世界".to_string());
+    state.start_typewriter(
+        Some("北风".to_string()),
+        "你好世界".to_string(),
+        vec![],
+        false,
+    );
     let dialogue = state.dialogue.as_ref().unwrap();
     assert_eq!(dialogue.visible_chars, 0);
     assert!(!dialogue.is_complete);
@@ -97,7 +102,7 @@ fn test_typewriter_effect() {
 fn test_complete_typewriter() {
     let mut state = RenderState::new();
 
-    state.start_typewriter(None, "测试文本".to_string());
+    state.start_typewriter(None, "测试文本".to_string(), vec![], false);
     assert!(!state.is_dialogue_complete());
 
     // 立即完成

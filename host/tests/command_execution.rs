@@ -61,6 +61,8 @@ fn test_dialogue_flow() {
     let cmd = Command::ShowText {
         speaker: Some("Alice".to_string()),
         content: "你好！".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     };
     let result = ctx.execute(&cmd);
     assert_eq!(result, ExecuteResult::WaitForClick);
@@ -87,6 +89,8 @@ fn test_choice_flow() {
     let cmd = Command::ShowText {
         speaker: Some("旁白".to_string()),
         content: "你会怎么选择？".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     };
     ctx.execute(&cmd);
     assert!(ctx.state.dialogue.is_some());

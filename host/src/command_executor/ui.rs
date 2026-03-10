@@ -3,7 +3,7 @@
 //! 处理 ShowText、PresentChoices、ChapterMark 命令。
 
 use crate::renderer::{ChoiceItem, RenderState};
-use vn_runtime::command::Choice;
+use vn_runtime::command::{Choice, InlineEffect};
 
 use super::CommandExecutor;
 use super::types::ExecuteResult;
@@ -14,15 +14,23 @@ impl CommandExecutor {
         &mut self,
         speaker: Option<String>,
         content: &str,
+        inline_effects: Vec<InlineEffect>,
+        no_wait: bool,
         render_state: &mut RenderState,
     ) -> ExecuteResult {
-        // 阶段 24：不再隐式清除 ChapterMark
-        // ChapterMark 有独立的定时生命周期，不受对话影响
+        render_state.start_typewriter(speaker, content.to_string(), inline_effects, no_wait);
+        ExecuteResult::WaitForClick
+    }
 
-        // 开始打字机效果
-        render_state.start_typewriter(speaker, content.to_string());
-
-        // ShowText 通常需要等待用户点击
+    /// 执行 ExtendText（台词续接）
+    pub(super) fn execute_extend_text(
+        &mut self,
+        content: &str,
+        inline_effects: Vec<InlineEffect>,
+        no_wait: bool,
+        render_state: &mut RenderState,
+    ) -> ExecuteResult {
+        render_state.extend_dialogue(content, inline_effects, no_wait);
         ExecuteResult::WaitForClick
     }
 

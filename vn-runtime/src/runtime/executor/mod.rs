@@ -128,10 +128,30 @@ impl Executor {
                 Ok(ExecuteResult::empty())
             }
 
-            ScriptNode::Dialogue { speaker, content } => Ok(ExecuteResult::with_wait(
+            ScriptNode::Dialogue {
+                speaker,
+                content,
+                inline_effects,
+                no_wait,
+            } => Ok(ExecuteResult::with_wait(
                 vec![Command::ShowText {
                     speaker: speaker.clone(),
                     content: content.clone(),
+                    inline_effects: inline_effects.clone(),
+                    no_wait: *no_wait,
+                }],
+                WaitingReason::WaitForClick,
+            )),
+
+            ScriptNode::Extend {
+                content,
+                inline_effects,
+                no_wait,
+            } => Ok(ExecuteResult::with_wait(
+                vec![Command::ExtendText {
+                    content: content.clone(),
+                    inline_effects: inline_effects.clone(),
+                    no_wait: *no_wait,
                 }],
                 WaitingReason::WaitForClick,
             )),

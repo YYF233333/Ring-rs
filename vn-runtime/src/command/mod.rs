@@ -27,6 +27,32 @@ pub const SIGNAL_SCENE_EFFECT: &str = "scene_effect";
 /// titleCard 显示完成的信号 ID
 pub const SIGNAL_TITLE_CARD: &str = "title_card";
 
+/// 内联效果（对话文本中的节奏控制标签）
+///
+/// 标记在纯文本的字符位置上，由打字机推进时触发。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InlineEffect {
+    /// 触发位置（纯文本中的字符索引，0-based）
+    pub position: usize,
+    /// 效果类型
+    pub kind: InlineEffectKind,
+}
+
+/// 内联效果类型
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum InlineEffectKind {
+    /// `{wait}` 或 `{wait Ns}` -- 在此位置暂停打字机
+    ///
+    /// `None` = 等待点击；`Some(n)` = 暂停 n 秒后继续
+    Wait(Option<f64>),
+    /// `{speed N}` -- 设置绝对字速（字符/秒）
+    SetCpsAbsolute(f64),
+    /// `{speed Nx}` -- 设置相对字速（基础速度的倍率）
+    SetCpsRelative(f64),
+    /// `{/speed}` -- 重置字速到用户默认
+    ResetCps,
+}
+
 /// 过渡效果参数
 ///
 /// 解析器从脚本中提取的过渡效果参数，不解释具体语义。
@@ -246,8 +272,22 @@ pub enum Command {
     ShowText {
         /// 说话者名称（None 表示旁白）
         speaker: Option<String>,
-        /// 对话内容
+        /// 对话内容（纯文本，标签已剥离）
         content: String,
+        /// 内联效果列表
+        inline_effects: Vec<InlineEffect>,
+        /// 是否自动推进（行尾 `-->` 修饰符）
+        no_wait: bool,
+    },
+
+    /// 台词续接（不清屏追加文本）
+    ExtendText {
+        /// 追加文本（纯文本）
+        content: String,
+        /// 内联效果列表
+        inline_effects: Vec<InlineEffect>,
+        /// 是否自动推进
+        no_wait: bool,
     },
 
     /// 显示选择分支

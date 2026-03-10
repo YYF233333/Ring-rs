@@ -40,6 +40,8 @@ fn test_execute_show_text() {
     let cmd = Command::ShowText {
         speaker: Some("北风".to_string()),
         content: "你好".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     };
 
     let result = ctx.execute(&cmd);
@@ -58,6 +60,8 @@ fn test_execute_show_text_narrator() {
     let cmd = Command::ShowText {
         speaker: None,
         content: "旁白内容".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     };
 
     let result = ctx.execute(&cmd);
@@ -395,6 +399,8 @@ fn test_execute_batch() {
         Command::ShowText {
             speaker: Some("角色".to_string()),
             content: "对话".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
         },
     ];
 

@@ -164,6 +164,17 @@ impl History {
         }
     }
 
+    /// 追加文本到最近一条 Dialogue 事件（用于 extend 命令）
+    ///
+    /// 如果最近一条事件不是 Dialogue，则创建新的旁白 Dialogue。
+    pub fn append_to_last_dialogue(&mut self, text: &str) {
+        if let Some(HistoryEvent::Dialogue { content, .. }) = self.events.last_mut() {
+            content.push_str(text);
+        } else {
+            self.push(HistoryEvent::dialogue(None, text.to_string()));
+        }
+    }
+
     /// 获取所有事件
     pub fn events(&self) -> &[HistoryEvent] {
         &self.events

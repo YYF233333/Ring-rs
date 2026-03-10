@@ -18,6 +18,7 @@
 3. `execute_batch` 顺序执行命令，汇总等待态或提前返回错误。
 4. 上层 `app`/`command_handlers` 根据输出继续驱动音频与效果系统。
 5. `effects` 子模块处理 `SceneEffect`、`TitleCard` 命令，产出效果请求与等待信号。
+6. `ui` 子模块处理 `ShowText`（含 `inline_effects`/`no_wait`）和新增的 `ExtendText`（台词续接）命令。
 
 ## Dependencies
 

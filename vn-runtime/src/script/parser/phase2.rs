@@ -9,9 +9,11 @@ use crate::script::ast::{ChoiceOption, ConditionalBranch, ScriptNode};
 
 use super::expr_parser::parse_expression;
 use super::helpers::{
-    extract_audio_src, extract_img_src, extract_keyword_value, is_table_separator, parse_dialogue,
-    parse_transition, parse_transition_args, starts_with_ignore_case,
+    extract_audio_src, extract_img_src, extract_keyword_value, extract_quoted_content,
+    is_table_separator, parse_dialogue, parse_transition, parse_transition_args,
+    starts_with_ignore_case,
 };
+use super::inline_tags::parse_inline_tags;
 use super::phase1::Block;
 
 /// 阶段 2 解析器
@@ -46,6 +48,8 @@ impl Phase2Parser {
         line: &str,
         line_number: usize,
     ) -> Result<Option<ScriptNode>, ParseError> {
+        // 检测行尾 --> 修饰符（自动推进）
+        let (line, no_wait) = strip_arrow_suffix(line.trim());
         let line = line.trim();
 
         // Markdown 注释块（以 > 开头）作为说明文字，解析时静默跳过。
@@ -140,6 +144,10 @@ impl Phase2Parser {
         if starts_with_ignore_case(line, "titlecard") {
             return self.parse_title_card(line, line_number);
         }
+        // extend - 台词续接
+        if starts_with_command(line, "extend") {
+            return self.parse_extend(line, line_number, no_wait);
+        }
 
         // 4. HTML 标签解析
         // <audio src="..."></audio> 或 <audio src="..."></audio> loop
@@ -148,8 +156,14 @@ impl Phase2Parser {
         }
 
         // 5. 对话/旁白 (包含冒号和引号)
-        if let Some((speaker, content)) = parse_dialogue(line) {
-            return Ok(Some(ScriptNode::Dialogue { speaker, content }));
+        if let Some((speaker, raw_content)) = parse_dialogue(line) {
+            let (content, inline_effects) = parse_inline_tags(&raw_content);
+            return Ok(Some(ScriptNode::Dialogue {
+                speaker,
+                content,
+                inline_effects,
+                no_wait,
+            }));
         }
 
         // 6. 未知行
@@ -970,6 +984,53 @@ impl Phase2Parser {
         }
 
         Ok(Some(ScriptNode::Choice { style, options }))
+    }
+}
+
+impl Phase2Parser {
+    /// 解析 extend 指令
+    ///
+    /// 语法: `extend "追加文本"`
+    fn parse_extend(
+        &self,
+        line: &str,
+        line_number: usize,
+        no_wait: bool,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        let content_part = line
+            .get("extend".len()..)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "extend".to_string(),
+                param: "quoted text".to_string(),
+            })?;
+
+        let raw_content =
+            extract_quoted_content(content_part).ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "extend".to_string(),
+                param: "quoted text (use \"...\")".to_string(),
+            })?;
+
+        let (content, inline_effects) = parse_inline_tags(raw_content);
+
+        Ok(Some(ScriptNode::Extend {
+            content,
+            inline_effects,
+            no_wait,
+        }))
+    }
+}
+
+/// 检测并剥离行尾 `-->` 修饰符
+fn strip_arrow_suffix(line: &str) -> (&str, bool) {
+    let trimmed = line.trim_end();
+    if let Some(before) = trimmed.strip_suffix("-->") {
+        (before, true)
+    } else {
+        (line, false)
     }
 }
 

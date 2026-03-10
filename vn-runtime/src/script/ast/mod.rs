@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::command::{Position, Transition};
+use crate::command::{InlineEffect, Position, Transition};
 use crate::script::Expr;
 
 /// 选择项（AST 级别）
@@ -55,12 +55,30 @@ pub enum ScriptNode {
 
     /// 对话
     ///
-    /// 对应 `角色名："对话内容"` 语法
+    /// 对应 `角色名："对话内容"` 语法。
+    /// 支持内联节奏标签（`{wait}`, `{speed}` 等）和行尾 `-->` 自动推进。
     Dialogue {
         /// 说话者名称（None 表示旁白）
         speaker: Option<String>,
-        /// 对话内容
+        /// 对话内容（纯文本，标签已剥离）
         content: String,
+        /// 内联效果列表（位置索引到纯文本字符位置）
+        inline_effects: Vec<InlineEffect>,
+        /// 是否自动推进（来自行尾 `-->` 修饰符）
+        no_wait: bool,
+    },
+
+    /// 台词续接（不清屏追加文本）
+    ///
+    /// 对应 `extend "追加文本"` 语法。
+    /// 继承上一行的 speaker，打字机从当前位置继续。
+    Extend {
+        /// 追加文本（纯文本，标签已剥离）
+        content: String,
+        /// 内联效果列表
+        inline_effects: Vec<InlineEffect>,
+        /// 是否自动推进
+        no_wait: bool,
     },
 
     /// 背景切换
@@ -249,6 +267,7 @@ impl ScriptNode {
         matches!(
             self,
             Self::Dialogue { .. }
+                | Self::Extend { .. }
                 | Self::Choice { .. }
                 | Self::Wait { .. }
                 | Self::Pause

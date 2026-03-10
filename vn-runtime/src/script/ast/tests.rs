@@ -5,6 +5,8 @@ fn test_script_node_causes_wait() {
     let dialogue = ScriptNode::Dialogue {
         speaker: Some("Test".to_string()),
         content: "Hello".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     };
     assert!(dialogue.causes_wait());
 
@@ -31,6 +33,8 @@ fn test_script_node_is_jump_target() {
     let dialogue = ScriptNode::Dialogue {
         speaker: None,
         content: "hi".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     };
     assert!(!dialogue.is_jump_target());
 }
@@ -44,6 +48,8 @@ fn test_script_label_index() {
         ScriptNode::Dialogue {
             speaker: None,
             content: "Hello".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
         },
         ScriptNode::Label {
             name: "end".to_string(),
@@ -62,6 +68,8 @@ fn test_script_get_node() {
     let nodes = vec![ScriptNode::Dialogue {
         speaker: None,
         content: "Test".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     }];
 
     let script = Script::new("test", nodes, "");
@@ -80,6 +88,8 @@ fn test_script_is_empty() {
         vec![ScriptNode::Dialogue {
             speaker: None,
             content: "x".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
         }],
         "",
     );

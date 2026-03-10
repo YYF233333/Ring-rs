@@ -8,10 +8,14 @@ fn create_test_script() -> Script {
             ScriptNode::Dialogue {
                 speaker: Some("Test".to_string()),
                 content: "Hello".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "World".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "",
@@ -38,7 +42,7 @@ fn test_runtime_tick_dialogue() {
     assert_eq!(commands.len(), 1);
     assert!(matches!(
         &commands[0],
-        Command::ShowText { speaker: Some(s), content }
+        Command::ShowText { speaker: Some(s), content, .. }
         if s == "Test" && content == "Hello"
     ));
     assert!(matches!(waiting, WaitingReason::WaitForClick));
@@ -49,7 +53,7 @@ fn test_runtime_tick_dialogue() {
     assert_eq!(commands.len(), 1);
     assert!(matches!(
         &commands[0],
-        Command::ShowText { speaker: None, content }
+        Command::ShowText { speaker: None, content, .. }
         if content == "World"
     ));
     assert!(matches!(waiting, WaitingReason::WaitForClick));
@@ -115,10 +119,14 @@ fn test_runtime_history_recording() {
             ScriptNode::Dialogue {
                 speaker: Some("角色".to_string()),
                 content: "你好".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "旁白".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "",
@@ -163,14 +171,20 @@ fn test_runtime_state_restore() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "1".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "2".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "3".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "",
@@ -208,6 +222,8 @@ fn test_runtime_with_goto() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "开始".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Goto {
                 target_label: "end".to_string(),
@@ -215,6 +231,8 @@ fn test_runtime_with_goto() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "这句不应该执行".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Label {
                 name: "end".to_string(),
@@ -222,6 +240,8 @@ fn test_runtime_with_goto() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "结束".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "",
@@ -268,6 +288,8 @@ fn test_runtime_with_choice() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "选了A".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Label {
                 name: "b".to_string(),
@@ -275,6 +297,8 @@ fn test_runtime_with_choice() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "选了B".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "",
@@ -357,6 +381,8 @@ fn test_choice_selected_label_not_found_error() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "不会执行".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "",
@@ -503,6 +529,8 @@ fn test_call_script_and_return_flow() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "主线继续".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "scripts/remake",
@@ -517,6 +545,8 @@ fn test_call_script_and_return_flow() {
             ScriptNode::Dialogue {
                 speaker: Some("子脚本".to_string()),
                 content: "子流程".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::ReturnFromScript,
         ],
@@ -535,7 +565,7 @@ fn test_call_script_and_return_flow() {
     assert_eq!(commands1.len(), 1);
     assert!(matches!(
         &commands1[0],
-        Command::ShowText { speaker: Some(s), content } if s == "子脚本" && content == "子流程"
+        Command::ShowText { speaker: Some(s), content, .. } if s == "子脚本" && content == "子流程"
     ));
     assert!(matches!(waiting1, WaitingReason::WaitForClick));
     assert_eq!(runtime.state().position.script_id, "child");
@@ -546,7 +576,7 @@ fn test_call_script_and_return_flow() {
     assert_eq!(commands2.len(), 1);
     assert!(matches!(
         &commands2[0],
-        Command::ShowText { speaker: None, content } if content == "主线继续"
+        Command::ShowText { speaker: None, content, .. } if content == "主线继续"
     ));
     assert!(matches!(waiting2, WaitingReason::WaitForClick));
     assert_eq!(runtime.state().position.script_id, "main");
@@ -585,6 +615,8 @@ fn test_call_script_auto_return_on_child_eof() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "主线恢复".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "scripts/remake",
@@ -599,6 +631,8 @@ fn test_call_script_auto_return_on_child_eof() {
             ScriptNode::Dialogue {
                 speaker: Some("子脚本".to_string()),
                 content: "子结尾自动返回".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "scripts/remake/ring",
@@ -615,7 +649,7 @@ fn test_call_script_auto_return_on_child_eof() {
     assert_eq!(commands1.len(), 1);
     assert!(matches!(
         &commands1[0],
-        Command::ShowText { speaker: Some(s), content } if s == "子脚本" && content == "子结尾自动返回"
+        Command::ShowText { speaker: Some(s), content, .. } if s == "子脚本" && content == "子结尾自动返回"
     ));
     assert!(matches!(waiting1, WaitingReason::WaitForClick));
 
@@ -624,7 +658,7 @@ fn test_call_script_auto_return_on_child_eof() {
     assert_eq!(commands2.len(), 1);
     assert!(matches!(
         &commands2[0],
-        Command::ShowText { speaker: None, content } if content == "主线恢复"
+        Command::ShowText { speaker: None, content, .. } if content == "主线恢复"
     ));
     assert!(matches!(waiting2, WaitingReason::WaitForClick));
     assert_eq!(runtime.state().position.script_id, "main");
@@ -647,6 +681,8 @@ fn test_call_script_label_is_display_only() {
             ScriptNode::Dialogue {
                 speaker: Some("子脚本".to_string()),
                 content: "从文件开头执行".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Label {
                 name: "entry".to_string(),
@@ -654,6 +690,8 @@ fn test_call_script_label_is_display_only() {
             ScriptNode::Dialogue {
                 speaker: Some("子脚本".to_string()),
                 content: "旧语义会先到这里".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
         ],
         "scripts/remake/ring",
@@ -673,7 +711,7 @@ fn test_call_script_label_is_display_only() {
     assert_eq!(commands.len(), 1);
     assert!(matches!(
         &commands[0],
-        Command::ShowText { speaker: Some(s), content } if s == "子脚本" && content == "从文件开头执行"
+        Command::ShowText { speaker: Some(s), content, .. } if s == "子脚本" && content == "从文件开头执行"
     ));
     assert!(matches!(waiting, WaitingReason::WaitForClick));
     assert_eq!(

@@ -117,7 +117,13 @@ pub fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
         return;
     }
 
-    // 如果对话正在打字，先完成打字
+    // 如果对话处于内联点击等待（{wait}），跳过当前等待点继续打字
+    if app_state.core.render_state.is_inline_click_wait() {
+        app_state.core.render_state.clear_inline_wait();
+        return;
+    }
+
+    // 如果对话正在打字（含定时内联等待），先完成打字
     if !app_state.core.render_state.is_dialogue_complete() {
         app_state.core.render_state.complete_typewriter();
         return;

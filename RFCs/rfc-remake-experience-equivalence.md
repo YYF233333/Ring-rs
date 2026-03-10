@@ -49,7 +49,21 @@
 - `pause` 指令全链路已完成（纯点击等待，复用 `WaitForClick`）。
 - `titleCard` 命令全链路已完成（全屏字卡 + 淡入淡出 + `WaitForSignal("title_card")`）。
 - 新增 13 个单元测试覆盖解析与执行。
-- **剩余缺口**：节奏标签 `{w}/{nw}/{cps}` 与 `extend` 台词续接未支持；镜头类高级效果（focusPush/panRight/pushIn 等）留待 P1-1。
+- **剩余缺口**：节奏标签与 `extend` 台词续接未支持；镜头类高级效果（focusPush/panRight/pushIn 等）留待 P1-1。
+
+### 0.4 阶段 3 对齐结论（2026-03-10）
+
+> 目标：节奏标签与 extend 台词续接。
+
+**本轮完成**（详见 `RFCs/rfc-rhythm-tags.md`）：
+
+- 节奏标签全链路（AST/Parser/Command/Executor/Host 打字机）已完成。
+  - 语义化语法：`{wait}`/`{wait Ns}` 内联等待、`-->` 行尾自动推进、`{speed N}`/`{speed Nx}`/`{/speed}` 字速控制。
+  - 内联标签解析器 `inline_tags.rs`（11 个单元测试），输出纯文本 + `Vec<InlineEffect>` 位置索引。
+  - Host 打字机扩展：inline_wait 状态、effective_cps 覆盖、no_wait 自动推进（Normal/Auto/Skip 三模式兼容）。
+  - 点击行为分级：inline 点击等待时跳过当前等待点（不完成全部文本）。
+- `extend` 台词续接全链路已完成（AST + Parser + Command + Executor + Host 打字机续接 + 历史追加）。
+- **剩余缺口**：镜头类高级效果留 P1-1；脚本内容迁移（.rpy -> .md 节奏标签适配）为独立任务。
 
 ---
 

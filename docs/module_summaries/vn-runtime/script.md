@@ -17,6 +17,8 @@
 3. `runtime/executor` 消费 `ScriptNode` 产生命令。
 4. 条件分支与变量赋值依赖 `expr` 求值器。
 5. 阶段 0 新增跨文件控制流节点：`CallScript`、`ReturnFromScript`。
+6. `ScriptNode::Dialogue` 扩展 `inline_effects`（内联标签）和 `no_wait`（自动推进）字段。
+7. 新增 `ScriptNode::Extend { content, inline_effects, no_wait }` 台词续接节点。
 
 ## Dependencies
 
@@ -46,7 +48,7 @@
 
 ## LastVerified
 
-2026-03-07
+2026-03-10
 
 ## Owner
 

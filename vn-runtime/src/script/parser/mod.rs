@@ -23,6 +23,7 @@
 
 mod expr_parser;
 mod helpers;
+pub(crate) mod inline_tags;
 mod phase1;
 mod phase2;
 

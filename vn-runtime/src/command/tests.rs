@@ -33,6 +33,8 @@ fn test_command_serialization() {
     let cmd = Command::ShowText {
         speaker: Some("羽艾".to_string()),
         content: "你好".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     };
 
     let json = serde_json::to_string(&cmd).unwrap();

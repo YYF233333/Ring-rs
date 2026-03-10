@@ -77,9 +77,23 @@ impl CommandExecutor {
             Command::HideCharacter { alias, transition } => {
                 self.execute_hide_character(alias, transition, render_state)
             }
-            Command::ShowText { speaker, content } => {
-                self.execute_show_text(speaker.clone(), content, render_state)
-            }
+            Command::ShowText {
+                speaker,
+                content,
+                inline_effects,
+                no_wait,
+            } => self.execute_show_text(
+                speaker.clone(),
+                content,
+                inline_effects.clone(),
+                *no_wait,
+                render_state,
+            ),
+            Command::ExtendText {
+                content,
+                inline_effects,
+                no_wait,
+            } => self.execute_extend_text(content, inline_effects.clone(), *no_wait, render_state),
             Command::PresentChoices { style, choices } => {
                 self.execute_present_choices(style.clone(), choices, render_state)
             }

@@ -245,14 +245,14 @@ fn test_parse_dialogue() {
     let script = parser.parse("test", chinese_dialogue).unwrap();
     assert!(matches!(
         &script.nodes[0],
-        ScriptNode::Dialogue { speaker: Some(s), content } if s == "羽艾" && content == "你好"
+        ScriptNode::Dialogue { speaker: Some(s), content, .. } if s == "羽艾" && content == "你好"
     ));
 
     // 英文冒号和引号
     let script = parser.parse("test", r#"Test: "Hello""#).unwrap();
     assert!(matches!(
         &script.nodes[0],
-        ScriptNode::Dialogue { speaker: Some(s), content } if s == "Test" && content == "Hello"
+        ScriptNode::Dialogue { speaker: Some(s), content, .. } if s == "Test" && content == "Hello"
     ));
 
     // 旁白
@@ -260,7 +260,7 @@ fn test_parse_dialogue() {
     let script = parser.parse("test", narration).unwrap();
     assert!(matches!(
         &script.nodes[0],
-        ScriptNode::Dialogue { speaker: None, content } if content == "这是旁白"
+        ScriptNode::Dialogue { speaker: None, content, .. } if content == "这是旁白"
     ));
 }
 
@@ -611,7 +611,7 @@ show <img src="assets/chara.png" style="zoom:25%;" /> as 红叶 at farleft with 
     // 验证对话
     assert!(matches!(
         &script.nodes[1],
-        ScriptNode::Dialogue { speaker: Some(s), content }
+        ScriptNode::Dialogue { speaker: Some(s), content, .. }
         if s == "角色名" && content == "台词"
     ));
 

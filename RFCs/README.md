@@ -7,8 +7,7 @@
 
 - 新提案：新增 `rfc-<topic>.md`，状态一般为 `Proposed` 或 `Draft`
 - 实施中：标记为 `Active`
-- 已落地：标记为 `Accepted`（必要时附实现链接）
-- 已废弃：标记为 `Superseded` 并给出替代 RFC
+- 已落地：标记为 `Accepted`
 - RFC 编号按“提出顺序”递增分配，格式为 `RFC-XXX`（三位数）
 
 ## 当前 RFC
@@ -20,3 +19,4 @@
 | RFC-003 | `show` 语义收敛与人体工学优先 | `rfc-show-unification-ergonomics.md` | Accepted |
 | RFC-004 | 扩展 API 与 Mod 化效果管理 | `rfc-extension-api-mod-effect-management.md` | Active |
 | RFC-005 | 对话内联差分语法 | `rfc-inline-sprite-in-dialogue.md` | Proposed |
+| RFC-006 | 节奏标签与 extend 台词续接 | `rfc-rhythm-tags.md` | Implemented |

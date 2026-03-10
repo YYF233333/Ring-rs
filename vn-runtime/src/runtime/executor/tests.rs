@@ -26,6 +26,8 @@ fn test_execute_dialogue() {
     let node = ScriptNode::Dialogue {
         speaker: Some("Test".to_string()),
         content: "Hello".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
     };
 
     let result = executor.execute(&node, &mut state, &script).unwrap();
@@ -33,7 +35,7 @@ fn test_execute_dialogue() {
     assert_eq!(result.commands.len(), 1);
     assert!(matches!(
         &result.commands[0],
-        Command::ShowText { speaker: Some(s), content }
+        Command::ShowText { speaker: Some(s), content, .. }
         if s == "Test" && content == "Hello"
     ));
     assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
@@ -182,6 +184,8 @@ fn test_execute_goto() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "Hello".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Label {
                 name: "end".to_string(),
@@ -288,6 +292,8 @@ fn test_execute_change_scene_resolves_mask_path() {
         extract_mask(&Command::ShowText {
             speaker: None,
             content: "x".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
         }),
         None
     );
@@ -471,6 +477,8 @@ fn test_execute_conditional_true_branch() {
             body: vec![ScriptNode::Dialogue {
                 speaker: None,
                 content: "条件为真".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             }],
         }],
     };
@@ -503,6 +511,8 @@ fn test_execute_conditional_false_branch() {
             body: vec![ScriptNode::Dialogue {
                 speaker: None,
                 content: "条件为真".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             }],
         }],
     };
@@ -532,6 +542,8 @@ fn test_execute_conditional_else_branch() {
                 body: vec![ScriptNode::Dialogue {
                     speaker: None,
                     content: "条件为真".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
                 }],
             },
             ConditionalBranch {
@@ -539,6 +551,8 @@ fn test_execute_conditional_else_branch() {
                 body: vec![ScriptNode::Dialogue {
                     speaker: None,
                     content: "条件为假".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
                 }],
             },
         ],
@@ -572,6 +586,8 @@ fn test_execute_conditional_elseif() {
                 body: vec![ScriptNode::Dialogue {
                     speaker: None,
                     content: "管理员".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
                 }],
             },
             ConditionalBranch {
@@ -579,6 +595,8 @@ fn test_execute_conditional_elseif() {
                 body: vec![ScriptNode::Dialogue {
                     speaker: None,
                     content: "用户".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
                 }],
             },
             ConditionalBranch {
@@ -586,6 +604,8 @@ fn test_execute_conditional_elseif() {
                 body: vec![ScriptNode::Dialogue {
                     speaker: None,
                     content: "访客".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
                 }],
             },
         ],
@@ -623,6 +643,8 @@ fn test_execute_conditional_with_multiple_body_nodes() {
                 ScriptNode::Dialogue {
                     speaker: Some("角色".to_string()),
                     content: "对话".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
                 },
             ],
         }],
@@ -717,6 +739,8 @@ fn test_execute_conditional_with_goto() {
             ScriptNode::Dialogue {
                 speaker: None,
                 content: "开始".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
             },
             ScriptNode::Label {
                 name: "end".to_string(),
@@ -736,6 +760,8 @@ fn test_execute_conditional_with_goto() {
                 ScriptNode::Dialogue {
                     speaker: None,
                     content: "不会执行".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
                 },
             ],
         }],

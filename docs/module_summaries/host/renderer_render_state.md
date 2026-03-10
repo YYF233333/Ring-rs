@@ -7,8 +7,8 @@
 ## PublicSurface
 
 - 模块入口：`host/src/renderer/render_state/mod.rs`
-- 核心类型：`RenderState`、`CharacterSprite`、`DialogueState`、`ChoicesState`、`ChoiceItem`
-- 关键接口：背景/角色/对话/选择状态读写与打字机推进方法
+- 核心类型：`RenderState`、`CharacterSprite`、`DialogueState`、`ChoicesState`、`ChoiceItem`、`InlineWait`、`EffectiveCps`
+- 关键接口：背景/角色/对话/选择状态读写、打字机推进方法、`extend_dialogue`（台词续接）、`effective_text_speed`（字速查询）
 
 ## KeyFlow
 
@@ -25,6 +25,9 @@
 
 - `RenderState` 只保存可渲染状态，不耦合输入或脚本执行器逻辑。
 - 打字机与章节标记状态推进必须可在帧级迭代。
+- `DialogueState` 扩展字段：`inline_effects`（位置索引内联效果）、`no_wait`（自动推进）、`inline_wait`（当前内联等待状态）、`effective_cps`（当前字速覆盖）。
+- `advance_typewriter` 在推进字符时自动检测并激活对应位置的 `InlineEffect`。
+- `extend_dialogue` 追加文本时自动偏移新增内联效果的位置索引。
 
 ## FailureModes
 
@@ -43,7 +46,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-10
 
 ## Owner
 

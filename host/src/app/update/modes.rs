@@ -138,13 +138,40 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     if let Some(ref dialogue) = app_state.core.render_state.dialogue
         && !dialogue.is_complete
     {
-        app_state.session.typewriter_timer += dt * app_state.user_settings.text_speed;
-        while app_state.session.typewriter_timer >= 1.0 {
-            app_state.session.typewriter_timer -= 1.0;
-            if app_state.core.render_state.advance_typewriter() {
-                break;
+        if app_state.core.render_state.has_inline_wait() {
+            // 内联等待中：如果是定时等待，递减计时器
+            app_state.core.render_state.update_inline_wait(dt);
+        } else {
+            // 正常推进：使用有效字速（可能被 {speed} 标签覆盖）
+            let effective_speed = app_state
+                .core
+                .render_state
+                .effective_text_speed(app_state.user_settings.text_speed);
+            app_state.session.typewriter_timer += dt * effective_speed;
+            while app_state.session.typewriter_timer >= 1.0 {
+                app_state.session.typewriter_timer -= 1.0;
+                if app_state.core.render_state.advance_typewriter() {
+                    break;
+                }
+                // 如果刚触发了内联等待，停止本帧的推进
+                if app_state.core.render_state.has_inline_wait() {
+                    break;
+                }
             }
         }
+    }
+
+    // --- 通用：no_wait 自动推进（对话完成后如果有 --> 修饰符，自动推进到下一条） ---
+    if app_state.session.waiting_reason == WaitingReason::WaitForClick
+        && app_state.core.render_state.is_dialogue_complete()
+        && app_state
+            .core
+            .render_state
+            .dialogue
+            .as_ref()
+            .is_some_and(|d| d.no_wait)
+    {
+        super::run_script_tick(app_state, Some(RuntimeInput::Click));
     }
 }
 

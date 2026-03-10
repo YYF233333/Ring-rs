@@ -382,9 +382,14 @@ impl VNRuntime {
     /// 根据 Command 记录历史事件
     fn record_history(&mut self, cmd: &Command) {
         match cmd {
-            Command::ShowText { speaker, content } => {
+            Command::ShowText {
+                speaker, content, ..
+            } => {
                 self.history
                     .push(HistoryEvent::dialogue(speaker.clone(), content.clone()));
+            }
+            Command::ExtendText { content, .. } => {
+                self.history.append_to_last_dialogue(content);
             }
             Command::ChapterMark { title, .. } => {
                 self.history.push(HistoryEvent::chapter_mark(title.clone()));
