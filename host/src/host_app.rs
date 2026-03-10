@@ -123,12 +123,13 @@ impl ApplicationHandler for HostApp {
 
                 let (w, h) = backend.size();
                 app_state.core.renderer.set_screen_size(w as f32, h as f32);
+                let mode_before_update = app_state.ui.navigation.current();
                 app::update(app_state, dt);
 
-                let current_mode = app_state.ui.navigation.current();
-
+                // Esc 返回：仅当更新前已处于菜单/子界面时才触发，
+                // 避免与 update_ingame 中 Esc 打开菜单在同一帧冲突。
                 if matches!(
-                    current_mode,
+                    mode_before_update,
                     AppMode::InGameMenu | AppMode::SaveLoad | AppMode::Settings | AppMode::History
                 ) && app_state.input_manager.is_key_just_pressed(KeyCode::Escape)
                 {
