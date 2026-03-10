@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`host` 是视觉小说引擎的宿主层：负责窗口与渲染、输入采集、音频播放、资源加载，以及把 `vn-runtime` 输出的 `Command` 落地为实际画面与交互效果。
+`host` 是视觉小说引擎的宿主层（winit + wgpu + egui）：负责窗口与渲染、输入采集、音频播放、资源加载，以及把 `vn-runtime` 输出的 `Command` 落地为实际画面与交互效果。
 
 ## PublicSurface
 
@@ -16,7 +16,7 @@
 2. 每帧 `app::update` 拉取输入、推进 `vn-runtime`、消费命令并驱动动画/过渡。
 3. `command_executor` 将 `Command` 转换为 `RenderState` 变更与外部副作用请求。
 4. `app/command_handlers` 消费副作用请求，驱动音频与效果应用器。
-5. `app::draw` 通过 `renderer` 把 `RenderState` 渲染到屏幕。
+5. `main.rs` 通过 `backend::WgpuBackend` 渲染 sprite 命令 + egui UI 到屏幕。
 
 ## Submodules
 
@@ -32,9 +32,9 @@
 - [renderer_scene_transition](host/renderer_scene_transition.md)：场景切换多阶段过渡
 - [resources](host/resources.md)：资源加载、缓存与路径解析
 - [audio](host/audio.md)：BGM/SFX 播放与淡入淡出
-- [input](host/input.md)：输入采集与 RuntimeInput 转换
-- [ui](host/ui.md)：UI 组件与 UI 上下文
-- [screens](host/screens.md)：页面层（Title/Settings/SaveLoad/History/Menu）
+- [input](host/input.md)：winit 事件驱动的输入采集与 RuntimeInput 转换
+- [ui](host/ui.md)：主题、Toast、UI 上下文（界面由 egui 在 main.rs 构建）
+- [backend](host/backend.md)：winit + wgpu + egui 渲染后端（SpriteRenderer / DissolveRenderer / GpuTexture）
 - [config](host/config.md)：运行配置加载、默认值与校验
 - [manifest](host/manifest.md)：立绘元数据与站位配置
 - [save_manager](host/save_manager.md)：槽位存档与 Continue 存档
@@ -68,7 +68,7 @@
 
 ## LastVerified
 
-2026-03-07
+2026-03-11
 
 ## Owner
 

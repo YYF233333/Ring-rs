@@ -2,52 +2,45 @@
 
 ## Purpose
 
-`ui` 提供可复用 UI 组件与共享 UI 上下文，支撑主菜单、设置、存档等页面的绘制与交互。
+`ui` 提供主题系统、Toast 通知和 UI 上下文等基础设施。界面渲染已迁移到 egui（在 `main.rs` 中构建）。
+旧的 macroquad UI 组件（button/list/modal/panel/slider/toggle/tab/scroll）已在 RFC-007 Phase 5 中移除。
 
 ## PublicSurface
 
 - 模块入口：`host/src/ui/mod.rs`
-- 核心类型：`UiContext`、`Theme`（阶段29新增 token 分层）
-- 组件子模块：`button`、`list`、`modal`、`panel`、`toast`
-- 阶段29新增：`slider`、`toggle`、`tab`、`scroll`
-- 阶段29新增：`theme_loader`（主题覆盖）、`skin`（皮肤协议加载）
+- 核心类型：`UiContext`、`Theme`（token 分层 + 自定义 `Color` 类型）、`ToastManager`
+- 子模块：`theme`、`theme_loader`、`toast`、`skin`
 
 ## KeyFlow
 
-1. `UiContext::update` 每帧刷新屏幕尺寸和鼠标状态。
-2. 启动时通过 `theme_loader` 加载默认主题 + 覆盖文件（缺失时回退默认主题并诊断）。
-3. 页面层（`screens`）读取上下文与组件 API 进行交互判定与绘制。
-4. Toast/Modal 等组件统一由 UI 上下文数据驱动；皮肤配置通过 `UiContext.skin` 可选注入。
+1. 启动时通过 `theme_loader` 加载默认主题 + 覆盖文件（缺失时回退默认主题并诊断）。
+2. `UiContext` 存储主题和屏幕尺寸，由 winit resize 事件更新。
+3. `ToastManager` 管理通知队列，每帧 `update(dt)` 推进计时和淡出。
+4. egui 界面代码在 `main.rs` 中通过 `build_toast_overlay` 渲染 Toast。
 
 ## Dependencies
 
-- 依赖 `macroquad` 进行基础绘制与输入读取
-- 被 `app` 与 `screens` 广泛消费
+- 不依赖外部渲染库（自定义 `Color` 类型替代 macroquad::Color）
+- 被 `app` 消费（UiContext / ToastManager 存储在 UiSystems 中）
 
 ## Invariants
 
-- `UiContext` 是页面层共享上下文，避免各页面重复维护输入状态。
-- 组件尽量保持纯视图与轻状态，页面负责业务编排。
-- 页面不应再内联实现通用控件（阶段29后 `slider/toggle/tab/scroll` 统一在 `ui` 层）。
-
-## FailureModes
-
-- 上下文未按帧更新导致点击/悬停判定滞后。
-- 组件样式与交互状态不一致导致 UI 反馈异常。
+- `UiContext` 屏幕尺寸由外部（winit）驱动，非自轮询。
+- Theme 的 `Color` 类型为 `ui::theme::Color`（RGBA f32），与 egui `Color32` 独立。
 
 ## WhenToReadSource
 
-- 需要新增通用 UI 组件或调整主题系统时。
-- 需要排查特定页面交互命中问题时。
+- 需要扩展主题 token 或新增 Toast 类型时。
+- 需要理解 egui 与 Theme 的映射关系时。
 
 ## RelatedDocs
 
 - [host 总览](../host.md)
-- [screens 摘要](screens.md)
+- [backend 摘要](backend.md)
 
 ## LastVerified
 
-2026-03-06
+2026-03-11
 
 ## Owner
 

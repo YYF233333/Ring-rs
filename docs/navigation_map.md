@@ -6,7 +6,7 @@
 ## 顶层概览（Workspace）
 
 - **`vn-runtime/`**：纯逻辑 Runtime（脚本解析/执行/状态/存档），**不依赖引擎与 IO**。
-- **`host/`**：macroquad 宿主（渲染/音频/输入/资源），把 Runtime 的 `Command` 转换为实际效果。
+- **`host/`**：winit + wgpu + egui 宿主（渲染/音频/输入/资源），把 Runtime 的 `Command` 转换为实际效果。
 - **`tools/xtask/`**：本地质量门禁与开发辅助命令（跨平台串行执行）。
 - **`tools/asset-packer/`**：资源打包工具（可选工作流）。
 - **`assets/`**：游戏资源（背景/立绘/脚本/音频/字体/manifest）。
@@ -78,7 +78,7 @@
 - 子模块：[audio](module_summaries/host/audio.md)
 - 子模块：[input](module_summaries/host/input.md)
 - 子模块：[ui](module_summaries/host/ui.md)
-- 子模块：[screens](module_summaries/host/screens.md)
+- 子模块：[backend](module_summaries/host/backend.md)
 - 子模块：[config](module_summaries/host/config.md)
 - 子模块：[manifest](module_summaries/host/manifest.md)
 - 子模块：[save_manager](module_summaries/host/save_manager.md)
@@ -110,16 +110,20 @@
 > - `command_executor` 更偏“把 Command 翻译成**状态变更 + 需要外部系统执行的输出**”
 > - `app/command_handlers` 更偏“消费输出，驱动**音频/过渡/动画系统**做事”
 
-### 渲染/资源/音频/UI/屏幕
+### 渲染后端 / 资源 / 音频 / UI
 
-- **渲染系统**：`host/src/renderer/`
+- **GPU 后端（winit + wgpu + egui）**：`host/src/backend/`
+  - **WgpuBackend**：窗口/GPU 初始化、帧渲染循环、egui 集成
+  - **SpriteRenderer**：2D textured quad batch 渲染器（WGSL shader）
+  - **DissolveRenderer**：mask-based dissolve 效果渲染器（WGSL shader）
+  - **GpuTexture**：wgpu 纹理封装（Arc-wrapped）
+- **渲染逻辑**：`host/src/renderer/`
   - **统一效果解析与请求**：`host/src/renderer/effects/`（EffectKind、ResolvedEffect、resolve()、EffectRequest、EffectTarget）
   - **动画系统**：`host/src/renderer/animation/`（AnimationSystem、Animatable trait）
-- **资源管理**：`host/src/resources/`（路径、来源、缓存、错误）
+- **资源管理**：`host/src/resources/`（路径、来源、缓存、GpuResourceContext）
 - **音频系统**：`host/src/audio/`
-- **屏幕（UI 页面）**：`host/src/screens/`（title/settings/save_load/history…）
-- **UI 组件**：`host/src/ui/`（button/list/modal/panel/theme/toast）
-- **输入**：`host/src/input/`
+- **UI 基础设施**：`host/src/ui/`（theme/toast/skin；界面渲染由 egui 在 main.rs 中构建）
+- **输入（winit 事件驱动）**：`host/src/input/`
 - **配置/manifest/save manager**：`host/src/config/`、`host/src/manifest/`、`host/src/save_manager/`
 
 ### 常见改动：节奏标签 / 打字机行为
@@ -158,7 +162,7 @@
 
 - **想加/改脚本语法** → [script_syntax_spec.md](script_syntax_spec.md) + `vn-runtime/src/script/*`
 - **想加一个新 Command** → `vn-runtime/src/command.rs` + `host/src/command_executor/*`
-- **想改 UI 页面** → `host/src/screens/*` + `host/src/ui/*`
+- **想改 UI 页面** → `host/src/main.rs`（egui screen builders）+ `host/src/ui/*`
 - **想改资源路径解析/打包/缓存** → `host/src/resources/*` + [resource_management.md](resource_management.md)
 - **想改存档/兼容** → `vn-runtime/src/save.rs` + `host/src/app/save.rs` + [save_format.md](save_format.md)
 

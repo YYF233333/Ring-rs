@@ -6,7 +6,6 @@ members = [
     "host",
     "tools/asset-packer",
     "tools/xtask",
-    "tools/rendering-poc",
 ]
 
 default-members = ["host"]
