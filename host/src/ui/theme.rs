@@ -2,7 +2,7 @@
 //!
 //! 定义 UI 的颜色、字体大小、间距等样式。
 
-/// RGBA 颜色（替代 macroquad::Color）
+/// RGBA 颜色
 #[derive(Debug, Clone, Copy)]
 pub struct Color {
     pub r: f32,

@@ -1,7 +1,6 @@
 //! # UI 组件模块
 //!
 //! 提供主题、Toast 和 UI 上下文等基础设施。
-//! 旧的 macroquad UI 组件已移除，界面渲染由 egui 接管。
 
 pub mod skin;
 pub mod theme;

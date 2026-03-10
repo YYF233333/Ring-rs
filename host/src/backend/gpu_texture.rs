@@ -1,6 +1,6 @@
 //! GPU 纹理类型
 //!
-//! 封装 wgpu 纹理 + 视图 + 绑定组，替代 macroquad 的 `Texture2D`。
+//! 封装 wgpu 纹理 + 视图 + 绑定组。
 
 use std::sync::Arc;
 
@@ -9,8 +9,10 @@ use std::sync::Arc;
 /// 包含 wgpu 纹理及其关联的视图和绑定组。
 /// 通过 `Arc<GpuTexture>` 在缓存和渲染系统间共享。
 pub struct GpuTexture {
+    /// 底层 wgpu 纹理句柄（视频帧注入等场景需要 `queue.write_texture` 访问）
     #[allow(dead_code)]
     pub(crate) texture: wgpu::Texture,
+    /// 纹理视图（用于绑定到渲染管线）
     #[allow(dead_code)]
     pub(crate) view: wgpu::TextureView,
     pub(crate) bind_group: wgpu::BindGroup,

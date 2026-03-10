@@ -217,20 +217,12 @@ impl InputManager {
     // ── 按键查询 ─────────────────────────────────────────────────────
 
     /// 检查指定按键是否在本帧刚被按下
-    pub fn is_key_just_pressed_pub(&self, key: KeyCode) -> bool {
+    pub fn is_key_just_pressed(&self, key: KeyCode) -> bool {
         self.just_pressed_keys.contains(&key)
     }
 
     /// 检查指定按键是否正在被按住
-    pub fn is_key_down_pub(&self, key: KeyCode) -> bool {
-        self.pressed_keys.contains(&key)
-    }
-
-    fn is_key_just_pressed(&self, key: KeyCode) -> bool {
-        self.just_pressed_keys.contains(&key)
-    }
-
-    fn is_key_down(&self, key: KeyCode) -> bool {
+    pub fn is_key_down(&self, key: KeyCode) -> bool {
         self.pressed_keys.contains(&key)
     }
 

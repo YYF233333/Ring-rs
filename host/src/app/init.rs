@@ -51,27 +51,16 @@ pub fn create_resource_manager(config: &AppConfig) -> ResourceManager {
 pub fn create_audio_manager(config: &AppConfig) -> Option<AudioManager> {
     let assets_root = assets_root_string(config);
 
-    match config.asset_source {
-        AssetSourceType::Fs => match AudioManager::new(&assets_root) {
-            Ok(am) => {
-                info!("音频系统初始化成功");
-                Some(am)
-            }
-            Err(e) => {
-                warn!(error = %e, "音频系统初始化失败");
-                None
-            }
-        },
-        AssetSourceType::Zip => match AudioManager::new_zip_mode(&assets_root) {
-            Ok(am) => {
-                info!("音频系统初始化成功 (ZIP 模式)");
-                Some(am)
-            }
-            Err(e) => {
-                warn!(error = %e, "音频系统初始化失败");
-                None
-            }
-        },
+    let use_zip = matches!(config.asset_source, AssetSourceType::Zip);
+    match AudioManager::new(&assets_root, use_zip) {
+        Ok(am) => {
+            info!(zip_mode = use_zip, "Audio system initialized");
+            Some(am)
+        }
+        Err(e) => {
+            warn!(error = %e, "Audio system initialization failed");
+            None
+        }
     }
 }
 

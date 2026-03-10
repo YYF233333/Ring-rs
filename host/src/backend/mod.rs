@@ -4,12 +4,15 @@
 //!
 //! ## 架构
 //!
-//! - [`WgpuBackend`]: GPU 初始化、窗口管理、egui 集成、帧渲染循环
-//! - [`SpriteRenderer`]: 2D textured quad batch 渲染器（背景/角色/遮罩）
-//! - [`GpuTexture`]: wgpu 纹理封装（替代 macroquad Texture2D）
+//! - `WgpuBackend`: 渲染后端门面，编排帧渲染流程
+//! - `GpuContext`: GPU 设备、队列、表面管理
+//! - `EguiIntegration`: egui 输入/输出/渲染桥接
+//! - `SpriteRenderer`: 2D textured quad batch 渲染器
+//! - `GpuTexture`: wgpu 纹理封装
 
 pub mod dissolve_renderer;
 pub mod gpu_texture;
+pub mod math;
 pub mod sprite_renderer;
 
 pub use gpu_texture::GpuTexture;
@@ -21,45 +24,27 @@ use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
-/// wgpu + egui 渲染后端
-///
-/// 封装了 GPU 设备、表面、渲染管线和 egui 集成。
-/// 提供帧渲染 API，支持自定义 wgpu 渲染与 egui UI 叠加。
-pub struct WgpuBackend {
-    window: Arc<Window>,
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+// ── GpuContext ────────────────────────────────────────────────────────────────
+
+/// GPU 设备、队列与渲染表面
+pub struct GpuContext {
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
     surface: wgpu::Surface<'static>,
     surface_cfg: wgpu::SurfaceConfiguration,
-
-    sprite_renderer: Arc<SpriteRenderer>,
-    dissolve_renderer: dissolve_renderer::DissolveRenderer,
-
-    egui_ctx: egui::Context,
-    egui_state: egui_winit::State,
-    egui_renderer: egui_wgpu::Renderer,
-
-    frame_start: std::time::Instant,
-    frame_delta: f32,
 }
 
-impl WgpuBackend {
-    /// 初始化渲染后端
-    ///
-    /// # 参数
-    /// - `window`: 已创建的 winit 窗口
-    /// - `font_data`: CJK 字体数据（如 simhei.ttf），用于 egui 中文渲染
-    pub fn new(window: Arc<Window>, font_data: Option<Vec<u8>>) -> Self {
+impl GpuContext {
+    fn new(window: &Arc<Window>) -> Self {
         let size = window.inner_size();
-
-        // wgpu 初始化
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let surface = instance.create_surface(window.clone()).unwrap();
+
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             compatible_surface: Some(&surface),
             ..Default::default()
         }))
-        .expect("no suitable GPU adapter found");
+        .expect("[GpuContext] no suitable GPU adapter found");
 
         info!(
             adapter = %adapter.get_info().name,
@@ -68,64 +53,88 @@ impl WgpuBackend {
         );
 
         let (device, queue) = pollster::block_on(adapter.request_device(&Default::default(), None))
-            .expect("GPU device creation failed");
+            .expect("[GpuContext] GPU device creation failed");
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
         let surface_cfg = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
-            .expect("surface format unsupported");
+            .expect("[GpuContext] surface format unsupported");
         surface.configure(&device, &surface_cfg);
 
-        // Sprite 渲染器
-        let sprite_renderer = Arc::new(SpriteRenderer::new(&device, &queue, surface_cfg.format));
-        sprite_renderer.update_projection(&queue, size.width as f32, size.height as f32);
-
-        let dissolve_renderer = dissolve_renderer::DissolveRenderer::new(
-            &device,
-            surface_cfg.format,
-            &sprite_renderer.texture_bind_group_layout,
-        );
-
-        // egui 初始化
-        let egui_ctx = egui::Context::default();
-        Self::configure_egui_fonts(&egui_ctx, font_data);
-
-        let egui_state = egui_winit::State::new(
-            egui_ctx.clone(),
-            egui_ctx.viewport_id(),
-            &window,
-            None,
-            None,
-            None,
-        );
-        let egui_renderer = egui_wgpu::Renderer::new(&device, surface_cfg.format, None, 1, false);
-
-        info!(
-            width = size.width,
-            height = size.height,
-            format = ?surface_cfg.format,
-            "WgpuBackend initialized"
-        );
-
         Self {
-            window,
             device,
             queue,
             surface,
             surface_cfg,
-            sprite_renderer,
-            dissolve_renderer,
-            egui_ctx,
-            egui_state,
-            egui_renderer,
-            frame_start: std::time::Instant::now(),
-            frame_delta: 0.0,
         }
     }
 
-    /// 配置 egui 字体（加入 CJK 字体支持）
-    fn configure_egui_fonts(ctx: &egui::Context, font_data: Option<Vec<u8>>) {
+    /// 当前表面尺寸（物理像素）
+    pub fn size(&self) -> (u32, u32) {
+        (self.surface_cfg.width, self.surface_cfg.height)
+    }
+
+    /// 表面纹理格式
+    pub fn surface_format(&self) -> wgpu::TextureFormat {
+        self.surface_cfg.format
+    }
+
+    /// 处理窗口大小变更
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.surface_cfg.width = new_size.width;
+            self.surface_cfg.height = new_size.height;
+            self.surface.configure(&self.device, &self.surface_cfg);
+        }
+    }
+
+    fn acquire_frame(&mut self) -> Option<(wgpu::SurfaceTexture, wgpu::TextureView)> {
+        match self.surface.get_current_texture() {
+            Ok(frame) => {
+                let view = frame.texture.create_view(&Default::default());
+                Some((frame, view))
+            }
+            Err(e) => {
+                warn!("Surface texture acquisition failed: {e}, reconfiguring");
+                self.surface.configure(&self.device, &self.surface_cfg);
+                None
+            }
+        }
+    }
+}
+
+// ── EguiIntegration ──────────────────────────────────────────────────────────
+
+/// egui 集成层（输入桥接 + UI 渲染）
+pub struct EguiIntegration {
+    pub ctx: egui::Context,
+    state: egui_winit::State,
+    renderer: egui_wgpu::Renderer,
+}
+
+impl EguiIntegration {
+    fn new(
+        window: &Window,
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        font_data: Option<Vec<u8>>,
+    ) -> Self {
+        let ctx = egui::Context::default();
+        Self::configure_fonts(&ctx, font_data);
+
+        let state =
+            egui_winit::State::new(ctx.clone(), ctx.viewport_id(), window, None, None, None);
+        let renderer = egui_wgpu::Renderer::new(device, surface_format, None, 1, false);
+
+        Self {
+            ctx,
+            state,
+            renderer,
+        }
+    }
+
+    fn configure_fonts(ctx: &egui::Context, font_data: Option<Vec<u8>>) {
         let Some(data) = font_data else {
             warn!("No CJK font data provided; Chinese text will render as tofu");
             return;
@@ -148,6 +157,73 @@ impl WgpuBackend {
         ctx.set_fonts(fonts);
     }
 
+    /// 将 winit 窗口事件传递给 egui，返回是否已消费
+    pub fn handle_window_event(&mut self, window: &Window, event: &WindowEvent) -> bool {
+        self.state.on_window_event(window, event).consumed
+    }
+
+    /// 处理 egui 平台输出（光标、IME 等）
+    fn handle_platform_output(&mut self, window: &Window, output: egui::PlatformOutput) {
+        self.state.handle_platform_output(window, output);
+    }
+}
+
+// ── WgpuBackend ──────────────────────────────────────────────────────────────
+
+/// wgpu + egui 渲染后端
+///
+/// 组合 [`GpuContext`] 和 [`EguiIntegration`]，编排帧渲染流程。
+pub struct WgpuBackend {
+    window: Arc<Window>,
+    pub gpu: GpuContext,
+    pub egui: EguiIntegration,
+
+    sprite_renderer: Arc<SpriteRenderer>,
+    dissolve_renderer: dissolve_renderer::DissolveRenderer,
+
+    frame_start: std::time::Instant,
+    frame_delta: f32,
+}
+
+impl WgpuBackend {
+    /// 初始化渲染后端
+    pub fn new(window: Arc<Window>, font_data: Option<Vec<u8>>) -> Self {
+        let gpu = GpuContext::new(&window);
+
+        let sprite_renderer = Arc::new(SpriteRenderer::new(
+            &gpu.device,
+            &gpu.queue,
+            gpu.surface_format(),
+        ));
+        let (w, h) = gpu.size();
+        sprite_renderer.update_projection(&gpu.queue, w as f32, h as f32);
+
+        let dissolve_renderer = dissolve_renderer::DissolveRenderer::new(
+            &gpu.device,
+            gpu.surface_format(),
+            &sprite_renderer.texture_bind_group_layout,
+        );
+
+        let egui = EguiIntegration::new(&window, &gpu.device, gpu.surface_format(), font_data);
+
+        info!(
+            width = w,
+            height = h,
+            format = ?gpu.surface_format(),
+            "WgpuBackend initialized"
+        );
+
+        Self {
+            window,
+            gpu,
+            egui,
+            sprite_renderer,
+            dissolve_renderer,
+            frame_start: std::time::Instant::now(),
+            frame_delta: 0.0,
+        }
+    }
+
     // ── 访问器 ──────────────────────────────────────────────────────────────
 
     pub fn window(&self) -> &Window {
@@ -155,20 +231,20 @@ impl WgpuBackend {
     }
 
     pub fn device(&self) -> &wgpu::Device {
-        &self.device
+        &self.gpu.device
     }
 
     pub fn queue(&self) -> &wgpu::Queue {
-        &self.queue
+        &self.gpu.queue
     }
 
     pub fn surface_format(&self) -> wgpu::TextureFormat {
-        self.surface_cfg.format
+        self.gpu.surface_format()
     }
 
     /// 当前窗口尺寸（物理像素）
     pub fn size(&self) -> (u32, u32) {
-        (self.surface_cfg.width, self.surface_cfg.height)
+        self.gpu.size()
     }
 
     pub fn scale_factor(&self) -> f32 {
@@ -181,7 +257,7 @@ impl WgpuBackend {
     }
 
     pub fn egui_ctx(&self) -> &egui::Context {
-        &self.egui_ctx
+        &self.egui.ctx
     }
 
     pub fn sprite_renderer(&self) -> &SpriteRenderer {
@@ -195,8 +271,8 @@ impl WgpuBackend {
     /// 创建 GPU 资源上下文（注入到 ResourceManager 中）
     pub fn gpu_resource_context(&self) -> crate::resources::GpuResourceContext {
         crate::resources::GpuResourceContext {
-            device: Arc::clone(&self.device),
-            queue: Arc::clone(&self.queue),
+            device: Arc::clone(&self.gpu.device),
+            queue: Arc::clone(&self.gpu.queue),
             sprite_renderer: Arc::clone(&self.sprite_renderer),
         }
     }
@@ -212,8 +288,8 @@ impl WgpuBackend {
         label: Option<&str>,
     ) -> Arc<GpuTexture> {
         self.sprite_renderer.create_texture(
-            &self.device,
-            &self.queue,
+            &self.gpu.device,
+            &self.gpu.queue,
             width,
             height,
             rgba_data,
@@ -223,23 +299,17 @@ impl WgpuBackend {
 
     // ── 事件处理 ─────────────────────────────────────────────────────────────
 
-    /// 将 winit 窗口事件传递给 egui。
-    ///
-    /// 返回 `true` 表示 egui 消费了该事件。
+    /// 将 winit 窗口事件传递给 egui，返回是否已消费
     pub fn handle_window_event(&mut self, event: &WindowEvent) -> bool {
-        self.egui_state
-            .on_window_event(&self.window, event)
-            .consumed
+        self.egui.handle_window_event(&self.window, event)
     }
 
     /// 处理窗口大小变更
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.gpu.resize(new_size);
         if new_size.width > 0 && new_size.height > 0 {
-            self.surface_cfg.width = new_size.width;
-            self.surface_cfg.height = new_size.height;
-            self.surface.configure(&self.device, &self.surface_cfg);
             self.sprite_renderer.update_projection(
-                &self.queue,
+                &self.gpu.queue,
                 new_size.width as f32,
                 new_size.height as f32,
             );
@@ -250,56 +320,44 @@ impl WgpuBackend {
 
     /// 渲染一帧
     ///
-    /// # 参数
-    /// - `build_ui`: 构建 egui UI 的闭包
-    /// - `sprite_commands`: 自定义 sprite 绘制命令（背景/角色/遮罩）
-    ///
-    /// 渲染顺序：
-    /// 1. Clear → sprite 绘制（背景/角色/遮罩）
-    /// 2. egui UI 叠加层
+    /// 渲染顺序：Clear -> sprite 绘制 -> dissolve 效果 -> egui UI 叠加
     pub fn render_frame(
         &mut self,
         build_ui: impl FnMut(&egui::Context),
         sprite_commands: &[DrawCommand],
     ) {
-        // 更新帧时间
         let now = std::time::Instant::now();
         self.frame_delta = now.duration_since(self.frame_start).as_secs_f32();
         self.frame_start = now;
 
-        // 获取 surface 纹理
-        let frame = match self.surface.get_current_texture() {
-            Ok(f) => f,
-            Err(_) => {
-                self.surface.configure(&self.device, &self.surface_cfg);
-                return;
-            }
+        let Some((frame, target_view)) = self.gpu.acquire_frame() else {
+            return;
         };
-        let target_view = frame.texture.create_view(&Default::default());
 
-        // egui: 采集输入 → 构建 UI → 输出
-        let raw_input = self.egui_state.take_egui_input(&self.window);
-        let full_output = self.egui_ctx.run(raw_input, build_ui);
+        // egui: 采集输入 -> 构建 UI -> 输出
+        let raw_input = self.egui.state.take_egui_input(&self.window);
+        let full_output = self.egui.ctx.run(raw_input, build_ui);
 
-        // egui: 纹理更新 + tessellation
         let screen = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [self.surface_cfg.width, self.surface_cfg.height],
+            size_in_pixels: [self.gpu.surface_cfg.width, self.gpu.surface_cfg.height],
             pixels_per_point: self.window.scale_factor() as f32,
         };
         let primitives = self
-            .egui_ctx
+            .egui
+            .ctx
             .tessellate(full_output.shapes, full_output.pixels_per_point);
 
         for (id, delta) in &full_output.textures_delta.set {
-            self.egui_renderer
-                .update_texture(&self.device, &self.queue, *id, delta);
+            self.egui
+                .renderer
+                .update_texture(&self.gpu.device, &self.gpu.queue, *id, delta);
         }
 
         // GPU 命令编码
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-        self.egui_renderer.update_buffers(
-            &self.device,
-            &self.queue,
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        self.egui.renderer.update_buffers(
+            &self.gpu.device,
+            &self.gpu.queue,
             &mut encoder,
             &primitives,
             &screen,
@@ -319,13 +377,10 @@ impl WgpuBackend {
             });
             let mut rpass = rpass.forget_lifetime();
 
-            // 1) Sprite 渲染（背景/角色/遮罩等，跳过 Dissolve 命令）
             self.sprite_renderer
-                .draw_sprites(&self.queue, &mut rpass, sprite_commands);
+                .draw_sprites(&self.gpu.queue, &mut rpass, sprite_commands);
 
-            // 2) Dissolve 叠加（遮罩溶解效果）
-            let sw = self.surface_cfg.width as f32;
-            let sh = self.surface_cfg.height as f32;
+            let (sw, sh) = self.gpu.size();
             for cmd in sprite_commands {
                 if let DrawCommand::Dissolve {
                     mask_texture,
@@ -340,11 +395,11 @@ impl WgpuBackend {
                 } = cmd
                 {
                     self.dissolve_renderer.draw(
-                        &self.queue,
+                        &self.gpu.queue,
                         &mut rpass,
                         mask_texture,
-                        sw,
-                        sh,
+                        sw as f32,
+                        sh as f32,
                         *progress,
                         *ramp,
                         *reversed,
@@ -357,18 +412,16 @@ impl WgpuBackend {
                 }
             }
 
-            // 3) egui UI 叠加
-            self.egui_renderer.render(&mut rpass, &primitives, &screen);
+            self.egui.renderer.render(&mut rpass, &primitives, &screen);
         }
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
 
-        // egui: 清理
         for id in &full_output.textures_delta.free {
-            self.egui_renderer.free_texture(id);
+            self.egui.renderer.free_texture(id);
         }
-        self.egui_state
+        self.egui
             .handle_platform_output(&self.window, full_output.platform_output);
     }
 }

@@ -15,6 +15,18 @@ use crate::manifest::Manifest;
 use crate::resources::ResourceManager;
 use vn_runtime::command::Position;
 
+// ── 渲染常量 ────────────────────────────────────────────────────────────────
+
+/// 场景效果（dim/blur）可见性阈值
+const EFFECT_THRESHOLD: f32 = 0.01;
+/// 模糊近似系数：blur_amount * 此值 = 叠加 alpha
+const BLUR_APPROX_FACTOR: f32 = 0.3;
+/// 震动效果频率（弧度/秒）
+const SHAKE_FREQUENCY: f32 = 30.0;
+/// 默认设计分辨率
+const DEFAULT_DESIGN_WIDTH: f32 = 1920.0;
+const DEFAULT_DESIGN_HEIGHT: f32 = 1080.0;
+
 pub mod animation;
 pub mod background_transition;
 pub mod character_animation;
@@ -163,7 +175,7 @@ impl Renderer {
         );
 
         // 场景效果：暗化遮罩
-        if state.scene_effect.dim_level > 0.01 {
+        if state.scene_effect.dim_level > EFFECT_THRESHOLD {
             let alpha = state.scene_effect.dim_level.clamp(0.0, 1.0);
             commands.push(DrawCommand::Rect {
                 x: 0.0,
@@ -175,8 +187,9 @@ impl Renderer {
         }
 
         // 场景效果：模糊近似（半透明白色叠加模拟）
-        if state.scene_effect.blur_amount > 0.01 {
-            let alpha = (state.scene_effect.blur_amount * 0.3).clamp(0.0, 0.3);
+        if state.scene_effect.blur_amount > EFFECT_THRESHOLD {
+            let alpha = (state.scene_effect.blur_amount * BLUR_APPROX_FACTOR)
+                .clamp(0.0, BLUR_APPROX_FACTOR);
             commands.push(DrawCommand::Rect {
                 x: 0.0,
                 y: 0.0,
@@ -229,7 +242,7 @@ impl Renderer {
             } else {
                 let progress = self.shake.elapsed / self.shake.duration;
                 let decay = 1.0 - progress;
-                let t = self.shake.elapsed * 30.0;
+                let t = self.shake.elapsed * SHAKE_FREQUENCY;
                 scene_effect.shake_offset_x = t.sin() * self.shake.amplitude_x * decay;
                 scene_effect.shake_offset_y = (t * 1.3).cos() * self.shake.amplitude_y * decay;
                 any_active = true;
@@ -441,7 +454,7 @@ impl Renderer {
         for (_alias, character) in characters {
             if let Some(texture) = resource_manager.peek_texture(&character.texture_path) {
                 let group_config = manifest.get_group_config(&character.texture_path);
-                let position_name = Self::position_to_preset_name(character.position);
+                let position_name = position_to_preset_name(character.position);
                 let preset = manifest.get_preset(position_name);
 
                 let alpha = character.anim.alpha();
@@ -563,10 +576,6 @@ impl Renderer {
         }
     }
 
-    fn position_to_preset_name(position: Position) -> &'static str {
-        position_to_preset_name(position)
-    }
-
     fn get_scale_factor(&self) -> f32 {
         let scale_x = self.screen_width / self.design_width;
         let scale_y = self.screen_height / self.design_height;
@@ -630,6 +639,6 @@ pub enum DrawMode {
 
 impl Default for Renderer {
     fn default() -> Self {
-        Self::new(1920.0, 1080.0)
+        Self::new(DEFAULT_DESIGN_WIDTH, DEFAULT_DESIGN_HEIGHT)
     }
 }

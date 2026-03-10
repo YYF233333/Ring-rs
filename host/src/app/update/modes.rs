@@ -1,8 +1,7 @@
 //! 各 AppMode 的更新逻辑
 //!
-//! Phase 5: 旧 macroquad screen 已移除。
 //! Title / InGameMenu / SaveLoad / Settings / History 的 UI 交互
-//! 由 main.rs 中的 egui 层处理；此处仅保留 InGame 的游戏逻辑。
+//! 由 egui 层处理；此处仅保留 InGame 的游戏逻辑。
 
 use tracing::debug;
 use vn_runtime::input::RuntimeInput;
@@ -20,10 +19,7 @@ pub(super) fn update_title(_app_state: &mut AppState) {}
 /// 更新游戏进行中
 pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     // ESC 打开系统菜单（同时退出 Auto/Skip 模式）
-    if app_state
-        .input_manager
-        .is_key_just_pressed_pub(KeyCode::Escape)
-    {
+    if app_state.input_manager.is_key_just_pressed(KeyCode::Escape) {
         app_state.session.playback_mode = PlaybackMode::Normal;
         app_state.session.auto_timer = 0.0;
         app_state.ui.navigation.navigate_to(AppMode::InGameMenu);
@@ -32,10 +28,10 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
 
     #[cfg(debug_assertions)]
     {
-        if app_state.input_manager.is_key_just_pressed_pub(KeyCode::F5) {
+        if app_state.input_manager.is_key_just_pressed(KeyCode::F5) {
             quick_save(app_state);
         }
-        if app_state.input_manager.is_key_just_pressed_pub(KeyCode::F9) {
+        if app_state.input_manager.is_key_just_pressed(KeyCode::F9) {
             quick_load(app_state);
         }
     }
@@ -43,10 +39,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     // --- 播放推进模式检测 ---
 
     // A 键切换 Auto 模式
-    if app_state
-        .input_manager
-        .is_key_just_pressed_pub(KeyCode::KeyA)
-    {
+    if app_state.input_manager.is_key_just_pressed(KeyCode::KeyA) {
         app_state.session.playback_mode = match app_state.session.playback_mode {
             PlaybackMode::Normal => {
                 debug!("切换到 Auto 模式");
@@ -62,12 +55,8 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     }
 
     // Ctrl 按住 -> 临时 Skip 模式（松开恢复）
-    let ctrl_held = app_state
-        .input_manager
-        .is_key_down_pub(KeyCode::ControlLeft)
-        || app_state
-            .input_manager
-            .is_key_down_pub(KeyCode::ControlRight);
+    let ctrl_held = app_state.input_manager.is_key_down(KeyCode::ControlLeft)
+        || app_state.input_manager.is_key_down(KeyCode::ControlRight);
     let effective_mode = if ctrl_held {
         PlaybackMode::Skip
     } else {

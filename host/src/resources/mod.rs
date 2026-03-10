@@ -195,9 +195,12 @@ impl ResourceManager {
             }
         };
 
-        let gpu = self.gpu.as_ref().expect(
-            "GPU context not set on ResourceManager. Call set_gpu_context() after WgpuBackend init.",
-        );
+        let gpu = self.gpu.as_ref().ok_or_else(|| ResourceError::LoadFailed {
+            path: full_path.clone(),
+            kind: "texture".to_string(),
+            message: "GPU context not set. Call set_gpu_context() after WgpuBackend init."
+                .to_string(),
+        })?;
 
         let texture = load_texture_from_bytes(
             &bytes,

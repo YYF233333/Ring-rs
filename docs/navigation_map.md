@@ -85,7 +85,10 @@
 
 ### 应用层（App：生命周期/主循环胶水）
 
-- **入口（尽量薄）**：`host/src/main.rs`
+- **入口（尽量薄）**：`host/src/main.rs`（仅 `main()` + 配置 + EventLoop 启动）
+- **HostApp（ApplicationHandler）**：`host/src/host_app.rs`（窗口生命周期、事件分发）
+- **EguiAction（UI 动作枚举）**：`host/src/egui_actions.rs`
+- **egui 页面构建**：`host/src/egui_screens/`（title/ingame/settings/save_load/history/toast/helpers）
 - **AppState 与组装**：`host/src/app/mod.rs`
 - **启动引导（资源预加载/按需加载扫描）**：`host/src/app/bootstrap.rs`
 - **初始化拆分（资源/音频/manifest/脚本/设置等）**：`host/src/app/init.rs`
@@ -113,16 +116,19 @@
 ### 渲染后端 / 资源 / 音频 / UI
 
 - **GPU 后端（winit + wgpu + egui）**：`host/src/backend/`
-  - **WgpuBackend**：窗口/GPU 初始化、帧渲染循环、egui 集成
+  - **WgpuBackend**：渲染后端门面，编排帧渲染流程
+  - **GpuContext**：GPU 设备/队列/表面管理
+  - **EguiIntegration**：egui 输入/输出/渲染桥接
   - **SpriteRenderer**：2D textured quad batch 渲染器（WGSL shader）
   - **DissolveRenderer**：mask-based dissolve 效果渲染器（WGSL shader）
   - **GpuTexture**：wgpu 纹理封装（Arc-wrapped）
+  - **math**：公共渲染工具（QuadVertex、orthographic_projection、quad_vertices）
 - **渲染逻辑**：`host/src/renderer/`
   - **统一效果解析与请求**：`host/src/renderer/effects/`（EffectKind、ResolvedEffect、resolve()、EffectRequest、EffectTarget）
   - **动画系统**：`host/src/renderer/animation/`（AnimationSystem、Animatable trait）
 - **资源管理**：`host/src/resources/`（路径、来源、缓存、GpuResourceContext）
 - **音频系统**：`host/src/audio/`
-- **UI 基础设施**：`host/src/ui/`（theme/toast/skin；界面渲染由 egui 在 main.rs 中构建）
+- **UI 基础设施**：`host/src/ui/`（theme/toast/skin）
 - **输入（winit 事件驱动）**：`host/src/input/`
 - **配置/manifest/save manager**：`host/src/config/`、`host/src/manifest/`、`host/src/save_manager/`
 
@@ -162,7 +168,7 @@
 
 - **想加/改脚本语法** → [script_syntax_spec.md](script_syntax_spec.md) + `vn-runtime/src/script/*`
 - **想加一个新 Command** → `vn-runtime/src/command.rs` + `host/src/command_executor/*`
-- **想改 UI 页面** → `host/src/main.rs`（egui screen builders）+ `host/src/ui/*`
+- **想改 UI 页面** → `host/src/egui_screens/`（各页面 UI 构建）+ `host/src/ui/*`（主题/Toast）
 - **想改资源路径解析/打包/缓存** → `host/src/resources/*` + [resource_management.md](resource_management.md)
 - **想改存档/兼容** → `vn-runtime/src/save.rs` + `host/src/app/save.rs` + [save_format.md](save_format.md)
 

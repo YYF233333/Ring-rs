@@ -13,6 +13,9 @@ use super::super::command_handlers::{apply_effect_requests, handle_audio_command
 use super::super::save::return_to_title_from_game;
 use super::super::script_loader::collect_prefetch_paths;
 
+/// 跳过场景效果时使用的大 dt（保证单步完成）
+const SKIP_LARGE_DT: f32 = 999.0;
+
 /// 一次性跳过所有活跃的演出效果（动画/过渡/场景过渡/打字机）
 ///
 /// 用于 Skip 模式，确保所有效果正确收敛：
@@ -46,7 +49,7 @@ pub fn skip_all_active_effects(core: &mut CoreSystems) {
     // 4. 跳过场景效果（shake/blur）
     if core.renderer.is_scene_effect_active() {
         core.renderer
-            .update_scene_effects(999.0, &mut core.render_state.scene_effect);
+            .update_scene_effects(SKIP_LARGE_DT, &mut core.render_state.scene_effect);
     }
 
     // 5. 跳过标题字卡

@@ -5,7 +5,7 @@
 //! ## 原理
 //!
 //! 通过灰度遮罩图控制每个像素的溶解顺序：
-//! - `progress` 从 0→1，mask 值 ≤ progress 的像素显示 overlay 色
+//! - `progress` 从 0->1，mask 值 <= progress 的像素显示 overlay 色
 //! - `ramp > 0` 时 smoothstep 产生柔和过渡边缘
 //! - `reversed` 反转遮罩方向
 
@@ -14,6 +14,7 @@ use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
 use super::gpu_texture::GpuTexture;
+use super::math::{QuadVertex, orthographic_projection, quad_vertices};
 
 // ── Uniform 数据 ─────────────────────────────────────────────────────────────
 
@@ -82,27 +83,6 @@ struct VertexOutput {
 }
 ";
 
-// ── 顶点定义（与 SpriteVertex 布局一致） ────────────────────────────────────
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct DissolveVertex {
-    pos: [f32; 2],
-    uv: [f32; 2],
-    _color: [f32; 4],
-}
-
-impl DissolveVertex {
-    const ATTRS: [wgpu::VertexAttribute; 3] =
-        wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4];
-
-    const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: size_of::<Self>() as u64,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &Self::ATTRS,
-    };
-}
-
 // ── DissolveRenderer ─────────────────────────────────────────────────────────
 
 /// 遮罩溶解渲染器
@@ -131,7 +111,6 @@ impl DissolveRenderer {
             source: wgpu::ShaderSource::Wgsl(DISSOLVE_WGSL.into()),
         });
 
-        // Group 0: dissolve uniforms (projection + params)
         let uniform_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("dissolve_uniform_layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -158,7 +137,7 @@ impl DissolveRenderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs"),
-                buffers: &[DissolveVertex::LAYOUT],
+                buffers: &[QuadVertex::LAYOUT],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -178,7 +157,6 @@ impl DissolveRenderer {
             cache: None,
         });
 
-        // Uniform buffer
         let initial = DissolveUniforms {
             projection: [0.0; 16],
             progress: 0.0,
@@ -201,10 +179,9 @@ impl DissolveRenderer {
             }],
         });
 
-        // Vertex buffer for a single quad (6 vertices)
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("dissolve_vbuf"),
-            size: (6 * size_of::<DissolveVertex>()) as u64,
+            size: (6 * size_of::<QuadVertex>()) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -218,9 +195,6 @@ impl DissolveRenderer {
     }
 
     /// 绘制一次溶解叠加
-    ///
-    /// 在当前 render pass 中绘制一个带遮罩 alpha 的全屏 quad。
-    /// `mask` 的 `bind_group` 必须与 `texture_bind_group_layout` 兼容。
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
@@ -249,7 +223,7 @@ impl DissolveRenderer {
         };
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
 
-        let vertices = quad_vertices(x, y, width, height);
+        let vertices = quad_vertices(x, y, width, height, true, [0.0; 4]);
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
 
         pass.set_pipeline(&self.pipeline);
@@ -258,42 +232,4 @@ impl DissolveRenderer {
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         pass.draw(0..6, 0..1);
     }
-}
-
-// ── 辅助函数 ────────────────────────────────────────────────────────────────
-
-fn orthographic_projection(width: f32, height: f32) -> [f32; 16] {
-    #[rustfmt::skip]
-    let m = [
-        2.0 / width,   0.0,            0.0,  0.0,
-        0.0,          -2.0 / height,    0.0,  0.0,
-        0.0,           0.0,            1.0,  0.0,
-       -1.0,           1.0,            0.0,  1.0,
-    ];
-    m
-}
-
-fn quad_vertices(x: f32, y: f32, w: f32, h: f32) -> [DissolveVertex; 6] {
-    let c = [0.0f32; 4];
-    let tl = DissolveVertex {
-        pos: [x, y],
-        uv: [0.0, 0.0],
-        _color: c,
-    };
-    let tr = DissolveVertex {
-        pos: [x + w, y],
-        uv: [1.0, 0.0],
-        _color: c,
-    };
-    let bl = DissolveVertex {
-        pos: [x, y + h],
-        uv: [0.0, 1.0],
-        _color: c,
-    };
-    let br = DissolveVertex {
-        pos: [x + w, y + h],
-        uv: [1.0, 1.0],
-        _color: c,
-    };
-    [tl, tr, br, tl, br, bl]
 }

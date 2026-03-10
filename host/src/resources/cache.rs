@@ -82,10 +82,11 @@ impl TextureCache {
 
     /// 获取纹理（如果存在则更新 LRU）
     pub fn get(&mut self, key: &str) -> Option<Arc<GpuTexture>> {
-        if self.entries.contains_key(key) {
+        if let Some(entry) = self.entries.get(key) {
             self.hits += 1;
+            let texture = Arc::clone(&entry.texture);
             self.touch(key);
-            Some(Arc::clone(&self.entries.get(key).unwrap().texture))
+            Some(texture)
         } else {
             self.misses += 1;
             None
@@ -122,10 +123,10 @@ impl TextureCache {
             if !self.evict_one() {
                 eviction_attempts += 1;
                 if eviction_attempts >= max_attempts {
-                    eprintln!(
-                        "WARNING: texture cache over budget ({:.1}MB / {:.1}MB), cannot evict (all pinned?)",
-                        (self.used_bytes + new_size) as f64 / 1024.0 / 1024.0,
-                        self.budget_bytes as f64 / 1024.0 / 1024.0
+                    tracing::warn!(
+                        used_mb = (self.used_bytes + new_size) as f64 / 1024.0 / 1024.0,
+                        budget_mb = self.budget_bytes as f64 / 1024.0 / 1024.0,
+                        "Texture cache over budget, cannot evict (all pinned?)"
                     );
                     break;
                 }

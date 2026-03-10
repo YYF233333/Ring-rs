@@ -80,10 +80,13 @@ enum FadeState {
 }
 
 impl AudioManager {
-    /// 创建新的音频管理器（文件系统模式）
-    pub fn new(base_path: &str) -> Result<Self, String> {
+    /// 创建新的音频管理器
+    ///
+    /// `use_zip_mode` 为 true 时从预缓存的字节数据加载音频，
+    /// 为 false 时从文件系统直接读取。
+    pub fn new(base_path: &str, use_zip_mode: bool) -> Result<Self, String> {
         let device_sink = DeviceSinkBuilder::open_default_sink()
-            .map_err(|e| format!("无法初始化音频输出: {}", e))?;
+            .map_err(|e| format!("Failed to initialize audio output: {}", e))?;
 
         Ok(Self {
             device_sink,
@@ -94,28 +97,7 @@ impl AudioManager {
             muted: false,
             fade_state: FadeState::None,
             base_path: PathBuf::from(base_path),
-            use_zip_mode: false,
-            audio_cache: HashMap::new(),
-            duck_multiplier: 1.0,
-            duck_target: 1.0,
-        })
-    }
-
-    /// 创建 ZIP 模式的音频管理器
-    pub fn new_zip_mode(base_path: &str) -> Result<Self, String> {
-        let device_sink = DeviceSinkBuilder::open_default_sink()
-            .map_err(|e| format!("无法初始化音频输出: {}", e))?;
-
-        Ok(Self {
-            device_sink,
-            bgm_sink: None,
-            current_bgm_path: None,
-            bgm_volume: 1.0,
-            sfx_volume: 1.0,
-            muted: false,
-            fade_state: FadeState::None,
-            base_path: PathBuf::from(base_path),
-            use_zip_mode: true,
+            use_zip_mode,
             audio_cache: HashMap::new(),
             duck_multiplier: 1.0,
             duck_target: 1.0,
@@ -577,7 +559,7 @@ mod tests {
     #[test]
     fn test_volume_settings() {
         // 注意：这个测试可能在没有音频设备的环境下失败
-        if let Ok(mut manager) = AudioManager::new("assets") {
+        if let Ok(mut manager) = AudioManager::new("assets", false) {
             manager.set_bgm_volume(0.5);
             assert_eq!(manager.bgm_volume(), 0.5);
 
@@ -595,7 +577,7 @@ mod tests {
 
     #[test]
     fn test_mute_toggle() {
-        if let Ok(mut manager) = AudioManager::new("assets") {
+        if let Ok(mut manager) = AudioManager::new("assets", false) {
             assert!(!manager.is_muted());
             manager.toggle_mute();
             assert!(manager.is_muted());
@@ -606,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_duck_unduck_state() {
-        if let Ok(mut manager) = AudioManager::new("assets") {
+        if let Ok(mut manager) = AudioManager::new("assets", false) {
             assert_eq!(manager.duck_multiplier, 1.0);
             assert_eq!(manager.duck_target, 1.0);
 

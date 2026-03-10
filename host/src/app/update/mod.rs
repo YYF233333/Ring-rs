@@ -20,6 +20,9 @@ use winit::keyboard::KeyCode;
 use super::AppState;
 use crate::AppMode;
 
+/// 角色淡出完成判定阈值（alpha <= 此值视为完成）
+const FADEOUT_ALPHA_THRESHOLD: f32 = 0.01;
+
 /// 更新入口（每帧调用）
 ///
 /// `dt` 由外部（winit 帧间隔）提供。
@@ -31,7 +34,7 @@ pub fn update(app_state: &mut AppState, dt: f32) {
     app_state.ui.toast_manager.update(dt);
 
     // 切换调试模式（全局可用）
-    if app_state.input_manager.is_key_just_pressed_pub(KeyCode::F1) {
+    if app_state.input_manager.is_key_just_pressed(KeyCode::F1) {
         app_state.host_state.debug_mode = !app_state.host_state.debug_mode;
         debug!(
             enabled = app_state.host_state.debug_mode,
@@ -131,7 +134,7 @@ pub fn update(app_state: &mut AppState, dt: f32) {
                 // 检查角色是否标记为淡出且透明度已降到 0
                 if char.fading_out {
                     let alpha = char.anim.alpha();
-                    alpha <= 0.01
+                    alpha <= FADEOUT_ALPHA_THRESHOLD
                 } else {
                     false
                 }

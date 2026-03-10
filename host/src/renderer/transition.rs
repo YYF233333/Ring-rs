@@ -95,7 +95,7 @@ impl TransitionManager {
         self.transition_state.reset_for_transition();
 
         // 启动旧背景淡出动画 (1.0 → 0.0)
-        let old_id = self
+        match self
             .animation_system
             .animate_object_with_easing::<AnimatableBackgroundTransition>(
                 self.object_id,
@@ -104,12 +104,16 @@ impl TransitionManager {
                 0.0,
                 duration,
                 EasingFunction::EaseInOutQuad,
-            )
-            .expect("Failed to start old background animation");
-        self.old_bg_animation_id = Some(old_id);
+            ) {
+            Ok(id) => self.old_bg_animation_id = Some(id),
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to start old background animation");
+                self.transition_state.set_completed();
+                return;
+            }
+        }
 
-        // 启动新背景淡入动画 (0.0 → 1.0)
-        let new_id = self
+        match self
             .animation_system
             .animate_object_with_easing::<AnimatableBackgroundTransition>(
                 self.object_id,
@@ -118,9 +122,13 @@ impl TransitionManager {
                 1.0,
                 duration,
                 EasingFunction::EaseInOutQuad,
-            )
-            .expect("Failed to start new background animation");
-        self.new_bg_animation_id = Some(new_id);
+            ) {
+            Ok(id) => self.new_bg_animation_id = Some(id),
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to start new background animation");
+                self.transition_state.set_completed();
+            }
+        }
     }
 
     /// 从 vn-runtime 的 Transition 解析（保留兼容）

@@ -13,27 +13,7 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
 use super::gpu_texture::{GpuTexture, create_gpu_texture};
-
-// ── 顶点定义 ────────────────────────────────────────────────────────────────
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct SpriteVertex {
-    pos: [f32; 2],
-    uv: [f32; 2],
-    color: [f32; 4],
-}
-
-impl SpriteVertex {
-    const ATTRS: [wgpu::VertexAttribute; 3] =
-        wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4];
-
-    const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: size_of::<Self>() as u64,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &Self::ATTRS,
-    };
-}
+use super::math::{QuadVertex, orthographic_projection, quad_vertices};
 
 const MAX_SPRITES: usize = 128;
 const VERTS_PER_SPRITE: usize = 6;
@@ -90,8 +70,6 @@ pub struct SpriteRenderer {
     textured_pipeline: wgpu::RenderPipeline,
     solid_pipeline: wgpu::RenderPipeline,
 
-    #[allow(dead_code)]
-    proj_bind_group_layout: wgpu::BindGroupLayout,
     proj_buffer: wgpu::Buffer,
     proj_bind_group: wgpu::BindGroup,
 
@@ -116,7 +94,6 @@ impl SpriteRenderer {
             source: wgpu::ShaderSource::Wgsl(SPRITE_WGSL.into()),
         });
 
-        // Projection uniform bind group layout (group 0)
         let proj_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("sprite_proj_layout"),
@@ -132,7 +109,6 @@ impl SpriteRenderer {
                 }],
             });
 
-        // Texture + sampler bind group layout (group 1)
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("sprite_tex_layout"),
@@ -169,7 +145,7 @@ impl SpriteRenderer {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs"),
-                    buffers: &[SpriteVertex::LAYOUT],
+                    buffers: &[QuadVertex::LAYOUT],
                     compilation_options: Default::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -193,7 +169,6 @@ impl SpriteRenderer {
         let textured_pipeline = make_pipeline("fs_textured", "sprite_textured_pipeline");
         let solid_pipeline = make_pipeline("fs_solid", "sprite_solid_pipeline");
 
-        // Projection uniform buffer (identity initially)
         let proj_data = orthographic_projection(1.0, 1.0);
         let proj_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("sprite_proj_buf"),
@@ -209,22 +184,19 @@ impl SpriteRenderer {
             }],
         });
 
-        // Sampler
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
-        // Vertex buffer (pre-allocated, updated each frame)
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("sprite_vbuf"),
-            size: (MAX_VERTS * size_of::<SpriteVertex>()) as u64,
+            size: (MAX_VERTS * size_of::<QuadVertex>()) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        // 1x1 white texture
         let white_texture = create_gpu_texture(
             device,
             queue,
@@ -239,7 +211,6 @@ impl SpriteRenderer {
         Self {
             textured_pipeline,
             solid_pipeline,
-            proj_bind_group_layout,
             proj_buffer,
             proj_bind_group,
             texture_bind_group_layout,
@@ -278,9 +249,6 @@ impl SpriteRenderer {
     }
 
     /// 在 render pass 中绘制 sprites
-    ///
-    /// 调用方需要在同一个 render pass 中先调用此方法。
-    /// `sprites` 按绘制顺序（从底到顶）排列。
     pub fn draw_sprites(
         &self,
         queue: &wgpu::Queue,
@@ -291,17 +259,16 @@ impl SpriteRenderer {
             return;
         }
 
-        // 生成所有顶点
-        let mut vertices = Vec::with_capacity(sprites.len() * VERTS_PER_SPRITE);
+        let mut vertices: Vec<QuadVertex> = Vec::with_capacity(sprites.len() * VERTS_PER_SPRITE);
         for cmd in sprites {
-            push_quad_vertices(&mut vertices, cmd);
+            if let Some((x, y, w, h, color, uv)) = cmd.sprite_params() {
+                vertices.extend_from_slice(&quad_vertices(x, y, w, h, uv, color));
+            }
         }
 
-        // 上传顶点数据
         let byte_data = bytemuck::cast_slice(&vertices);
         queue.write_buffer(&self.vertex_buffer, 0, byte_data);
 
-        // 绘制
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         pass.set_bind_group(0, &self.proj_bind_group, &[]);
 
@@ -359,73 +326,26 @@ pub enum DrawCommand {
     },
 }
 
-// ── 辅助函数 ────────────────────────────────────────────────────────────────
-
-/// 正交投影矩阵：像素坐标 → NDC（左上角原点）
-fn orthographic_projection(width: f32, height: f32) -> [f32; 16] {
-    #[rustfmt::skip]
-    let m = [
-        2.0 / width,   0.0,            0.0,  0.0,
-        0.0,          -2.0 / height,    0.0,  0.0,
-        0.0,           0.0,            1.0,  0.0,
-       -1.0,           1.0,            0.0,  1.0,
-    ];
-    m
-}
-
-/// 为一个绘制命令生成 6 个顶点（两个三角形）
-fn push_quad_vertices(verts: &mut Vec<SpriteVertex>, cmd: &DrawCommand) {
-    let (x, y, w, h, color, uv) = match cmd {
-        DrawCommand::Sprite {
-            x,
-            y,
-            width,
-            height,
-            color,
-            ..
-        } => (*x, *y, *width, *height, *color, true),
-        DrawCommand::Rect {
-            x,
-            y,
-            width,
-            height,
-            color,
-        } => (*x, *y, *width, *height, *color, false),
-        DrawCommand::Dissolve { .. } => return,
-    };
-
-    let (u0, v0, u1, v1) = if uv {
-        (0.0f32, 0.0, 1.0, 1.0)
-    } else {
-        (0.0, 0.0, 0.0, 0.0)
-    };
-
-    let tl = SpriteVertex {
-        pos: [x, y],
-        uv: [u0, v0],
-        color,
-    };
-    let tr = SpriteVertex {
-        pos: [x + w, y],
-        uv: [u1, v0],
-        color,
-    };
-    let bl = SpriteVertex {
-        pos: [x, y + h],
-        uv: [u0, v1],
-        color,
-    };
-    let br = SpriteVertex {
-        pos: [x + w, y + h],
-        uv: [u1, v1],
-        color,
-    };
-
-    // 两个三角形：TL-TR-BR, TL-BR-BL
-    verts.push(tl);
-    verts.push(tr);
-    verts.push(br);
-    verts.push(tl);
-    verts.push(br);
-    verts.push(bl);
+impl DrawCommand {
+    /// 提取 sprite/rect 的绘制参数 (x, y, w, h, color, has_uv)
+    fn sprite_params(&self) -> Option<(f32, f32, f32, f32, [f32; 4], bool)> {
+        match self {
+            DrawCommand::Sprite {
+                x,
+                y,
+                width,
+                height,
+                color,
+                ..
+            } => Some((*x, *y, *width, *height, *color, true)),
+            DrawCommand::Rect {
+                x,
+                y,
+                width,
+                height,
+                color,
+            } => Some((*x, *y, *width, *height, *color, false)),
+            DrawCommand::Dissolve { .. } => None,
+        }
+    }
 }
