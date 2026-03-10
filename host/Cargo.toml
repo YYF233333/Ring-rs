@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-macroquad = "0.4.14"
 vn-runtime = { version = "0.1.0", path = "../vn-runtime" }
 thiserror = "2.0.18"
 serde = { version = "1.0", features = ["derive"] }
@@ -22,3 +21,13 @@ rodio = { version = "0.22", default-features = false, features = ["mp3", "wav", 
 
 # ZIP 文件支持（资源打包/发布）
 zip = { version = "8.1", default-features = false, features = ["deflate-flate2"] }
+
+# 渲染后端 (winit + wgpu + egui)
+winit = "0.30"
+wgpu = "24"
+egui = "0.31"
+egui-wgpu = "0.31"
+egui-winit = "0.31"
+pollster = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
+env_logger = "0.11"

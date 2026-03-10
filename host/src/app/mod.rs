@@ -31,9 +31,6 @@ use crate::persistent::PersistentStore;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
 use crate::resources::ResourceManager;
-use crate::screens::{
-    HistoryScreen, InGameMenuScreen, SaveLoadScreen, SettingsScreen, TitleScreen,
-};
 use crate::ui::{Theme, ToastManager, UiContext, load_skin, load_theme_with_override};
 use crate::{
     AppConfig, AudioManager, CommandExecutor, HostState, InputManager, NavigationStack,
@@ -83,16 +80,6 @@ pub struct UiSystems {
     pub ui_context: UiContext,
     /// Toast 提示管理器
     pub toast_manager: ToastManager,
-    /// 主标题界面
-    pub title_screen: TitleScreen,
-    /// 游戏内菜单
-    pub ingame_menu: InGameMenuScreen,
-    /// 存档/读档界面
-    pub save_load_screen: SaveLoadScreen,
-    /// 设置界面
-    pub settings_screen: SettingsScreen,
-    /// 历史界面
-    pub history_screen: HistoryScreen,
 }
 
 /// 游戏会话状态：运行时脚本执行与推进控制
@@ -201,16 +188,11 @@ impl AppState {
             ui: UiSystems {
                 navigation: NavigationStack::new(),
                 ui_context: {
-                    let mut ui_ctx = UiContext::new(theme);
+                    let mut ui_ctx = UiContext::new(theme, width, height);
                     ui_ctx.skin = skin;
                     ui_ctx
                 },
                 toast_manager: ToastManager::new(),
-                title_screen: TitleScreen::new(),
-                ingame_menu: InGameMenuScreen::new(),
-                save_load_screen: SaveLoadScreen::new(),
-                settings_screen: SettingsScreen::new(),
-                history_screen: HistoryScreen::new(),
             },
             session: GameSession {
                 vn_runtime: None,

@@ -11,19 +11,19 @@ mod script;
 pub use scene_transition::update_scene_transition;
 pub use script::{handle_script_mode_input, run_script_tick, skip_all_active_effects};
 
-use macroquad::prelude::*;
 use tracing::debug;
 use vn_runtime::command::{SIGNAL_SCENE_EFFECT, SIGNAL_SCENE_TRANSITION, SIGNAL_TITLE_CARD};
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
+use winit::keyboard::KeyCode;
 
 use super::AppState;
 use crate::AppMode;
 
 /// 更新入口（每帧调用）
-pub fn update(app_state: &mut AppState) {
-    let dt = get_frame_time();
-
+///
+/// `dt` 由外部（winit 帧间隔）提供。
+pub fn update(app_state: &mut AppState, dt: f32) {
     // 更新 UI 上下文
     app_state.ui.ui_context.update();
 
@@ -31,9 +31,12 @@ pub fn update(app_state: &mut AppState) {
     app_state.ui.toast_manager.update(dt);
 
     // 切换调试模式（全局可用）
-    if is_key_pressed(KeyCode::F1) {
+    if app_state.input_manager.is_key_just_pressed_pub(KeyCode::F1) {
         app_state.host_state.debug_mode = !app_state.host_state.debug_mode;
-        debug!(enabled = app_state.host_state.debug_mode, "切换调试模式");
+        debug!(
+            enabled = app_state.host_state.debug_mode,
+            "Debug mode toggled"
+        );
     }
 
     // 根据当前模式处理更新

@@ -219,7 +219,6 @@ pub fn return_to_title_from_game(app_state: &mut AppState, should_save_continue:
 
     // 返回标题
     app_state.ui.navigation.return_to_title();
-    app_state.ui.title_screen.mark_needs_init();
 }
 
 /// 开始新游戏（使用 config.start_script_path）

@@ -1,10 +1,10 @@
 //! # Resources 模块
 //!
-//! 资源管理系统，负责图片和音频资源的加载、缓存和管理。
+//! 资源管理系统，负责图片资源的加载、缓存和管理。
 
-use macroquad::audio::{Sound, load_sound};
-use macroquad::prelude::*;
-use std::collections::{HashMap, HashSet};
+use crate::backend::GpuTexture;
+use crate::backend::sprite_renderer::SpriteRenderer;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 mod cache;
@@ -19,67 +19,62 @@ pub use path::{
 };
 pub use source::{FsSource, ResourceSource, ZipSource};
 
-/// 从字节数据加载图片并转换为 Texture2D
-/// 支持 JPEG、PNG、WebP 等格式（由 `image` crate 的 feature 决定）
-fn load_texture_from_bytes(bytes: &[u8], path: &str) -> Result<Texture2D, String> {
-    // 使用 image crate 解码
-    let img =
-        image::load_from_memory(bytes).map_err(|e| format!("无法解码图片 {}: {}", path, e))?;
-
-    // 转换为 RGBA8
+/// 从字节数据加载图片并转换为 GPU 纹理
+fn load_texture_from_bytes(
+    bytes: &[u8],
+    path: &str,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    sprite_renderer: &SpriteRenderer,
+) -> Result<Arc<GpuTexture>, String> {
+    let img = image::load_from_memory(bytes)
+        .map_err(|e| format!("Cannot decode image {}: {}", path, e))?;
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
+    Ok(sprite_renderer.create_texture(device, queue, width, height, &rgba, Some(path)))
+}
 
-    // 创建 macroquad Texture2D
-    let texture = Texture2D::from_rgba8(width as u16, height as u16, &rgba);
-
-    Ok(texture)
+/// GPU 资源上下文
+///
+/// 持有 GPU 设备引用，供 ResourceManager 创建纹理时使用。
+/// 使用 Arc 在 ResourceManager 和 WgpuBackend 之间共享。
+pub struct GpuResourceContext {
+    pub(crate) device: Arc<wgpu::Device>,
+    pub(crate) queue: Arc<wgpu::Queue>,
+    pub(crate) sprite_renderer: Arc<SpriteRenderer>,
 }
 
 /// 资源管理器
 ///
-/// 负责加载和缓存所有游戏资源（图片、音频等）。
+/// 负责加载和缓存所有游戏资源（图片等）。
 /// 纹理使用 LRU 缓存 + 显存预算管理。
 pub struct ResourceManager {
     /// 纹理缓存（带 LRU 驱逐）
     texture_cache: TextureCache,
-    /// 音频资源缓存（路径 -> Sound）
-    sounds: HashMap<String, Sound>,
     /// 纹理加载失败缓存（规范化路径）
-    ///
-    /// 用于避免缺失资源在每帧按需加载时反复重试并刷屏日志。
     failed_textures: HashSet<String>,
     /// 资源基础路径
     base_path: String,
     /// 资源来源（文件系统/ZIP 等）
     source: Arc<dyn ResourceSource>,
+    /// GPU 资源上下文（延迟注入，在 WgpuBackend 创建后设置）
+    gpu: Option<GpuResourceContext>,
 }
 
 impl ResourceManager {
     /// 创建新的资源管理器（使用文件系统来源）
-    ///
-    /// # 参数
-    ///
-    /// - `base_path`: 资源文件的基础路径（如 "assets"）
-    /// - `texture_cache_size_mb`: 纹理缓存大小（MB）
     pub fn new(base_path: impl Into<String>, texture_cache_size_mb: usize) -> Self {
         let base = base_path.into();
         Self {
             texture_cache: TextureCache::new(texture_cache_size_mb),
-            sounds: HashMap::new(),
             failed_textures: HashSet::new(),
             source: Arc::new(FsSource::new(&base)),
             base_path: base,
+            gpu: None,
         }
     }
 
     /// 创建使用自定义资源来源的资源管理器
-    ///
-    /// # 参数
-    ///
-    /// - `base_path`: 资源基础路径（用于路径解析）
-    /// - `source`: 资源来源实现
-    /// - `texture_cache_size_mb`: 纹理缓存大小（MB）
     pub fn with_source(
         base_path: impl Into<String>,
         source: Arc<dyn ResourceSource>,
@@ -87,54 +82,50 @@ impl ResourceManager {
     ) -> Self {
         Self {
             texture_cache: TextureCache::new(texture_cache_size_mb),
-            sounds: HashMap::new(),
             failed_textures: HashSet::new(),
             base_path: base_path.into(),
             source,
+            gpu: None,
         }
     }
 
     /// 创建指定缓存大小的资源管理器
-    ///
-    /// # 参数
-    ///
-    /// - `base_path`: 资源基础路径
-    /// - `texture_cache_size_mb`: 纹理缓存大小（MB）
     pub fn with_budget(base_path: impl Into<String>, texture_cache_size_mb: usize) -> Self {
         let base = base_path.into();
         Self {
             texture_cache: TextureCache::new(texture_cache_size_mb),
-            sounds: HashMap::new(),
             failed_textures: HashSet::new(),
             source: Arc::new(FsSource::new(&base)),
             base_path: base,
+            gpu: None,
         }
     }
 
-    /// 解析资源路径（将相对路径转换为完整路径）
+    /// 注入 GPU 资源上下文
     ///
-    /// 使用 std::path 处理路径规范化，支持 `..` 等相对路径
+    /// 在 WgpuBackend 创建后调用，使 load_texture 能够创建 GPU 纹理。
+    pub fn set_gpu_context(&mut self, gpu: GpuResourceContext) {
+        self.gpu = Some(gpu);
+    }
+
+    /// 解析资源路径（将相对路径转换为完整路径）
     pub fn resolve_path(&self, path: &str) -> String {
         use std::path::{Path, PathBuf};
 
         let path_obj = Path::new(path);
 
-        // 如果是绝对路径，直接规范化并返回
         if path_obj.is_absolute() {
             return Self::normalize_path_components(path_obj);
         }
 
-        // 检查是否已经包含 base_path
         if path.contains(&self.base_path) {
             return Self::normalize_path_components(path_obj);
         }
 
-        // 拼接 base_path 和相对路径
         let full_path: PathBuf = [&self.base_path, path].iter().collect();
         Self::normalize_path_components(&full_path)
     }
 
-    /// 使用 std::path 规范化路径，处理 `..` 和 `.`
     fn normalize_path_components(path: &std::path::Path) -> String {
         use std::path::Component;
 
@@ -143,21 +134,15 @@ impl ResourceManager {
         for component in path.components() {
             match component {
                 Component::Prefix(p) => {
-                    // Windows 盘符，如 C:
                     components.push(p.as_os_str().to_string_lossy().to_string());
                 }
                 Component::RootDir => {
-                    // 根目录 /
                     if components.is_empty() {
-                        components.push(String::new()); // 会在 join 时产生开头的 /
+                        components.push(String::new());
                     }
                 }
-                Component::CurDir => {
-                    // . 当前目录，跳过
-                }
+                Component::CurDir => {}
                 Component::ParentDir => {
-                    // .. 父目录，弹出上一级
-                    // 但要保留盘符
                     if components.len() > 1
                         || (components.len() == 1 && !components[0].contains(':'))
                     {
@@ -170,14 +155,11 @@ impl ResourceManager {
             }
         }
 
-        // 用 / 连接（跨平台统一使用 /）
         if components.is_empty() {
             return String::new();
         }
 
-        // 处理 Windows 盘符的情况
         if components.len() >= 2 && components[0].contains(':') {
-            // 第一个是盘符如 "F:"，第二个开始是路径
             let drive = &components[0];
             let rest = components[1..].join("/");
             format!("{}/{}", drive, rest)
@@ -186,40 +168,25 @@ impl ResourceManager {
         }
     }
 
-    /// 加载图片资源
+    /// 加载图片资源（同步）
     ///
     /// 如果资源已缓存，直接返回缓存的资源。
     /// 否则通过 ResourceSource 加载并缓存。
-    /// 使用 LRU 缓存，超出预算时自动驱逐旧资源。
-    ///
-    /// 支持 PNG、JPEG 等格式。
-    ///
-    /// # 参数
-    ///
-    /// - `path`: 图片文件路径（相对于 base_path 或绝对路径）
-    ///
-    /// # 返回
-    ///
-    /// 加载的 Texture2D，或加载错误
-    pub async fn load_texture(&mut self, path: &str) -> Result<Texture2D, ResourceError> {
-        // 解析并规范化路径（用于缓存键和加载）
+    pub fn load_texture(&mut self, path: &str) -> Result<Arc<GpuTexture>, ResourceError> {
         let full_path = self.resolve_path(path);
 
-        // 检查缓存（使用规范化后的路径）
         if let Some(texture) = self.texture_cache.get(&full_path) {
             return Ok(texture);
         }
 
-        // 对已经失败过的路径直接返回，避免每帧重复 IO + 重复报错
         if self.failed_textures.contains(&full_path) {
             return Err(ResourceError::LoadFailed {
                 path: full_path,
                 kind: "texture".to_string(),
-                message: "该纹理此前加载失败，已跳过重复重试".to_string(),
+                message: "Previously failed, skipping retry".to_string(),
             });
         }
 
-        // 通过 ResourceSource 读取字节
         let bytes = match self.source.read(path) {
             Ok(bytes) => bytes,
             Err(err) => {
@@ -228,8 +195,18 @@ impl ResourceManager {
             }
         };
 
-        // 统一使用 image crate 解码（支持 PNG/JPEG/GIF/WebP 等）
-        let texture = load_texture_from_bytes(&bytes, &full_path).map_err(|e| {
+        let gpu = self.gpu.as_ref().expect(
+            "GPU context not set on ResourceManager. Call set_gpu_context() after WgpuBackend init.",
+        );
+
+        let texture = load_texture_from_bytes(
+            &bytes,
+            &full_path,
+            &gpu.device,
+            &gpu.queue,
+            &gpu.sprite_renderer,
+        )
+        .map_err(|e| {
             self.failed_textures.insert(full_path.clone());
             ResourceError::LoadFailed {
                 path: full_path.clone(),
@@ -238,77 +215,22 @@ impl ResourceManager {
             }
         })?;
 
-        // 成功后确保失败缓存被清除（兼容运行时资源恢复场景）
         self.failed_textures.remove(&full_path);
-
-        // 设置纹理过滤模式（平滑缩放）
-        texture.set_filter(FilterMode::Linear);
-
-        // 缓存资源（LRU 缓存会自动驱逐旧资源）
         self.texture_cache.insert(full_path, texture.clone());
 
         Ok(texture)
     }
 
-    /// 加载音频资源
-    ///
-    /// 如果资源已缓存，直接返回缓存的资源。
-    /// 否则从文件系统加载并缓存。
-    ///
-    /// # 参数
-    ///
-    /// - `path`: 音频文件路径（相对于 base_path 或绝对路径）
-    ///
-    /// # 返回
-    ///
-    /// 加载的 Sound，或加载错误
-    pub async fn load_sound(&mut self, path: &str) -> Result<Sound, ResourceError> {
-        // 检查缓存
-        if let Some(sound) = self.sounds.get(path) {
-            return Ok(sound.clone());
-        }
-
-        // 解析路径
-        let full_path = self.resolve_path(path);
-
-        // 加载音频
-        let sound = load_sound(&full_path)
-            .await
-            .map_err(|e: macroquad::Error| ResourceError::LoadFailed {
-                path: full_path.clone(),
-                kind: "sound".to_string(),
-                message: e.to_string(),
-            })?;
-
-        // 缓存资源
-        self.sounds.insert(path.to_string(), sound.clone());
-
-        // 返回缓存的资源
-        Ok(sound)
-    }
-
-    /// 获取已缓存的图片资源（不加载）
-    ///
-    /// 如果资源未缓存，返回 None。
-    /// 注意：此方法会更新 LRU 顺序。
-    pub fn get_texture(&mut self, path: &str) -> Option<Texture2D> {
+    /// 获取已缓存的图片资源（不加载），更新 LRU
+    pub fn get_texture(&mut self, path: &str) -> Option<Arc<GpuTexture>> {
         let full_path = self.resolve_path(path);
         self.texture_cache.get(&full_path)
     }
 
     /// 只读获取已缓存的图片资源（不更新 LRU）
-    ///
-    /// 用于渲染时快速查询，不影响缓存驱逐顺序。
-    pub fn peek_texture(&self, path: &str) -> Option<Texture2D> {
+    pub fn peek_texture(&self, path: &str) -> Option<Arc<GpuTexture>> {
         let full_path = self.resolve_path(path);
         self.texture_cache.peek(&full_path)
-    }
-
-    /// 获取已缓存的音频资源（不加载）
-    ///
-    /// 如果资源未缓存，返回 None。
-    pub fn get_sound(&self, path: &str) -> Option<Sound> {
-        self.sounds.get(path).cloned()
     }
 
     /// 检查图片资源是否已加载
@@ -317,37 +239,16 @@ impl ResourceManager {
         self.texture_cache.contains(&full_path)
     }
 
-    /// 检查纹理是否已被标记为加载失败（用于抑制重复重试/日志）
+    /// 检查纹理是否已被标记为加载失败
     pub fn has_failed_texture(&self, path: &str) -> bool {
         let full_path = self.resolve_path(path);
         self.failed_textures.contains(&full_path)
     }
 
-    /// 检查音频资源是否已加载
-    pub fn has_sound(&self, path: &str) -> bool {
-        self.sounds.contains_key(path)
-    }
-
     /// 预加载多个图片资源
-    ///
-    /// # 参数
-    ///
-    /// - `paths`: 图片路径列表
-    pub async fn preload_textures(&mut self, paths: &[&str]) -> Result<(), ResourceError> {
+    pub fn preload_textures(&mut self, paths: &[&str]) -> Result<(), ResourceError> {
         for path in paths {
-            self.load_texture(path).await?;
-        }
-        Ok(())
-    }
-
-    /// 预加载多个音频资源
-    ///
-    /// # 参数
-    ///
-    /// - `paths`: 音频路径列表
-    pub async fn preload_sounds(&mut self, paths: &[&str]) -> Result<(), ResourceError> {
-        for path in paths {
-            self.load_sound(path).await?;
+            self.load_texture(path)?;
         }
         Ok(())
     }
@@ -359,63 +260,41 @@ impl ResourceManager {
         self.failed_textures.remove(&full_path);
     }
 
-    /// 释放指定的音频资源
-    pub fn unload_sound(&mut self, path: &str) {
-        self.sounds.remove(path);
-    }
-
     /// 释放所有资源
     pub fn clear(&mut self) {
         self.texture_cache.clear();
-        self.sounds.clear();
         self.failed_textures.clear();
     }
 
-    /// 获取已加载的图片资源数量
     pub fn texture_count(&self) -> usize {
         self.texture_cache.len()
     }
 
-    /// 获取纹理缓存统计信息
     pub fn texture_cache_stats(&self) -> CacheStats {
         self.texture_cache.stats()
     }
 
-    /// Pin 纹理（防止当前帧被驱逐）
     pub fn pin_texture(&mut self, path: &str) {
         let full_path = self.resolve_path(path);
         self.texture_cache.pin(&full_path);
     }
 
-    /// Unpin 纹理
     pub fn unpin_texture(&mut self, path: &str) {
         let full_path = self.resolve_path(path);
         self.texture_cache.unpin(&full_path);
     }
 
-    /// Unpin 所有纹理（帧结束时调用）
     pub fn unpin_all_textures(&mut self) {
         self.texture_cache.unpin_all();
     }
 
-    /// 获取已加载的音频资源数量
-    pub fn sound_count(&self) -> usize {
-        self.sounds.len()
-    }
-
-    /// 读取文本资源（用于 manifest、脚本等）
-    ///
-    /// # 参数
-    /// - `path`: 资源路径（相对于 base_path）
-    ///
-    /// # 返回
-    /// 文本内容，或错误
+    /// 读取文本资源
     pub fn read_text(&self, path: &str) -> Result<String, ResourceError> {
         let bytes = self.source.read(path)?;
         String::from_utf8(bytes).map_err(|e| ResourceError::LoadFailed {
             path: path.to_string(),
             kind: "text".to_string(),
-            message: format!("无法将字节转换为 UTF-8 字符串: {}", e),
+            message: format!("Cannot convert bytes to UTF-8: {}", e),
         })
     }
 
@@ -424,24 +303,12 @@ impl ResourceManager {
         self.source.exists(path)
     }
 
-    /// 读取原始字节资源（用于字体等二进制文件）
-    ///
-    /// # 参数
-    /// - `path`: 资源路径（相对于 base_path）
-    ///
-    /// # 返回
-    /// 字节内容，或错误
+    /// 读取原始字节资源
     pub fn read_bytes(&self, path: &str) -> Result<Vec<u8>, ResourceError> {
         self.source.read(path)
     }
 
     /// 列出指定目录下的所有文件
-    ///
-    /// # 参数
-    /// - `dir_path`: 目录路径（相对于 base_path）
-    ///
-    /// # 返回
-    /// 文件路径列表（相对于 base_path）
     pub fn list_files(&self, dir_path: &str) -> Vec<String> {
         self.source.list_files(dir_path)
     }

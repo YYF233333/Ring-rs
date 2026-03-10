@@ -2,8 +2,9 @@
 //!
 //! 带 LRU 驱逐和显存预算的纹理缓存。
 
-use macroquad::prelude::*;
+use crate::backend::GpuTexture;
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 
 /// 默认显存预算：256 MB
 pub const DEFAULT_TEXTURE_BUDGET_MB: usize = 256;
@@ -12,7 +13,7 @@ pub const DEFAULT_TEXTURE_BUDGET_MB: usize = 256;
 #[derive(Debug)]
 struct CacheEntry {
     /// 纹理对象
-    texture: Texture2D,
+    texture: Arc<GpuTexture>,
     /// 估算的显存占用（字节）
     size_bytes: usize,
     /// 引用计数（pin 状态）
@@ -20,9 +21,8 @@ struct CacheEntry {
 }
 
 impl CacheEntry {
-    fn new(texture: Texture2D) -> Self {
-        // 估算纹理显存：width * height * 4 (RGBA8)
-        let size_bytes = (texture.width() as usize) * (texture.height() as usize) * 4;
+    fn new(texture: Arc<GpuTexture>) -> Self {
+        let size_bytes = texture.size_bytes();
         Self {
             texture,
             size_bytes,
@@ -81,11 +81,11 @@ impl TextureCache {
     }
 
     /// 获取纹理（如果存在则更新 LRU）
-    pub fn get(&mut self, key: &str) -> Option<Texture2D> {
+    pub fn get(&mut self, key: &str) -> Option<Arc<GpuTexture>> {
         if self.entries.contains_key(key) {
             self.hits += 1;
             self.touch(key);
-            Some(self.entries.get(key).unwrap().texture.clone())
+            Some(Arc::clone(&self.entries.get(key).unwrap().texture))
         } else {
             self.misses += 1;
             None
@@ -93,8 +93,8 @@ impl TextureCache {
     }
 
     /// 只读获取纹理（不更新 LRU，用于渲染时快速查询）
-    pub fn peek(&self, key: &str) -> Option<Texture2D> {
-        self.entries.get(key).map(|e| e.texture.clone())
+    pub fn peek(&self, key: &str) -> Option<Arc<GpuTexture>> {
+        self.entries.get(key).map(|e| Arc::clone(&e.texture))
     }
 
     /// 检查是否存在
@@ -105,7 +105,7 @@ impl TextureCache {
     /// 插入纹理
     ///
     /// 如果超出预算，会先驱逐旧资源。
-    pub fn insert(&mut self, key: String, texture: Texture2D) {
+    pub fn insert(&mut self, key: String, texture: Arc<GpuTexture>) {
         let entry = CacheEntry::new(texture);
         let new_size = entry.size_bytes;
 
@@ -117,21 +117,19 @@ impl TextureCache {
 
         // 驱逐直到有足够空间
         let mut eviction_attempts = 0;
-        let max_attempts = self.entries.len(); // 最多尝试驱逐所有条目
+        let max_attempts = self.entries.len();
         while self.used_bytes + new_size > self.budget_bytes {
             if !self.evict_one() {
-                // 无法驱逐更多（可能全部被 pin 或队列为空）
                 eviction_attempts += 1;
                 if eviction_attempts >= max_attempts {
                     eprintln!(
-                        "⚠️ 警告：纹理缓存超出预算（{:.1}MB / {:.1}MB），但无法驱逐资源（可能全部被 pin）。强制插入新资源可能导致显存溢出。",
+                        "WARNING: texture cache over budget ({:.1}MB / {:.1}MB), cannot evict (all pinned?)",
                         (self.used_bytes + new_size) as f64 / 1024.0 / 1024.0,
                         self.budget_bytes as f64 / 1024.0 / 1024.0
                     );
                     break;
                 }
             } else {
-                // 成功驱逐，重置尝试计数
                 eviction_attempts = 0;
             }
         }
@@ -178,22 +176,18 @@ impl TextureCache {
         self.used_bytes = 0;
     }
 
-    /// 获取当前占用（字节）
     pub fn used_bytes(&self) -> usize {
         self.used_bytes
     }
 
-    /// 获取预算（字节）
     pub fn budget_bytes(&self) -> usize {
         self.budget_bytes
     }
 
-    /// 获取缓存条目数量
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
-    /// 缓存是否为空
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -215,7 +209,6 @@ impl TextureCache {
         }
     }
 
-    /// 重置统计
     pub fn reset_stats(&mut self) {
         self.hits = 0;
         self.misses = 0;
@@ -224,22 +217,16 @@ impl TextureCache {
 
     // === 内部方法 ===
 
-    /// 更新 LRU 顺序（将 key 移到最后）
     fn touch(&mut self, key: &str) {
         self.remove_from_lru(key);
         self.lru_order.push_back(key.to_string());
     }
 
-    /// 从 LRU 列表中移除
     fn remove_from_lru(&mut self, key: &str) {
         self.lru_order.retain(|k| k != key);
     }
 
-    /// 驱逐一个资源（LRU，跳过 pinned）
-    ///
-    /// 返回是否成功驱逐
     fn evict_one(&mut self) -> bool {
-        // 找到第一个未 pin 的资源
         let key_to_evict = self
             .lru_order
             .iter()
@@ -267,24 +254,16 @@ impl TextureCache {
 /// 缓存统计信息
 #[derive(Debug, Clone)]
 pub struct CacheStats {
-    /// 缓存条目数量
     pub entries: usize,
-    /// 当前占用（字节）
     pub used_bytes: usize,
-    /// 预算（字节）
     pub budget_bytes: usize,
-    /// 命中次数
     pub hits: u64,
-    /// 未命中次数
     pub misses: u64,
-    /// 驱逐次数
     pub evictions: u64,
-    /// 命中率
     pub hit_rate: f64,
 }
 
 impl CacheStats {
-    /// 格式化为可读字符串
     pub fn format(&self) -> String {
         format!(
             "Cache: {} entries, {:.1}MB / {:.1}MB ({:.1}%), hit rate: {:.1}%, evictions: {}",
@@ -306,9 +285,6 @@ impl CacheStats {
 mod tests {
     use super::*;
 
-    // 创建一个模拟纹理（用于测试）
-    // 注意：实际测试中需要 macroquad 上下文，这里只测试逻辑
-
     #[test]
     fn test_cache_stats_format() {
         let stats = CacheStats {
@@ -325,7 +301,7 @@ mod tests {
         assert!(formatted.contains("10 entries"));
         assert!(formatted.contains("50.0MB"));
         assert!(formatted.contains("256.0MB"));
-        assert!(formatted.contains("80.0%")); // hit rate
+        assert!(formatted.contains("80.0%"));
     }
 
     #[test]

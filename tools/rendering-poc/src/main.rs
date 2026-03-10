@@ -7,7 +7,6 @@
 ///  4. dynamic texture updates  (simulates video-frame injection per frame)
 ///
 /// Usage:  cargo run -p rendering-poc [path/to/background.webp]
-
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -160,9 +159,8 @@ impl Gpu {
             ..Default::default()
         }))
         .expect("no suitable GPU adapter");
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&Default::default(), None))
-                .expect("device creation failed");
+        let (device, queue) = pollster::block_on(adapter.request_device(&Default::default(), None))
+            .expect("device creation failed");
 
         let surface_cfg = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
@@ -304,8 +302,7 @@ impl Gpu {
             None,
             None,
         );
-        let egui_renderer =
-            egui_wgpu::Renderer::new(&device, surface_cfg.format, None, 1, false);
+        let egui_renderer = egui_wgpu::Renderer::new(&device, surface_cfg.format, None, 1, false);
 
         Self {
             window,
@@ -542,9 +539,9 @@ impl ApplicationHandler for App {
 fn main() {
     env_logger::init();
 
-    let bg = std::env::args().nth(1).unwrap_or_else(|| {
-        "assets/backgrounds/高中教室/bg001_sashool_h_19201440.webp".into()
-    });
+    let bg = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "assets/backgrounds/高中教室/bg001_sashool_h_19201440.webp".into());
     println!("Ring-rs rendering PoC  |  bg = {bg}");
 
     let el = EventLoop::new().unwrap();

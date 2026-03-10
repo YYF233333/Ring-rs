@@ -1,6 +1,11 @@
 //! # Host 层
 //!
-//! Visual Novel Engine 的宿主层实现，使用 macroquad 作为渲染和 IO 引擎。
+//! Visual Novel Engine 的宿主层实现。
+//!
+//! ## 渲染后端
+//!
+//! 使用 winit + wgpu + egui 作为渲染/窗口/UI 基础设施（RFC-007）。
+//! [`backend::WgpuBackend`] 封装了 GPU 初始化与帧渲染循环。
 //!
 //! ## 架构说明
 //!
@@ -16,6 +21,7 @@
 pub mod app;
 pub mod app_mode;
 pub mod audio;
+pub mod backend;
 pub mod command_executor;
 pub mod config;
 pub mod extensions;
@@ -25,7 +31,6 @@ pub mod persistent;
 pub mod renderer;
 pub mod resources;
 pub mod save_manager;
-pub mod screens;
 pub mod state;
 pub mod ui;
 

@@ -4,44 +4,55 @@
 //!
 //! ## 设计说明
 //!
-//! - `InputManager` 采集 macroquad 的鼠标和键盘事件
-//! - 根据当前 `WaitingReason` 决定如何处理输入
-//! - 实现输入防抖，避免重复触发
-//! - 支持选择分支的鼠标交互
+//! - `InputManager` 消费 winit 的 `WindowEvent` 维护内部键盘/鼠标状态
+//! - 每帧调用 `begin_frame(dt)` 清理 per-frame 状态并推进内部时钟
+//! - `update()` 根据当前 `WaitingReason` 将输入状态转换为 `RuntimeInput`
+//! - 实现输入防抖和长按快进
+//! - 支持选择分支的键盘导航和鼠标交互
 
-use macroquad::prelude::*;
+use std::collections::HashSet;
+
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
+use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 /// 输入防抖配置
 const CLICK_DEBOUNCE_SECONDS: f64 = 0.15;
 
-/// 长按快进配置
-/// 第一次按下后等待的时间，之后才开始快进
+/// 长按快进 — 首次按下后等待时间，之后开始快进
 const HOLD_INITIAL_DELAY: f64 = 0.3;
-/// 长按快进时的重复间隔（秒），越小越快
+/// 长按快进重复间隔（秒），越小越快
 const HOLD_REPEAT_INTERVAL: f64 = 0.05;
 
 /// 输入管理器
 ///
-/// 负责采集用户输入并转换为 RuntimeInput。
+/// 消费 winit `WindowEvent` 维护按键/鼠标状态，
+/// 每帧通过 `update()` 将其转换为 `RuntimeInput`。
 #[derive(Debug)]
 pub struct InputManager {
-    /// 上次点击时间（用于防抖）
+    // ── per-frame state（begin_frame 清除）───────────────────────────
+    just_pressed_keys: HashSet<KeyCode>,
+    mouse_just_pressed: bool,
+
+    // ── persistent state ─────────────────────────────────────────────
+    pressed_keys: HashSet<KeyCode>,
+    mouse_pressed: bool,
+    mouse_position: (f32, f32),
+
+    // ── 内部时钟 ────────────────────────────────────────────────────
+    current_time: f64,
+
+    // ── 游戏逻辑状态 ────────────────────────────────────────────────
     last_click_time: f64,
     /// 当前选择索引（用于选择分支）
     pub selected_index: usize,
     /// 鼠标悬停索引（用于选择分支）
     pub hovered_index: Option<usize>,
-    /// 选项数量（用于边界检查）
     choice_count: usize,
-    /// 是否有待处理的输入
     pending_input: Option<RuntimeInput>,
-    /// 选择框矩形区域缓存
     choice_rects: Vec<(f32, f32, f32, f32)>,
-    /// 长按计时器（用于快进）
     hold_timer: f64,
-    /// 上次快进触发时间
     last_hold_trigger_time: f64,
 }
 
@@ -49,6 +60,12 @@ impl InputManager {
     /// 创建新的输入管理器
     pub fn new() -> Self {
         Self {
+            just_pressed_keys: HashSet::new(),
+            mouse_just_pressed: false,
+            pressed_keys: HashSet::new(),
+            mouse_pressed: false,
+            mouse_position: (0.0, 0.0),
+            current_time: 0.0,
             last_click_time: 0.0,
             selected_index: 0,
             hovered_index: None,
@@ -59,6 +76,77 @@ impl InputManager {
             last_hold_trigger_time: 0.0,
         }
     }
+
+    // ── 事件接口 ─────────────────────────────────────────────────────
+
+    /// 消费 winit WindowEvent 更新内部按键/鼠标状态
+    pub fn process_event(&mut self, event: &WindowEvent) {
+        match event {
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let PhysicalKey::Code(key) = event.physical_key {
+                    match event.state {
+                        ElementState::Pressed if !event.repeat => {
+                            self.just_pressed_keys.insert(key);
+                            self.pressed_keys.insert(key);
+                        }
+                        ElementState::Pressed => {
+                            self.pressed_keys.insert(key);
+                        }
+                        ElementState::Released => {
+                            self.pressed_keys.remove(&key);
+                        }
+                    }
+                }
+            }
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Left,
+                ..
+            } => match state {
+                ElementState::Pressed => {
+                    self.mouse_just_pressed = true;
+                    self.mouse_pressed = true;
+                }
+                ElementState::Released => {
+                    self.mouse_pressed = false;
+                }
+            },
+            WindowEvent::CursorMoved { position, .. } => {
+                self.mouse_position = (position.x as f32, position.y as f32);
+            }
+            _ => {}
+        }
+    }
+
+    /// 帧开始时调用：推进内部时钟（不清除 per-frame 状态）
+    pub fn begin_frame(&mut self, dt: f32) {
+        self.current_time += dt as f64;
+    }
+
+    /// 帧结束时调用：清除 per-frame 状态（just_pressed 等）
+    ///
+    /// 必须在游戏逻辑消费输入之后、下一帧事件到来之前调用。
+    pub fn end_frame(&mut self) {
+        self.just_pressed_keys.clear();
+        self.mouse_just_pressed = false;
+    }
+
+    /// 获取当前鼠标位置
+    pub fn mouse_position(&self) -> (f32, f32) {
+        self.mouse_position
+    }
+
+    /// 获取当前鼠标是否按下
+    pub fn is_mouse_pressed(&self) -> bool {
+        self.mouse_pressed
+    }
+
+    /// 获取当前鼠标是否刚按下（本帧）
+    pub fn is_mouse_just_pressed(&self) -> bool {
+        self.mouse_just_pressed
+    }
+
+    // ── 选择分支 API ─────────────────────────────────────────────────
 
     /// 重置选择状态
     pub fn reset_choice(&mut self, choice_count: usize) {
@@ -73,46 +161,35 @@ impl InputManager {
         self.choice_rects = rects;
     }
 
-    /// 更新输入状态
-    ///
-    /// 根据当前的 `WaitingReason` 采集相应的输入。
-    /// 返回可能产生的 `RuntimeInput`。
-    ///
-    /// # 参数
-    /// - `waiting`: 当前的等待状态
-    /// - `dt`: 帧时间（秒），用于长按快进计时
+    // ── 主更新 ───────────────────────────────────────────────────────
+
+    /// 根据当前的 `WaitingReason` 将输入状态转换为 RuntimeInput
     pub fn update(&mut self, waiting: &WaitingReason, dt: f32) -> Option<RuntimeInput> {
-        // 如果有待处理的输入，先返回它
         if let Some(input) = self.pending_input.take() {
             return Some(input);
         }
 
         match waiting {
             WaitingReason::None => {
-                // 不等待时，不处理输入，重置长按计时器
                 self.hold_timer = 0.0;
                 self.last_hold_trigger_time = 0.0;
                 None
             }
             WaitingReason::WaitForClick => self.handle_click_input(dt),
             WaitingReason::WaitForChoice { choice_count } => {
-                // 如果选项数量变化，重置选择
                 if self.choice_count != *choice_count {
                     self.reset_choice(*choice_count);
                 }
-                // 选择分支时不支持长按快进，重置计时器
                 self.hold_timer = 0.0;
                 self.last_hold_trigger_time = 0.0;
                 self.handle_choice_input()
             }
             WaitingReason::WaitForTime(_) => {
-                // 时间等待可被点击打断（不支持长按快进，仅单次点击）
                 self.hold_timer = 0.0;
                 self.last_hold_trigger_time = 0.0;
                 self.handle_time_wait_input()
             }
             WaitingReason::WaitForSignal(_) => {
-                // 信号等待由外部系统触发，暂不处理
                 self.hold_timer = 0.0;
                 self.last_hold_trigger_time = 0.0;
                 None
@@ -120,45 +197,71 @@ impl InputManager {
         }
     }
 
-    /// 处理点击输入（支持长按快进）
+    /// 检查是否刚刚发生点击（不消耗输入），用于 UI 反馈
+    pub fn is_clicking(&self) -> bool {
+        self.mouse_just_pressed
+            || self.is_key_just_pressed(KeyCode::Space)
+            || self.is_key_just_pressed(KeyCode::Enter)
+    }
+
+    /// 设置待处理的输入（用于外部系统注入，如信号）
+    pub fn inject_input(&mut self, input: RuntimeInput) {
+        self.pending_input = Some(input);
+    }
+
+    /// 获取当前选中的索引
+    pub fn get_selected_index(&self) -> usize {
+        self.selected_index
+    }
+
+    // ── 按键查询 ─────────────────────────────────────────────────────
+
+    /// 检查指定按键是否在本帧刚被按下
+    pub fn is_key_just_pressed_pub(&self, key: KeyCode) -> bool {
+        self.just_pressed_keys.contains(&key)
+    }
+
+    /// 检查指定按键是否正在被按住
+    pub fn is_key_down_pub(&self, key: KeyCode) -> bool {
+        self.pressed_keys.contains(&key)
+    }
+
+    fn is_key_just_pressed(&self, key: KeyCode) -> bool {
+        self.just_pressed_keys.contains(&key)
+    }
+
+    fn is_key_down(&self, key: KeyCode) -> bool {
+        self.pressed_keys.contains(&key)
+    }
+
     fn handle_click_input(&mut self, dt: f32) -> Option<RuntimeInput> {
-        let current_time = get_time();
+        let current_time = self.current_time;
         let dt_f64 = dt as f64;
 
-        // 检查是否刚刚按下（单次点击检测，优先处理）
-        let just_pressed = is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter);
-        // 检查鼠标点击（不支持长按，只支持单次点击）
-        let mouse_clicked = is_mouse_button_pressed(MouseButton::Left);
-        // 检查是否按下空格或回车（长按检测）
-        let is_holding = is_key_down(KeyCode::Space) || is_key_down(KeyCode::Enter);
+        let just_pressed =
+            self.is_key_just_pressed(KeyCode::Space) || self.is_key_just_pressed(KeyCode::Enter);
+        let mouse_clicked = self.mouse_just_pressed;
+        let is_holding = self.is_key_down(KeyCode::Space) || self.is_key_down(KeyCode::Enter);
 
-        // 优先处理单次按下或鼠标点击（立即响应）
-        if just_pressed || mouse_clicked {
-            // 检查防抖
-            if current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
-                self.last_click_time = current_time;
-                self.hold_timer = 0.0; // 重置长按计时器
-                self.last_hold_trigger_time = 0.0;
-                return Some(RuntimeInput::Click);
-            }
+        if (just_pressed || mouse_clicked)
+            && current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS
+        {
+            self.last_click_time = current_time;
+            self.hold_timer = 0.0;
+            self.last_hold_trigger_time = 0.0;
+            return Some(RuntimeInput::Click);
         }
 
-        // 处理长按快进
         if is_holding {
-            // 长按状态：更新计时器
             self.hold_timer += dt_f64;
-
-            // 检查是否超过初始延迟
-            if self.hold_timer >= HOLD_INITIAL_DELAY {
-                // 开始快进：以固定频率触发输入
-                if current_time - self.last_hold_trigger_time >= HOLD_REPEAT_INTERVAL {
-                    self.last_hold_trigger_time = current_time;
-                    self.last_click_time = current_time;
-                    return Some(RuntimeInput::Click);
-                }
+            if self.hold_timer >= HOLD_INITIAL_DELAY
+                && current_time - self.last_hold_trigger_time >= HOLD_REPEAT_INTERVAL
+            {
+                self.last_hold_trigger_time = current_time;
+                self.last_click_time = current_time;
+                return Some(RuntimeInput::Click);
             }
         } else {
-            // 没有按下：重置长按计时器
             self.hold_timer = 0.0;
             self.last_hold_trigger_time = 0.0;
         }
@@ -166,12 +269,11 @@ impl InputManager {
         None
     }
 
-    /// 处理时间等待期间的打断输入（仅单次点击，不支持长按快进）
     fn handle_time_wait_input(&mut self) -> Option<RuntimeInput> {
-        let current_time = get_time();
-        let clicked = is_mouse_button_pressed(MouseButton::Left)
-            || is_key_pressed(KeyCode::Space)
-            || is_key_pressed(KeyCode::Enter);
+        let current_time = self.current_time;
+        let clicked = self.mouse_just_pressed
+            || self.is_key_just_pressed(KeyCode::Space)
+            || self.is_key_just_pressed(KeyCode::Enter);
 
         if clicked && current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
             self.last_click_time = current_time;
@@ -181,28 +283,26 @@ impl InputManager {
         None
     }
 
-    /// 处理选择输入
     fn handle_choice_input(&mut self) -> Option<RuntimeInput> {
         if self.choice_count == 0 {
             return None;
         }
 
-        // 更新鼠标悬停状态
         self.update_hover_state();
 
         // 键盘导航
-        if is_key_pressed(KeyCode::Up) || is_key_pressed(KeyCode::W) {
+        if self.is_key_just_pressed(KeyCode::ArrowUp) || self.is_key_just_pressed(KeyCode::KeyW) {
             self.selected_index = self.selected_index.saturating_sub(1);
-            self.hovered_index = None; // 键盘操作时清除悬停状态
+            self.hovered_index = None;
         }
-        if is_key_pressed(KeyCode::Down) || is_key_pressed(KeyCode::S) {
+        if self.is_key_just_pressed(KeyCode::ArrowDown) || self.is_key_just_pressed(KeyCode::KeyS) {
             self.selected_index = (self.selected_index + 1).min(self.choice_count - 1);
-            self.hovered_index = None; // 键盘操作时清除悬停状态
+            self.hovered_index = None;
         }
 
-        // 键盘确认选择
-        if is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::Space) {
-            let current_time = get_time();
+        // 键盘确认
+        if self.is_key_just_pressed(KeyCode::Enter) || self.is_key_just_pressed(KeyCode::Space) {
+            let current_time = self.current_time;
             if current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
                 self.last_click_time = current_time;
                 return Some(RuntimeInput::ChoiceSelected {
@@ -211,11 +311,11 @@ impl InputManager {
             }
         }
 
-        // 鼠标点击选择（点击悬停的选项）
-        if is_mouse_button_pressed(MouseButton::Left)
+        // 鼠标点击选择
+        if self.mouse_just_pressed
             && let Some(hover_idx) = self.hovered_index
         {
-            let current_time = get_time();
+            let current_time = self.current_time;
             if current_time - self.last_click_time >= CLICK_DEBOUNCE_SECONDS {
                 self.last_click_time = current_time;
                 self.selected_index = hover_idx;
@@ -226,9 +326,8 @@ impl InputManager {
         None
     }
 
-    /// 更新鼠标悬停状态
     fn update_hover_state(&mut self) {
-        let (mouse_x, mouse_y) = mouse_position();
+        let (mouse_x, mouse_y) = self.mouse_position;
         self.hovered_index = None;
 
         for (i, &(x, y, w, h)) in self.choice_rects.iter().enumerate() {
@@ -239,12 +338,9 @@ impl InputManager {
         }
     }
 
-    /// 处理选择项的鼠标悬停（外部调用版本）
-    ///
-    /// 根据鼠标位置更新选中的选项索引。
-    /// 返回是否有选项被悬停。
+    /// 根据鼠标位置更新选中的选项索引，返回是否有选项被悬停
     pub fn handle_choice_hover(&mut self, choice_rects: &[(f32, f32, f32, f32)]) -> bool {
-        let (mouse_x, mouse_y) = mouse_position();
+        let (mouse_x, mouse_y) = self.mouse_position;
 
         for (i, &(x, y, w, h)) in choice_rects.iter().enumerate() {
             if mouse_x >= x && mouse_x <= x + w && mouse_y >= y && mouse_y <= y + h {
@@ -255,27 +351,6 @@ impl InputManager {
 
         self.hovered_index = None;
         false
-    }
-
-    /// 设置待处理的输入
-    ///
-    /// 用于外部系统注入输入（如信号）。
-    pub fn inject_input(&mut self, input: RuntimeInput) {
-        self.pending_input = Some(input);
-    }
-
-    /// 获取当前选中的索引
-    pub fn get_selected_index(&self) -> usize {
-        self.selected_index
-    }
-
-    /// 检查是否刚刚发生点击（不消耗输入）
-    ///
-    /// 用于 UI 反馈，不会触发 RuntimeInput。
-    pub fn is_clicking(&self) -> bool {
-        is_mouse_button_pressed(MouseButton::Left)
-            || is_key_pressed(KeyCode::Space)
-            || is_key_pressed(KeyCode::Enter)
     }
 }
 
@@ -310,9 +385,10 @@ mod tests {
     fn test_inject_input() {
         let mut manager = InputManager::new();
         manager.inject_input(RuntimeInput::Click);
-
-        // 模拟 update，应该返回注入的输入
-        // 注意：这个测试需要 macroquad 环境，在单元测试中可能无法完全运行
         assert!(manager.pending_input.is_some());
+
+        let result = manager.update(&WaitingReason::WaitForClick, 0.016);
+        assert_eq!(result, Some(RuntimeInput::Click));
+        assert!(manager.pending_input.is_none());
     }
 }

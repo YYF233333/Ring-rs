@@ -3,9 +3,6 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use macroquad::prelude::screen_height;
-use macroquad::prelude::screen_width;
-
 use crate::renderer::animation::ObjectId;
 use crate::renderer::effects::{EffectKind, EffectTarget, defaults};
 use crate::renderer::{AnimatableCharacter, position_to_preset_name};
@@ -264,8 +261,8 @@ pub fn apply_character_move(
     let duration = request.effect.duration_or(defaults::MOVE_DURATION);
 
     let core = ctx.core_mut();
-    let screen_w = screen_width();
-    let screen_h = screen_height();
+    let screen_w = core.renderer.screen_width();
+    let screen_h = core.renderer.screen_height();
     let (offset_x, offset_y, start_scale) =
         compute_move_transition(&old_preset, &new_preset, screen_w, screen_h);
     let Some(character) = core.render_state.get_character_anim(alias).cloned() else {

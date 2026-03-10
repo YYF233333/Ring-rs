@@ -1,8 +1,5 @@
 //! # Toast 提示组件
 
-use super::{UiContext, draw_rounded_rect};
-use macroquad::prelude::*;
-
 /// Toast 类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToastType {
@@ -43,7 +40,6 @@ impl Toast {
     pub fn update(&mut self, dt: f32) -> bool {
         self.remaining_time -= dt;
 
-        // 最后 0.3 秒开始淡出
         if self.remaining_time <= 0.3 {
             self.fade_progress = 1.0 - (self.remaining_time / 0.3).max(0.0);
         }
@@ -54,9 +50,7 @@ impl Toast {
 
 /// Toast 管理器
 pub struct ToastManager {
-    /// 活跃的 Toast 列表
     toasts: Vec<Toast>,
-    /// 默认显示时间
     default_duration: f32,
 }
 
@@ -105,79 +99,9 @@ impl ToastManager {
         self.toasts.retain_mut(|toast| !toast.update(dt));
     }
 
-    /// 绘制所有 Toast
-    pub fn draw(&self, ctx: &UiContext, text_renderer: &crate::renderer::TextRenderer) {
-        let theme = &ctx.theme;
-        let toast_height = theme.tokens.control.toast_height;
-        let toast_width = theme.tokens.control.toast_width;
-        let margin = theme.spacing;
-        let start_y = theme.spacing_large;
-
-        for (i, toast) in self.toasts.iter().enumerate() {
-            let y = start_y + i as f32 * (toast_height + margin);
-            let x = ctx.screen_width - toast_width - margin;
-
-            // 根据类型选择颜色
-            let base_color = match toast.toast_type {
-                ToastType::Info => theme.bg_secondary,
-                ToastType::Success => theme.success,
-                ToastType::Warning => theme.warning,
-                ToastType::Error => theme.danger,
-            };
-
-            // 应用淡出透明度
-            let alpha = 1.0 - toast.fade_progress;
-            let bg_color = Color::new(base_color.r, base_color.g, base_color.b, 0.9 * alpha);
-            let text_color = Color::new(
-                theme.text_primary.r,
-                theme.text_primary.g,
-                theme.text_primary.b,
-                alpha,
-            );
-
-            // 绘制背景
-            draw_rounded_rect(
-                x,
-                y,
-                toast_width,
-                toast_height,
-                theme.corner_radius,
-                bg_color,
-            );
-
-            // 绘制图标（简化为文字）
-            let icon = if let Some(skin) = &ctx.skin {
-                match toast.toast_type {
-                    ToastType::Info => skin.icons.info.as_deref().unwrap_or("i"),
-                    ToastType::Success => skin.icons.success.as_deref().unwrap_or("v"),
-                    ToastType::Warning => skin.icons.warning.as_deref().unwrap_or("!"),
-                    ToastType::Error => skin.icons.error.as_deref().unwrap_or("x"),
-                }
-            } else {
-                match toast.toast_type {
-                    ToastType::Info => "i",
-                    ToastType::Success => "v",
-                    ToastType::Warning => "!",
-                    ToastType::Error => "x",
-                }
-            };
-            text_renderer.draw_ui_text(
-                icon,
-                x + theme.spacing,
-                y + toast_height / 2.0 + theme.font_size_normal * 0.3,
-                theme.font_size_normal,
-                text_color,
-            );
-
-            // 绘制消息
-            text_renderer.draw_ui_text(
-                &toast.message,
-                x + theme.spacing * 2.5,
-                y + toast_height / 2.0 + theme.font_size_small * 0.3,
-                theme.font_size_small,
-                text_color,
-            );
-        }
+    /// 获取所有活跃 Toast（用于 egui 覆盖渲染）
+    pub fn toasts(&self) -> &[Toast] {
+        &self.toasts
     }
 
     /// 是否有活跃的 Toast

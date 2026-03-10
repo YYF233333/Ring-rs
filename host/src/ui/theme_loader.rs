@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-use macroquad::prelude::Color;
+use super::theme::Color;
 use serde::Deserialize;
 use tracing::warn;
 

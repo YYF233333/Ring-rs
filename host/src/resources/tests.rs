@@ -34,7 +34,6 @@ fn test_image_crate_can_decode_webp() {
 fn test_resource_manager_creation() {
     let manager = ResourceManager::new("assets", 256);
     assert_eq!(manager.texture_count(), 0);
-    assert_eq!(manager.sound_count(), 0);
 }
 
 #[test]
