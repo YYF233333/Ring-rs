@@ -6,15 +6,30 @@
 use super::persistent::PersistentStore;
 use crate::manifest::Manifest;
 use crate::resources::path::{extract_base_dir, normalize_logical_path};
-use crate::resources::{ResourceManager, extract_script_id};
+use crate::resources::{LogicalPath, ResourceManager, ZipSource, extract_script_id};
 use crate::save_manager::SaveManager;
-use crate::{AppConfig, AssetSourceType, AudioManager, UserSettings, ZipSource};
+use crate::{AppConfig, AssetSourceType, AudioManager, UserSettings};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{error, info, warn};
 use vn_runtime::{Parser, analyze_script, extract_resource_references};
 
 use super::script_loader::{scan_scripts, scan_scripts_from_zip};
+
+/// Create the resource source from config (centralized source creation).
+pub fn create_resource_source(config: &AppConfig) -> Arc<dyn crate::resources::ResourceSource> {
+    let assets_root = assets_root_string(config);
+    match config.asset_source {
+        AssetSourceType::Fs => Arc::new(crate::resources::FsSource::new(&assets_root)),
+        AssetSourceType::Zip => {
+            let zip_path = config
+                .zip_path
+                .as_ref()
+                .expect("Zip mode requires zip_path");
+            Arc::new(ZipSource::new(zip_path))
+        }
+    }
+}
 
 pub fn assets_root_string(config: &AppConfig) -> String {
     config.assets_root.to_string_lossy().to_string()
@@ -40,7 +55,6 @@ pub fn create_resource_manager(config: &AppConfig) -> ResourceManager {
             let zip_path = config.zip_path.as_ref().expect("Zip 模式必须配置 zip_path");
             info!(zip_path = %zip_path, "资源来源: ZIP 文件");
             ResourceManager::with_source(
-                &assets_root,
                 Arc::new(ZipSource::new(zip_path)),
                 config.resources.texture_cache_size_mb,
             )
@@ -48,13 +62,10 @@ pub fn create_resource_manager(config: &AppConfig) -> ResourceManager {
     }
 }
 
-pub fn create_audio_manager(config: &AppConfig) -> Option<AudioManager> {
-    let assets_root = assets_root_string(config);
-
-    let use_zip = matches!(config.asset_source, AssetSourceType::Zip);
-    match AudioManager::new(&assets_root, use_zip) {
+pub fn create_audio_manager(_config: &AppConfig) -> Option<AudioManager> {
+    match AudioManager::new() {
         Ok(am) => {
-            info!(zip_mode = use_zip, "Audio system initialized");
+            info!("Audio system initialized");
             Some(am)
         }
         Err(e) => {
@@ -65,39 +76,21 @@ pub fn create_audio_manager(config: &AppConfig) -> Option<AudioManager> {
 }
 
 pub fn load_manifest(config: &AppConfig, resource_manager: &ResourceManager) -> Manifest {
-    match config.asset_source {
-        AssetSourceType::Fs => {
-            let manifest_path = config.manifest_full_path();
-            match Manifest::load(&manifest_path.to_string_lossy()) {
-                Ok(m) => {
-                    info!(path = ?manifest_path, "资源清单加载成功");
-                    m
-                }
-                Err(e) => {
-                    warn!(path = ?manifest_path, error = %e, "资源清单加载失败，使用默认配置");
-                    Manifest::with_defaults()
-                }
+    let manifest_path = LogicalPath::new(&config.manifest_path);
+    match resource_manager.read_text(&manifest_path) {
+        Ok(content) => match Manifest::load_from_bytes(content.as_bytes()) {
+            Ok(m) => {
+                info!(path = %manifest_path, "Manifest loaded");
+                m
             }
-        }
-        AssetSourceType::Zip => {
-            // ZIP 模式：通过 ResourceManager 读取
-            let manifest_path = &config.manifest_path;
-            match resource_manager.read_text(manifest_path) {
-                Ok(content) => match Manifest::load_from_bytes(content.as_bytes()) {
-                    Ok(m) => {
-                        info!(path = %manifest_path, "资源清单加载成功");
-                        m
-                    }
-                    Err(e) => {
-                        warn!(path = %manifest_path, error = %e, "资源清单解析失败，使用默认配置");
-                        Manifest::with_defaults()
-                    }
-                },
-                Err(e) => {
-                    warn!(path = %manifest_path, error = %e, "资源清单加载失败，使用默认配置");
-                    Manifest::with_defaults()
-                }
+            Err(e) => {
+                warn!(path = %manifest_path, error = %e, "Manifest parse failed, using defaults");
+                Manifest::with_defaults()
             }
+        },
+        Err(e) => {
+            warn!(path = %manifest_path, error = %e, "Manifest read failed, using defaults");
+            Manifest::with_defaults()
         }
     }
 }
@@ -158,7 +151,7 @@ pub fn run_script_check(
         // 读取脚本内容
         let logical_path = normalize_logical_path(&script_path.to_string_lossy());
         let script_id = extract_script_id(&logical_path);
-        let content = match resource_manager.read_text(&logical_path) {
+        let content = match resource_manager.read_text(&LogicalPath::new(&logical_path)) {
             Ok(c) => c,
             Err(e) => {
                 warn!(script_id = %script_id, error = %e, "脚本无法读取");
@@ -207,16 +200,15 @@ pub fn run_script_check(
             }
         }
 
-        // 检查资源引用
         let refs = extract_resource_references(&script);
         for r in refs {
-            let resource_path = config.assets_root.join(&r.resolved_path);
-            if !resource_path.exists() {
+            let lp = LogicalPath::new(&r.resolved_path);
+            if !resource_manager.resource_exists(&lp) {
                 warn!(
                     script_id = %script_id,
                     resource_type = %r.resource_type,
                     path = %r.resolved_path,
-                    "资源不存在"
+                    "Resource not found"
                 );
                 total_warnings += 1;
             }

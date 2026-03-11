@@ -37,6 +37,20 @@ pub struct PanelSkin {
     pub border: Option<String>,
 }
 
+/// 从 JSON 字符串解析皮肤配置。
+pub fn load_skin_from_str(content: &str) -> Option<UiSkinConfig> {
+    match serde_json::from_str::<UiSkinConfig>(content) {
+        Ok(cfg) => {
+            info!("UI skin config loaded");
+            Some(cfg)
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to parse UI skin config, using default");
+            None
+        }
+    }
+}
+
 pub fn load_skin(path: &Path) -> Option<UiSkinConfig> {
     if !path.exists() {
         warn!(path = ?path, "UI 皮肤文件不存在，将使用默认绘制");

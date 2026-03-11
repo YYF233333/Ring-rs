@@ -4,7 +4,7 @@
 
 use crate::manifest::Manifest;
 use crate::rendering_types::{DrawCommand, Texture};
-use crate::resources::ResourceManager;
+use crate::resources::{LogicalPath, ResourceManager};
 
 use super::scene_transition::SceneTransitionPhase;
 use super::{DrawMode, RenderState, Renderer, SceneTransitionType};
@@ -28,7 +28,7 @@ impl Renderer {
         // 旧背景（过渡中）
         if self.transition.is_active()
             && let Some(ref old_bg_path) = self.old_background
-            && let Some(texture) = resource_manager.peek_texture(old_bg_path)
+            && let Some(texture) = resource_manager.peek_texture(&LogicalPath::new(old_bg_path))
         {
             let alpha = self.transition.old_content_alpha();
             if alpha > 0.0 {
@@ -46,7 +46,7 @@ impl Renderer {
 
         // 新（当前）背景
         if let Some(ref bg_path) = state.current_background
-            && let Some(texture) = resource_manager.peek_texture(bg_path)
+            && let Some(texture) = resource_manager.peek_texture(&LogicalPath::new(bg_path))
         {
             let alpha = self.transition.new_content_alpha();
             let (dw, dh, x, y) = self.calculate_draw_rect_for(&*texture, DrawMode::Cover);
@@ -79,7 +79,9 @@ impl Renderer {
         let base_scale = self.get_scale_factor();
 
         for (_alias, character) in characters {
-            if let Some(texture) = resource_manager.peek_texture(&character.texture_path) {
+            if let Some(texture) =
+                resource_manager.peek_texture(&LogicalPath::new(&character.texture_path))
+            {
                 let group_config = manifest.get_group_config(&character.texture_path);
                 let position_name = super::position_to_preset_name(character.position);
                 let preset = manifest.get_preset(position_name);
@@ -160,7 +162,9 @@ impl Renderer {
                 let progress = self.scene_transition.progress();
                 let phase = self.scene_transition.phase();
 
-                if let Some(mask_texture) = resource_manager.peek_texture(mask_path) {
+                if let Some(mask_texture) =
+                    resource_manager.peek_texture(&LogicalPath::new(mask_path))
+                {
                     let (dissolve_progress, overlay_alpha) = match phase {
                         SceneTransitionPhase::FadeIn => (progress, 1.0f32),
                         SceneTransitionPhase::Blackout => (1.0, 1.0),

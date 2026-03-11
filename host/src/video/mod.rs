@@ -237,11 +237,11 @@ impl VideoPlayer {
         self.current_frame = None;
         self.pending_frame = None;
 
-        if let Some(temp_path) = self.temp_video_file.take() {
-            if let Err(e) = std::fs::remove_file(&temp_path) {
-                debug!(error = %e, path = %temp_path.display(),
+        if let Some(temp_path) = self.temp_video_file.take()
+            && let Err(e) = std::fs::remove_file(&temp_path)
+        {
+            debug!(error = %e, path = %temp_path.display(),
                     "Failed to clean up temp video file");
-            }
         }
     }
 }
@@ -275,13 +275,13 @@ pub fn detect_ffmpeg() -> Option<PathBuf> {
     }
 
     // 2. 可执行文件同目录（发布模式）
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let beside_exe = exe_dir.join(exe_name);
-            if beside_exe.exists() {
-                debug!(path = %beside_exe.display(), "Found FFmpeg beside executable");
-                return Some(beside_exe);
-            }
+    if let Ok(exe_path) = std::env::current_exe()
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        let beside_exe = exe_dir.join(exe_name);
+        if beside_exe.exists() {
+            debug!(path = %beside_exe.display(), "Found FFmpeg beside executable");
+            return Some(beside_exe);
         }
     }
 

@@ -123,22 +123,22 @@ pub fn update(app_state: &mut AppState, dt: f32) {
         }
 
         // cutscene 视频播放推进
-        if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason {
-            if id == SIGNAL_CUTSCENE {
-                if app_state.video_player.is_playing() {
-                    // 推进视频帧
-                    app_state.video_player.update(dt);
+        if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
+            && id == SIGNAL_CUTSCENE
+        {
+            if app_state.video_player.is_playing() {
+                // 推进视频帧
+                app_state.video_player.update(dt);
 
-                    // 尝试启动音频播放
-                    try_start_video_audio(app_state);
+                // 尝试启动音频播放
+                try_start_video_audio(app_state);
 
-                    if app_state.video_player.is_done() {
-                        finish_cutscene(app_state);
-                    }
-                } else {
-                    // 视频未在播放（启动失败或已完成），立即发信号跳过
+                if app_state.video_player.is_done() {
                     finish_cutscene(app_state);
                 }
+            } else {
+                // 视频未在播放（启动失败或已完成），立即发信号跳过
+                finish_cutscene(app_state);
             }
         }
 

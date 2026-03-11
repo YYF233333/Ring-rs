@@ -582,15 +582,15 @@ fn detect_ffmpeg_for_release() -> Option<PathBuf> {
     } else {
         "which"
     };
-    if let Ok(output) = std::process::Command::new(which_cmd).arg(exe_name).output() {
-        if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout);
-            let first_line = path_str.lines().next().unwrap_or("").trim();
-            if !first_line.is_empty() {
-                let p = PathBuf::from(first_line);
-                if p.exists() {
-                    return Some(p);
-                }
+    if let Ok(output) = std::process::Command::new(which_cmd).arg(exe_name).output()
+        && output.status.success()
+    {
+        let path_str = String::from_utf8_lossy(&output.stdout);
+        let first_line = path_str.lines().next().unwrap_or("").trim();
+        if !first_line.is_empty() {
+            let p = PathBuf::from(first_line);
+            if p.exists() {
+                return Some(p);
             }
         }
     }

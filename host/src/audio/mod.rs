@@ -11,44 +11,32 @@
 //!
 //! ## 路径处理
 //!
-//! 音频路径使用**逻辑路径**（相对于 assets_root），由调用方负责规范化。
-//! 内部根据 `use_zip_mode` 决定从文件系统还是临时文件加载。
+//! 音频字节统一由调用方通过 [`ResourceManager`] 读取后，
+//! 调用 [`AudioManager::cache_audio_bytes`] 预缓存。
+//! `AudioManager` 不直接访问文件系统或 ZIP。
 
 mod playback;
 
 use rodio::{DeviceSinkBuilder, MixerDeviceSink, Player};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use tracing::debug;
 
 /// 音频管理器
 ///
 /// 负责管理 BGM 和 SFX 的播放状态。
+/// 音频字节通过 [`cache_audio_bytes`](AudioManager::cache_audio_bytes) 注入，
+/// 不直接持有文件系统路径或资源来源。
 pub struct AudioManager {
-    /// 设备输出 Sink（必须保持存活）
     device_sink: MixerDeviceSink,
-    /// BGM 播放器
     bgm_sink: Option<Player>,
-    /// 当前 BGM 路径（逻辑路径）
     current_bgm_path: Option<String>,
-    /// BGM 主音量 (0.0 - 1.0)
     bgm_volume: f32,
-    /// SFX 主音量 (0.0 - 1.0)
     sfx_volume: f32,
-    /// 是否静音
     muted: bool,
-    /// 淡入淡出状态
     fade_state: FadeState,
-    /// 资源基础路径（文件系统模式使用）
-    base_path: PathBuf,
-    /// 是否使用 ZIP 模式
-    use_zip_mode: bool,
     /// 音频字节缓存（逻辑路径 -> 字节数据）
-    /// 用于 ZIP 模式，避免重复从 ResourceManager 读取
     audio_cache: HashMap<String, Vec<u8>>,
-    /// Duck 当前乘数 (1.0 = 正常, DUCK_VOLUME_RATIO = 压低)
     duck_multiplier: f32,
-    /// Duck 目标乘数
     duck_target: f32,
 }
 
@@ -81,10 +69,7 @@ enum FadeState {
 
 impl AudioManager {
     /// 创建新的音频管理器
-    ///
-    /// `use_zip_mode` 为 true 时从预缓存的字节数据加载音频，
-    /// 为 false 时从文件系统直接读取。
-    pub fn new(base_path: &str, use_zip_mode: bool) -> Result<Self, String> {
+    pub fn new() -> Result<Self, String> {
         let device_sink = DeviceSinkBuilder::open_default_sink()
             .map_err(|e| format!("Failed to initialize audio output: {}", e))?;
 
@@ -96,31 +81,17 @@ impl AudioManager {
             sfx_volume: 1.0,
             muted: false,
             fade_state: FadeState::None,
-            base_path: PathBuf::from(base_path),
-            use_zip_mode,
             audio_cache: HashMap::new(),
             duck_multiplier: 1.0,
             duck_target: 1.0,
         })
     }
 
-    /// 预加载音频字节数据（用于 ZIP 模式）
+    /// 预缓存音频字节数据。
     ///
-    /// 在 ZIP 模式下，需要先通过 ResourceManager 读取音频字节，
-    /// 然后调用此方法缓存数据。
+    /// 调用方通过 ResourceManager 读取音频字节后，注入此缓存。
     pub fn cache_audio_bytes(&mut self, logical_path: &str, bytes: Vec<u8>) {
         self.audio_cache.insert(logical_path.to_string(), bytes);
-    }
-
-    /// 解析音频路径到完整文件系统路径（仅文件系统模式使用）
-    fn resolve_fs_path(&self, logical_path: &str) -> PathBuf {
-        use crate::resources::normalize_logical_path;
-
-        // 规范化逻辑路径
-        let normalized = normalize_logical_path(logical_path);
-
-        // 拼接 base_path
-        self.base_path.join(&normalized)
     }
 
     /// 设置 BGM 音量
@@ -252,15 +223,13 @@ mod tests {
 
     #[test]
     fn test_volume_settings() {
-        // 注意：这个测试可能在没有音频设备的环境下失败
-        if let Ok(mut manager) = AudioManager::new("assets", false) {
+        if let Ok(mut manager) = AudioManager::new() {
             manager.set_bgm_volume(0.5);
             assert_eq!(manager.bgm_volume(), 0.5);
 
             manager.set_sfx_volume(0.7);
             assert_eq!(manager.sfx_volume(), 0.7);
 
-            // 测试音量限制
             manager.set_bgm_volume(1.5);
             assert_eq!(manager.bgm_volume(), 1.0);
 
@@ -271,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_mute_toggle() {
-        if let Ok(mut manager) = AudioManager::new("assets", false) {
+        if let Ok(mut manager) = AudioManager::new() {
             assert!(!manager.is_muted());
             manager.toggle_mute();
             assert!(manager.is_muted());
@@ -282,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_duck_unduck_state() {
-        if let Ok(mut manager) = AudioManager::new("assets", false) {
+        if let Ok(mut manager) = AudioManager::new() {
             assert_eq!(manager.duck_multiplier, 1.0);
             assert_eq!(manager.duck_target, 1.0);
 

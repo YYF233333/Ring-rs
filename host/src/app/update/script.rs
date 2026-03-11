@@ -8,8 +8,7 @@ use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 
 use crate::ExecuteResult;
-use crate::config::AssetSourceType;
-use crate::resources::normalize_logical_path;
+use crate::resources::LogicalPath;
 use crate::video::VideoError;
 
 use super::super::AppState;
@@ -297,42 +296,17 @@ pub fn finish_cutscene(app_state: &mut AppState) {
 
 /// 解析视频路径为真实文件系统路径。
 ///
-/// - FS 模式：规范化逻辑路径后拼接 assets_root。
-/// - ZIP 模式：从 ZIP 读取视频字节并写入临时文件，返回临时文件路径。
-///
-/// 返回 `(resolved_filesystem_path, Option<temp_file_to_cleanup>)`。
+/// 通过 `ResourceManager::materialize_to_fs` 统一处理 FS/ZIP 模式。
 fn resolve_video_path(
     app_state: &mut AppState,
     logical_path: &str,
 ) -> Result<(PathBuf, Option<PathBuf>), VideoError> {
-    let normalized = normalize_logical_path(logical_path);
+    let path = LogicalPath::new(logical_path);
+    let temp_dir = std::env::temp_dir().join("ring-vn-video");
 
-    match app_state.config.asset_source {
-        AssetSourceType::Fs => {
-            let resolved = app_state.config.assets_root.join(&normalized);
-            Ok((resolved, None))
-        }
-        AssetSourceType::Zip => {
-            let bytes = app_state
-                .core
-                .resource_manager
-                .read_bytes(&normalized)
-                .map_err(|e| VideoError::FileNotFound(format!("{} (zip: {})", normalized, e)))?;
-
-            let temp_dir = std::env::temp_dir().join("ring-vn-video");
-            std::fs::create_dir_all(&temp_dir).map_err(VideoError::Io)?;
-
-            let filename = normalized.rsplit('/').next().unwrap_or("video.webm");
-            let temp_path = temp_dir.join(filename);
-
-            std::fs::write(&temp_path, &bytes).map_err(VideoError::Io)?;
-            info!(
-                temp_path = %temp_path.display(),
-                size_mb = bytes.len() as f64 / 1_048_576.0,
-                "ZIP 模式：视频已提取到临时文件"
-            );
-
-            Ok((temp_path.clone(), Some(temp_path)))
-        }
-    }
+    app_state
+        .core
+        .resource_manager
+        .materialize_to_fs(&path, &temp_dir)
+        .map_err(|e| VideoError::FileNotFound(format!("{} ({})", path, e)))
 }

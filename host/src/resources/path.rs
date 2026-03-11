@@ -4,10 +4,80 @@
 //!
 //! ## 设计原则
 //!
-//! - 程序内部统一使用**相对于 assets_root 的逻辑路径**
+//! - 程序内部统一使用 [`LogicalPath`] 表示**相对于 assets_root 的逻辑路径**
 //! - 使用 `/` 作为路径分隔符（跨平台统一）
 //! - 路径不包含 `assets/` 前缀
-//! - 加载时根据 ResourceSource 类型决定如何解析到实际路径
+//! - 加载时根据 `ResourceSource` 类型决定如何解析到实际路径
+//!
+//! ## LogicalPath newtype
+//!
+//! [`LogicalPath`] 是规范化逻辑路径的 newtype 包装。所有通过 [`ResourceManager`]
+//! 和 [`ResourceSource`] 进行的资源访问都使用此类型，编译期防止逻辑路径与文件系统路径混用。
+
+use std::path::PathBuf;
+
+/// 规范化的逻辑资源路径。
+///
+/// 不变量：
+/// - 相对于 assets_root（不含 `assets/` 前缀）
+/// - 使用 `/` 分隔符
+/// - 已解析 `..` 和 `.`
+///
+/// 只能通过 [`LogicalPath::new()`] 构造（内部调用 [`normalize_logical_path`]），
+/// 保证所有实例都满足不变量。
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LogicalPath(String);
+
+impl LogicalPath {
+    /// 从原始字符串构造，内部自动规范化。
+    pub fn new(raw: &str) -> Self {
+        Self(normalize_logical_path(raw))
+    }
+
+    /// 获取内部字符串切片。
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// 提取文件名（不含扩展名）。
+    pub fn file_stem(&self) -> &str {
+        let filename = self.0.rsplit('/').next().unwrap_or(&self.0);
+        if let Some(dot_pos) = filename.rfind('.') {
+            &filename[..dot_pos]
+        } else {
+            filename
+        }
+    }
+
+    /// 提取父目录路径。
+    pub fn parent_dir(&self) -> &str {
+        if let Some(last_slash) = self.0.rfind('/') {
+            &self.0[..last_slash]
+        } else {
+            ""
+        }
+    }
+
+    /// 拼接子路径并规范化。
+    pub fn join(&self, relative: &str) -> Self {
+        if self.0.is_empty() {
+            Self::new(relative)
+        } else {
+            Self::new(&format!("{}/{}", self.0, relative))
+        }
+    }
+
+    /// 转换为 [`PathBuf`]（用于需要 std::path 的场合，如日志）。
+    pub fn to_path_buf(&self) -> PathBuf {
+        PathBuf::from(&self.0)
+    }
+}
+
+impl std::fmt::Display for LogicalPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
 
 /// 规范化逻辑路径
 ///
@@ -245,5 +315,53 @@ mod tests {
             "scripts/chapter1"
         );
         assert_eq!(extract_base_dir("test.md"), "");
+    }
+
+    #[test]
+    fn test_logical_path_new_normalizes() {
+        let p = LogicalPath::new("assets/backgrounds\\bg.png");
+        assert_eq!(p.as_str(), "backgrounds/bg.png");
+
+        let p2 = LogicalPath::new("scripts/../backgrounds/bg.png");
+        assert_eq!(p2.as_str(), "backgrounds/bg.png");
+
+        let p3 = LogicalPath::new("./backgrounds/bg.png");
+        assert_eq!(p3.as_str(), "backgrounds/bg.png");
+    }
+
+    #[test]
+    fn test_logical_path_file_stem() {
+        let p = LogicalPath::new("scripts/chapter1/intro.md");
+        assert_eq!(p.file_stem(), "intro");
+
+        let p2 = LogicalPath::new("test");
+        assert_eq!(p2.file_stem(), "test");
+    }
+
+    #[test]
+    fn test_logical_path_parent_dir() {
+        let p = LogicalPath::new("scripts/chapter1/intro.md");
+        assert_eq!(p.parent_dir(), "scripts/chapter1");
+
+        let p2 = LogicalPath::new("test.md");
+        assert_eq!(p2.parent_dir(), "");
+    }
+
+    #[test]
+    fn test_logical_path_join() {
+        let base = LogicalPath::new("scripts/chapter1");
+        let joined = base.join("../common/char.png");
+        assert_eq!(joined.as_str(), "scripts/common/char.png");
+
+        let empty = LogicalPath::new("");
+        let joined2 = empty.join("images/bg.png");
+        assert_eq!(joined2.as_str(), "images/bg.png");
+    }
+
+    #[test]
+    fn test_logical_path_equality_after_normalization() {
+        let a = LogicalPath::new("assets/backgrounds/bg.png");
+        let b = LogicalPath::new("backgrounds/bg.png");
+        assert_eq!(a, b);
     }
 }

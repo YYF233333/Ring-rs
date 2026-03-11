@@ -7,9 +7,9 @@ pub mod theme;
 pub mod theme_loader;
 pub mod toast;
 
-pub use skin::{UiSkinConfig, load_skin};
+pub use skin::{UiSkinConfig, load_skin, load_skin_from_str};
 pub use theme::Theme;
-pub use theme_loader::load_theme_with_override;
+pub use theme_loader::{load_theme_from_str, load_theme_with_override};
 pub use toast::{Toast, ToastManager, ToastType};
 
 /// UI 上下文，存储 UI 渲染所需的共享状态

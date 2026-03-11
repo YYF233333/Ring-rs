@@ -3,8 +3,7 @@
 //! 包含 `AudioManager` 的 `play_bgm`、`stop_bgm`、`crossfade_bgm`、`play_sfx` 和 `update` 方法。
 
 use rodio::{Decoder, Player, Source};
-use std::fs::File;
-use std::io::{BufReader, Cursor};
+use std::io::Cursor;
 use tracing::{debug, error};
 
 use super::{AudioManager, FadeState};
@@ -26,43 +25,22 @@ impl AudioManager {
 
         let logical_path = normalize_logical_path(path);
 
-        let source: Box<dyn Source + Send> = if self.use_zip_mode {
-            let bytes = match self.audio_cache.get(&logical_path) {
-                Some(b) => b.clone(),
-                None => {
-                    error!(
-                        path = %logical_path,
-                        "音频未缓存 (请先调用 cache_audio_bytes)"
-                    );
-                    return;
-                }
-            };
-
-            let cursor = Cursor::new(bytes);
-            match Decoder::new(cursor) {
-                Ok(s) => Box::new(s),
-                Err(e) => {
-                    error!(path = %logical_path, error = %e, "无法解码音频");
-                    return;
-                }
+        let bytes = match self.audio_cache.get(&logical_path) {
+            Some(b) => b.clone(),
+            None => {
+                error!(
+                    path = %logical_path,
+                    "Audio not cached (call cache_audio_bytes first)"
+                );
+                return;
             }
-        } else {
-            let full_path = self.resolve_fs_path(&logical_path);
+        };
 
-            let file = match File::open(&full_path) {
-                Ok(f) => f,
-                Err(e) => {
-                    error!(path = %full_path.display(), error = %e, "无法打开音频文件");
-                    return;
-                }
-            };
-
-            match Decoder::new(BufReader::new(file)) {
-                Ok(s) => Box::new(s),
-                Err(e) => {
-                    error!(path = %full_path.display(), error = %e, "无法解码音频文件");
-                    return;
-                }
+        let source = match Decoder::new(Cursor::new(bytes)) {
+            Ok(s) => s,
+            Err(e) => {
+                error!(path = %logical_path, error = %e, "Cannot decode audio");
+                return;
             }
         };
 
@@ -98,7 +76,7 @@ impl AudioManager {
             path = %logical_path,
             looping = looping,
             fade_in = ?fade_in,
-            "开始播放 BGM"
+            "Playing BGM"
         );
     }
 
@@ -165,43 +143,22 @@ impl AudioManager {
 
         let logical_path = normalize_logical_path(path);
 
-        let source: Box<dyn Source + Send> = if self.use_zip_mode {
-            let bytes = match self.audio_cache.get(&logical_path) {
-                Some(b) => b.clone(),
-                None => {
-                    error!(
-                        path = %logical_path,
-                        "音效未缓存 (请先调用 cache_audio_bytes)"
-                    );
-                    return;
-                }
-            };
-
-            let cursor = Cursor::new(bytes);
-            match Decoder::new(cursor) {
-                Ok(s) => Box::new(s),
-                Err(e) => {
-                    error!(path = %logical_path, error = %e, "无法解码音效");
-                    return;
-                }
+        let bytes = match self.audio_cache.get(&logical_path) {
+            Some(b) => b.clone(),
+            None => {
+                error!(
+                    path = %logical_path,
+                    "SFX not cached (call cache_audio_bytes first)"
+                );
+                return;
             }
-        } else {
-            let full_path = self.resolve_fs_path(&logical_path);
+        };
 
-            let file = match File::open(&full_path) {
-                Ok(f) => f,
-                Err(e) => {
-                    error!(path = %full_path.display(), error = %e, "无法打开音效文件");
-                    return;
-                }
-            };
-
-            match Decoder::new(BufReader::new(file)) {
-                Ok(s) => Box::new(s),
-                Err(e) => {
-                    error!(path = %full_path.display(), error = %e, "无法解码音效文件");
-                    return;
-                }
+        let source = match Decoder::new(Cursor::new(bytes)) {
+            Ok(s) => s,
+            Err(e) => {
+                error!(path = %logical_path, error = %e, "Cannot decode SFX");
+                return;
             }
         };
 
@@ -209,7 +166,7 @@ impl AudioManager {
         sink.set_volume(self.sfx_volume);
         sink.append(source);
         sink.detach();
-        debug!(path = %logical_path, "播放音效");
+        debug!(path = %logical_path, "Playing SFX");
     }
 
     /// 更新音频状态（每帧调用）

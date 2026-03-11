@@ -28,6 +28,42 @@ fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::new(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
+/// 从 JSON 字符串覆盖主题；解析失败时返回默认主题。
+pub fn load_theme_from_str(default_theme: Theme, content: &str) -> Theme {
+    let override_cfg: UiThemeOverride = match serde_json::from_str(content) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            warn!(error = %e, "Failed to parse UI theme override, using default");
+            return default_theme;
+        }
+    };
+
+    let mut theme = default_theme;
+    if let Some(p) = override_cfg.palette {
+        if let Some(c) = p.bg_primary {
+            theme.tokens.palette.bg_primary = color_from_rgba(c);
+        }
+        if let Some(c) = p.bg_secondary {
+            theme.tokens.palette.bg_secondary = color_from_rgba(c);
+        }
+        if let Some(c) = p.bg_panel {
+            theme.tokens.palette.bg_panel = color_from_rgba(c);
+        }
+        if let Some(c) = p.text_primary {
+            theme.tokens.palette.text_primary = color_from_rgba(c);
+        }
+        if let Some(c) = p.text_secondary {
+            theme.tokens.palette.text_secondary = color_from_rgba(c);
+        }
+        if let Some(c) = p.accent {
+            theme.tokens.palette.accent = color_from_rgba(c);
+        }
+    }
+
+    theme.sync_legacy_fields();
+    theme
+}
+
 /// 从 json 覆盖主题；失败时记录诊断并返回默认主题
 pub fn load_theme_with_override(default_theme: Theme, path: &Path) -> Theme {
     if !path.exists() {

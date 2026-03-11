@@ -1,50 +1,47 @@
 //! # Resources 模块
 //!
 //! 资源管理系统，负责图片资源的加载、缓存和管理。
+//!
+//! 所有资源访问通过 [`ResourceManager`] 进行，路径使用 [`LogicalPath`] 类型。
 
 use crate::rendering_types::{Texture, TextureContext};
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 mod cache;
 mod error;
 pub mod path;
-mod source;
+pub(crate) mod source;
 
 pub use cache::{CacheStats, DEFAULT_TEXTURE_BUDGET_MB, TextureCache};
 pub use error::ResourceError;
 pub use path::{
-    extract_base_dir, extract_script_id, normalize_logical_path, resolve_relative_path,
+    LogicalPath, extract_base_dir, extract_script_id, normalize_logical_path, resolve_relative_path,
 };
-pub use source::{FsSource, ResourceSource, ZipSource};
+pub use source::ResourceSource;
+pub(crate) use source::{FsSource, ZipSource};
 
-/// 从字节数据加载图片并创建纹理
 fn load_texture_from_bytes(
     bytes: &[u8],
-    path: &str,
+    label: &str,
     ctx: &TextureContext,
 ) -> Result<Arc<dyn Texture>, String> {
     let img = image::load_from_memory(bytes)
-        .map_err(|e| format!("Cannot decode image {}: {}", path, e))?;
+        .map_err(|e| format!("Cannot decode image {}: {}", label, e))?;
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
-    Ok(ctx.create_texture(width, height, &rgba, Some(path)))
+    Ok(ctx.create_texture(width, height, &rgba, Some(label)))
 }
 
 /// 资源管理器
 ///
-/// 负责加载和缓存所有游戏资源（图片等）。
-/// 纹理使用 LRU 缓存 + 显存预算管理。
+/// 负责加载和缓存所有游戏资源。
+/// 所有资源访问使用 [`LogicalPath`]，内部通过 [`ResourceSource`] 读取。
 pub struct ResourceManager {
-    /// 纹理缓存（带 LRU 驱逐）
     texture_cache: TextureCache,
-    /// 纹理加载失败缓存（规范化路径）
     failed_textures: HashSet<String>,
-    /// 资源基础路径
-    base_path: String,
-    /// 资源来源（文件系统/ZIP 等）
     source: Arc<dyn ResourceSource>,
-    /// 纹理上下文（延迟注入，在 WgpuBackend 创建后设置）
     texture_ctx: Option<TextureContext>,
 }
 
@@ -56,34 +53,16 @@ impl ResourceManager {
             texture_cache: TextureCache::new(texture_cache_size_mb),
             failed_textures: HashSet::new(),
             source: Arc::new(FsSource::new(&base)),
-            base_path: base,
             texture_ctx: None,
         }
     }
 
     /// 创建使用自定义资源来源的资源管理器
-    pub fn with_source(
-        base_path: impl Into<String>,
-        source: Arc<dyn ResourceSource>,
-        texture_cache_size_mb: usize,
-    ) -> Self {
+    pub fn with_source(source: Arc<dyn ResourceSource>, texture_cache_size_mb: usize) -> Self {
         Self {
             texture_cache: TextureCache::new(texture_cache_size_mb),
             failed_textures: HashSet::new(),
-            base_path: base_path.into(),
             source,
-            texture_ctx: None,
-        }
-    }
-
-    /// 创建指定缓存大小的资源管理器
-    pub fn with_budget(base_path: impl Into<String>, texture_cache_size_mb: usize) -> Self {
-        let base = base_path.into();
-        Self {
-            texture_cache: TextureCache::new(texture_cache_size_mb),
-            failed_textures: HashSet::new(),
-            source: Arc::new(FsSource::new(&base)),
-            base_path: base,
             texture_ctx: None,
         }
     }
@@ -95,80 +74,19 @@ impl ResourceManager {
         self.texture_ctx = Some(ctx);
     }
 
-    /// 解析资源路径（将相对路径转换为完整路径）
-    pub fn resolve_path(&self, path: &str) -> String {
-        use std::path::{Path, PathBuf};
-
-        let path_obj = Path::new(path);
-
-        if path_obj.is_absolute() {
-            return Self::normalize_path_components(path_obj);
-        }
-
-        if path.contains(&self.base_path) {
-            return Self::normalize_path_components(path_obj);
-        }
-
-        let full_path: PathBuf = [&self.base_path, path].iter().collect();
-        Self::normalize_path_components(&full_path)
-    }
-
-    fn normalize_path_components(path: &std::path::Path) -> String {
-        use std::path::Component;
-
-        let mut components: Vec<String> = Vec::new();
-
-        for component in path.components() {
-            match component {
-                Component::Prefix(p) => {
-                    components.push(p.as_os_str().to_string_lossy().to_string());
-                }
-                Component::RootDir => {
-                    if components.is_empty() {
-                        components.push(String::new());
-                    }
-                }
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    if components.len() > 1
-                        || (components.len() == 1 && !components[0].contains(':'))
-                    {
-                        components.pop();
-                    }
-                }
-                Component::Normal(name) => {
-                    components.push(name.to_string_lossy().to_string());
-                }
-            }
-        }
-
-        if components.is_empty() {
-            return String::new();
-        }
-
-        if components.len() >= 2 && components[0].contains(':') {
-            let drive = &components[0];
-            let rest = components[1..].join("/");
-            format!("{}/{}", drive, rest)
-        } else {
-            components.join("/")
-        }
-    }
-
     /// 加载图片资源（同步）
     ///
-    /// 如果资源已缓存，直接返回缓存的资源。
-    /// 否则通过 ResourceSource 加载并缓存。
-    pub fn load_texture(&mut self, path: &str) -> Result<Arc<dyn Texture>, ResourceError> {
-        let full_path = self.resolve_path(path);
+    /// 缓存键使用 [`LogicalPath`] 的规范化字符串，保证跨平台一致。
+    pub fn load_texture(&mut self, path: &LogicalPath) -> Result<Arc<dyn Texture>, ResourceError> {
+        let key = path.as_str();
 
-        if let Some(texture) = self.texture_cache.get(&full_path) {
+        if let Some(texture) = self.texture_cache.get(key) {
             return Ok(texture);
         }
 
-        if self.failed_textures.contains(&full_path) {
+        if self.failed_textures.contains(key) {
             return Err(ResourceError::LoadFailed {
-                path: full_path,
+                path: key.to_string(),
                 kind: "texture".to_string(),
                 message: "Previously failed, skipping retry".to_string(),
             });
@@ -177,7 +95,7 @@ impl ResourceManager {
         let bytes = match self.source.read(path) {
             Ok(bytes) => bytes,
             Err(err) => {
-                self.failed_textures.insert(full_path.clone());
+                self.failed_textures.insert(key.to_string());
                 return Err(err);
             }
         };
@@ -186,53 +104,49 @@ impl ResourceManager {
             .texture_ctx
             .as_ref()
             .ok_or_else(|| ResourceError::LoadFailed {
-                path: full_path.clone(),
+                path: key.to_string(),
                 kind: "texture".to_string(),
                 message: "Texture context not set. Call set_texture_context() after backend init."
                     .to_string(),
             })?;
 
-        let texture = load_texture_from_bytes(&bytes, &full_path, ctx).map_err(|e| {
-            self.failed_textures.insert(full_path.clone());
+        let texture = load_texture_from_bytes(&bytes, key, ctx).map_err(|e| {
+            self.failed_textures.insert(key.to_string());
             ResourceError::LoadFailed {
-                path: full_path.clone(),
+                path: key.to_string(),
                 kind: "texture".to_string(),
                 message: e,
             }
         })?;
 
-        self.failed_textures.remove(&full_path);
-        self.texture_cache.insert(full_path, texture.clone());
+        self.failed_textures.remove(key);
+        self.texture_cache.insert(key.to_string(), texture.clone());
 
         Ok(texture)
     }
 
     /// 获取已缓存的图片资源（不加载），更新 LRU
-    pub fn get_texture(&mut self, path: &str) -> Option<Arc<dyn Texture>> {
-        let full_path = self.resolve_path(path);
-        self.texture_cache.get(&full_path)
+    pub fn get_texture(&mut self, path: &LogicalPath) -> Option<Arc<dyn Texture>> {
+        self.texture_cache.get(path.as_str())
     }
 
     /// 只读获取已缓存的图片资源（不更新 LRU）
-    pub fn peek_texture(&self, path: &str) -> Option<Arc<dyn Texture>> {
-        let full_path = self.resolve_path(path);
-        self.texture_cache.peek(&full_path)
+    pub fn peek_texture(&self, path: &LogicalPath) -> Option<Arc<dyn Texture>> {
+        self.texture_cache.peek(path.as_str())
     }
 
     /// 检查图片资源是否已加载
-    pub fn has_texture(&self, path: &str) -> bool {
-        let full_path = self.resolve_path(path);
-        self.texture_cache.contains(&full_path)
+    pub fn has_texture(&self, path: &LogicalPath) -> bool {
+        self.texture_cache.contains(path.as_str())
     }
 
     /// 检查纹理是否已被标记为加载失败
-    pub fn has_failed_texture(&self, path: &str) -> bool {
-        let full_path = self.resolve_path(path);
-        self.failed_textures.contains(&full_path)
+    pub fn has_failed_texture(&self, path: &LogicalPath) -> bool {
+        self.failed_textures.contains(path.as_str())
     }
 
     /// 预加载多个图片资源
-    pub fn preload_textures(&mut self, paths: &[&str]) -> Result<(), ResourceError> {
+    pub fn preload_textures(&mut self, paths: &[&LogicalPath]) -> Result<(), ResourceError> {
         for path in paths {
             self.load_texture(path)?;
         }
@@ -240,10 +154,10 @@ impl ResourceManager {
     }
 
     /// 释放指定的图片资源
-    pub fn unload_texture(&mut self, path: &str) {
-        let full_path = self.resolve_path(path);
-        self.texture_cache.remove(&full_path);
-        self.failed_textures.remove(&full_path);
+    pub fn unload_texture(&mut self, path: &LogicalPath) {
+        let key = path.as_str();
+        self.texture_cache.remove(key);
+        self.failed_textures.remove(key);
     }
 
     /// 释放所有资源
@@ -256,7 +170,6 @@ impl ResourceManager {
         self.texture_cache.len()
     }
 
-    /// 获取纹理缓存的可变引用（仅用于测试注入）
     #[cfg(test)]
     pub fn texture_cache_mut(&mut self) -> &mut TextureCache {
         &mut self.texture_cache
@@ -266,14 +179,12 @@ impl ResourceManager {
         self.texture_cache.stats()
     }
 
-    pub fn pin_texture(&mut self, path: &str) {
-        let full_path = self.resolve_path(path);
-        self.texture_cache.pin(&full_path);
+    pub fn pin_texture(&mut self, path: &LogicalPath) {
+        self.texture_cache.pin(path.as_str());
     }
 
-    pub fn unpin_texture(&mut self, path: &str) {
-        let full_path = self.resolve_path(path);
-        self.texture_cache.unpin(&full_path);
+    pub fn unpin_texture(&mut self, path: &LogicalPath) {
+        self.texture_cache.unpin(path.as_str());
     }
 
     pub fn unpin_all_textures(&mut self) {
@@ -281,7 +192,7 @@ impl ResourceManager {
     }
 
     /// 读取文本资源
-    pub fn read_text(&self, path: &str) -> Result<String, ResourceError> {
+    pub fn read_text(&self, path: &LogicalPath) -> Result<String, ResourceError> {
         let bytes = self.source.read(path)?;
         String::from_utf8(bytes).map_err(|e| ResourceError::LoadFailed {
             path: path.to_string(),
@@ -290,19 +201,62 @@ impl ResourceManager {
         })
     }
 
+    /// 读取文本资源，不存在时返回 None（不报错）。
+    pub fn read_text_optional(&self, path: &LogicalPath) -> Option<String> {
+        if !self.source.exists(path) {
+            return None;
+        }
+        self.read_text(path).ok()
+    }
+
     /// 检查资源是否存在
-    pub fn resource_exists(&self, path: &str) -> bool {
+    pub fn resource_exists(&self, path: &LogicalPath) -> bool {
         self.source.exists(path)
     }
 
     /// 读取原始字节资源
-    pub fn read_bytes(&self, path: &str) -> Result<Vec<u8>, ResourceError> {
+    pub fn read_bytes(&self, path: &LogicalPath) -> Result<Vec<u8>, ResourceError> {
         self.source.read(path)
     }
 
     /// 列出指定目录下的所有文件
-    pub fn list_files(&self, dir_path: &str) -> Vec<String> {
+    pub fn list_files(&self, dir_path: &LogicalPath) -> Vec<LogicalPath> {
         self.source.list_files(dir_path)
+    }
+
+    /// 将逻辑路径物化为真实文件系统路径。
+    ///
+    /// - FS 来源：直接返回 backing path，无需清理。
+    /// - ZIP 来源：提取到 `temp_dir` 下的临时文件，调用方负责清理。
+    ///
+    /// 仅用于必须要真实文件路径的子系统（FFmpeg 等）。
+    pub fn materialize_to_fs(
+        &self,
+        path: &LogicalPath,
+        temp_dir: &Path,
+    ) -> Result<(PathBuf, Option<PathBuf>), ResourceError> {
+        if let Some(fs_path) = self.source.backing_path(path) {
+            return Ok((fs_path, None));
+        }
+
+        let bytes = self.source.read(path)?;
+
+        std::fs::create_dir_all(temp_dir).map_err(|e| ResourceError::LoadFailed {
+            path: path.to_string(),
+            kind: "materialize".to_string(),
+            message: format!("Cannot create temp dir: {}", e),
+        })?;
+
+        let filename = path.as_str().rsplit('/').next().unwrap_or("resource");
+        let temp_path = temp_dir.join(filename);
+
+        std::fs::write(&temp_path, &bytes).map_err(|e| ResourceError::LoadFailed {
+            path: path.to_string(),
+            kind: "materialize".to_string(),
+            message: format!("Cannot write temp file: {}", e),
+        })?;
+
+        Ok((temp_path.clone(), Some(temp_path)))
     }
 }
 

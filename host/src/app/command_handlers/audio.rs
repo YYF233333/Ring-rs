@@ -3,42 +3,38 @@
 //! 阶段 27：函数签名从 `&mut AppState` 改为 `(&mut CoreSystems, &AppConfig)`，
 //! 不再依赖完整的应用状态。
 
-use crate::AssetSourceType;
 use crate::command_executor::AudioCommand;
 use crate::config::AppConfig;
-use crate::resources::normalize_logical_path;
+use crate::resources::LogicalPath;
 
 use super::super::CoreSystems;
 use tracing::error;
 
 /// 处理音频命令
-pub fn handle_audio_command(core: &mut CoreSystems, config: &AppConfig) {
+///
+/// 始终通过 ResourceManager 读取音频字节并缓存到 AudioManager，
+/// 不再区分 FS/ZIP 模式。
+pub fn handle_audio_command(core: &mut CoreSystems, _config: &AppConfig) {
     let audio_cmd = core.command_executor.last_output.audio_command.clone();
 
     if let Some(cmd) = audio_cmd {
-        // ZIP 模式下需要先缓存音频字节
-        if let AssetSourceType::Zip = config.asset_source {
-            let path_to_cache = match &cmd {
-                AudioCommand::PlayBgm { path, .. } => Some(path.clone()),
-                AudioCommand::PlaySfx { path } => Some(path.clone()),
-                AudioCommand::StopBgm { .. } | AudioCommand::BgmDuck | AudioCommand::BgmUnduck => {
-                    None
-                }
-            };
+        let path_to_cache = match &cmd {
+            AudioCommand::PlayBgm { path, .. } => Some(path.clone()),
+            AudioCommand::PlaySfx { path } => Some(path.clone()),
+            AudioCommand::StopBgm { .. } | AudioCommand::BgmDuck | AudioCommand::BgmUnduck => None,
+        };
 
-            if let Some(path) = path_to_cache {
-                let logical_path = normalize_logical_path(&path);
-                // 读取音频字节并缓存
-                match core.resource_manager.read_bytes(&logical_path) {
-                    Ok(bytes) => {
-                        if let Some(ref mut audio) = core.audio_manager {
-                            audio.cache_audio_bytes(&logical_path, bytes);
-                        }
+        if let Some(path) = path_to_cache {
+            let logical_path = LogicalPath::new(&path);
+            match core.resource_manager.read_bytes(&logical_path) {
+                Ok(bytes) => {
+                    if let Some(ref mut audio) = core.audio_manager {
+                        audio.cache_audio_bytes(logical_path.as_str(), bytes);
                     }
-                    Err(e) => {
-                        error!(path = %logical_path, error = %e, "无法读取音频文件");
-                        return;
-                    }
+                }
+                Err(e) => {
+                    error!(path = %logical_path, error = %e, "Cannot read audio file");
+                    return;
                 }
             }
         }

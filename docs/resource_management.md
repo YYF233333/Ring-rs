@@ -351,19 +351,27 @@ backgrounds/../characters/角色.png  → characters/角色.png
 
 ### 资源来源抽象
 
-系统使用 `ResourceSource` trait 抽象资源访问：
+系统使用 `ResourceSource` trait 和 `LogicalPath` newtype 抽象资源访问：
 
 ```rust
+// LogicalPath：编译期防止逻辑路径与文件系统路径混用
+let path = LogicalPath::new("backgrounds/bg.png");
+
+// ResourceSource trait（所有方法使用 &LogicalPath）
 trait ResourceSource {
-    fn read(&self, path: &str) -> Result<Vec<u8>>;
-    fn exists(&self, path: &str) -> bool;
-    fn full_path(&self, path: &str) -> String;
+    fn read(&self, path: &LogicalPath) -> Result<Vec<u8>>;
+    fn exists(&self, path: &LogicalPath) -> bool;
+    fn backing_path(&self, path: &LogicalPath) -> Option<PathBuf>;
+    // ...
 }
 ```
 
-实现：
+实现（`pub(crate)` 可见性，不对外公开）：
 - `FsSource`：从文件系统读取
 - `ZipSource`：从 ZIP 文件读取
+
+所有资源访问通过 `ResourceManager` 进行，不直接使用 `FsSource`/`ZipSource`。
+需要真实文件系统路径时使用 `ResourceManager::materialize_to_fs()`。
 
 ---
 

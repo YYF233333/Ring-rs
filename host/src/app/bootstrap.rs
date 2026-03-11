@@ -1,6 +1,7 @@
 //! 启动与资源引导（bootstrap）
 
 use super::AppState;
+use crate::resources::LogicalPath;
 use tracing::{debug, error, info};
 
 /// 加载启动阶段必需资源（基础纹理等）
@@ -15,7 +16,8 @@ pub fn load_resources(app_state: &mut AppState) {
     // 预加载必需的 UI 纹理（用于过渡效果）
     let essential_textures = ["backgrounds/black.png", "backgrounds/white.png"];
     for path in &essential_textures {
-        match app_state.core.resource_manager.load_texture(path) {
+        let logical = LogicalPath::new(path);
+        match app_state.core.resource_manager.load_texture(&logical) {
             Ok(_) => debug!(path = %path, "预加载纹理"),
             Err(e) => error!(path = %path, error = %e, "预加载失败"),
         }
@@ -30,41 +32,38 @@ pub fn load_resources(app_state: &mut AppState) {
 ///
 /// 检查 RenderState / 过渡状态中引用的资源，如果尚未缓存则加载。
 pub fn ensure_render_resources(app_state: &mut AppState) {
-    let mut paths_to_load: Vec<String> = Vec::new();
+    let mut paths_to_load: Vec<LogicalPath> = Vec::new();
 
     // 检查当前背景
-    if let Some(ref bg_path) = app_state.core.render_state.current_background
-        && !app_state.core.resource_manager.has_texture(bg_path)
-        && !app_state.core.resource_manager.has_failed_texture(bg_path)
-    {
-        paths_to_load.push(bg_path.clone());
+    if let Some(ref bg_path) = app_state.core.render_state.current_background {
+        let logical = LogicalPath::new(bg_path);
+        if !app_state.core.resource_manager.has_texture(&logical)
+            && !app_state.core.resource_manager.has_failed_texture(&logical)
+        {
+            paths_to_load.push(logical);
+        }
     }
 
     // 检查可见角色
     for character in app_state.core.render_state.visible_characters.values() {
-        if !app_state
-            .core
-            .resource_manager
-            .has_texture(&character.texture_path)
-            && !app_state
-                .core
-                .resource_manager
-                .has_failed_texture(&character.texture_path)
+        let logical = LogicalPath::new(&character.texture_path);
+        if !app_state.core.resource_manager.has_texture(&logical)
+            && !app_state.core.resource_manager.has_failed_texture(&logical)
         {
-            paths_to_load.push(character.texture_path.clone());
+            paths_to_load.push(logical);
         }
     }
 
     // 检查场景过渡（Rule 效果需要遮罩纹理）
     if let Some(crate::renderer::SceneTransitionType::Rule { mask_path, .. }) =
         app_state.core.renderer.scene_transition.transition_type()
-        && !app_state.core.resource_manager.has_texture(mask_path)
-        && !app_state
-            .core
-            .resource_manager
-            .has_failed_texture(mask_path)
     {
-        paths_to_load.push(mask_path.clone());
+        let logical = LogicalPath::new(mask_path);
+        if !app_state.core.resource_manager.has_texture(&logical)
+            && !app_state.core.resource_manager.has_failed_texture(&logical)
+        {
+            paths_to_load.push(logical);
+        }
     }
 
     // 加载缺失的资源

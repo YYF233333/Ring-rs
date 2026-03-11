@@ -1,6 +1,6 @@
 //! 脚本扫描与加载
 
-use crate::resources::ResourceManager;
+use crate::resources::{LogicalPath, ResourceManager};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tracing::{error, info, warn};
@@ -32,13 +32,13 @@ pub fn scan_scripts_from_zip(resource_manager: &ResourceManager) -> Vec<PathBuf>
     let mut scripts = Vec::new();
 
     // 通过 ResourceManager 列出 scripts 目录下的文件
-    let files = resource_manager.list_files("scripts");
+    let files = resource_manager.list_files(&LogicalPath::new("scripts"));
 
     for file_path in files {
         // 只处理 .md 文件
-        if file_path.ends_with(".md") {
+        if file_path.as_str().ends_with(".md") {
             // ZIP 模式下路径已经是相对于 assets_root 的
-            scripts.push(PathBuf::from(&file_path));
+            scripts.push(PathBuf::from(file_path.as_str()));
         }
     }
 
@@ -65,7 +65,11 @@ pub fn load_script_from_logical_path(app_state: &mut AppState, logical_path: &st
     info!(script_id = %script_id, path = %normalized_path, base_dir = %base_dir, "加载脚本");
 
     // 通过 ResourceManager 读取（统一处理 FS 和 ZIP 模式）
-    let script_text = match app_state.core.resource_manager.read_text(&normalized_path) {
+    let script_text = match app_state
+        .core
+        .resource_manager
+        .read_text(&LogicalPath::new(&normalized_path))
+    {
         Ok(text) => text,
         Err(e) => {
             error!(path = %normalized_path, error = %e, "脚本文件加载失败");
@@ -137,7 +141,7 @@ pub fn load_script_into_registry(
 
     let normalized_path = normalize_logical_path(logical_path);
 
-    let script_text = match resource_manager.read_text(&normalized_path) {
+    let script_text = match resource_manager.read_text(&LogicalPath::new(&normalized_path)) {
         Ok(text) => text,
         Err(e) => {
             error!(path = %normalized_path, error = %e, "call_stack 脚本加载失败");
@@ -212,7 +216,7 @@ fn preload_called_scripts(
             continue;
         }
 
-        let script_text = match resource_manager.read_text(&resolved_path) {
+        let script_text = match resource_manager.read_text(&LogicalPath::new(&resolved_path)) {
             Ok(text) => text,
             Err(e) => {
                 warn!(path = %resolved_path, error = %e, "callScript 目标脚本预加载失败");

@@ -41,6 +41,10 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | `unwrap()` / `expect()` 处理外部输入 | `?` 或 `map_err` 传播 |
 | `let _ = fallible_expr();` 无注释 | 显式处理或注释说明 |
 | `println!` / `eprintln!` 调试 | `tracing::debug!` / `log::debug!` |
+| `config.assets_root.join()` / 手工 `PathBuf` 拼接资源路径 | `ResourceManager` 方法 + `LogicalPath` |
+| 子系统自持 `base_path` 或 `use_zip_mode` 字段 | 通过 `ResourceManager` 统一读取 |
+| 直接构造 `FsSource` / `ZipSource`（`init.rs` 之外） | `create_resource_source()` 统一入口 |
+| 资源路径使用裸 `&str` / `String` 调用 `ResourceManager` | 使用 `&LogicalPath` |
 
 ### 代码风格
 

@@ -52,7 +52,7 @@ pub use rendering_types::{
     DrawCommand, NullTexture, NullTextureFactory, Texture, TextureContext, TextureFactory,
 };
 pub use resources::{
-    CacheStats, FsSource, ResourceError, ResourceManager, ResourceSource, TextureCache, ZipSource,
+    CacheStats, LogicalPath, ResourceError, ResourceManager, ResourceSource, TextureCache,
 };
 pub use save_manager::SaveManager;
 

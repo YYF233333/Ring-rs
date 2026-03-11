@@ -4,7 +4,7 @@
 
 use crate::renderer::RenderState;
 use crate::renderer::effects::{self, EffectKind, EffectRequest, EffectTarget};
-use crate::resources::ResourceManager;
+use crate::resources::{LogicalPath, ResourceManager};
 use tracing::debug;
 
 use super::CommandExecutor;
@@ -53,7 +53,7 @@ impl CommandExecutor {
         path: &str,
         transition: Option<vn_runtime::command::Transition>,
         render_state: &mut RenderState,
-        resource_manager: &ResourceManager,
+        _resource_manager: &ResourceManager,
     ) -> ExecuteResult {
         // 保存旧背景用于过渡效果
         let old_background = render_state.current_background.clone();
@@ -90,8 +90,7 @@ impl CommandExecutor {
                     mask_path,
                     reversed,
                 } => {
-                    // 规范化路径
-                    let normalized_mask_path = resource_manager.resolve_path(mask_path);
+                    let normalized_mask_path = LogicalPath::new(mask_path).to_string();
                     debug!(
                         mask = %normalized_mask_path,
                         duration = ?effect.duration,

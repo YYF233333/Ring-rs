@@ -13,9 +13,10 @@
 ## KeyFlow
 
 1. `script.rs` 拦截 `Command::Cutscene`，通过 `resolve_video_path()` 解析视频路径：
-   - **FS 模式**：`normalize_logical_path()` 规范化后拼接 `assets_root`。
-   - **ZIP 模式**：通过 `ResourceManager::read_bytes()` 从 ZIP 提取视频字节，写入临时文件（`%TEMP%/ring-vn-video/`）。
-2. 调用 `VideoPlayer::start(resolved_path, temp_file)` 启动播放。`start()` 接收已解析的真实文件系统路径，检测 FFmpeg、验证文件存在，启动 `VideoDecoder`（后台线程 ffmpeg-sidecar → RGB24 → RGBA via mpsc channel）和 `VideoAudio`（后台线程 FFmpeg → f32le PCM）。
+   - 使用 `ResourceManager::materialize_to_fs()` 统一处理 FS/ZIP 模式。
+   - FS 模式：返回底层文件路径，无需清理。
+   - ZIP 模式：提取到临时文件（`%TEMP%/ring-vn-video/`），返回临时路径。
+2. 调用 `VideoPlayer::start(resolved_path, temp_file)` 启动播放。`start()` 接收已解析的真实文件系统路径，检测 FFmpeg、验证文件存在，启动 `VideoDecoder`（后台线程 ffmpeg-sidecar -> RGB24 -> RGBA via mpsc channel）和 `VideoAudio`（后台线程 FFmpeg -> f32le PCM）。
 3. 每帧 `update(dt)` 推进 elapsed 时间，从 decoder channel 消费帧至当前时间戳。
 4. `update/mod.rs` 中 `try_start_video_audio()` 检查音频提取完成，通过 `AudioManager::play_video_audio()` 播放。
 5. `host_app.rs` 中将当前帧 RGBA 数据上传到 `WgpuBackend` 视频纹理，生成全屏 `DrawCommand::Sprite`（信箱模式保持宽高比）。

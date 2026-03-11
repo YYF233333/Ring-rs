@@ -18,7 +18,7 @@ pub mod state;
 mod bootstrap;
 mod command_handlers;
 mod draw;
-mod init;
+pub mod init;
 mod save;
 mod script_loader;
 mod update;
@@ -36,8 +36,8 @@ use self::state::HostState;
 use crate::extensions::ExtensionRegistry;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
-use crate::resources::ResourceManager;
-use crate::ui::{Theme, ToastManager, UiContext, load_skin, load_theme_with_override};
+use crate::resources::{LogicalPath, ResourceManager};
+use crate::ui::{Theme, ToastManager, UiContext, load_skin_from_str, load_theme_from_str};
 use crate::video::VideoPlayer;
 use crate::{AppConfig, AudioManager, CommandExecutor, InputManager};
 use std::collections::HashMap;
@@ -162,14 +162,19 @@ impl AppState {
         let theme = if config.ui.theme_path.trim().is_empty() {
             Theme::dark()
         } else {
-            let theme_path = config.assets_root.join(&config.ui.theme_path);
-            load_theme_with_override(Theme::dark(), &theme_path)
+            let theme_lp = LogicalPath::new(&config.ui.theme_path);
+            match resource_manager.read_text_optional(&theme_lp) {
+                Some(content) => load_theme_from_str(Theme::dark(), &content),
+                None => Theme::dark(),
+            }
         };
         let skin = if config.ui.skin_path.trim().is_empty() {
             None
         } else {
-            let skin_path = config.assets_root.join(&config.ui.skin_path);
-            load_skin(&skin_path)
+            let skin_lp = LogicalPath::new(&config.ui.skin_path);
+            resource_manager
+                .read_text_optional(&skin_lp)
+                .and_then(|content| load_skin_from_str(&content))
         };
 
         // Dev Mode: 运行脚本检查

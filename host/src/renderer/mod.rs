@@ -263,7 +263,7 @@ mod headless_tests {
         let tex: Arc<dyn crate::rendering_types::Texture> = Arc::new(NullTexture::new(1920, 1080));
         resource_manager
             .texture_cache_mut()
-            .insert("assets/bg/sky.png".to_string(), tex);
+            .insert("bg/sky.png".to_string(), tex);
 
         let manifest = Manifest::with_defaults();
         let cmds = renderer.build_draw_commands(&state, &resource_manager, &manifest);
@@ -292,7 +292,7 @@ mod headless_tests {
         let tex: Arc<dyn crate::rendering_types::Texture> = Arc::new(NullTexture::new(512, 1024));
         resource_manager
             .texture_cache_mut()
-            .insert("assets/characters/hero/normal.png".to_string(), tex);
+            .insert("characters/hero/normal.png".to_string(), tex);
 
         let manifest = Manifest::with_defaults();
         let cmds = renderer.build_draw_commands(&state, &resource_manager, &manifest);
