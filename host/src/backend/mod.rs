@@ -214,6 +214,10 @@ pub struct WgpuBackend {
 
     frame_start: std::time::Instant,
     frame_delta: f32,
+
+    /// 视频帧纹理（cutscene 播放时使用）
+    video_texture: Option<Arc<GpuTexture>>,
+    video_texture_size: (u32, u32),
 }
 
 impl WgpuBackend {
@@ -252,6 +256,8 @@ impl WgpuBackend {
             dissolve_renderer,
             frame_start: std::time::Instant::now(),
             frame_delta: 0.0,
+            video_texture: None,
+            video_texture_size: (0, 0),
         }
     }
 
@@ -459,5 +465,78 @@ impl WgpuBackend {
         }
         self.egui
             .handle_platform_output(&self.window, full_output.platform_output);
+    }
+
+    /// 上传视频帧 RGBA 数据到 GPU 纹理。
+    ///
+    /// 首次调用或分辨率变化时创建新纹理，否则就地更新像素数据。
+    pub fn upload_video_frame(&mut self, data: &[u8], width: u32, height: u32) {
+        if self.video_texture_size != (width, height) || self.video_texture.is_none() {
+            self.video_texture = Some(gpu_texture::create_gpu_texture(
+                &self.gpu.device,
+                &self.gpu.queue,
+                &self.sprite_renderer.texture_bind_group_layout,
+                &self.sprite_renderer.sampler,
+                width,
+                height,
+                data,
+                Some("video_frame"),
+            ));
+            self.video_texture_size = (width, height);
+            return;
+        }
+
+        if let Some(tex) = &self.video_texture {
+            self.gpu.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &tex.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                data,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * width),
+                    rows_per_image: Some(height),
+                },
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+    }
+
+    /// 生成视频全屏渲染的 DrawCommand（带信箱黑边）。
+    ///
+    /// 保持视频宽高比，在屏幕上居中渲染，剩余区域由 clear color（黑色）填充。
+    pub fn video_draw_command(&self) -> Option<DrawCommand> {
+        let tex = self.video_texture.as_ref()?;
+        let (sw, sh) = self.gpu.size();
+        let (sw, sh) = (sw as f32, sh as f32);
+        let (vw, vh) = (tex.width(), tex.height());
+
+        let scale = (sw / vw).min(sh / vh);
+        let dst_w = vw * scale;
+        let dst_h = vh * scale;
+        let x = (sw - dst_w) / 2.0;
+        let y = (sh - dst_h) / 2.0;
+
+        Some(DrawCommand::Sprite {
+            texture: tex.clone(),
+            x,
+            y,
+            width: dst_w,
+            height: dst_h,
+            color: [1.0, 1.0, 1.0, 1.0],
+        })
+    }
+
+    /// 释放视频纹理，播放结束后调用。
+    pub fn clear_video_texture(&mut self) {
+        self.video_texture = None;
+        self.video_texture_size = (0, 0);
     }
 }

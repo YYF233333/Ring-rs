@@ -21,4 +21,5 @@
 | RFC-005 | 对话内联差分语法 | `rfc-inline-sprite-in-dialogue.md` | Proposed |
 | RFC-006 | 节奏标签与 extend 台词续接 | `rfc-rhythm-tags.md` | Accepted |
 | RFC-007 | 渲染后端迁移 (macroquad → winit+wgpu+egui) | `rfc-rendering-backend-migration.md` | Accepted |
-| RFC-007 | RenderBackend Trait -- 渲染后端抽象层 | `rfc-rendering-backend-trait.md` | Accepted |
+| RFC-008 | RenderBackend Trait -- 渲染后端抽象层 | `rfc-rendering-backend-trait.md` | Accepted |
+| RFC-009 | Cutscene 视频播放 | `rfc-cutscene-video-playback.md` | Accepted |

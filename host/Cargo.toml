@@ -30,3 +30,6 @@ egui-wgpu = "0.31"
 egui-winit = "0.31"
 pollster = "0.4"
 bytemuck = { version = "1", features = ["derive"] }
+
+# 视频解码（FFmpeg 子进程封装）
+ffmpeg-sidecar = { version = "2.4", default-features = false }

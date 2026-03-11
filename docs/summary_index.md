@@ -31,6 +31,7 @@
    - [renderer_scene_transition](module_summaries/host/renderer_scene_transition.md)
    - [resources](module_summaries/host/resources.md)
    - [audio](module_summaries/host/audio.md)
+   - [video](module_summaries/host/video.md)
    - [input](module_summaries/host/input.md)
    - [ui](module_summaries/host/ui.md)
    - [backend](module_summaries/host/backend.md)

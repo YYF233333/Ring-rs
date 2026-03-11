@@ -189,6 +189,8 @@ pub enum ResourceType {
     Character,
     /// 音频（BGM/SFX）
     Audio,
+    /// 视频
+    Video,
 }
 
 impl std::fmt::Display for ResourceType {
@@ -198,6 +200,7 @@ impl std::fmt::Display for ResourceType {
             Self::Scene => write!(f, "场景"),
             Self::Character => write!(f, "立绘"),
             Self::Audio => write!(f, "音频"),
+            Self::Video => write!(f, "视频"),
         }
     }
 }
@@ -346,6 +349,13 @@ fn extract_from_nodes(nodes: &[ScriptNode], script: &Script, refs: &mut Vec<Reso
             ScriptNode::PlayAudio { path, .. } => {
                 refs.push(ResourceReference {
                     resource_type: ResourceType::Audio,
+                    path: path.clone(),
+                    resolved_path: script.resolve_path(path),
+                });
+            }
+            ScriptNode::Cutscene { path } => {
+                refs.push(ResourceReference {
+                    resource_type: ResourceType::Video,
                     path: path.clone(),
                     resolved_path: script.resolve_path(path),
                 });

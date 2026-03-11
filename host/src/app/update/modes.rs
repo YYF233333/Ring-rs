@@ -10,6 +10,7 @@ use winit::keyboard::KeyCode;
 
 use super::super::AppState;
 use super::super::save::{quick_load, quick_save};
+use super::finish_cutscene;
 use crate::AppMode;
 use crate::PlaybackMode;
 
@@ -18,6 +19,24 @@ pub(super) fn update_title(_app_state: &mut AppState) {}
 
 /// 更新游戏进行中
 pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
+    // 视频播放中：拦截所有正常输入，仅响应跳过操作
+    if app_state.video_player.is_playing() {
+        let skip_requested = app_state.input_manager.is_key_just_pressed(KeyCode::Escape)
+            || app_state.input_manager.is_key_just_pressed(KeyCode::Enter)
+            || app_state.input_manager.is_key_just_pressed(KeyCode::Space)
+            || app_state.input_manager.is_mouse_just_pressed()
+            || matches!(app_state.session.playback_mode, PlaybackMode::Skip)
+            || app_state.input_manager.is_key_down(KeyCode::ControlLeft)
+            || app_state.input_manager.is_key_down(KeyCode::ControlRight);
+
+        if skip_requested {
+            debug!("用户请求跳过 cutscene");
+            app_state.video_player.skip();
+            finish_cutscene(app_state);
+        }
+        return;
+    }
+
     // ESC 打开系统菜单（同时退出 Auto/Skip 模式）
     if app_state.input_manager.is_key_just_pressed(KeyCode::Escape) {
         app_state.session.playback_mode = PlaybackMode::Normal;

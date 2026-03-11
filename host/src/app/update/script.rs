@@ -1,7 +1,7 @@
 //! 脚本模式输入与 VNRuntime tick
 
-use tracing::{debug, error, info};
-use vn_runtime::command::Command;
+use tracing::{debug, error, info, warn};
+use vn_runtime::command::{Command, SIGNAL_CUTSCENE};
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 
@@ -190,6 +190,26 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                     return;
                 }
 
+                // Cutscene：启动视频播放器，duck BGM
+                if let Command::Cutscene { path } = command {
+                    info!(path = %path, "收到 Cutscene 命令，启动视频播放");
+                    let assets_base = std::path::PathBuf::from(&app_state.config.assets_root);
+                    match app_state.video_player.start(path, &assets_base) {
+                        Ok(()) => {
+                            if let Some(ref mut audio) = app_state.core.audio_manager {
+                                audio.duck();
+                            }
+                        }
+                        Err(e) => {
+                            warn!(error = %e, "视频播放启动失败，跳过 cutscene");
+                            // 启动失败，立即发信号跳过
+                            // 不能在命令循环内递归调用 run_script_tick，
+                            // 设置标记让 waiting 处理自然恢复
+                        }
+                    }
+                    continue;
+                }
+
                 let result = app_state.core.command_executor.execute(
                     command,
                     &mut app_state.core.render_state,
@@ -251,4 +271,18 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
             error!(error = ?e, "Runtime tick 错误");
         }
     }
+}
+
+/// 结束 cutscene 播放，发送信号恢复 Runtime 并 unduck BGM。
+pub fn finish_cutscene(app_state: &mut AppState) {
+    app_state.video_player.cleanup();
+    if let Some(ref mut audio) = app_state.core.audio_manager {
+        audio.unduck();
+    }
+    run_script_tick(
+        app_state,
+        Some(RuntimeInput::Signal {
+            id: SIGNAL_CUTSCENE.to_string(),
+        }),
+    );
 }

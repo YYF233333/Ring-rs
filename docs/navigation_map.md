@@ -82,6 +82,7 @@
 - 子模块：[config](module_summaries/host/config.md)
 - 子模块：[manifest](module_summaries/host/manifest.md)
 - 子模块：[save_manager](module_summaries/host/save_manager.md)
+- 子模块：[video](module_summaries/host/video.md)
 - 子模块：[host_app](module_summaries/host/host_app.md)
 - 子模块：[egui_actions](module_summaries/host/egui_actions.md)
 - 子模块：[egui_screens](module_summaries/host/egui_screens.md)
@@ -140,6 +141,10 @@
   - **统一效果解析与请求**：`host/src/renderer/effects/`（EffectKind、ResolvedEffect、resolve()、EffectRequest、EffectTarget）
   - **动画系统**：`host/src/renderer/animation/`（AnimationSystem、Animatable trait）
 - **资源管理**：`host/src/resources/`（路径、来源、缓存、TextureContext）
+- **视频系统（RFC-009 cutscene）**：`host/src/video/`
+  - **VideoPlayer 状态机与编排**：`host/src/video/mod.rs`（FFmpeg 检测、帧调度、跳过）
+  - **VideoDecoder**：`host/src/video/decoder.rs`（ffmpeg-sidecar 后台解码线程，RGB24→RGBA）
+  - **VideoAudio**：`host/src/video/audio.rs`（FFmpeg 子进程 PCM 音频提取，rodio 播放）
 - **音频系统**：`host/src/audio/`（mod.rs: 结构/音量/duck; playback.rs: BGM/SFX 播放与淡入淡出）
 - **UI 基础设施**：`host/src/ui/`（theme/toast/skin）
 - **输入（winit 事件驱动）**：`host/src/input/`

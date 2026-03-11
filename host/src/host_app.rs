@@ -145,10 +145,19 @@ impl ApplicationHandler for HostApp {
                     *settings_draft = None;
                 }
 
-                let sprite_cmds = if current_mode.is_in_game() {
-                    app::build_game_draw_commands(app_state)
+                // 视频播放时：上传帧数据到 GPU 纹理，生成全屏视频精灵
+                let sprite_cmds = if app_state.video_player.is_playing() {
+                    if let Some(frame) = app_state.video_player.current_frame() {
+                        backend.upload_video_frame(&frame.data, frame.width, frame.height);
+                    }
+                    backend.video_draw_command().into_iter().collect::<Vec<_>>()
                 } else {
-                    Vec::new()
+                    backend.clear_video_texture();
+                    if current_mode.is_in_game() {
+                        app::build_game_draw_commands(app_state)
+                    } else {
+                        Vec::new()
+                    }
                 };
 
                 let save_infos: Vec<Option<host::save_manager::SaveInfo>> =
@@ -165,29 +174,35 @@ impl ApplicationHandler for HostApp {
                 let mut ui_action = EguiAction::None;
                 backend.render_frame(
                     |ctx| {
-                        ui_action = match current_mode {
-                            AppMode::Title => egui_screens::title::build_title_ui(ctx, app_state),
-                            AppMode::InGame => {
-                                egui_screens::ingame::build_ingame_ui(
+                        ui_action = if app_state.video_player.is_playing() {
+                            EguiAction::None
+                        } else {
+                            match current_mode {
+                                AppMode::Title => {
+                                    egui_screens::title::build_title_ui(ctx, app_state)
+                                }
+                                AppMode::InGame => {
+                                    egui_screens::ingame::build_ingame_ui(
+                                        ctx,
+                                        &app_state.core.render_state,
+                                    );
+                                    EguiAction::None
+                                }
+                                AppMode::InGameMenu => {
+                                    egui_screens::ingame_menu::build_ingame_menu_ui(ctx)
+                                }
+                                AppMode::Settings => {
+                                    egui_screens::settings::build_settings_ui(ctx, settings_draft)
+                                }
+                                AppMode::SaveLoad => egui_screens::save_load::build_save_load_ui(
                                     ctx,
-                                    &app_state.core.render_state,
-                                );
-                                EguiAction::None
-                            }
-                            AppMode::InGameMenu => {
-                                egui_screens::ingame_menu::build_ingame_menu_ui(ctx)
-                            }
-                            AppMode::Settings => {
-                                egui_screens::settings::build_settings_ui(ctx, settings_draft)
-                            }
-                            AppMode::SaveLoad => egui_screens::save_load::build_save_load_ui(
-                                ctx,
-                                sl_tab,
-                                &save_infos,
-                                can_save,
-                            ),
-                            AppMode::History => {
-                                egui_screens::history::build_history_ui(ctx, app_state)
+                                    sl_tab,
+                                    &save_infos,
+                                    can_save,
+                                ),
+                                AppMode::History => {
+                                    egui_screens::history::build_history_ui(ctx, app_state)
+                                }
                             }
                         };
                         egui_screens::toast::build_toast_overlay(ctx, &app_state.ui.toast_manager);

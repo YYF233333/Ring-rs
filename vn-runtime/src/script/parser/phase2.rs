@@ -151,6 +151,10 @@ impl Phase2Parser {
         if starts_with_ignore_case(line, "titlecard") {
             return self.parse_title_card(line, line_number);
         }
+        // cutscene - 视频过场
+        if starts_with_ignore_case(line, "cutscene") {
+            return self.parse_cutscene(line, line_number);
+        }
         // extend - 台词续接
         if starts_with_command(line, "extend") {
             return self.parse_extend(line, line_number, no_wait);
@@ -843,6 +847,54 @@ impl Phase2Parser {
         }
 
         Ok(Some(ScriptNode::TitleCard { text, duration }))
+    }
+
+    /// 解析视频过场命令
+    ///
+    /// 语法: `cutscene "path"`
+    fn parse_cutscene(
+        &self,
+        line: &str,
+        line_number: usize,
+    ) -> Result<Option<ScriptNode>, ParseError> {
+        let content = line
+            .get("cutscene".len()..)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ParseError::MissingParameter {
+                line: line_number,
+                command: "cutscene".to_string(),
+                param: "path".to_string(),
+            })?;
+
+        let quote_start = content
+            .find('"')
+            .ok_or_else(|| ParseError::InvalidParameter {
+                line: line_number,
+                param: "path".to_string(),
+                message: "cutscene requires a quoted path".to_string(),
+            })?;
+        let quote_end =
+            content[quote_start + 1..]
+                .find('"')
+                .ok_or_else(|| ParseError::InvalidParameter {
+                    line: line_number,
+                    param: "path".to_string(),
+                    message: "missing closing quote".to_string(),
+                })?
+                + quote_start
+                + 1;
+        let path = content[quote_start + 1..quote_end].to_string();
+
+        if path.is_empty() {
+            return Err(ParseError::InvalidParameter {
+                line: line_number,
+                param: "path".to_string(),
+                message: "cutscene path cannot be empty".to_string(),
+            });
+        }
+
+        Ok(Some(ScriptNode::Cutscene { path }))
     }
 
     /// 从行中提取 with 子句的过渡效果

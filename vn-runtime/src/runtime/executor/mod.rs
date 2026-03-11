@@ -8,7 +8,7 @@
 //! - 产生对应的 Command
 //! - 决定是否需要等待
 
-use crate::command::{Choice, Command, SIGNAL_SCENE_EFFECT, SIGNAL_TITLE_CARD};
+use crate::command::{Choice, Command, SIGNAL_CUTSCENE, SIGNAL_SCENE_EFFECT, SIGNAL_TITLE_CARD};
 use crate::error::RuntimeError;
 use crate::script::{EvalError, Script, ScriptNode, evaluate, evaluate_to_bool};
 use crate::state::{RuntimeState, WaitingReason};
@@ -420,6 +420,14 @@ impl Executor {
                 }],
                 WaitingReason::WaitForSignal(SIGNAL_TITLE_CARD.to_string()),
             )),
+
+            ScriptNode::Cutscene { path } => {
+                let resolved = script.resolve_path(path);
+                Ok(ExecuteResult::with_wait(
+                    vec![Command::Cutscene { path: resolved }],
+                    WaitingReason::WaitForSignal(SIGNAL_CUTSCENE.to_string()),
+                ))
+            }
         }
     }
 

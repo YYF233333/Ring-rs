@@ -302,18 +302,17 @@ fn create_release(
     };
 
     // 1. 打包资源
-    println!("📦 步骤 1/4: 打包资源...");
+    println!("步骤 1/5: 打包资源...");
     pack_assets(assets_dir, zip_output, compression_level)?;
     println!();
 
     // 2. 编译 release 版本的 host
-    println!("🔨 步骤 2/4: 编译 release 版本的 host...");
+    println!("步骤 2/5: 编译 release 版本的 host...");
     run_cargo_command(
         "执行 cargo build --release --package host",
         &["build", "--release", "--package", "host"],
     )?;
 
-    // 查找编译后的二进制文件
     let host_binary = if cfg!(target_os = "windows") {
         PathBuf::from("target/release/host.exe")
     } else {
@@ -324,35 +323,44 @@ fn create_release(
         bail!("找不到编译后的二进制文件: {:?}", host_binary);
     }
 
-    println!("✅ 编译完成: {:?}", host_binary);
+    println!("编译完成: {:?}", host_binary);
     println!();
 
     // 3. 检查 config.json
-    println!("📋 步骤 3/4: 检查配置文件...");
+    println!("步骤 3/5: 检查配置文件...");
     if !config_path.exists() {
         bail!("找不到 config.json 文件");
     }
-    println!("✅ 找到配置文件: {:?}", config_path);
-    println!("✅ 游戏名称: {}", game_name);
+    println!("找到配置文件: {:?}", config_path);
+    println!("游戏名称: {}", game_name);
     println!();
 
-    // 4. 创建发行版目录并复制文件
-    println!("📁 步骤 4/4: 创建发行版目录...");
+    // 4. 检测 FFmpeg 二进制
+    println!("步骤 4/5: 检测 FFmpeg 二进制...");
+    let ffmpeg_binary = detect_ffmpeg_for_release();
+    if let Some(ref path) = ffmpeg_binary {
+        println!("找到 FFmpeg: {:?}", path);
+    } else {
+        println!("[警告] 未找到 FFmpeg 二进制，发行版将不包含视频播放支持");
+        println!("  提示: 将 ffmpeg 放置在 vendor/ffmpeg/win-x64/ (Windows)");
+        println!("        或 vendor/ffmpeg/linux-x64/ (Linux) 或 vendor/ffmpeg/macos-x64/ (macOS)");
+    }
+    println!();
 
-    // 创建输出目录
+    // 5. 创建发行版目录并复制文件
+    println!("步骤 5/5: 创建发行版目录...");
+
     if release_dir.exists() {
-        println!("⚠️  发行版目录已存在，将清空: {:?}", release_dir);
+        println!("发行版目录已存在，将清空: {:?}", release_dir);
         std::fs::remove_dir_all(release_dir)?;
     }
     std::fs::create_dir_all(release_dir)?;
 
-    // 复制文件
     let zip_file_name = required_file_name(zip_output, "资源 ZIP 输出路径必须是文件")?;
     let zip_dest = release_dir.join(zip_file_name);
     std::fs::rename(zip_output, &zip_dest)?;
-    println!("  ✅ 移动资源包: {:?} -> {:?}", zip_output, zip_dest);
+    println!("  移动资源包: {:?} -> {:?}", zip_output, zip_dest);
 
-    // 根据游戏名称重命名二进制文件
     let binary_filename = if cfg!(target_os = "windows") {
         format!("{}.exe", game_name)
     } else {
@@ -361,25 +369,43 @@ fn create_release(
     let binary_dest = release_dir.join(&binary_filename);
     std::fs::copy(&host_binary, &binary_dest)?;
     println!(
-        "  ✅ 复制二进制: {:?} -> {:?} (重命名为: {})",
+        "  复制二进制: {:?} -> {:?} (重命名为: {})",
         host_binary, binary_dest, binary_filename
     );
 
     let config_dest = release_dir.join("config.json");
     std::fs::copy(&config_path, &config_dest)?;
-    println!("  ✅ 复制配置: {:?} -> {:?}", config_path, config_dest);
+    println!("  复制配置: {:?} -> {:?}", config_path, config_dest);
 
-    // 更新 config.json 以使用 ZIP 模式
     update_config_for_release(&config_dest, zip_file_name.to_string_lossy().as_ref())?;
-    println!("  ✅ 更新配置以使用 ZIP 模式");
+    println!("  更新配置以使用 ZIP 模式");
+
+    if let Some(ref ffmpeg_path) = ffmpeg_binary {
+        let ffmpeg_dest_name = if cfg!(target_os = "windows") {
+            "ffmpeg.exe"
+        } else {
+            "ffmpeg"
+        };
+        let ffmpeg_dest = release_dir.join(ffmpeg_dest_name);
+        std::fs::copy(ffmpeg_path, &ffmpeg_dest)?;
+        println!("  复制 FFmpeg: {:?} -> {:?}", ffmpeg_path, ffmpeg_dest);
+    }
 
     println!();
-    println!("✅ 发行版创建完成！");
+    println!("发行版创建完成！");
     println!("   发行版目录: {:?}", release_dir);
     println!("   包含文件:");
     println!("     - {}", zip_file_name.to_string_lossy());
     println!("     - {}", binary_filename);
     println!("     - config.json");
+    if ffmpeg_binary.is_some() {
+        let ffmpeg_name = if cfg!(target_os = "windows") {
+            "ffmpeg.exe"
+        } else {
+            "ffmpeg"
+        };
+        println!("     - {}", ffmpeg_name);
+    }
 
     // 可选：打包整个发行版
     if create_zip {
@@ -521,6 +547,58 @@ fn add_directory_to_zip(
 fn required_file_name<'a>(path: &'a Path, context: &str) -> Result<&'a std::ffi::OsStr> {
     path.file_name()
         .with_context(|| format!("{context}: {:?}", path))
+}
+
+/// 检测 FFmpeg 二进制路径（用于发行版打包）。
+///
+/// 搜索 `vendor/ffmpeg/{platform}/` 和系统 PATH。
+fn detect_ffmpeg_for_release() -> Option<PathBuf> {
+    let exe_name = if cfg!(target_os = "windows") {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    };
+
+    let vendor_dir = if cfg!(target_os = "windows") {
+        "vendor/ffmpeg/win-x64"
+    } else if cfg!(target_os = "macos") {
+        "vendor/ffmpeg/macos-x64"
+    } else {
+        "vendor/ffmpeg/linux-x64"
+    };
+    let vendor_path = PathBuf::from(vendor_dir).join(exe_name);
+    if vendor_path.exists() {
+        return Some(vendor_path);
+    }
+
+    let bin_path = PathBuf::from("bin").join(exe_name);
+    if bin_path.exists() {
+        return Some(bin_path);
+    }
+
+    // 检查系统 PATH，使用 `where` (Windows) 或 `which` (Unix) 获取绝对路径
+    let which_cmd = if cfg!(target_os = "windows") {
+        "where"
+    } else {
+        "which"
+    };
+    if let Ok(output) = std::process::Command::new(which_cmd)
+        .arg(exe_name)
+        .output()
+    {
+        if output.status.success() {
+            let path_str = String::from_utf8_lossy(&output.stdout);
+            let first_line = path_str.lines().next().unwrap_or("").trim();
+            if !first_line.is_empty() {
+                let p = PathBuf::from(first_line);
+                if p.exists() {
+                    return Some(p);
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// 格式化文件大小

@@ -27,6 +27,12 @@ pub const SIGNAL_SCENE_EFFECT: &str = "scene_effect";
 /// titleCard 显示完成的信号 ID
 pub const SIGNAL_TITLE_CARD: &str = "title_card";
 
+/// cutscene 播放完成的信号 ID
+///
+/// 当 cutscene 命令执行时，Runtime 进入 `WaitForSignal(SIGNAL_CUTSCENE)`,
+/// Host 在视频播放完毕或被跳过后发送此信号以解除等待。
+pub const SIGNAL_CUTSCENE: &str = "cutscene";
+
 /// 内联效果（对话文本中的节奏控制标签）
 ///
 /// 标记在纯文本的字符位置上，由打字机推进时触发。
@@ -372,6 +378,16 @@ pub enum Command {
     /// 2. 清空当前游戏会话
     /// 3. 返回标题画面
     FullRestart,
+
+    /// 播放过场视频
+    ///
+    /// Host 收到后全屏播放指定视频。播放完毕或玩家跳过后，
+    /// 发送 `Signal("cutscene")` 恢复 Runtime。
+    /// FFmpeg 不可用或文件不存在时应优雅降级（跳过 + 警告）。
+    Cutscene {
+        /// 视频文件路径
+        path: String,
+    },
 }
 
 #[cfg(test)]

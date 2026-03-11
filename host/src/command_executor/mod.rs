@@ -118,6 +118,9 @@ impl CommandExecutor {
             // FullRestart 由 host 上层（run_script_tick）在命令循环前拦截处理，
             // CommandExecutor 层不需要做任何事。
             Command::FullRestart => ExecuteResult::Ok,
+            // Cutscene 由 host 上层（run_script_tick）在命令循环中拦截处理，
+            // 启动 VideoPlayer 并进入视频播放模式。
+            Command::Cutscene { .. } => ExecuteResult::Ok,
         };
 
         self.last_output.result = result.clone();

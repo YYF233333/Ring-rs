@@ -267,6 +267,15 @@ pub enum ScriptNode {
     /// 对应 `fullRestart` 语法。
     /// 触发后 host 将持久化 `persistent_variables`，清空会话状态并返回标题画面。
     FullRestart,
+
+    /// 视频过场
+    ///
+    /// 对应 `cutscene "path"` 语法。
+    /// 全屏播放视频，播放完毕或跳过后继续执行。
+    Cutscene {
+        /// 视频文件路径（相对于脚本目录）
+        path: String,
+    },
 }
 
 impl ScriptNode {
@@ -282,6 +291,7 @@ impl ScriptNode {
                 | Self::Wait { .. }
                 | Self::Pause
                 | Self::TitleCard { .. }
+                | Self::Cutscene { .. }
         )
     }
 

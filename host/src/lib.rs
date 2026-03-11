@@ -31,6 +31,7 @@ pub mod rendering_types;
 pub mod resources;
 pub mod save_manager;
 pub mod ui;
+pub mod video;
 
 pub use app::app_mode::{
     AppMode, InputCapture, NavigationStack, PlaybackMode, SaveLoadTab, UserSettings,

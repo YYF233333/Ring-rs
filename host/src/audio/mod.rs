@@ -223,6 +223,23 @@ impl AudioManager {
         }
     }
 
+    /// 播放视频音频（f32 PCM 样本，fire-and-forget）
+    ///
+    /// 创建 `rodio::buffer::SamplesBuffer` 并通过 mixer 播放。
+    /// 返回 `Player` 句柄，调用方可用于提前停止。
+    pub fn play_video_audio(&self, samples: Vec<f32>, channels: u16, sample_rate: u32) -> Player {
+        use std::num::NonZero;
+        let source = rodio::buffer::SamplesBuffer::new(
+            NonZero::new(channels).expect("invariant: channels > 0"),
+            NonZero::new(sample_rate).expect("invariant: sample_rate > 0"),
+            samples,
+        );
+        let player = Player::connect_new(self.device_sink.mixer());
+        player.set_volume(self.sfx_volume);
+        player.append(source);
+        player
+    }
+
     /// Duck 音量比例
     const DUCK_VOLUME_RATIO: f32 = 0.3;
     /// Duck 过渡速度（每秒变化量，越大越快）

@@ -1095,3 +1095,40 @@ fn test_execute_dialogue_no_wait() {
         Command::ShowText { no_wait: true, .. }
     ));
 }
+
+#[test]
+fn test_execute_cutscene_waits_for_signal() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::Cutscene {
+        path: "audio/ending.webm".to_string(),
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::Cutscene { path } if path == "audio/ending.webm"
+    ));
+    assert!(matches!(
+        result.waiting,
+        Some(WaitingReason::WaitForSignal(ref id)) if id == "cutscene"
+    ));
+}
+
+#[test]
+fn test_execute_cutscene_resolves_path() {
+    let mut executor = super::Executor::new();
+    let script = crate::script::Script::new(
+        "test",
+        vec![ScriptNode::Cutscene {
+            path: "video/ending.webm".to_string(),
+        }],
+        "scripts/winter",
+    );
+    let mut state = RuntimeState::new("test");
+    let node = script.get_node(0).unwrap();
+    let result = executor.execute(node, &mut state, &script).unwrap();
+    assert!(matches!(
+        &result.commands[0],
+        Command::Cutscene { path } if path == "scripts/winter/video/ending.webm"
+    ));
+}

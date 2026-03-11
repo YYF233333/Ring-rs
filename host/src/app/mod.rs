@@ -38,6 +38,7 @@ use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
 use crate::resources::ResourceManager;
 use crate::ui::{Theme, ToastManager, UiContext, load_skin, load_theme_with_override};
+use crate::video::VideoPlayer;
 use crate::{AppConfig, AudioManager, CommandExecutor, InputManager};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -144,6 +145,8 @@ pub struct AppState {
     pub play_start_time: std::time::Instant,
     /// 资源加载是否完成
     pub loading_complete: bool,
+    /// 视频播放器（cutscene）
+    pub video_player: VideoPlayer,
 }
 
 impl AppState {
@@ -217,6 +220,7 @@ impl AppState {
             scripts,
             play_start_time: std::time::Instant::now(),
             loading_complete: false,
+            video_player: VideoPlayer::new(),
         }
     }
 }

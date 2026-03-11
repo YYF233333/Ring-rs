@@ -2021,3 +2021,59 @@ fn test_parse_expression_number_only_minus_sign() {
     let err = parse_expression("$x == -", 1).unwrap_err();
     assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
 }
+
+// =========================================================================
+// cutscene 测试
+// =========================================================================
+
+#[test]
+fn test_parse_cutscene() {
+    let node = parse_single_node(r#"cutscene "audio/ending_HVC_bgm.webm""#);
+    match node {
+        ScriptNode::Cutscene { path } => {
+            assert_eq!(path, "audio/ending_HVC_bgm.webm");
+        }
+        other => panic!("Expected Cutscene, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_cutscene_case_insensitive() {
+    let node = parse_single_node(r#"CUTSCENE "video.webm""#);
+    assert!(matches!(node, ScriptNode::Cutscene { .. }));
+
+    let node2 = parse_single_node(r#"Cutscene "video.webm""#);
+    assert!(matches!(node2, ScriptNode::Cutscene { .. }));
+}
+
+#[test]
+fn test_parse_cutscene_missing_path() {
+    let err = parse_err("cutscene");
+    assert!(
+        format!("{:?}", err).contains("MissingParameter"),
+        "expected MissingParameter, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn test_parse_cutscene_missing_quotes() {
+    let err = parse_err("cutscene audio/video.webm");
+    assert!(
+        format!("{:?}", err).contains("InvalidParameter"),
+        "expected InvalidParameter, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn test_parse_cutscene_missing_closing_quote() {
+    let err = parse_err(r#"cutscene "unclosed"#);
+    assert!(format!("{:?}", err).contains("InvalidParameter"));
+}
+
+#[test]
+fn test_parse_cutscene_empty_path() {
+    let err = parse_err(r#"cutscene """#);
+    assert!(format!("{:?}", err).contains("InvalidParameter"));
+}

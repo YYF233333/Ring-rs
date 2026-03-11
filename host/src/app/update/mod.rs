@@ -9,10 +9,14 @@ mod scene_transition;
 mod script;
 
 pub use scene_transition::update_scene_transition;
-pub use script::{handle_script_mode_input, run_script_tick, skip_all_active_effects};
+pub use script::{
+    finish_cutscene, handle_script_mode_input, run_script_tick, skip_all_active_effects,
+};
 
 use tracing::debug;
-use vn_runtime::command::{SIGNAL_SCENE_EFFECT, SIGNAL_SCENE_TRANSITION, SIGNAL_TITLE_CARD};
+use vn_runtime::command::{
+    SIGNAL_CUTSCENE, SIGNAL_SCENE_EFFECT, SIGNAL_SCENE_TRANSITION, SIGNAL_TITLE_CARD,
+};
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 use winit::keyboard::KeyCode;
@@ -118,6 +122,26 @@ pub fn update(app_state: &mut AppState, dt: f32) {
             }
         }
 
+        // cutscene 视频播放推进
+        if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason {
+            if id == SIGNAL_CUTSCENE {
+                if app_state.video_player.is_playing() {
+                    // 推进视频帧
+                    app_state.video_player.update(dt);
+
+                    // 尝试启动音频播放
+                    try_start_video_audio(app_state);
+
+                    if app_state.video_player.is_done() {
+                        finish_cutscene(app_state);
+                    }
+                } else {
+                    // 视频未在播放（启动失败或已完成），立即发信号跳过
+                    finish_cutscene(app_state);
+                }
+            }
+        }
+
         // 更新章节标记动画（非阻塞、不受快进影响、固定时间自动消失）
         app_state.core.render_state.update_chapter_mark(dt);
 
@@ -157,5 +181,23 @@ pub fn update(app_state: &mut AppState, dt: f32) {
     // 更新音频状态（所有模式都需要）
     if let Some(ref mut audio_manager) = app_state.core.audio_manager {
         audio_manager.update(dt);
+    }
+}
+
+/// 检查视频音频提取是否完成，如完成则通过 AudioManager 播放。
+fn try_start_video_audio(app_state: &mut AppState) {
+    let Some(audio_mod) = app_state.video_player.audio_mut() else {
+        return;
+    };
+    audio_mod.try_start_playback();
+
+    let channels = audio_mod.channels();
+    let sample_rate = audio_mod.sample_rate();
+    let Some(samples) = audio_mod.take_samples() else {
+        return;
+    };
+
+    if let Some(ref audio_manager) = app_state.core.audio_manager {
+        let _player = audio_manager.play_video_audio(samples, channels, sample_rate);
     }
 }
