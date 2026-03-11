@@ -68,6 +68,8 @@ pub struct VideoPlayer {
     elapsed: f32,
     current_frame: Option<VideoFrame>,
     pending_frame: Option<VideoFrame>,
+    /// ZIP 模式下提取的临时视频文件路径，cleanup 时删除
+    temp_video_file: Option<PathBuf>,
 }
 
 impl VideoPlayer {
@@ -79,23 +81,32 @@ impl VideoPlayer {
             elapsed: 0.0,
             current_frame: None,
             pending_frame: None,
+            temp_video_file: None,
         }
     }
 
     /// 开始播放视频文件。
     ///
-    /// 启动 FFmpeg 子进程进行视频解码和音频提取。
-    /// FFmpeg 不可用或文件不存在时返回错误。
-    pub fn start(&mut self, video_path: &str, assets_base: &Path) -> Result<(), VideoError> {
+    /// `resolved_path` 必须是真实文件系统路径（FS 模式为 assets 下的路径，
+    /// ZIP 模式为调用方提取到临时文件后的路径）。
+    /// `temp_file` 为 ZIP 模式下需要在播放结束后清理的临时文件路径。
+    pub fn start(
+        &mut self,
+        resolved_path: &Path,
+        temp_file: Option<PathBuf>,
+    ) -> Result<(), VideoError> {
         let ffmpeg_path = detect_ffmpeg().ok_or(VideoError::FfmpegNotFound)?;
 
-        let full_path = assets_base.join(video_path);
-        if !full_path.exists() {
-            return Err(VideoError::FileNotFound(video_path.to_string()));
+        if !resolved_path.exists() {
+            return Err(VideoError::FileNotFound(
+                resolved_path.to_string_lossy().to_string(),
+            ));
         }
 
-        let path_str = full_path.to_string_lossy().to_string();
+        let path_str = resolved_path.to_string_lossy().to_string();
         info!(path = %path_str, "Starting cutscene video playback");
+
+        self.temp_video_file = temp_file;
 
         // Ensure FFmpeg is discoverable by FfmpegCommand
         ensure_ffmpeg_in_path(&ffmpeg_path);
@@ -225,6 +236,13 @@ impl VideoPlayer {
         }
         self.current_frame = None;
         self.pending_frame = None;
+
+        if let Some(temp_path) = self.temp_video_file.take() {
+            if let Err(e) = std::fs::remove_file(&temp_path) {
+                debug!(error = %e, path = %temp_path.display(),
+                    "Failed to clean up temp video file");
+            }
+        }
     }
 }
 

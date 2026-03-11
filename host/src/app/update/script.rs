@@ -1,11 +1,16 @@
 //! 脚本模式输入与 VNRuntime tick
 
+use std::path::PathBuf;
+
 use tracing::{debug, error, info, warn};
 use vn_runtime::command::{Command, SIGNAL_CUTSCENE};
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 
 use crate::ExecuteResult;
+use crate::config::AssetSourceType;
+use crate::resources::normalize_logical_path;
+use crate::video::VideoError;
 
 use super::super::AppState;
 use super::super::CoreSystems;
@@ -193,18 +198,21 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                 // Cutscene：启动视频播放器，duck BGM
                 if let Command::Cutscene { path } = command {
                     info!(path = %path, "收到 Cutscene 命令，启动视频播放");
-                    let assets_base = std::path::PathBuf::from(&app_state.config.assets_root);
-                    match app_state.video_player.start(path, &assets_base) {
-                        Ok(()) => {
-                            if let Some(ref mut audio) = app_state.core.audio_manager {
-                                audio.duck();
+                    match resolve_video_path(app_state, path) {
+                        Ok((resolved_path, temp_file)) => {
+                            match app_state.video_player.start(&resolved_path, temp_file) {
+                                Ok(()) => {
+                                    if let Some(ref mut audio) = app_state.core.audio_manager {
+                                        audio.duck();
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(error = %e, "视频播放启动失败，跳过 cutscene");
+                                }
                             }
                         }
                         Err(e) => {
-                            warn!(error = %e, "视频播放启动失败，跳过 cutscene");
-                            // 启动失败，立即发信号跳过
-                            // 不能在命令循环内递归调用 run_script_tick，
-                            // 设置标记让 waiting 处理自然恢复
+                            warn!(error = %e, "视频路径解析失败，跳过 cutscene");
                         }
                     }
                     continue;
@@ -285,4 +293,46 @@ pub fn finish_cutscene(app_state: &mut AppState) {
             id: SIGNAL_CUTSCENE.to_string(),
         }),
     );
+}
+
+/// 解析视频路径为真实文件系统路径。
+///
+/// - FS 模式：规范化逻辑路径后拼接 assets_root。
+/// - ZIP 模式：从 ZIP 读取视频字节并写入临时文件，返回临时文件路径。
+///
+/// 返回 `(resolved_filesystem_path, Option<temp_file_to_cleanup>)`。
+fn resolve_video_path(
+    app_state: &mut AppState,
+    logical_path: &str,
+) -> Result<(PathBuf, Option<PathBuf>), VideoError> {
+    let normalized = normalize_logical_path(logical_path);
+
+    match app_state.config.asset_source {
+        AssetSourceType::Fs => {
+            let resolved = app_state.config.assets_root.join(&normalized);
+            Ok((resolved, None))
+        }
+        AssetSourceType::Zip => {
+            let bytes = app_state
+                .core
+                .resource_manager
+                .read_bytes(&normalized)
+                .map_err(|e| VideoError::FileNotFound(format!("{} (zip: {})", normalized, e)))?;
+
+            let temp_dir = std::env::temp_dir().join("ring-vn-video");
+            std::fs::create_dir_all(&temp_dir).map_err(VideoError::Io)?;
+
+            let filename = normalized.rsplit('/').next().unwrap_or("video.webm");
+            let temp_path = temp_dir.join(filename);
+
+            std::fs::write(&temp_path, &bytes).map_err(VideoError::Io)?;
+            info!(
+                temp_path = %temp_path.display(),
+                size_mb = bytes.len() as f64 / 1_048_576.0,
+                "ZIP 模式：视频已提取到临时文件"
+            );
+
+            Ok((temp_path.clone(), Some(temp_path)))
+        }
+    }
 }

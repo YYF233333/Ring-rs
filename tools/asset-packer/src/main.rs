@@ -582,10 +582,7 @@ fn detect_ffmpeg_for_release() -> Option<PathBuf> {
     } else {
         "which"
     };
-    if let Ok(output) = std::process::Command::new(which_cmd)
-        .arg(exe_name)
-        .output()
-    {
+    if let Ok(output) = std::process::Command::new(which_cmd).arg(exe_name).output() {
         if output.status.success() {
             let path_str = String::from_utf8_lossy(&output.stdout);
             let first_line = path_str.lines().next().unwrap_or("").trim();
