@@ -1568,3 +1568,456 @@ fn test_parse_title_card_missing_text() {
         err
     );
 }
+
+// =========================================================================
+// extend 指令测试
+// =========================================================================
+
+#[test]
+fn test_parse_extend_basic() {
+    let node = parse_single_node(r#"extend "继续说话""#);
+    assert!(matches!(
+        node,
+        ScriptNode::Extend { content, inline_effects, no_wait: false }
+            if content == "继续说话" && inline_effects.is_empty()
+    ));
+}
+
+#[test]
+fn test_parse_extend_with_no_wait() {
+    let node = parse_single_node(r#"extend "继续说话" -->"#);
+    assert!(matches!(
+        node,
+        ScriptNode::Extend { content, no_wait: true, .. }
+            if content == "继续说话"
+    ));
+}
+
+#[test]
+fn test_parse_extend_with_inline_effects() {
+    let node = parse_single_node(r#"extend "接着{wait}继续""#);
+    if let ScriptNode::Extend {
+        content,
+        inline_effects,
+        ..
+    } = node
+    {
+        assert_eq!(content, "接着继续");
+        assert!(!inline_effects.is_empty());
+    } else {
+        panic!("Expected Extend node");
+    }
+}
+
+#[test]
+fn test_parse_extend_missing_text() {
+    let err = parse_err("extend");
+    assert!(matches!(
+        err,
+        crate::error::ParseError::MissingParameter { .. }
+    ));
+}
+
+#[test]
+fn test_parse_extend_missing_quotes() {
+    let err = parse_err("extend hello");
+    assert!(matches!(
+        err,
+        crate::error::ParseError::MissingParameter { .. }
+    ));
+}
+
+// =========================================================================
+// --> (no_wait) 修饰符测试
+// =========================================================================
+
+#[test]
+fn test_parse_dialogue_with_no_wait_arrow() {
+    let node = parse_single_node(r#"角色："台词" -->"#);
+    assert!(matches!(node, ScriptNode::Dialogue { no_wait: true, .. }));
+}
+
+#[test]
+fn test_parse_dialogue_without_no_wait() {
+    let node = parse_single_node(r#"角色："没有箭头""#);
+    assert!(matches!(node, ScriptNode::Dialogue { no_wait: false, .. }));
+}
+
+// =========================================================================
+// set 指令边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_set_var_empty_name() {
+    let err = parse_err("set $ = true");
+    assert!(matches!(
+        err,
+        crate::error::ParseError::MissingParameter { .. }
+    ));
+}
+
+#[test]
+fn test_parse_set_var_invalid_name_chars() {
+    let err = parse_err("set $na-me = true");
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+// =========================================================================
+// titleCard 边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_title_card_missing_closing_quote() {
+    let err = parse_err(r#"titleCard "unclosed"#);
+    assert!(format!("{:?}", err).contains("InvalidParameter"));
+}
+
+#[test]
+fn test_parse_title_card_negative_duration() {
+    let err = parse_err(r#"titleCard "text" (duration: -1)"#);
+    assert!(format!("{:?}", err).contains("InvalidParameter"));
+}
+
+#[test]
+fn test_parse_title_card_positional_duration() {
+    let node = parse_single_node(r#"titleCard "text" (2.5)"#);
+    match node {
+        ScriptNode::TitleCard { text, duration } => {
+            assert_eq!(text, "text");
+            assert!((duration - 2.5).abs() < f64::EPSILON);
+        }
+        other => panic!("Expected TitleCard, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_title_card_missing_closing_paren() {
+    let err = parse_err(r#"titleCard "text" (duration: 1"#);
+    assert!(format!("{:?}", err).contains("InvalidParameter"));
+}
+
+// =========================================================================
+// callScript 边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_call_script_extra_params_after_link() {
+    let err = parse_err("callScript [ch1](ch1.md) extra_stuff");
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+#[test]
+fn test_parse_call_script_empty_label() {
+    let err = parse_err("callScript [ ](ch1.md)");
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+#[test]
+fn test_parse_call_script_empty_path() {
+    let err = parse_err("callScript [ch1]( )");
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+// =========================================================================
+// audio unicode loop 标识测试
+// =========================================================================
+
+#[test]
+fn test_parse_audio_unicode_loop() {
+    let node = parse_single_node("<audio src=\"bgm.mp3\"></audio> \u{267E}");
+    assert!(matches!(
+        node,
+        ScriptNode::PlayAudio { path, is_bgm: true } if path == "bgm.mp3"
+    ));
+}
+
+// =========================================================================
+// show 指令边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_show_invalid_position() {
+    let err = parse_err(r#"show <img src="char.png" /> as alice at invalid_pos"#);
+    assert!(matches!(
+        err,
+        crate::error::ParseError::InvalidParameter { .. }
+    ));
+}
+
+#[test]
+fn test_parse_show_missing_as() {
+    let err = parse_err(r#"show <img src="char.png" /> at center"#);
+    assert!(matches!(
+        err,
+        crate::error::ParseError::MissingParameter { .. }
+    ));
+}
+
+// =========================================================================
+// changeBG 边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_change_bg_missing_img() {
+    let err = parse_err("changeBG with dissolve");
+    assert!(matches!(
+        err,
+        crate::error::ParseError::MissingParameter { .. }
+    ));
+}
+
+// =========================================================================
+// label 边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_label_with_stars_inside() {
+    let script = parse_ok("***bold***");
+    assert_eq!(
+        script.len(),
+        0,
+        "label with * inside should not parse as label"
+    );
+}
+
+// =========================================================================
+// chapter 边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_chapter_empty_title() {
+    let script = parse_ok("## ");
+    assert_eq!(script.len(), 0);
+}
+
+#[test]
+fn test_parse_chapter_levels() {
+    for level in 1..=6u8 {
+        let input = format!("{} Title", "#".repeat(level as usize));
+        let node = parse_single_node(&input);
+        assert!(
+            matches!(node, ScriptNode::Chapter { level: l, .. } if l == level),
+            "level={level}"
+        );
+    }
+}
+
+// =========================================================================
+// wait 边界测试 - zero duration
+// =========================================================================
+
+#[test]
+fn test_parse_wait_zero() {
+    let err = parse_err("wait 0");
+    assert!(format!("{:?}", err).contains("InvalidParameter"));
+}
+
+// =========================================================================
+// 条件块边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_conditional_with_multiple_body_commands() {
+    let input = r#"
+if $flag == true
+  textBoxHide
+  clearCharacters
+  ："条件内多条命令"
+endif
+"#;
+    let node = parse_single_node(input);
+    if let ScriptNode::Conditional { branches } = node {
+        assert_eq!(branches.len(), 1);
+        assert_eq!(branches[0].body.len(), 3);
+    } else {
+        panic!("Expected Conditional node");
+    }
+}
+
+#[test]
+fn test_parse_conditional_empty_body() {
+    let input = r#"
+if $flag == true
+endif
+"#;
+    let node = parse_single_node(input);
+    if let ScriptNode::Conditional { branches } = node {
+        assert_eq!(branches.len(), 1);
+        assert!(branches[0].body.is_empty());
+    } else {
+        panic!("Expected Conditional node");
+    }
+}
+
+// =========================================================================
+// extract_transition_from_line 边界测试
+// =========================================================================
+
+#[test]
+fn test_extract_transition_no_closing_backtick() {
+    let parser = phase2::Phase2Parser::new();
+    let t =
+        parser.extract_transition_from_line(r#"changeBG <img src="bg.png" /> with `Dissolve(1.0)"#);
+    assert!(t.is_some());
+    let t = t.unwrap();
+    assert_eq!(t.name, "Dissolve");
+}
+
+#[test]
+fn test_extract_transition_inline_backtick_with_internal_backtick() {
+    let parser = phase2::Phase2Parser::new();
+    let t = parser.extract_transition_from_line(r#"changeBG <img src="bg.png" /> with `Dissolve`"#);
+    assert!(t.is_some());
+    let t = t.unwrap();
+    assert_eq!(t.name, "Dissolve");
+}
+
+// =========================================================================
+// goto 边界测试 - 不带星号的 label
+// =========================================================================
+
+#[test]
+fn test_parse_goto_without_stars() {
+    let node = parse_single_node("goto some_label");
+    assert!(matches!(
+        node,
+        ScriptNode::Goto { target_label } if target_label == "some_label"
+    ));
+}
+
+#[test]
+fn test_parse_goto_missing_label() {
+    let err = parse_err("goto");
+    assert!(matches!(
+        err,
+        crate::error::ParseError::MissingParameter { .. }
+    ));
+}
+
+// =========================================================================
+// phase1: nested conditional blocks
+// =========================================================================
+
+#[test]
+fn test_parse_nested_conditionals() {
+    let input = r#"
+if $outer == true
+  if $inner == true
+    ："内层"
+  endif
+  ："外层"
+endif
+"#;
+    let node = parse_single_node(input);
+    if let ScriptNode::Conditional { branches } = node {
+        assert_eq!(branches.len(), 1);
+        assert!(!branches[0].body.is_empty());
+    } else {
+        panic!("Expected Conditional node");
+    }
+}
+
+// =========================================================================
+// fullRestart 大小写测试已有，添加混合大小写
+// =========================================================================
+
+#[test]
+fn test_parse_simple_commands_case_insensitive() {
+    let cases = [
+        ("STOPBGM", ScriptNode::StopBgm),
+        ("StopBGM", ScriptNode::StopBgm),
+        ("RETURNFROMSCRIPT", ScriptNode::ReturnFromScript),
+        ("ReturnFromScript", ScriptNode::ReturnFromScript),
+        ("PAUSE", ScriptNode::Pause),
+    ];
+    for (input, expected) in cases {
+        let node = parse_single_node(input);
+        assert_eq!(node, expected, "input={input}");
+    }
+}
+
+// =========================================================================
+// changeScene 边界测试 - 缺少图片路径
+// =========================================================================
+
+#[test]
+fn test_parse_change_scene_missing_img() {
+    let err = parse_err("changeScene with Dissolve(1.0)");
+    assert!(matches!(
+        err,
+        crate::error::ParseError::MissingParameter { .. }
+    ));
+}
+
+// =========================================================================
+// 表达式解析器边界测试
+// =========================================================================
+
+#[test]
+fn test_parse_expression_single_quoted_string() {
+    let expr = parse_expression("$name == 'Alice'", 1).unwrap();
+    assert!(matches!(expr, crate::script::Expr::Eq(_, _)));
+}
+
+#[test]
+fn test_parse_expression_unclosed_string() {
+    let err = parse_expression(r#"$name == "unclosed"#, 1).unwrap_err();
+    assert!(format!("{:?}", err).contains("未闭合"));
+}
+
+#[test]
+fn test_parse_expression_negative_number() {
+    let expr = parse_expression("$count == -5", 1).unwrap();
+    assert!(matches!(expr, crate::script::Expr::Eq(_, _)));
+}
+
+#[test]
+fn test_parse_expression_integer_literal() {
+    let expr = parse_expression("42", 1).unwrap();
+    assert!(matches!(
+        expr,
+        crate::script::Expr::Literal(crate::state::VarValue::Int(42))
+    ));
+}
+
+#[test]
+fn test_parse_expression_unexpected_char() {
+    let err = parse_expression("@invalid", 1).unwrap_err();
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+#[test]
+fn test_parse_expression_trailing_content() {
+    let err = parse_expression("true garbage", 1).unwrap_err();
+    assert!(format!("{:?}", err).contains("无法解析"));
+}
+
+#[test]
+fn test_parse_expression_unexpected_end_after_eq() {
+    let err = parse_expression("$a ==", 1).unwrap_err();
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+#[test]
+fn test_parse_expression_empty_identifier() {
+    let err = parse_expression("$ == true", 1).unwrap_err();
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}
+
+#[test]
+fn test_parse_expression_double_not() {
+    let expr = parse_expression("not not $flag", 1).unwrap();
+    assert!(matches!(expr, crate::script::Expr::Not(_)));
+}
+
+#[test]
+fn test_parse_expression_complex_nested_parens() {
+    let expr = parse_expression("($a == true) and (($b == false) or ($c == true))", 1).unwrap();
+    assert!(matches!(expr, crate::script::Expr::And(_, _)));
+}
+
+#[test]
+fn test_parse_expression_number_only_minus_sign() {
+    let err = parse_expression("$x == -", 1).unwrap_err();
+    assert!(matches!(err, crate::error::ParseError::InvalidLine { .. }));
+}

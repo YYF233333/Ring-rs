@@ -948,3 +948,150 @@ fn test_execute_title_card_waits_for_signal() {
         Some(WaitingReason::WaitForSignal(ref id)) if id == "title_card"
     ));
 }
+
+#[test]
+fn test_execute_extend_text() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::Extend {
+        content: "追加文本".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::ExtendText { content, no_wait: false, .. } if content == "追加文本"
+    ));
+    assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
+}
+
+#[test]
+fn test_execute_extend_text_no_wait() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::Extend {
+        content: "自动推进".to_string(),
+        inline_effects: vec![],
+        no_wait: true,
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(matches!(
+        &result.commands[0],
+        Command::ExtendText { no_wait: true, .. }
+    ));
+}
+
+#[test]
+fn test_execute_conditional_no_match_returns_empty() {
+    let (mut executor, mut state, script) = test_ctx("");
+    state.set_var("flag".to_string(), crate::state::VarValue::Bool(false));
+    let branches = vec![crate::script::ast::ConditionalBranch {
+        condition: Some(crate::script::Expr::var("flag")),
+        body: vec![ScriptNode::TextBoxHide],
+    }];
+    let node = ScriptNode::Conditional { branches };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(result.commands.is_empty());
+    assert!(result.waiting.is_none());
+    assert!(result.jump_to.is_none());
+}
+
+#[test]
+fn test_execute_change_scene_without_transition() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::ChangeScene {
+        path: "bg.png".to_string(),
+        transition: None,
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::ChangeScene {
+            transition: None,
+            ..
+        }
+    ));
+    assert!(result.waiting.is_none());
+}
+
+#[test]
+fn test_execute_change_scene_non_mask_named_arg_preserved() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::ChangeScene {
+        path: "bg.png".to_string(),
+        transition: Some(Transition::with_named_args(
+            "Fade",
+            vec![(Some("duration".to_string()), TransitionArg::Number(1.5))],
+        )),
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    if let Command::ChangeScene {
+        transition: Some(t),
+        ..
+    } = &result.commands[0]
+    {
+        assert_eq!(t.get_duration(), Some(1.5));
+    } else {
+        panic!("Expected ChangeScene with transition");
+    }
+}
+
+#[test]
+fn test_execute_conditional_with_call_script_in_branch() {
+    let (mut executor, mut state, script) = test_ctx("");
+    state.set_var("flag".to_string(), crate::state::VarValue::Bool(true));
+    let branches = vec![crate::script::ast::ConditionalBranch {
+        condition: Some(crate::script::Expr::var("flag")),
+        body: vec![ScriptNode::CallScript {
+            path: "other.md".to_string(),
+            display_label: None,
+        }],
+    }];
+    let node = ScriptNode::Conditional { branches };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(result.script_control.is_some());
+    assert!(matches!(
+        result.script_control,
+        Some(ScriptControlFlow::Call { .. })
+    ));
+}
+
+#[test]
+fn test_execute_conditional_with_wait_in_branch() {
+    let (mut executor, mut state, script) = test_ctx("");
+    state.set_var("flag".to_string(), crate::state::VarValue::Bool(true));
+    let branches = vec![crate::script::ast::ConditionalBranch {
+        condition: Some(crate::script::Expr::var("flag")),
+        body: vec![
+            ScriptNode::TextBoxHide,
+            ScriptNode::Dialogue {
+                speaker: None,
+                content: "test".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
+            },
+            ScriptNode::TextBoxShow,
+        ],
+    }];
+    let node = ScriptNode::Conditional { branches };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 2);
+    assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
+}
+
+#[test]
+fn test_execute_dialogue_no_wait() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::Dialogue {
+        speaker: Some("A".to_string()),
+        content: "auto".to_string(),
+        inline_effects: vec![],
+        no_wait: true,
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(matches!(
+        &result.commands[0],
+        Command::ShowText { no_wait: true, .. }
+    ));
+}

@@ -218,3 +218,111 @@ fn test_script_source_map() {
     // 节点3: **end** -> 第5行
     assert_eq!(script.get_source_line(3), Some(5));
 }
+
+#[test]
+fn test_diagnostic_result_merge() {
+    let mut result1 = DiagnosticResult::new();
+    result1.push(Diagnostic::error("a.md", "err1"));
+
+    let mut result2 = DiagnosticResult::new();
+    result2.push(Diagnostic::warn("b.md", "warn1"));
+    result2.push(Diagnostic::info("b.md", "info1"));
+
+    result1.merge(result2);
+    assert_eq!(result1.diagnostics.len(), 3);
+    assert_eq!(result1.error_count(), 1);
+    assert_eq!(result1.warn_count(), 1);
+}
+
+#[test]
+fn test_diagnostic_display_without_line_and_detail() {
+    let diag = Diagnostic::warn("test.md", "some warning");
+    let display = format!("{}", diag);
+    assert!(display.contains("[WARN]"));
+    assert!(display.contains("test.md"));
+    assert!(display.contains("some warning"));
+    assert!(diag.line.is_none());
+    assert!(diag.detail.is_none());
+}
+
+#[test]
+fn test_diagnostic_display_info_level() {
+    let diag = Diagnostic::info("test.md", "info message");
+    let display = format!("{}", diag);
+    assert!(display.contains("[INFO]"));
+}
+
+#[test]
+fn test_resource_type_display() {
+    assert_eq!(format!("{}", ResourceType::Background), "背景");
+    assert_eq!(format!("{}", ResourceType::Scene), "场景");
+    assert_eq!(format!("{}", ResourceType::Character), "立绘");
+    assert_eq!(format!("{}", ResourceType::Audio), "音频");
+}
+
+#[test]
+fn test_extract_resource_references_change_scene() {
+    let mut parser = Parser::new();
+    let text = r#"changeScene <img src="bg/new.png" /> with Dissolve(duration: 1)"#;
+    let script = parser
+        .parse_with_base_path("test", text, "scripts")
+        .unwrap();
+    let refs = extract_resource_references(&script);
+
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].resource_type, ResourceType::Scene);
+    assert_eq!(refs[0].path, "bg/new.png");
+    assert_eq!(refs[0].resolved_path, "scripts/bg/new.png");
+}
+
+#[test]
+fn test_extract_resource_references_show_without_path() {
+    let mut parser = Parser::new();
+    let text = "show alice at center";
+    let script = parser.parse("test", text).unwrap();
+    let refs = extract_resource_references(&script);
+    assert!(refs.is_empty());
+}
+
+#[test]
+fn test_extract_resource_references_in_conditional() {
+    let mut parser = Parser::new();
+    let text = r#"
+if $flag == true
+  changeBG <img src="bg_a.png" />
+else
+  changeBG <img src="bg_b.png" />
+endif
+"#;
+    let script = parser
+        .parse_with_base_path("test", text, "scripts")
+        .unwrap();
+    let refs = extract_resource_references(&script);
+    assert_eq!(refs.len(), 2);
+    assert_eq!(refs[0].resource_type, ResourceType::Background);
+    assert_eq!(refs[1].resource_type, ResourceType::Background);
+}
+
+#[test]
+fn test_get_jump_targets() {
+    let mut parser = Parser::new();
+    let text = r#"
+**start**
+goto **end**
+goto **end**
+
+| 选择 |        |
+| --- | --- |
+| A | target_a |
+
+**end**
+角色："结束"
+"#;
+
+    let script = parser.parse("test", text).unwrap();
+    let targets = get_jump_targets(&script);
+
+    assert!(targets.contains("end"));
+    assert!(targets.contains("target_a"));
+    assert_eq!(targets.len(), 2);
+}

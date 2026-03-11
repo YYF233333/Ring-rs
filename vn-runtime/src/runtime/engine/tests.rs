@@ -719,3 +719,151 @@ fn test_call_script_label_is_display_only() {
         "child_label_display_only"
     );
 }
+
+#[test]
+fn test_runtime_is_finished() {
+    let script = Script::new(
+        "test",
+        vec![ScriptNode::Dialogue {
+            speaker: None,
+            content: "only line".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
+        }],
+        "",
+    );
+    let mut runtime = VNRuntime::new(script);
+    assert!(!runtime.is_finished());
+
+    let (_cmds, _waiting) = runtime.tick(None).unwrap();
+    assert!(!runtime.is_finished());
+
+    runtime.tick(Some(RuntimeInput::Click)).unwrap();
+    assert!(runtime.is_finished());
+}
+
+#[test]
+fn test_runtime_restore_history() {
+    let script = create_test_script();
+    let mut runtime = VNRuntime::new(script);
+
+    let mut history = History::new();
+    history.push(HistoryEvent::dialogue(
+        Some("A".to_string()),
+        "hi".to_string(),
+    ));
+
+    runtime.restore_history(history);
+    assert_eq!(runtime.history().events().len(), 1);
+}
+
+#[test]
+fn test_record_history_for_extend_text() {
+    let script = Script::new(
+        "test",
+        vec![
+            ScriptNode::Dialogue {
+                speaker: Some("A".to_string()),
+                content: "First".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
+            },
+            ScriptNode::Extend {
+                content: " continued".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
+            },
+        ],
+        "",
+    );
+    let mut runtime = VNRuntime::new(script);
+
+    let (cmds, _) = runtime.tick(None).unwrap();
+    assert_eq!(cmds.len(), 1);
+
+    runtime.tick(Some(RuntimeInput::Click)).unwrap();
+
+    let recent = runtime.history().recent_dialogues(5);
+    assert!(!recent.is_empty());
+    if let HistoryEvent::Dialogue { content, .. } = recent[0] {
+        assert!(content.contains("First"));
+        assert!(content.contains("continued"));
+    } else {
+        panic!("Expected Dialogue event");
+    }
+}
+
+#[test]
+fn test_record_history_for_chapter_mark() {
+    let script = Script::new(
+        "test",
+        vec![ScriptNode::Chapter {
+            title: "Chapter 1".to_string(),
+            level: 1,
+        }],
+        "",
+    );
+    let mut runtime = VNRuntime::new(script);
+    runtime.tick(None).unwrap();
+
+    assert!(
+        runtime
+            .history()
+            .events()
+            .iter()
+            .any(|e| matches!(e, HistoryEvent::ChapterMark { .. }))
+    );
+}
+
+#[test]
+fn test_record_history_for_stop_bgm() {
+    let script = Script::new("test", vec![ScriptNode::StopBgm], "");
+    let mut runtime = VNRuntime::new(script);
+    runtime.tick(None).unwrap();
+
+    assert!(
+        runtime
+            .history()
+            .events()
+            .iter()
+            .any(|e| matches!(e, HistoryEvent::BgmChange { path: None, .. }))
+    );
+}
+
+#[test]
+fn test_runtime_with_extend() {
+    let script = Script::new(
+        "test",
+        vec![
+            ScriptNode::Dialogue {
+                speaker: None,
+                content: "Hello".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
+            },
+            ScriptNode::Extend {
+                content: " world".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
+            },
+        ],
+        "",
+    );
+    let mut runtime = VNRuntime::new(script);
+
+    let (cmds, waiting) = runtime.tick(None).unwrap();
+    assert_eq!(cmds.len(), 1);
+    assert!(matches!(
+        &cmds[0],
+        Command::ShowText { content, .. } if content == "Hello"
+    ));
+    assert!(matches!(waiting, WaitingReason::WaitForClick));
+
+    let (cmds2, waiting2) = runtime.tick(Some(RuntimeInput::Click)).unwrap();
+    assert_eq!(cmds2.len(), 1);
+    assert!(matches!(
+        &cmds2[0],
+        Command::ExtendText { content, .. } if content == " world"
+    ));
+    assert!(matches!(waiting2, WaitingReason::WaitForClick));
+}
