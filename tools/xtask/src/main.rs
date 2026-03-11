@@ -84,6 +84,32 @@ fn run(step: &str, sh: &Shell, program: &str, args: &[&str]) -> anyhow::Result<(
     Ok(())
 }
 
+/// 覆盖率排除规则：vn-runtime 主口径
+///
+/// 排除纯声明/derive 文件，不含可测试业务逻辑：
+/// - `lib.rs`：模块声明与重导出
+/// - `error.rs`：thiserror derive，无手写逻辑
+const COV_RUNTIME_IGNORE: &str = r"vn-runtime[/\\]src[/\\](lib|error)\.rs$";
+
+/// 覆盖率排除规则：workspace 次口径
+///
+/// 在 vn-runtime 排除基础上，额外排除不可单元测试的平台/框架胶水代码：
+/// - `src/lib.rs`：两个 crate 的模块声明与重导出
+/// - `main.rs` / `host_app.rs` / `egui_actions.rs`：平台入口与事件循环
+/// - `egui_screens/*`：egui UI 构建逻辑（三方框架行为）
+/// - `backend/*`（除 `math.rs`）：GPU 渲染管线（需真实设备）
+/// - `audio/playback.rs`：硬件依赖的音频播放
+/// - `app/draw.rs`：渲染管线薄包装
+const COV_WORKSPACE_IGNORE: &str = concat!(
+    r"src[/\\]lib\.rs$|",
+    r"vn-runtime[/\\]src[/\\]error\.rs$|",
+    r"host[/\\]src[/\\](main|host_app|egui_actions)\.rs$|",
+    r"host[/\\]src[/\\]egui_screens[/\\]|",
+    r"host[/\\]src[/\\]backend[/\\](mod|sprite_renderer|gpu_texture|dissolve_renderer)\.rs$|",
+    r"host[/\\]src[/\\]audio[/\\]playback\.rs$|",
+    r"host[/\\]src[/\\]app[/\\]draw\.rs$",
+);
+
 fn ensure_cargo_llvm_cov_available(sh: &Shell) -> anyhow::Result<()> {
     if sh
         .cmd("cargo")
@@ -139,10 +165,18 @@ fn real_main() -> anyhow::Result<()> {
             ensure_cargo_llvm_cov_available(&sh)?;
 
             run(
-                "cargo llvm-cov -p vn-runtime --all-features --html",
+                "cargo llvm-cov -p vn-runtime (with exclusions)",
                 &sh,
                 "cargo",
-                &["llvm-cov", "-p", "vn-runtime", "--all-features", "--html"],
+                &[
+                    "llvm-cov",
+                    "-p",
+                    "vn-runtime",
+                    "--all-features",
+                    "--html",
+                    "--ignore-filename-regex",
+                    COV_RUNTIME_IGNORE,
+                ],
             )?;
 
             eprintln!("\nCoverage HTML: target/llvm-cov/html/index.html");
@@ -150,11 +184,8 @@ fn real_main() -> anyhow::Result<()> {
         XtaskCommand::CovWorkspace => {
             ensure_cargo_llvm_cov_available(&sh)?;
 
-            // 说明：
-            // - workspace 覆盖率不作为主目标，主要用于"趋势观察"
-            // - 在口径上排除 tool crates（xtask/asset-packer）以免稀释信号
             run(
-                "cargo llvm-cov --workspace --exclude xtask --exclude asset-packer --all-features --html",
+                "cargo llvm-cov --workspace (with exclusions)",
                 &sh,
                 "cargo",
                 &[
@@ -166,6 +197,8 @@ fn real_main() -> anyhow::Result<()> {
                     "asset-packer",
                     "--all-features",
                     "--html",
+                    "--ignore-filename-regex",
+                    COV_WORKSPACE_IGNORE,
                 ],
             )?;
 

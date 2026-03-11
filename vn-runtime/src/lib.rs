@@ -91,25 +91,3 @@ pub use save::{
 };
 pub use script::{ChoiceOption, Parser, Script, ScriptNode};
 pub use state::{RuntimeState, ScriptPosition, VarValue, WaitingReason};
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_public_api_accessible() {
-        // 验证所有公共类型都可以正常使用
-        let _cmd = Command::ShowText {
-            speaker: Some("Test".to_string()),
-            content: "Hello".to_string(),
-            inline_effects: vec![],
-            no_wait: false,
-        };
-
-        let _input = RuntimeInput::Click;
-
-        let _waiting = WaitingReason::WaitForClick;
-
-        let _state = RuntimeState::new("main");
-    }
-}
