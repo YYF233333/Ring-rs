@@ -1,16 +1,8 @@
 //! 通用工具函数
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use std::path::Path;
 use xshell::Shell;
-
-/// 验证压缩级别在合法范围（0-9）
-pub fn validate_level(level: u32) -> Result<()> {
-    if level > 9 {
-        bail!("压缩级别必须在 0-9 范围内，当前: {level}");
-    }
-    Ok(())
-}
 
 /// 运行 cargo 子命令，失败时附带描述信息
 pub fn run_cargo_command(description: &str, args: &[&str]) -> Result<()> {

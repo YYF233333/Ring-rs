@@ -22,7 +22,6 @@ const DEFAULT_GAME_NAME: &str = "Ring";
 pub fn create_release(
     assets_dir: &Path,
     zip_output: &Path,
-    compression_level: u32,
     release_dir: &Path,
     create_zip: bool,
 ) -> Result<()> {
@@ -38,7 +37,7 @@ pub fn create_release(
 
     // 步骤 1: 打包资源
     println!("步骤 1/5: 打包资源...");
-    pack_assets(assets_dir, zip_output, compression_level)?;
+    pack_assets(assets_dir, zip_output)?;
     println!();
 
     // 步骤 2: 编译 release 版本
@@ -98,7 +97,7 @@ pub fn create_release(
             .parent()
             .unwrap_or(Path::new("."))
             .join(format!("{}.zip", game_name));
-        pack_directory(release_dir, &release_zip, compression_level)?;
+        pack_directory(release_dir, &release_zip)?;
         println!("发行版 ZIP 创建完成: {:?}", release_zip);
     }
 

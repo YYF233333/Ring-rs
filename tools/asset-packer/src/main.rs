@@ -34,7 +34,7 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "packer")]
-#[command(about = "资源打包工具 - 将 assets 目录打包为 ZIP 文件")]
+#[command(about = "资源打包工具 - 将 assets 目录打包为 ZIP 文件（不压缩）")]
 #[command(version, author)]
 struct Cli {
     #[command(subcommand)]
@@ -47,10 +47,6 @@ struct Cli {
     /// 输出 ZIP 文件（默认：game.zip）
     #[arg(short, long, default_value = "game.zip", global = true)]
     output: PathBuf,
-
-    /// 压缩级别 (0-9)（默认：6）
-    #[arg(short, long, default_value = "6", global = true)]
-    level: u32,
 }
 
 #[derive(Subcommand)]
@@ -95,16 +91,15 @@ fn main() {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
-    utils::validate_level(cli.level)?;
 
     match cli.command {
-        None => pack::pack_assets(&cli.input, &cli.output, cli.level),
+        None => pack::pack_assets(&cli.input, &cli.output),
         Some(Commands::List { zip_file }) => inspect::list_zip(&zip_file),
         Some(Commands::Verify { zip_file, input }) => {
             inspect::verify_zip(&zip_file, input.as_deref())
         }
         Some(Commands::Release { output_dir, zip }) => {
-            release::create_release(&cli.input, &cli.output, cli.level, &output_dir, zip)
+            release::create_release(&cli.input, &cli.output, &output_dir, zip)
         }
     }
 }

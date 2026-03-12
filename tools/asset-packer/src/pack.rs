@@ -16,7 +16,7 @@ pub struct PackStats {
 }
 
 /// 将资源目录打包为 ZIP 文件，并打印统计信息
-pub fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<()> {
+pub fn pack_assets(input: &Path, output: &Path) -> Result<()> {
     println!("打包资源目录: {:?} -> {:?}", input, output);
 
     if !input.exists() {
@@ -25,18 +25,12 @@ pub fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<()> {
 
     let file = File::create(output).with_context(|| format!("无法创建输出 ZIP: {:?}", output))?;
     let mut zip = ZipWriter::new(file);
-    let options = make_options(level);
 
     let mut stats = PackStats::default();
-    add_dir_to_zip(input, input, &mut zip, options, Some(&mut stats))?;
+    add_dir_to_zip(input, input, &mut zip, Some(&mut stats))?;
     zip.finish()?;
 
-    let compressed = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
-    let ratio = if stats.total_size > 0 {
-        compressed as f64 / stats.total_size as f64 * 100.0
-    } else {
-        0.0
-    };
+    let zip_size = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
 
     println!();
     println!("打包完成！");
@@ -46,9 +40,8 @@ pub fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<()> {
         stats.total_size as f64 / 1024.0 / 1024.0
     );
     println!(
-        "   压缩后: {:.2} MB (压缩率: {:.1}%)",
-        compressed as f64 / 1024.0 / 1024.0,
-        ratio
+        "   ZIP 大小: {:.2} MB（无压缩）",
+        zip_size as f64 / 1024.0 / 1024.0,
     );
     println!("   输出文件: {:?}", output);
 
@@ -56,26 +49,22 @@ pub fn pack_assets(input: &Path, output: &Path, level: u32) -> Result<()> {
 }
 
 /// 将目录打包为 ZIP 文件，不打印统计信息（用于内部调用）
-pub fn pack_directory(input: &Path, output: &Path, level: u32) -> Result<()> {
+pub fn pack_directory(input: &Path, output: &Path) -> Result<()> {
     let file = File::create(output)?;
     let mut zip = ZipWriter::new(file);
-    let options = make_options(level);
-    add_dir_to_zip(input, input, &mut zip, options, None)?;
+    add_dir_to_zip(input, input, &mut zip, None)?;
     zip.finish()?;
     Ok(())
 }
 
-fn make_options(level: u32) -> SimpleFileOptions {
-    SimpleFileOptions::default()
-        .compression_method(CompressionMethod::Deflated)
-        .compression_level(Some(level as i64))
+fn stored_options() -> SimpleFileOptions {
+    SimpleFileOptions::default().compression_method(CompressionMethod::Stored)
 }
 
 fn add_dir_to_zip(
     root: &Path,
     input: &Path,
     zip: &mut ZipWriter<File>,
-    options: SimpleFileOptions,
     mut stats: Option<&mut PackStats>,
 ) -> Result<()> {
     for entry in WalkDir::new(input).into_iter().filter_map(|e| e.ok()) {
@@ -91,7 +80,7 @@ fn add_dir_to_zip(
         File::open(path)?.read_to_end(&mut buf)?;
         let size = buf.len() as u64;
 
-        zip.start_file(&name, options)?;
+        zip.start_file(&name, stored_options())?;
         zip.write_all(&buf)?;
 
         if let Some(s) = stats.as_deref_mut() {
