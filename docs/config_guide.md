@@ -32,7 +32,8 @@
   "start_script_path": "scripts/main.md",
   "asset_source": "zip",
   "zip_path": "game.zip",
-  "window": { "width": 1280, "height": 720, "title": "My VN", "fullscreen": false }
+  "window": { "width": 1280, "height": 720, "title": "My VN", "fullscreen": false },
+  "debug": { "log_file": "game.log" }
 }
 ```
 
@@ -129,6 +130,19 @@
 - **来源**：
   - `debug.log_level`
   - 默认 `info`
+
+### `debug.log_file`
+
+- **用途**：日志输出文件路径。设置后日志写入文件而非标准输出。
+- **类型**：字符串或 `null`
+- **默认值**：
+  - release build：`"game.log"`（配合隐藏控制台窗口）
+  - debug build：`null`（输出到控制台）
+- **注意**：
+  - release 构建会自动隐藏 Windows 控制台窗口（`windows_subsystem = "windows"`），此时日志默认写入 `game.log`。
+  - 显式设为 `null` 可强制输出到标准输出（release 构建下日志将丢失，因为无控制台窗口）。
+  - 文件在每次启动时会被覆盖（不追加）。
+  - 如果文件创建失败，自动回退到标准输出。
 
 ## `audio` 音频配置
 

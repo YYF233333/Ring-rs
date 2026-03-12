@@ -2,6 +2,8 @@
 //!
 //! Visual Novel Engine 的宿主层入口。
 
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod egui_actions;
 mod egui_screens;
 mod host_app;
@@ -37,12 +39,36 @@ fn main() {
         }
     };
 
-    tracing_subscriber::fmt()
-        .with_max_level(level)
-        .without_time()
-        .compact()
-        .with_target(false)
-        .init();
+    let log_file_writer =
+        config
+            .debug
+            .log_file
+            .as_ref()
+            .and_then(|path| match std::fs::File::create(path) {
+                Ok(file) => Some(file),
+                Err(e) => {
+                    eprintln!("Failed to create log file '{path}': {e}");
+                    None
+                }
+            });
+
+    if let Some(file) = log_file_writer {
+        tracing_subscriber::fmt()
+            .with_max_level(level)
+            .without_time()
+            .compact()
+            .with_target(false)
+            .with_ansi(false)
+            .with_writer(std::sync::Mutex::new(file))
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_max_level(level)
+            .without_time()
+            .compact()
+            .with_target(false)
+            .init();
+    }
 
     info!(path = ?CONFIG_PATH, "Config loaded");
 

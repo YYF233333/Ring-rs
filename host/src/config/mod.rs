@@ -123,6 +123,15 @@ pub struct DebugConfig {
     /// - 默认 `info`
     #[serde(default)]
     pub log_level: Option<String>,
+
+    /// 日志输出文件路径
+    ///
+    /// 设置后日志输出到文件而非标准输出，同时 release 构建会隐藏控制台窗口。
+    /// - release build 默认 `"game.log"`
+    /// - debug build 默认 `None`（输出到控制台）
+    /// - 显式设为 `null` 可强制输出到控制台（即使 release 构建）
+    #[serde(default = "default_log_file")]
+    pub log_file: Option<String>,
 }
 
 /// 音频配置
@@ -226,8 +235,15 @@ fn default_font_path() -> String {
 }
 
 fn default_script_check() -> bool {
-    // 在 debug build 时默认开启脚本检查
     cfg!(debug_assertions)
+}
+
+fn default_log_file() -> Option<String> {
+    if cfg!(debug_assertions) {
+        None
+    } else {
+        Some("game.log".to_string())
+    }
 }
 
 impl Default for AppConfig {
@@ -265,6 +281,7 @@ impl Default for DebugConfig {
         Self {
             script_check: default_script_check(),
             log_level: None,
+            log_file: default_log_file(),
         }
     }
 }

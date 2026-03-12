@@ -7,7 +7,7 @@
 ## PublicSurface
 
 - 模块入口：`host/src/config/mod.rs`
-- 核心类型：`AppConfig`、`WindowConfig`、`DebugConfig`、`AudioConfig`、`ResourceConfig`
+- 核心类型：`AppConfig`、`WindowConfig`、`DebugConfig`（含 `log_file` 文件日志开关）、`AudioConfig`、`ResourceConfig`
 - 关键接口：`AppConfig::load`、`save`、`validate`
 
 ## KeyFlow
@@ -44,7 +44,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-12
 
 ## Owner
 
