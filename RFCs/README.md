@@ -5,9 +5,10 @@
 
 ## 使用约定
 
-- 新提案：新增 `rfc-<topic>.md`，状态一般为 `Proposed` 或 `Draft`
+- 新提案：新增 `rfc-<topic>.md`，状态为 `Proposed`
 - 实施中：标记为 `Active`
 - 已落地：标记为 `Accepted`，移动到Accepted子文件夹下
+- RFC文件更新时同步更新本文档中目录
 - RFC 编号按“提出顺序”递增分配，格式为 `RFC-XXX`（三位数）
 
 ## 当前 RFC
