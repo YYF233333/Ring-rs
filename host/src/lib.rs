@@ -34,7 +34,7 @@ pub mod ui;
 pub mod video;
 
 pub use app::app_mode::{
-    AppMode, InputCapture, NavigationStack, PlaybackMode, SaveLoadTab, UserSettings,
+    AppMode, InputCapture, NavigationStack, PlaybackMode, SaveLoadPage, SaveLoadTab, UserSettings,
 };
 pub use app::state::HostState;
 pub use audio::AudioManager;

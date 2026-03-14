@@ -7,7 +7,7 @@ use std::sync::Arc;
 use host::app::{self, AppState};
 use host::backend::WgpuBackend;
 use host::ui::UiAssetCache;
-use host::{AppConfig, AppMode, SaveLoadTab, UserSettings};
+use host::{AppConfig, AppMode, SaveLoadPage, SaveLoadTab, UserSettings};
 use tracing::info;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -20,8 +20,6 @@ use crate::egui_actions::{self, EguiAction};
 use crate::egui_screens;
 use crate::egui_screens::confirm::ConfirmDialog;
 
-const SAVE_SLOTS_SHOWN: u32 = 20;
-
 pub struct HostApp {
     backend: Option<WgpuBackend>,
     app_state: Option<AppState>,
@@ -30,7 +28,10 @@ pub struct HostApp {
     initialized: bool,
     settings_draft: Option<UserSettings>,
     save_load_tab: SaveLoadTab,
+    save_load_page: SaveLoadPage,
     pending_confirm: Option<ConfirmDialog>,
+    /// 待保存缩略图的存档槽位（截图已请求，等待下一帧捕获）
+    pending_thumbnail_slot: Option<u32>,
 }
 
 impl HostApp {
@@ -43,7 +44,9 @@ impl HostApp {
             initialized: false,
             settings_draft: None,
             save_load_tab: SaveLoadTab::Load,
+            save_load_page: SaveLoadPage::default(),
             pending_confirm: None,
+            pending_thumbnail_slot: None,
         }
     }
 }
@@ -89,7 +92,9 @@ impl ApplicationHandler for HostApp {
             initialized,
             settings_draft,
             save_load_tab,
+            save_load_page,
             pending_confirm,
+            pending_thumbnail_slot,
             ..
         } = self;
         let (Some(backend), Some(app_state)) = (backend.as_mut(), app_state.as_mut()) else {
@@ -190,18 +195,46 @@ impl ApplicationHandler for HostApp {
 
                 let save_infos: Vec<Option<host::save_manager::SaveInfo>> =
                     if current_mode == AppMode::SaveLoad {
-                        (1..=SAVE_SLOTS_SHOWN)
+                        save_load_page
+                            .slot_range()
                             .map(|s| app_state.save_manager.get_save_info(s))
                             .collect()
                     } else {
                         Vec::new()
                     };
+
+                let mut slot_thumbnails = std::collections::HashMap::new();
+                if current_mode == AppMode::SaveLoad {
+                    for slot in save_load_page.slot_range() {
+                        if let Some(png_bytes) = app_state.save_manager.load_thumbnail_bytes(slot) {
+                            if let Ok(img) = image::load_from_memory(&png_bytes) {
+                                let rgba = img.to_rgba8();
+                                let (w, h) = rgba.dimensions();
+                                let tex = backend.egui_ctx().load_texture(
+                                    format!("thumb_{slot}"),
+                                    egui::ColorImage::from_rgba_unmultiplied(
+                                        [w as usize, h as usize],
+                                        &rgba,
+                                    ),
+                                    egui::TextureOptions::LINEAR,
+                                );
+                                slot_thumbnails.insert(slot, tex);
+                            }
+                        }
+                    }
+                }
+
                 let can_save = app_state.session.vn_runtime.is_some();
                 let sl_tab = *save_load_tab;
 
                 let layout = &app_state.ui.layout;
                 let asset_cache = app_state.ui.asset_cache.as_ref();
                 let scale = &app_state.ui.ui_context.scale;
+                let is_winter = app_state
+                    .persistent_store
+                    .variables
+                    .get("complete_summer")
+                    .is_some_and(|v| matches!(v, vn_runtime::state::VarValue::Bool(true)));
 
                 let mut ui_action = EguiAction::None;
                 let mut confirm_resolved = false;
@@ -237,6 +270,7 @@ impl ApplicationHandler for HostApp {
                                     egui_screens::game_menu::build_game_menu_frame(
                                         ctx,
                                         "设置",
+                                        is_winter,
                                         layout,
                                         asset_cache,
                                         scale,
@@ -245,6 +279,7 @@ impl ApplicationHandler for HostApp {
                                                 ui,
                                                 settings_draft,
                                                 layout,
+                                                asset_cache,
                                                 scale,
                                             )
                                         },
@@ -258,6 +293,7 @@ impl ApplicationHandler for HostApp {
                                         } else {
                                             "读取"
                                         },
+                                        is_winter,
                                         layout,
                                         asset_cache,
                                         scale,
@@ -265,11 +301,13 @@ impl ApplicationHandler for HostApp {
                                             egui_screens::save_load::build_save_load_content(
                                                 ui,
                                                 sl_tab,
+                                                save_load_page,
                                                 &save_infos,
                                                 can_save,
                                                 layout,
                                                 asset_cache,
                                                 scale,
+                                                &slot_thumbnails,
                                             )
                                         },
                                     )
@@ -277,6 +315,7 @@ impl ApplicationHandler for HostApp {
                                 AppMode::History => egui_screens::game_menu::build_game_menu_frame(
                                     ctx,
                                     "历史",
+                                    is_winter,
                                     layout,
                                     asset_cache,
                                     scale,
@@ -316,7 +355,13 @@ impl ApplicationHandler for HostApp {
                             }
                         }
 
-                        egui_screens::toast::build_toast_overlay(ctx, &app_state.ui.toast_manager);
+                        egui_screens::toast::build_toast_overlay(
+                            ctx,
+                            &app_state.ui.toast_manager,
+                            layout,
+                            asset_cache,
+                            scale,
+                        );
                     },
                     &sprite_cmds,
                 );
@@ -325,11 +370,38 @@ impl ApplicationHandler for HostApp {
                     *pending_confirm = None;
                 }
 
+                // Process pending thumbnail save (from previous frame's screenshot request)
+                if let Some(slot) = *pending_thumbnail_slot {
+                    if let Some((rgba, w, h)) = backend.take_screenshot() {
+                        let thumb_w = 384u32;
+                        let thumb_h = 216u32;
+                        if let Err(e) = app_state
+                            .save_manager
+                            .save_thumbnail(slot, &rgba, w, h, thumb_w, thumb_h)
+                        {
+                            tracing::warn!(slot, error = %e, "缩略图保存失败");
+                        }
+                        *pending_thumbnail_slot = None;
+                    }
+                }
+
+                // Track save slot for screenshot capture
+                let save_slot = match &ui_action {
+                    EguiAction::SaveToSlot(s) => Some(*s),
+                    EguiAction::QuickSave => Some(app_state.current_save_slot),
+                    _ => None,
+                };
+
                 match ui_action {
                     EguiAction::ShowConfirm {
                         message,
                         on_confirm,
                     } => {
+                        // If the confirmed action is SaveToSlot, track it for screenshot
+                        if let EguiAction::SaveToSlot(s) = *on_confirm {
+                            *pending_thumbnail_slot = Some(s);
+                            backend.request_screenshot();
+                        }
                         *pending_confirm = Some(ConfirmDialog {
                             message,
                             on_confirm: *on_confirm,
@@ -337,6 +409,10 @@ impl ApplicationHandler for HostApp {
                         });
                     }
                     _ => {
+                        if let Some(slot) = save_slot {
+                            *pending_thumbnail_slot = Some(slot);
+                            backend.request_screenshot();
+                        }
                         egui_actions::handle_egui_action(app_state, ui_action, save_load_tab, el);
                     }
                 }

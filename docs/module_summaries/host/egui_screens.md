@@ -9,16 +9,16 @@
 
 - 目录：`host/src/egui_screens/`
 - 子模块与入口函数：
-  - `title::build_title_ui` -- 主标题界面（全屏背景 + 左侧中文导航）
+  - `title::build_title_ui` -- 主标题界面（全屏背景 + 左侧中文导航）。根据 `persistent_store.complete_summer` 切换夏/冬篇背景，条件显示冬篇入口按钮。
   - `ingame::build_ingame_ui` -- 游戏中对话框（图片背景 + 名字框 + 快捷菜单 + 选项）
   - `ingame_menu::build_ingame_menu_ui` -- 游戏内暂停菜单（半透明覆盖 + 居中按钮，退出/返回标题经确认弹窗）
-  - `game_menu::build_game_menu_frame` -- 游戏菜单通用框架（左侧导航 + 右侧内容），Settings/SaveLoad/History 共用
-  - `settings::build_settings_content` -- 设置内容区（音量/文字速度滑块 + 中文标签）
-  - `save_load::build_save_load_content` -- 存档/读档内容区（Tab 切换 + 网格 + 删除按钮 + 覆盖确认）
+  - `game_menu::build_game_menu_frame` -- 游戏菜单通用框架（左侧导航 + 右侧内容），Settings/SaveLoad/History 共用。接收 `is_winter: bool` 参数切换背景。
+  - `settings::build_settings_content` -- 设置内容区（自定义 `ImageSlider` widget + 中文标签），接收 `UiAssetCache` 使用 slider 素材。
+  - `save_load::build_save_load_content` -- 存档/读档内容区（Tab 切换 + 网格 + 删除按钮 + 覆盖确认 + 分页导航栏 + 缩略图显示）。接收 `SaveLoadPage` 管理 A/Q/1-9 分页，接收 `thumbnails` HashMap 显示存档截图。
   - `history::build_history_content` -- 对话历史内容区（双列布局：角色名 + 对话文本）
   - `confirm::build_confirm_overlay` -- 确认弹窗（模态覆盖 + NinePatch 框架）
   - `skip_indicator::build_skip_indicator` -- 快进指示器（左上角动画提示）
-  - `toast::build_toast_overlay` -- Toast 通知浮层
+  - `toast::build_toast_overlay` -- Toast 通知浮层，接收 `layout`/`assets`/`scale` 使用 `notify.png` NinePatch 背景。
 
 ## KeyFlow
 
@@ -30,13 +30,16 @@
 6. 退出/返回标题/覆盖存档/删除存档操作经 `ShowConfirm` 确认弹窗拦截
 7. Skip 指示器在 `InGame` + `Skip` 模式下自动显示
 8. 确认弹窗在所有 UI 之上渲染，阻塞其他交互
+9. 存读档页面通过 `SaveLoadPage` enum 实现分页（A/Q/1-9），每页 6 slot
+10. 保存操作触发帧缓冲截图，下一帧保存为 PNG 缩略图
 
 ## Dependencies
 
 - `egui`（UI 构建 API）
 - `host::ui::{UiLayoutConfig, UiAssetCache, ScaleContext, NinePatch}`（数据驱动 UI 基础设施）
+- `host::ui::image_slider`（自定义图片滑块 widget）
 - `host::app::AppState`（读取游戏状态用于 UI 展示）
-- `EguiAction`（UI 交互输出，含 QuickSave/QuickLoad/ToggleSkip/ToggleAuto/ShowConfirm 等新变体）
+- `EguiAction`（UI 交互输出，含 StartWinter/QuickSave/QuickLoad/ToggleSkip/ToggleAuto/ShowConfirm 等变体）
 
 ## Invariants
 

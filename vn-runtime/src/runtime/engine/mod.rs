@@ -341,6 +341,11 @@ impl VNRuntime {
         }
     }
 
+    /// 查找标签在当前脚本中的节点索引
+    pub fn find_label(&self, label: &str) -> Option<usize> {
+        self.script.find_label(label)
+    }
+
     /// 获取当前状态（用于存档）
     pub fn state(&self) -> &RuntimeState {
         &self.state

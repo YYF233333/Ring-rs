@@ -88,9 +88,10 @@ impl GpuContext {
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
-        let surface_cfg = surface
+        let mut surface_cfg = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .expect("[GpuContext] surface format unsupported");
+        surface_cfg.usage |= wgpu::TextureUsages::COPY_SRC;
         surface.configure(&device, &surface_cfg);
 
         Self {
@@ -218,6 +219,12 @@ pub struct WgpuBackend {
     /// 视频帧纹理（cutscene 播放时使用）
     video_texture: Option<Arc<GpuTexture>>,
     video_texture_size: (u32, u32),
+
+    /// 截图请求标志
+    screenshot_requested: bool,
+    /// 上一帧截图的 RGBA 像素数据
+    last_screenshot: Option<Vec<u8>>,
+    last_screenshot_size: (u32, u32),
 }
 
 impl WgpuBackend {
@@ -258,6 +265,9 @@ impl WgpuBackend {
             frame_delta: 0.0,
             video_texture: None,
             video_texture_size: (0, 0),
+            screenshot_requested: false,
+            last_screenshot: None,
+            last_screenshot_size: (0, 0),
         }
     }
 
@@ -286,6 +296,18 @@ impl WgpuBackend {
 
     pub fn scale_factor(&self) -> f32 {
         self.window.scale_factor() as f32
+    }
+
+    /// 请求在下一帧渲染结束后捕获截图
+    pub fn request_screenshot(&mut self) {
+        self.screenshot_requested = true;
+    }
+
+    /// 取走上一次捕获的截图（RGBA 像素 + 尺寸），仅可取一次
+    pub fn take_screenshot(&mut self) -> Option<(Vec<u8>, u32, u32)> {
+        let data = self.last_screenshot.take()?;
+        let (w, h) = self.last_screenshot_size;
+        Some((data, w, h))
     }
 
     /// 上一帧耗时（秒）
@@ -457,7 +479,77 @@ impl WgpuBackend {
             self.egui.renderer.render(&mut rpass, &primitives, &screen);
         }
 
-        self.gpu.queue.submit(std::iter::once(encoder.finish()));
+        if self.screenshot_requested {
+            self.screenshot_requested = false;
+            let (w, h) = self.gpu.size();
+            let bytes_per_pixel = 4u32;
+            let unpadded_row = w * bytes_per_pixel;
+            let padded_row = (unpadded_row + 255) & !255; // wgpu requires 256-byte alignment
+            let buffer_size = (padded_row * h) as u64;
+
+            let staging = self.gpu.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("screenshot_staging"),
+                size: buffer_size,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            encoder.copy_texture_to_buffer(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &frame.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &staging,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(padded_row),
+                        rows_per_image: Some(h),
+                    },
+                },
+                wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
+            );
+
+            self.gpu.queue.submit(std::iter::once(encoder.finish()));
+
+            let slice = staging.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            slice.map_async(wgpu::MapMode::Read, move |result| {
+                let _ = tx.send(result);
+            });
+            self.gpu.device.poll(wgpu::Maintain::Wait);
+
+            if rx.recv().is_ok_and(|r| r.is_ok()) {
+                let mapped = slice.get_mapped_range();
+                let mut pixels = Vec::with_capacity((w * h * bytes_per_pixel) as usize);
+                for row in 0..h {
+                    let start = (row * padded_row) as usize;
+                    let end = start + unpadded_row as usize;
+                    pixels.extend_from_slice(&mapped[start..end]);
+                }
+                drop(mapped);
+
+                // Surface format may be BGRA; convert to RGBA
+                if self.gpu.surface_format() == wgpu::TextureFormat::Bgra8UnormSrgb
+                    || self.gpu.surface_format() == wgpu::TextureFormat::Bgra8Unorm
+                {
+                    for chunk in pixels.chunks_exact_mut(4) {
+                        chunk.swap(0, 2); // B <-> R
+                    }
+                }
+
+                self.last_screenshot = Some(pixels);
+                self.last_screenshot_size = (w, h);
+            }
+        } else {
+            self.gpu.queue.submit(std::iter::once(encoder.finish()));
+        }
         frame.present();
 
         for id in &full_output.textures_delta.free {

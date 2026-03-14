@@ -11,6 +11,8 @@ use winit::event_loop::ActiveEventLoop;
 pub enum EguiAction {
     None,
     StartGame,
+    /// 从冬篇标签开始新游戏（跳转到 main.md 的 "Winter" label）
+    StartWinter,
     ContinueGame,
     NavigateTo(AppMode),
     /// 替换当前模式（不压栈），用于同级页面间切换
@@ -47,6 +49,10 @@ pub fn handle_egui_action(
         EguiAction::StartGame => {
             let _ = app_state.save_manager.delete_continue();
             app::start_new_game(app_state);
+        }
+        EguiAction::StartWinter => {
+            let _ = app_state.save_manager.delete_continue();
+            app::start_new_game_at_label(app_state, "Winter");
         }
         EguiAction::ContinueGame => {
             app::load_continue(app_state);

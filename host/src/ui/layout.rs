@@ -524,6 +524,16 @@ pub struct UiAssetPaths {
     pub quick_idle: String,
     #[serde(default = "defaults::asset_quick_hover")]
     pub quick_hover: String,
+
+    // Slider
+    #[serde(default = "defaults::asset_slider_idle_bar")]
+    pub slider_idle_bar: String,
+    #[serde(default = "defaults::asset_slider_hover_bar")]
+    pub slider_hover_bar: String,
+    #[serde(default = "defaults::asset_slider_idle_thumb")]
+    pub slider_idle_thumb: String,
+    #[serde(default = "defaults::asset_slider_hover_thumb")]
+    pub slider_hover_thumb: String,
 }
 
 impl Default for UiAssetPaths {
@@ -548,6 +558,10 @@ impl Default for UiAssetPaths {
             slot_hover: defaults::asset_slot_hover(),
             quick_idle: defaults::asset_quick_idle(),
             quick_hover: defaults::asset_quick_hover(),
+            slider_idle_bar: defaults::asset_slider_idle_bar(),
+            slider_hover_bar: defaults::asset_slider_hover_bar(),
+            slider_idle_thumb: defaults::asset_slider_idle_thumb(),
+            slider_hover_thumb: defaults::asset_slider_hover_thumb(),
         }
     }
 }
@@ -575,6 +589,10 @@ impl UiAssetPaths {
             ("slot_hover", &self.slot_hover),
             ("quick_idle", &self.quick_idle),
             ("quick_hover", &self.quick_hover),
+            ("slider_idle_bar", &self.slider_idle_bar),
+            ("slider_hover_bar", &self.slider_hover_bar),
+            ("slider_idle_thumb", &self.slider_idle_thumb),
+            ("slider_hover_thumb", &self.slider_hover_thumb),
         ]
     }
 }
@@ -923,6 +941,18 @@ mod defaults {
     pub fn asset_quick_hover() -> String {
         "gui/button/quick_hover_background.png".into()
     }
+    pub fn asset_slider_idle_bar() -> String {
+        "gui/slider/horizontal_idle_bar.png".into()
+    }
+    pub fn asset_slider_hover_bar() -> String {
+        "gui/slider/horizontal_hover_bar.png".into()
+    }
+    pub fn asset_slider_idle_thumb() -> String {
+        "gui/slider/horizontal_idle_thumb.png".into()
+    }
+    pub fn asset_slider_hover_thumb() -> String {
+        "gui/slider/horizontal_hover_thumb.png".into()
+    }
 }
 
 #[cfg(test)]
@@ -997,6 +1027,6 @@ mod tests {
     #[test]
     fn asset_paths_all_entries_count() {
         let paths = UiAssetPaths::default();
-        assert_eq!(paths.all_entries().len(), 19);
+        assert_eq!(paths.all_entries().len(), 23);
     }
 }

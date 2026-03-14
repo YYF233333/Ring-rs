@@ -3,6 +3,7 @@
 //! 提供布局配置、素材缓存、NinePatch、Toast 和 UI 上下文等基础设施。
 
 pub mod asset_cache;
+pub mod image_slider;
 pub mod layout;
 pub mod nine_patch;
 pub mod toast;

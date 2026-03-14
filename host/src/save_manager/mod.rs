@@ -104,7 +104,51 @@ impl SaveManager {
             info!(path = %path.display(), "存档删除成功");
         }
 
+        // 同时删除缩略图（如果存在）
+        let thumb = self.thumbnail_path(slot);
+        if thumb.exists() {
+            let _ = fs::remove_file(&thumb);
+        }
+
         Ok(())
+    }
+
+    /// 缩略图文件路径
+    pub fn thumbnail_path(&self, slot: u32) -> PathBuf {
+        self.saves_dir.join(format!("thumb_{:03}.png", slot))
+    }
+
+    /// 保存 RGBA 像素数据为 PNG 缩略图（缩放到目标尺寸）
+    pub fn save_thumbnail(
+        &self,
+        slot: u32,
+        rgba: &[u8],
+        src_w: u32,
+        src_h: u32,
+        dst_w: u32,
+        dst_h: u32,
+    ) -> Result<(), String> {
+        use image::{ImageBuffer, RgbaImage};
+
+        let img: RgbaImage = ImageBuffer::from_raw(src_w, src_h, rgba.to_vec())
+            .ok_or_else(|| "无法从 RGBA 数据创建图像".to_string())?;
+
+        let thumb =
+            image::imageops::resize(&img, dst_w, dst_h, image::imageops::FilterType::Triangle);
+
+        self.ensure_dir().map_err(|e| e.to_string())?;
+        let path = self.thumbnail_path(slot);
+        thumb
+            .save(&path)
+            .map_err(|e| format!("缩略图保存失败: {e}"))?;
+        info!(path = %path.display(), "缩略图保存成功");
+        Ok(())
+    }
+
+    /// 加载缩略图文件的原始字节
+    pub fn load_thumbnail_bytes(&self, slot: u32) -> Option<Vec<u8>> {
+        let path = self.thumbnail_path(slot);
+        fs::read(&path).ok()
     }
 
     /// 检查存档是否存在

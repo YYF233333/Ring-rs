@@ -588,22 +588,17 @@ ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAss
 
 ### 后续工作（不在本 RFC 首期范围内）
 
-已完成的架构为以下后续工作奠定基础：
+已完成的架构为以下后续工作奠定基础。未完成项已迁移至 **RFC-011（UI 系统后续增强）** 统一管理。
 
-| 项目 | 说明 | 优先级 | 状态 |
-|------|------|--------|------|
-| 季节切换逻辑 | `title.rs` 根据 `persistent_store.complete_summer` 选择 summer/winter 背景 | 高 | 待做 |
-| ~~确认弹窗触发整合~~ | Exit/ReturnToTitle/SaveToSlot(非空)/DeleteSlot 触发 ShowConfirm | 高 | ✓ 已完成 |
-| ~~`game_menu_frame` 采用~~ | save_load/settings/history 使用 game_menu_frame 包裹 | 中 | ✓ 已完成 |
-| ~~存档删除按钮~~ | save_load 网格中每个非空槽位添加 DeleteSlot 按钮 | 中 | ✓ 已完成 |
-| 分页导航 | save_load 底部分页按钮栏 (< 1-9 >) | 中 | 待做 |
-| 冬篇入口 | 标题画面仅 `complete_summer` 后显示冬篇按钮 | 中 | 待做 |
-| 存档截图 | 保存时截取当前画面缩略图填入 slot（需 GPU 帧回读） | 低 | 待做 |
-| ~~`skin.rs` 清理~~ | 删除 `skin.rs`、`theme.rs`、`theme_loader.rs`、`helpers.rs`，移除 `UiContext` 中的 `skin`/`theme` 字段 | 低 | ✓ 已完成 |
-| ~~Theme 兼容字段清理~~ | `Theme` 整体移除（颜色/尺寸全由 `UiLayoutConfig` 管理） | 低 | ✓ 已完成 |
-| notify.png 背景 | Toast 使用 `notify.png` NinePatch 背景替代纯色 | 低 | 待做 |
-| 自定义滑块样式 | 使用 `slider/` 素材替代 egui 原生滑块 | 低 | 待做 |
-| NVL 模式 UI | 另开 RFC | -- | |
+| 项目 | 说明 | 状态 |
+|------|------|------|
+| ~~确认弹窗触发整合~~ | Exit/ReturnToTitle/SaveToSlot(非空)/DeleteSlot 触发 ShowConfirm | ✓ 已完成 |
+| ~~`game_menu_frame` 采用~~ | save_load/settings/history 使用 game_menu_frame 包裹 | ✓ 已完成 |
+| ~~存档删除按钮~~ | save_load 网格中每个非空槽位添加 DeleteSlot 按钮 | ✓ 已完成 |
+| ~~`skin.rs` 清理~~ | 删除 `skin.rs`、`theme.rs`、`theme_loader.rs`、`helpers.rs` | ✓ 已完成 |
+| ~~Theme 兼容字段清理~~ | `Theme` 整体移除（颜色/尺寸全由 `UiLayoutConfig` 管理） | ✓ 已完成 |
+| 季节切换 / 冬篇入口 / 分页导航 / 存档截图 / notify.png / 自定义滑块 / 字体加载 / UI 定制文档 | → RFC-011 | 待做 |
+| NVL 模式 UI | 另开 RFC | -- |
 
 ---
 
@@ -654,11 +649,15 @@ ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAss
 
 ### 7.4 已知限制
 
-1. **季节切换未接入**：标题/菜单页面固定使用夏篇背景，未读取 persistent store 判断切换
-2. ~~**确认弹窗未触发**~~ → ✓ 后续收尾已接入：退出/返回标题/覆盖存档/删除存档均经 `ShowConfirm` 确认
-3. **快捷菜单"回退"缺失**：runtime 暂不支持 rollback，该按钮未添加
-4. **字体未加载 NotoSansSC**：仍使用 egui 默认字体，CJK 字符依赖 egui 内置 fallback
-5. ~~**3 个编译 warning**~~ → ✓ 后续收尾已消除：`DeleteSlot` 已有 UI 触发、`ShowConfirm` 已接入、`game_menu_frame` 已被采用
+以下限制已迁移至 RFC-011 跟踪：
+
+1. **季节切换未接入**：标题/菜单页面固定使用夏篇背景 → RFC-011 Phase A
+2. **字体未加载 NotoSansSC**：仍使用 egui 默认字体 → RFC-011 Phase B
+3. **快捷菜单"回退"缺失**：runtime 暂不支持 rollback，该按钮未添加（不在 RFC-011 范围，依赖 rollback 功能实现）
+
+已解决：
+- ~~**确认弹窗未触发**~~ → ✓ 后续收尾已接入
+- ~~**3 个编译 warning**~~ → ✓ 后续收尾已消除
 
 ## 8. 验收标准
 
@@ -684,3 +683,4 @@ ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAss
 | RFC-004 | 扩展 API 与 Mod 化效果管理 | UI 定制化与 Mod 化的设计理念一致 |
 | RFC-007 | 渲染后端迁移 | egui 是本 RFC 的 UI 框架基础 |
 | RFC-008 | 渲染后端 Trait 抽象 | GUI 素材加载复用 TextureFactory |
+| RFC-011 | UI 系统后续增强 | 承接本 RFC 未完成的后续工作 |

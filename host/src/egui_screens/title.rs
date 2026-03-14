@@ -4,6 +4,7 @@ use host::AppMode;
 use host::app::AppState;
 use host::ui::asset_cache::UiAssetCache;
 use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use vn_runtime::state::VarValue;
 
 use crate::egui_actions::EguiAction;
 
@@ -15,6 +16,11 @@ pub fn build_title_ui(
     scale: &ScaleContext,
 ) -> EguiAction {
     let has_continue = app_state.save_manager.has_continue();
+    let is_winter = app_state
+        .persistent_store
+        .variables
+        .get("complete_summer")
+        .is_some_and(|v| matches!(v, VarValue::Bool(true)));
     let mut action = EguiAction::None;
 
     egui::CentralPanel::default()
@@ -26,9 +32,12 @@ pub fn build_title_ui(
         .show(ctx, |ui| {
             let screen_rect = ui.max_rect();
 
-            // Full-screen background
             if let Some(assets) = assets {
-                let bg_key = "main_summer";
+                let bg_key = if is_winter {
+                    "main_winter"
+                } else {
+                    "main_summer"
+                };
                 if let Some(tex) = assets.get(bg_key) {
                     ui.painter().image(
                         tex.id(),
@@ -55,6 +64,7 @@ pub fn build_title_ui(
 
             let entries: Vec<(&str, EguiAction, bool)> = vec![
                 ("开始游戏", EguiAction::StartGame, true),
+                ("冬篇", EguiAction::StartWinter, is_winter),
                 ("继续游戏", EguiAction::ContinueGame, has_continue),
                 ("读取游戏", EguiAction::OpenLoad, true),
                 ("设置", EguiAction::NavigateTo(AppMode::Settings), true),

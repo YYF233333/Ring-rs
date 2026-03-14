@@ -16,6 +16,7 @@ use crate::egui_actions::EguiAction;
 pub fn build_game_menu_frame(
     ctx: &egui::Context,
     title: &str,
+    is_winter: bool,
     layout: &UiLayoutConfig,
     assets: Option<&UiAssetCache>,
     scale: &ScaleContext,
@@ -33,9 +34,12 @@ pub fn build_game_menu_frame(
         .show(ctx, |ui| {
             let screen_rect = ui.max_rect();
 
-            // Background image
             if let Some(assets) = assets {
-                let bg_key = "game_menu_bg";
+                let bg_key = if is_winter {
+                    "main_winter"
+                } else {
+                    "game_menu_bg"
+                };
                 if let Some(tex) = assets.get(bg_key) {
                     ui.painter().image(
                         tex.id(),

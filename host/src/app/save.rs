@@ -223,10 +223,18 @@ pub fn return_to_title_from_game(app_state: &mut AppState, should_save_continue:
 
 /// 开始新游戏（使用 config.start_script_path）
 pub fn start_new_game(app_state: &mut AppState) {
+    start_new_game_inner(app_state, None);
+}
+
+/// 开始新游戏并跳转到指定标签（用于冬篇入口等）
+pub fn start_new_game_at_label(app_state: &mut AppState, label: &str) {
+    start_new_game_inner(app_state, Some(label));
+}
+
+fn start_new_game_inner(app_state: &mut AppState, jump_label: Option<&str>) {
     use super::update::run_script_tick;
     use crate::AppMode;
 
-    // 使用配置的入口脚本（逻辑路径）
     let script_path = app_state.config.start_script_path.clone();
 
     if load_script_from_logical_path(app_state, &script_path) {
@@ -234,17 +242,23 @@ pub fn start_new_game(app_state: &mut AppState) {
         app_state.session.script_finished = false;
         app_state.play_start_time = std::time::Instant::now();
 
-        // 将持久化变量注入到新游戏 runtime（确保章节门控变量可见）
         if let Some(ref mut runtime) = app_state.session.vn_runtime {
             runtime.state_mut().persistent_variables = app_state.persistent_store.variables.clone();
+
+            if let Some(label) = jump_label {
+                if let Some(index) = runtime.find_label(label) {
+                    runtime.state_mut().position.jump_to(index);
+                    info!(label, "跳转到标签");
+                } else {
+                    warn!(label, "标签未找到，从头开始");
+                }
+            }
         }
 
-        // 执行第一次 tick
         run_script_tick(app_state, None);
 
-        // 切换到游戏模式
         app_state.ui.navigation.switch_to(AppMode::InGame);
-        info!(script = %script_path, "开始新游戏");
+        info!(script = %script_path, label = ?jump_label, "开始新游戏");
     } else {
         app_state.ui.toast_manager.error("无法加载入口脚本");
     }

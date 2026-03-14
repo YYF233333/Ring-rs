@@ -31,6 +31,99 @@ pub enum SaveLoadTab {
     Load,
 }
 
+/// 存读档页面的分页标识
+///
+/// 每页 6 个槽位。槽位 ID 映射：
+/// - `Manual(1..=9)` → slot 1-54
+/// - `Quick` → slot 55-60
+/// - `Auto` → slot 61-66
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveLoadPage {
+    /// 手动存档页 (1-9)
+    Manual(u8),
+    /// 快速存档页
+    Quick,
+    /// 自动存档页
+    Auto,
+}
+
+impl Default for SaveLoadPage {
+    fn default() -> Self {
+        Self::Manual(1)
+    }
+}
+
+impl SaveLoadPage {
+    pub const SLOTS_PER_PAGE: u32 = 6;
+
+    /// 该页对应的起始 slot ID（1-indexed）
+    pub fn first_slot(self) -> u32 {
+        match self {
+            Self::Manual(n) => (n as u32 - 1) * Self::SLOTS_PER_PAGE + 1,
+            Self::Quick => 55,
+            Self::Auto => 61,
+        }
+    }
+
+    /// 该页对应的 slot ID 范围（含两端）
+    pub fn slot_range(self) -> std::ops::RangeInclusive<u32> {
+        let start = self.first_slot();
+        start..=(start + Self::SLOTS_PER_PAGE - 1)
+    }
+
+    /// 页面显示标签
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Manual(n) => match n {
+                1 => "1",
+                2 => "2",
+                3 => "3",
+                4 => "4",
+                5 => "5",
+                6 => "6",
+                7 => "7",
+                8 => "8",
+                9 => "9",
+                _ => "?",
+            },
+            Self::Quick => "Q",
+            Self::Auto => "A",
+        }
+    }
+
+    /// 所有分页，按显示顺序排列
+    pub fn all_pages() -> &'static [SaveLoadPage] {
+        use SaveLoadPage::*;
+        &[
+            Auto,
+            Quick,
+            Manual(1),
+            Manual(2),
+            Manual(3),
+            Manual(4),
+            Manual(5),
+            Manual(6),
+            Manual(7),
+            Manual(8),
+            Manual(9),
+        ]
+    }
+
+    /// 前一页
+    pub fn prev(self) -> Option<Self> {
+        let pages = Self::all_pages();
+        let idx = pages.iter().position(|p| *p == self)?;
+        if idx > 0 { Some(pages[idx - 1]) } else { None }
+    }
+
+    /// 后一页
+    pub fn next(self) -> Option<Self> {
+        let pages = Self::all_pages();
+        let idx = pages.iter().position(|p| *p == self)?;
+        pages.get(idx + 1).copied()
+    }
+}
+
 /// 导航栈管理器
 ///
 /// 用于管理界面的返回逻辑，例如：

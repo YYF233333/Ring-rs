@@ -25,3 +25,4 @@
 | RFC-008 | RenderBackend Trait -- 渲染后端抽象层 | `rfc-rendering-backend-trait.md` | Accepted |
 | RFC-009 | Cutscene 视频播放 | `rfc-cutscene-video-playback.md` | Accepted |
 | RFC-010 | 可定制 UI 系统 | `rfc-customizable-ui-system.md` | Accepted |
+| RFC-011 | UI 系统后续增强 | `rfc-ui-enhancements.md` | Accepted |
