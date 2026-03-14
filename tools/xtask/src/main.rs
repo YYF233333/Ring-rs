@@ -4,7 +4,7 @@
 //!
 //! ## 命令
 //!
-//! - `check-all`: 运行 fmt、clippy、test
+//! - `check-all`: fmt（直接应用）、clippy、test（仅输出最终结果）
 //! - `cov-runtime`: 运行 vn-runtime 覆盖率
 //! - `cov-workspace`: 运行 workspace 覆盖率
 //! - `script-check`: 检查脚本文件（语法、label、资源引用）
@@ -39,7 +39,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum XtaskCommand {
-    /// 运行 fmt、clippy、test（本地门禁）
+    /// 运行 fmt（直接应用）、clippy、test（--quiet，仅最终结果）
     CheckAll,
 
     /// 运行 vn-runtime 覆盖率报告（HTML）
@@ -142,12 +142,7 @@ fn real_main() -> anyhow::Result<()> {
 
     match cli.command {
         XtaskCommand::CheckAll => {
-            run(
-                "cargo fmt --all -- --check",
-                &sh,
-                "cargo",
-                &["fmt", "--all", "--", "--check"],
-            )?;
+            run("cargo fmt --all", &sh, "cargo", &["fmt", "--all"])?;
             run(
                 "cargo clippy --workspace --all-targets",
                 &sh,
@@ -155,10 +150,10 @@ fn real_main() -> anyhow::Result<()> {
                 &["clippy", "--workspace", "--all-targets"],
             )?;
             run(
-                "cargo test --workspace",
+                "cargo test --workspace --quiet",
                 &sh,
                 "cargo",
-                &["test", "--workspace"],
+                &["test", "--workspace", "--quiet"],
             )?;
         }
         XtaskCommand::CovRuntime => {

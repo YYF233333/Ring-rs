@@ -72,6 +72,12 @@ pub struct VideoPlayer {
     temp_video_file: Option<PathBuf>,
 }
 
+impl Default for VideoPlayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VideoPlayer {
     pub fn new() -> Self {
         Self {

@@ -206,20 +206,20 @@ impl ApplicationHandler for HostApp {
                 let mut slot_thumbnails = std::collections::HashMap::new();
                 if current_mode == AppMode::SaveLoad {
                     for slot in save_load_page.slot_range() {
-                        if let Some(png_bytes) = app_state.save_manager.load_thumbnail_bytes(slot) {
-                            if let Ok(img) = image::load_from_memory(&png_bytes) {
-                                let rgba = img.to_rgba8();
-                                let (w, h) = rgba.dimensions();
-                                let tex = backend.egui_ctx().load_texture(
-                                    format!("thumb_{slot}"),
-                                    egui::ColorImage::from_rgba_unmultiplied(
-                                        [w as usize, h as usize],
-                                        &rgba,
-                                    ),
-                                    egui::TextureOptions::LINEAR,
-                                );
-                                slot_thumbnails.insert(slot, tex);
-                            }
+                        if let Some(png_bytes) = app_state.save_manager.load_thumbnail_bytes(slot)
+                            && let Ok(img) = image::load_from_memory(&png_bytes)
+                        {
+                            let rgba = img.to_rgba8();
+                            let (w, h) = rgba.dimensions();
+                            let tex = backend.egui_ctx().load_texture(
+                                format!("thumb_{slot}"),
+                                egui::ColorImage::from_rgba_unmultiplied(
+                                    [w as usize, h as usize],
+                                    &rgba,
+                                ),
+                                egui::TextureOptions::LINEAR,
+                            );
+                            slot_thumbnails.insert(slot, tex);
                         }
                     }
                 }
@@ -340,8 +340,8 @@ impl ApplicationHandler for HostApp {
                         }
 
                         // Confirm dialog overlay (drawn on top of everything)
-                        if let Some(dialog) = pending_confirm.as_ref() {
-                            if let Some(confirm_action) =
+                        if let Some(dialog) = pending_confirm.as_ref()
+                            && let Some(confirm_action) =
                                 egui_screens::confirm::build_confirm_overlay(
                                     ctx,
                                     dialog,
@@ -349,10 +349,9 @@ impl ApplicationHandler for HostApp {
                                     asset_cache,
                                     scale,
                                 )
-                            {
-                                ui_action = confirm_action;
-                                confirm_resolved = true;
-                            }
+                        {
+                            ui_action = confirm_action;
+                            confirm_resolved = true;
                         }
 
                         egui_screens::toast::build_toast_overlay(
@@ -371,18 +370,18 @@ impl ApplicationHandler for HostApp {
                 }
 
                 // Process pending thumbnail save (from previous frame's screenshot request)
-                if let Some(slot) = *pending_thumbnail_slot {
-                    if let Some((rgba, w, h)) = backend.take_screenshot() {
-                        let thumb_w = 384u32;
-                        let thumb_h = 216u32;
-                        if let Err(e) = app_state
-                            .save_manager
-                            .save_thumbnail(slot, &rgba, w, h, thumb_w, thumb_h)
-                        {
-                            tracing::warn!(slot, error = %e, "缩略图保存失败");
-                        }
-                        *pending_thumbnail_slot = None;
+                if let Some(slot) = *pending_thumbnail_slot
+                    && let Some((rgba, w, h)) = backend.take_screenshot()
+                {
+                    let thumb_w = 384u32;
+                    let thumb_h = 216u32;
+                    if let Err(e) = app_state
+                        .save_manager
+                        .save_thumbnail(slot, &rgba, w, h, thumb_w, thumb_h)
+                    {
+                        tracing::warn!(slot, error = %e, "缩略图保存失败");
                     }
+                    *pending_thumbnail_slot = None;
                 }
 
                 // Track save slot for screenshot capture

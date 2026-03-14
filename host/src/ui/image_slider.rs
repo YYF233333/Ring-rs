@@ -39,14 +39,14 @@ pub fn image_slider(
     let usable_width = usable_right - usable_left;
 
     let mut changed = false;
-    if response.dragged() || response.clicked() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            let t = ((pos.x - usable_left) / usable_width).clamp(0.0, 1.0);
-            let new_val = range_min + t * range_span;
-            if (new_val - *value).abs() > f32::EPSILON {
-                *value = new_val;
-                changed = true;
-            }
+    if (response.dragged() || response.clicked())
+        && let Some(pos) = response.interact_pointer_pos()
+    {
+        let t = ((pos.x - usable_left) / usable_width).clamp(0.0, 1.0);
+        let new_val = range_min + t * range_span;
+        if (new_val - *value).abs() > f32::EPSILON {
+            *value = new_val;
+            changed = true;
         }
     }
 

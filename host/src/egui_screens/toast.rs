@@ -53,13 +53,13 @@ pub fn build_toast_overlay(
                 let painter = ui.painter();
 
                 let mut drew_ninepatch = false;
-                if let Some(assets) = assets {
-                    if let Some(tex) = assets.get("notify") {
-                        let np = NinePatch::new(tex, borders);
-                        let tint = egui::Color32::from_rgba_unmultiplied(255, 255, 255, alpha);
-                        np.paint(painter, rect, tint);
-                        drew_ninepatch = true;
-                    }
+                if let Some(assets) = assets
+                    && let Some(tex) = assets.get("notify")
+                {
+                    let np = NinePatch::new(tex, borders);
+                    let tint = egui::Color32::from_rgba_unmultiplied(255, 255, 255, alpha);
+                    np.paint(painter, rect, tint);
+                    drew_ninepatch = true;
                 }
 
                 if !drew_ninepatch {

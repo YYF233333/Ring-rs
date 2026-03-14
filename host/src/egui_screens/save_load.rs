@@ -11,6 +11,7 @@ use host::{SaveLoadPage, SaveLoadTab};
 use crate::egui_actions::EguiAction;
 
 /// 存读档页面内容区（由 `game_menu_frame` 包裹）
+#[allow(clippy::too_many_arguments)] // UI 构建入口，参数均为调用方已有引用，抽 struct 收益有限
 pub fn build_save_load_content(
     ui: &mut egui::Ui,
     tab: SaveLoadTab,
@@ -231,10 +232,10 @@ pub fn build_save_load_content(
             )
             .sense(egui::Sense::click()),
         );
-        if prev_resp.clicked() {
-            if let Some(p) = prev_page {
-                *page = p;
-            }
+        if prev_resp.clicked()
+            && let Some(p) = prev_page
+        {
+            *page = p;
         }
 
         // Page buttons: A Q 1-9
@@ -282,10 +283,10 @@ pub fn build_save_load_content(
             )
             .sense(egui::Sense::click()),
         );
-        if next_resp.clicked() {
-            if let Some(p) = next_page {
-                *page = p;
-            }
+        if next_resp.clicked()
+            && let Some(p) = next_page
+        {
+            *page = p;
         }
     });
 

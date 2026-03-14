@@ -15,7 +15,7 @@ test-runtime = "test -p vn-runtime"
 test-host-lib = "test -p host --lib"
 
 # One-command local gate (cross-platform).
-# Runs: fmt --check -> clippy -> tests
+# Runs: fmt（直接应用）-> clippy -> test（--quiet，仅最终结果）
 check-all = "run -p xtask -- check-all"
 
 # -------- Coverage (local) --------

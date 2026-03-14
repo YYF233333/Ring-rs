@@ -44,15 +44,15 @@ pub fn build_ingame_ui(
 
                 let painter = ui.painter();
 
-                if let Some(assets) = assets {
-                    if let Some(tex) = assets.get("textbox") {
-                        painter.image(
-                            tex.id(),
-                            area_rect,
-                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                            egui::Color32::WHITE,
-                        );
-                    }
+                if let Some(assets) = assets
+                    && let Some(tex) = assets.get("textbox")
+                {
+                    painter.image(
+                        tex.id(),
+                        area_rect,
+                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                        egui::Color32::WHITE,
+                    );
                 }
 
                 if let Some(ref speaker) = dialogue.speaker {
@@ -60,19 +60,18 @@ pub fn build_ingame_ui(
                     let name_y = scale.y(layout.dialogue.name_ypos);
                     let name_pos = egui::pos2(name_x, area_rect.top() + name_y);
 
-                    if let Some(assets) = assets {
-                        if let Some(tex) = assets.get("namebox") {
-                            let borders = Borders::from_array(layout.dialogue.namebox_borders);
-                            let name_size = scale.uniform(layout.fonts.name_text_size);
-                            let nb_w = name_size * speaker.len() as f32 * 0.7
-                                + scale.x(borders.left + borders.right)
-                                + 20.0;
-                            let nb_h = name_size + scale.y(borders.top + borders.bottom) + 8.0;
-                            let nb_rect =
-                                egui::Rect::from_min_size(name_pos, egui::vec2(nb_w, nb_h));
-                            let np = NinePatch::new(tex, borders);
-                            np.paint(painter, nb_rect, egui::Color32::WHITE);
-                        }
+                    if let Some(assets) = assets
+                        && let Some(tex) = assets.get("namebox")
+                    {
+                        let borders = Borders::from_array(layout.dialogue.namebox_borders);
+                        let name_size = scale.uniform(layout.fonts.name_text_size);
+                        let nb_w = name_size * speaker.len() as f32 * 0.7
+                            + scale.x(borders.left + borders.right)
+                            + 20.0;
+                        let nb_h = name_size + scale.y(borders.top + borders.bottom) + 8.0;
+                        let nb_rect = egui::Rect::from_min_size(name_pos, egui::vec2(nb_w, nb_h));
+                        let np = NinePatch::new(tex, borders);
+                        np.paint(painter, nb_rect, egui::Color32::WHITE);
                     }
 
                     let name_text_size = scale.uniform(layout.fonts.name_text_size);
