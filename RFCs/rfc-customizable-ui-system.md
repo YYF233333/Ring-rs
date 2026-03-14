@@ -1,0 +1,611 @@
+# RFC: 可定制 UI 系统
+
+## 元信息
+
+- 编号：RFC-010
+- 状态：Proposed
+- 作者：Ring-rs 开发组
+- 日期：2026-03-15
+- 相关范围：`host/src/ui/`、`host/src/egui_screens/`、`host/src/backend/`、`assets/gui/`
+
+---
+
+## 1. 背景
+
+当前引擎的 UI 是在 RFC-007 迁移到 egui 后的"能用即可"状态：所有页面使用硬编码颜色、尺寸和纯文本控件，无图片素材支持，也未真正使用已有的 Theme token 系统。与 ref-project 的 Ren'Py 原作 UI 存在显著的视觉差距。
+
+ref-project 使用 Ren'Py 的 `gui.rpy` / `screens.rpy` 体系，通过声明式配置变量 + 图片素材 + screen 布局定义了完整的视觉风格。所有 UI 素材已在 `assets/ref-project/gui/` 中可用。
+
+本 RFC 的目标是构建一个**数据驱动的可定制 UI 系统**，使引擎能够：
+1. 复用 ref-project 的 GUI 素材实现与原作视觉风格一致的 UI
+2. 支持未来不同游戏项目通过替换配置 + 素材来定制 UI 外观
+
+---
+
+## 2. 目标与非目标
+
+### 2.1 目标
+
+- **视觉等价**：核心页面（标题/对话框/快捷菜单/游戏菜单/设置/存读档/历史/选项/确认弹窗）的视觉风格与 ref-project 主观一致
+- **数据驱动**：布局参数（位置/尺寸/间距/颜色/字号）和图片素材路径从配置文件读取，不硬编码
+- **图片 UI 支持**：对话框、名字框、按钮、滑块、滚动条等核心控件支持图片背景/前景，支持九宫格拉伸
+- **分辨率适配**：以 1920×1080 为基准设计分辨率，按实际窗口尺寸等比缩放
+- **增量实施**：按页面逐步改造，每个阶段有独立可验收的产出
+
+### 2.2 明确非目标
+
+- 不实现 Ren'Py screen language 的通用解释器
+- 不要求像素级一致——保留美术风格与信息层级即可（与 RFC-002 §2.2 一致）
+- 不在此 RFC 中实现 NVL 模式（如需另开 RFC）
+- 不做运行时 UI 热重载（开发期可通过重启验证）
+- 不做拖拽式 UI 编辑器
+
+---
+
+## 3. 现状分析
+
+### 3.1 当前 UI 实现
+
+| 模块 | 现状 | 问题 |
+|------|------|------|
+| `egui_screens/helpers.rs` | 3 个硬编码颜色常量 + 1 个通用按钮函数 | 不读取 Theme，不支持图片 |
+| `egui_screens/title.rs` | 深色纯色背景 + "Visual Novel Engine" 标题 + 文本按钮 | 无背景图片，无季节切换，英文标签 |
+| `egui_screens/ingame.rs` | 半透明底部面板 + 纯文本对话 + 基础选项列表 | 无 textbox.png，无 namebox.png，无快捷菜单 |
+| `egui_screens/ingame_menu.rs` | 半透明覆盖层 + 文本按钮列表 | 无背景图片，样式简陋 |
+| `egui_screens/settings.rs` | 纯色面板 + egui 原生滑块 | 无自定义滑块样式，缺少显示模式/跳过选项 |
+| `egui_screens/save_load.rs` | 纯文本列表 + 文本按钮 | 无缩略图，无网格布局，无分页 |
+| `egui_screens/history.rs` | 简单滚动文本列表 | 无分栏布局，样式粗糙 |
+| `ui/theme.rs` | 完整的 token 分层体系 | **已有但未被 egui_screens 使用** |
+| `ui/skin.rs` | 皮肤配置骨架（icon/button/panel 路径映射） | **已有但完全未实装** |
+| `ui/theme_loader.rs` | JSON 主题覆盖加载 | 仅支持 palette 子集 |
+
+### 3.2 ref-project UI 规格（从 `gui.rpy` / `screens.rpy` 提取）
+
+#### 基准参数
+
+| 参数 | 值 |
+|------|------|
+| 基准分辨率 | 1920 × 1080 |
+| 文本字体 | NotoSansSC-Regular.otf |
+| 对话字号 | 33px |
+| 角色名字号 | 45px |
+| 界面文字号 | 33px |
+| 标题字号 | 75px |
+
+#### 颜色体系
+
+| 用途 | 颜色 |
+|------|------|
+| 强调色 | `#ffffff` |
+| 空闲态文本 | `#888888` |
+| 悬停色 | `#ff9900` |
+| 选中色 | `#ffffff` |
+| 禁用色 | `#7878787f` |
+| 对话文本 | `#000000`（对话框内为黑色文字） |
+| 界面文本 | `#ffffff` |
+| 选项空闲 | `#cccccc` |
+| 选项悬停 | `#ffffff` |
+
+#### 对话框布局
+
+| 参数 | 值 |
+|------|------|
+| 对话框高度 | 278px |
+| 对话框对齐 | 底部 (yalign=1.0) |
+| 对话框背景 | `gui/textbox.png` |
+| 名字框位置 | (360, 0)，左对齐 |
+| 名字框背景 | `gui/namebox.png` |
+| 对话文本位置 | (402, 75) |
+| 对话文本宽度 | 1116px |
+
+#### 主菜单
+
+| 参数 | 值 |
+|------|------|
+| 夏篇背景 | `gui/prelude/main_summer_edit.png` |
+| 冬篇背景 | `gui/prelude/main_winter_edit.png` |
+| 导航按钮位置 | xpos=60，垂直居中 |
+| 导航按钮间距 | 6px |
+| 冬篇入口 | 仅 `persistent.complete_summer` 后显示 |
+
+#### 游戏菜单
+
+| 参数 | 值 |
+|------|------|
+| 夏篇背景 | `gui/main_summer.jpg` |
+| 冬篇背景 | `gui/main_winter.jpg` |
+| 覆盖层 | `gui/overlay/game_menu.png` |
+| 导航面板宽度 | 420px |
+| 内容区左边距 | 60px |
+| 内容区右边距 | 30px |
+| 标题标签高度 | 180px |
+| 标题字号 | 75px |
+
+#### 快捷菜单
+
+| 参数 | 值 |
+|------|------|
+| 位置 | 底部居中 (xalign=0.5, yalign=1.0) |
+| 按钮字号 | 21px |
+| 按钮 | 回退/历史/快进/自动/保存/快存/快读/设置 |
+
+#### 选项按钮
+
+| 参数 | 值 |
+|------|------|
+| 宽度 | 1185px |
+| 位置 | 水平居中，ypos=405, yanchor=0.5 |
+| 间距 | 33px |
+| 背景图 | `gui/button/choice_idle_background.png` / `choice_hover_background.png` |
+| 文本居中 | xalign=0.5 |
+
+#### 存档界面
+
+| 参数 | 值 |
+|------|------|
+| 网格 | 3 列 × 2 行 |
+| 槽位按钮尺寸 | 414 × 309 px |
+| 缩略图尺寸 | 384 × 216 px |
+| 槽位间距 | 15px |
+| 分页按钮 | < A Q 1-9 > |
+| 背景图 | `gui/button/slot_idle_background.png` / `slot_hover_background.png` |
+
+#### 历史界面
+
+| 参数 | 值 |
+|------|------|
+| 条目高度 | 210px |
+| 角色名位置 | xpos=233，右对齐，宽度=233 |
+| 对话文本位置 | xpos=255，左对齐，宽度=1110 |
+
+#### 确认弹窗
+
+| 参数 | 值 |
+|------|------|
+| 覆盖层 | `gui/overlay/confirm.png` |
+| 框架背景 | `gui/frame.png` |
+| 按钮间距 | 150px |
+
+#### 快进指示器
+
+| 参数 | 值 |
+|------|------|
+| 位置 | ypos=15 |
+| 背景 | `gui/skip.png` |
+| 文本 | "正在快进" + 闪烁箭头 |
+
+### 3.3 GUI 素材清单
+
+ref-project 的 `gui/` 目录已包含完整素材集：
+
+```
+gui/
+├── textbox.png              # 对话框背景
+├── namebox.png              # 名字框背景
+├── frame.png                # 通用框架
+├── main_menu.png            # 主菜单背景
+├── game_menu.png            # 游戏菜单背景
+├── main_summer.jpg          # 夏篇背景
+├── main_winter.jpg          # 冬篇背景
+├── skip.png                 # 快进指示器
+├── notify.png               # 通知框
+├── nvl.png                  # NVL 模式背景
+├── window_icon.png          # 窗口图标
+├── bar/                     # 进度条素材
+├── button/                  # 按钮状态素材
+│   ├── choice_idle/hover_background.png
+│   ├── slot_idle/hover_background.png
+│   ├── quick_idle/hover_background.png
+│   ├── idle/hover_background.png
+│   ├── check_foreground/selected_foreground.png
+│   └── radio_foreground/selected_foreground.png
+├── overlay/                 # 覆盖层
+│   ├── main_menu.png
+│   ├── game_menu.png
+│   └── confirm.png
+├── prelude/                 # 标题画面
+│   ├── main_summer_edit.png
+│   └── main_winter_edit.png
+├── scrollbar/               # 滚动条素材
+└── slider/                  # 滑块素材
+```
+
+### 3.4 差距总结
+
+| 维度 | 差距等级 | 说明 |
+|------|---------|------|
+| 对话框 | **大** | 无图片背景、无名字框、布局参数硬编码 |
+| 标题画面 | **大** | 无背景图、无季节切换、英文标签 |
+| 快捷菜单 | **大** | 完全缺失（游戏中无底部快捷按钮栏） |
+| 游戏菜单框架 | **大** | 无背景图、无左侧导航面板布局 |
+| 选项按钮 | **中** | 有基本功能但无图片背景样式 |
+| 存读档 | **大** | 无缩略图、无网格布局、无分页 |
+| 设置 | **中** | 有基本功能但缺少显示模式/跳过选项/自定义滑块 |
+| 历史 | **中** | 有基本功能但无分栏布局 |
+| 确认弹窗 | **大** | 完全缺失 |
+| 快进/通知指示器 | **中** | Toast 有基本实现，快进指示缺失 |
+| Theme 集成 | **中** | Token 体系已有但未被页面使用 |
+| 分辨率适配 | **大** | 无缩放机制，各页面假设固定尺寸 |
+
+---
+
+## 4. 方案设计
+
+### 4.1 架构概览
+
+```
+┌─────────────────────────────────────────────────┐
+│                 UiConfig (JSON)                  │
+│  布局参数 + 颜色 + 字号 + 素材路径 + 间距        │
+└────────────────────┬────────────────────────────┘
+                     │ 启动时加载
+                     ▼
+┌─────────────────────────────────────────────────┐
+│              UiLayoutConfig (Rust)               │
+│  DialogueLayout / TitleLayout / MenuLayout /     │
+│  SaveLoadLayout / SettingsLayout / ...           │
+│  + ScaleContext (基准分辨率 → 实际分辨率缩放)     │
+└────────────────────┬────────────────────────────┘
+                     │ 注入
+                     ▼
+┌─────────────────────────────────────────────────┐
+│              UiAssetCache (Rust)                 │
+│  通过 ResourceManager 加载 GUI 图片素材          │
+│  缓存为 egui TextureHandle                       │
+│  支持九宫格 (NinePatch) 拉伸渲染                 │
+└────────────────────┬────────────────────────────┘
+                     │ 注入
+                     ▼
+┌─────────────────────────────────────────────────┐
+│           egui_screens/* (改造后)                 │
+│  各页面读取 UiLayoutConfig + UiAssetCache        │
+│  而非硬编码值                                    │
+│  使用 ScaleContext 将基准坐标转为实际坐标        │
+└─────────────────────────────────────────────────┘
+```
+
+### 4.2 核心类型
+
+#### UiLayoutConfig
+
+对应 Ren'Py `gui.rpy` 中的配置变量。以 JSON 格式存储，启动时一次性加载。
+
+```rust
+/// UI 布局配置，对应一套完整的 UI 视觉定义
+pub struct UiLayoutConfig {
+    pub base_resolution: (u32, u32),  // 基准分辨率 (1920, 1080)
+    pub fonts: FontConfig,
+    pub colors: ColorConfig,
+    pub dialogue: DialogueLayoutConfig,
+    pub title: TitleLayoutConfig,
+    pub quick_menu: QuickMenuConfig,
+    pub game_menu: GameMenuConfig,
+    pub choice: ChoiceConfig,
+    pub save_load: SaveLoadConfig,
+    pub history: HistoryConfig,
+    pub settings: SettingsConfig,
+    pub confirm: ConfirmConfig,
+    pub skip_indicator: SkipIndicatorConfig,
+    pub notify: NotifyConfig,
+    pub assets: UiAssetPaths,  // 所有 GUI 素材的路径映射
+}
+```
+
+每个子 config 携带该页面/组件的全部布局参数（位置、尺寸、边距、字号等），其默认值直接来自 ref-project 的 `gui.rpy`。
+
+#### ScaleContext
+
+```rust
+/// 分辨率缩放上下文
+pub struct ScaleContext {
+    base_width: f32,    // 1920.0
+    base_height: f32,   // 1080.0
+    actual_width: f32,
+    actual_height: f32,
+    scale_x: f32,       // actual / base
+    scale_y: f32,
+}
+
+impl ScaleContext {
+    /// 将基准坐标/尺寸缩放为实际值
+    pub fn x(&self, base: f32) -> f32;
+    pub fn y(&self, base: f32) -> f32;
+    pub fn size(&self, base: f32) -> f32; // 取 min(scale_x, scale_y) 保持比例
+}
+```
+
+#### UiAssetCache
+
+```rust
+/// GUI 图片素材缓存
+pub struct UiAssetCache {
+    textures: HashMap<String, egui::TextureHandle>,
+}
+
+impl UiAssetCache {
+    /// 从 UiAssetPaths + ResourceManager 加载所有 GUI 素材
+    pub fn load(paths: &UiAssetPaths, resource_manager: &ResourceManager,
+                ctx: &egui::Context) -> Self;
+
+    /// 获取已加载的纹理
+    pub fn get(&self, key: &str) -> Option<&egui::TextureHandle>;
+}
+```
+
+#### NinePatch 渲染
+
+对于需要拉伸的 UI 元素（对话框、按钮背景、框架等），实现九宫格渲染：
+
+```rust
+pub struct NinePatch {
+    texture: egui::TextureHandle,
+    borders: Borders,  // left, top, right, bottom 不拉伸区域
+}
+
+impl NinePatch {
+    /// 在指定矩形区域内渲染九宫格图片
+    pub fn paint(&self, ui: &mut egui::Ui, rect: egui::Rect);
+}
+```
+
+### 4.3 页面改造设计
+
+#### 4.3.1 对话框 (InGame)
+
+**现状**：`egui::TopBottomPanel::bottom` + 硬编码颜色/尺寸
+
+**目标**：
+- 使用 `textbox.png` 作为对话框背景（图片覆盖全底部区域）
+- 使用 `namebox.png` 作为名字框背景
+- 对话文本位置/宽度/字号从 `DialogueLayoutConfig` 读取
+- 名字位置/字号从 config 读取
+- 快捷菜单栏（回退/历史/快进/自动/保存/快存/快读/设置）叠加在对话框区域
+
+**实现策略**：使用 egui `Area` + `Image` 绘制背景图片，在其上叠加文本 widget。不使用 `TopBottomPanel`（因其无法直接使用图片背景），改为在固定位置的 `Area` 中自行布局。
+
+#### 4.3.2 标题画面 (Title)
+
+**现状**：深色纯色背景 + 英文标题和按钮
+
+**目标**：
+- 全屏背景图片（季节切换：夏篇 `main_summer_edit.png` / 冬篇 `main_winter_edit.png`）
+- 左侧导航按钮（中文：开始游戏/冬篇/读取游戏/设置/退出）
+- 冬篇入口仅 `complete_summer` 后显示
+
+#### 4.3.3 快捷菜单 (Quick Menu) —— 新增
+
+**现状**：完全缺失
+
+**目标**：
+- 对话框区域内底部水平排列的按钮栏
+- 按钮：回退(暂不支持)/历史/快进/自动/保存/快存/快读/设置
+- 按钮使用 `quick_idle_background.png` / `quick_hover_background.png`
+- 字号 21px
+
+**说明**："回退"功能需要 runtime 支持 rollback（当前未实现），此按钮先渲染但禁用。
+
+#### 4.3.4 游戏菜单框架 (Game Menu)
+
+**现状**：各子页面独立使用 `CentralPanel` + `panel_frame()`
+
+**目标**：
+- 共享的游戏菜单框架（背景图 + 左侧导航面板 + 右侧内容区 + 标题标签）
+- 背景图片季节切换
+- 覆盖层 `overlay/game_menu.png`
+- 左侧 420px 导航面板（历史/保存/读取/设置/标题界面/退出）
+- 右侧内容区可选 viewport 滚动
+- 返回按钮在左侧底部
+
+#### 4.3.5 选项按钮 (Choice)
+
+**现状**：基本选项列表，无图片背景
+
+**目标**：
+- 居中 1185px 宽按钮
+- 使用 `choice_idle_background.png` / `choice_hover_background.png`
+- 文本居中，间距 33px
+
+#### 4.3.6 存读档 (SaveLoad)
+
+**现状**：纯文本列表
+
+**目标**：
+- 3×2 网格布局
+- 每个槽位 414×309px，含截图缩略图 (384×216px)
+- 时间/存档名显示
+- 分页导航（< A Q 1-9 >）
+- 槽位按钮使用 `slot_idle/hover_background.png`
+
+**前置**：需要实现存档截图功能（保存时截取当前画面缩略图）。
+
+#### 4.3.7 设置 (Settings)
+
+**现状**：基本滑块，缺少部分选项
+
+**目标**：
+- 显示模式选项（窗口/全屏）
+- 跳过选项（未读文本/选项后继续/忽略转场）
+- 滑块：文字速度/自动前进时间/音乐音量/音效音量
+- 自定义滑块样式（`slider/` 素材）
+- 全部静音按钮
+
+#### 4.3.8 历史 (History)
+
+**现状**：简单滚动文本
+
+**目标**：
+- 固定高度条目 (210px)
+- 左列角色名（右对齐，233px 宽）+ 右列对话文本（左对齐，1110px 宽）
+- 角色名颜色跟随角色定义
+
+#### 4.3.9 确认弹窗 (Confirm) —— 新增
+
+**现状**：完全缺失
+
+**目标**：
+- 模态覆盖层 `overlay/confirm.png`
+- 居中框架 `frame.png`（九宫格拉伸）
+- 提示文本 + 确定/取消按钮（间距 150px）
+- 用于退出确认、覆盖存档确认、返回标题确认等
+
+#### 4.3.10 快进指示器 (Skip Indicator) —— 新增
+
+**现状**：无可视指示
+
+**目标**：
+- 左上角 `skip.png` 背景框
+- "正在快进" + 闪烁箭头动画
+
+### 4.4 配置文件格式
+
+配置文件为 JSON，放置于 `assets/ui/layout.json`。缺失时使用内置默认值（等价于 ref-project 参数）。
+
+```json
+{
+  "base_resolution": [1920, 1080],
+  "fonts": {
+    "text_font": "NotoSansSC-Regular.otf",
+    "text_size": 33,
+    "name_text_size": 45,
+    "interface_text_size": 33,
+    "title_text_size": 75
+  },
+  "colors": {
+    "accent": "#ffffff",
+    "idle": "#888888",
+    "hover": "#ff9900",
+    "selected": "#ffffff",
+    "insensitive": "#7878787f",
+    "text": "#000000",
+    "interface_text": "#ffffff"
+  },
+  "dialogue": {
+    "textbox_height": 278,
+    "textbox_yalign": 1.0,
+    "name_xpos": 360,
+    "name_ypos": 0,
+    "dialogue_xpos": 402,
+    "dialogue_ypos": 75,
+    "dialogue_width": 1116
+  },
+  "assets": {
+    "textbox": "gui/textbox.png",
+    "namebox": "gui/namebox.png",
+    "title_bg_summer": "gui/prelude/main_summer_edit.png",
+    "title_bg_winter": "gui/prelude/main_winter_edit.png",
+    "menu_bg_summer": "gui/main_summer.jpg",
+    "menu_bg_winter": "gui/main_winter.jpg",
+    "overlay_game_menu": "gui/overlay/game_menu.png",
+    "overlay_confirm": "gui/overlay/confirm.png",
+    "frame": "gui/frame.png",
+    "skip": "gui/skip.png",
+    "notify": "gui/notify.png"
+  }
+}
+```
+
+### 4.5 素材复用策略
+
+ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAssetPaths` 映射引用。这些素材通过 `ResourceManager` 加载（与背景/立绘使用相同的资源加载路径），在 egui 侧创建 `TextureHandle` 缓存。
+
+### 4.6 与现有系统的关系
+
+| 现有模块 | 关系 |
+|---------|------|
+| `ui/theme.rs` ThemeTokens | **保留并扩展**——颜色 token 合并到 `UiLayoutConfig.colors`，Theme 仍可作为不含图片的 fallback |
+| `ui/skin.rs` UiSkinConfig | **废弃**——被 `UiLayoutConfig.assets` 替代，功能更完整 |
+| `ui/theme_loader.rs` | **扩展**——改为加载完整 `UiLayoutConfig` |
+| `egui_screens/helpers.rs` | **改造**——硬编码常量替换为从 `UiLayoutConfig` 读取 |
+| `backend/egui_integration.rs` | **扩展**——支持额外的 font 加载（NotoSansSC） |
+| `resources/` ResourceManager | **复用**——GUI 素材走统一资源路径 |
+
+---
+
+## 5. 风险
+
+| 风险 | 等级 | 缓解 |
+|------|------|------|
+| egui 对图片背景支持有限（无内置九宫格） | 中 | 自行实现 NinePatch 渲染（egui `Painter` API 支持自定义绘制） |
+| egui 布局模型与 Ren'Py 绝对定位模型差异大 | 中 | 对话框/菜单等关键组件使用 `Area`（绝对定位）而非 egui 布局容器 |
+| 中文字体加载与 egui 文本渲染性能 | 低 | egui 已支持 CJK 字体，仅需在启动时加载字体文件 |
+| GUI 素材文件较大影响加载时间 | 低 | 启动时批量加载 + 按需加载非关键素材 |
+| 存档截图功能需要 GPU 回读 | 中 | 使用 wgpu 的 `read_buffer` 在 save 时截取帧缓冲（可后续阶段实现） |
+
+---
+
+## 6. 分阶段计划
+
+### Phase 1：基础设施（UiLayoutConfig + ScaleContext + 素材加载）
+
+- [ ] 定义 `UiLayoutConfig` 类型体系 + JSON 反序列化
+- [ ] 实现 `ScaleContext`（基准→实际分辨率缩放）
+- [ ] 实现 `UiAssetCache`（通过 ResourceManager 加载 GUI 图片 → egui TextureHandle）
+- [ ] 复制 ref-project `gui/` 素材到 `assets/gui/`
+- [ ] 在 `AppState` 中集成 `UiLayoutConfig` + `UiAssetCache`
+- [ ] 验收：启动时成功加载配置和素材，无 panic
+
+### Phase 2：对话框 + 快捷菜单
+
+- [ ] 改造 `ingame.rs`：图片背景对话框 + 名字框 + 正确布局
+- [ ] 新增快捷菜单（Quick Menu）栏
+- [ ] 实现 NinePatch 九宫格渲染（如对话框/名字框需要）
+- [ ] 验收：对话框视觉与 ref-project 主观一致
+
+### Phase 3：标题画面 + 游戏菜单框架
+
+- [ ] 改造 `title.rs`：全屏背景图 + 季节切换 + 中文导航按钮
+- [ ] 抽取共享游戏菜单框架（背景 + 左导航 + 右内容区 + 标题标签）
+- [ ] 改造 `ingame_menu.rs`：使用新的菜单框架
+- [ ] 验收：标题/菜单页面视觉与 ref-project 主观一致
+
+### Phase 4：选项 + 确认弹窗
+
+- [ ] 改造选项按钮样式（图片背景 + 居中文本）
+- [ ] 新增确认弹窗组件
+- [ ] 验收：选项和确认弹窗视觉正确
+
+### Phase 5：存读档 + 设置 + 历史
+
+- [ ] 改造 `save_load.rs`：网格布局 + 分页 + 样式
+- [ ] 改造 `settings.rs`：补齐选项 + 自定义控件样式
+- [ ] 改造 `history.rs`：分栏布局 + 角色颜色
+- [ ] 验收：各子页面视觉与 ref-project 主观一致
+
+### Phase 6：快进指示器 + 通知 + 收尾
+
+- [ ] 实现快进指示器（Skip Indicator）
+- [ ] 改进 Toast/通知样式
+- [ ] 全页面 Theme token 集成验证
+- [ ] 撰写 UI 定制文档（如何替换素材/配置文件来定制外观）
+- [ ] 验收：完整通关体验中 UI 风格统一
+
+### 后续阶段（不在本 RFC 范围内）
+
+- 存档截图功能（需 GPU 帧回读）
+- NVL 模式 UI
+- 运行时主题切换
+
+---
+
+## 7. 验收标准
+
+1. 所有核心页面使用图片素材 + 配置化布局，无硬编码颜色/尺寸常量
+2. 标题画面呈现 ref-project 的季节背景 + 导航布局
+3. 对话框使用 `textbox.png` / `namebox.png`，文本位置与 ref-project 一致
+4. 快捷菜单可用且位于对话框区域
+5. 游戏菜单各子页面（设置/存读档/历史）视觉风格统一且接近 ref-project
+6. 选项按钮使用图片背景且居中显示
+7. 确认弹窗功能完整（退出/覆盖存档/返回标题）
+8. 删除或替换 `assets/ui/layout.json` 后引擎仍可正常启动（fallback 到内置默认值）
+9. 窗口缩放时 UI 元素保持正确比例
+
+---
+
+## 8. 相关 RFC
+
+| RFC | 标题 | 关系 |
+|-----|------|------|
+| RFC-002 | ref-project 重制体验等价计划 | 本 RFC 是 P2-4 "UI 风格持续贴近原作"的具体实施方案 |
+| RFC-004 | 扩展 API 与 Mod 化效果管理 | UI 定制化与 Mod 化的设计理念一致 |
+| RFC-007 | 渲染后端迁移 | egui 是本 RFC 的 UI 框架基础 |
+| RFC-008 | 渲染后端 Trait 抽象 | GUI 素材加载复用 TextureFactory |

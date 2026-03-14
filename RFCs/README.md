@@ -24,3 +24,4 @@
 | RFC-007 | 渲染后端迁移 (macroquad → winit+wgpu+egui) | `rfc-rendering-backend-migration.md` | Accepted |
 | RFC-008 | RenderBackend Trait -- 渲染后端抽象层 | `rfc-rendering-backend-trait.md` | Accepted |
 | RFC-009 | Cutscene 视频播放 | `rfc-cutscene-video-playback.md` | Accepted |
+| RFC-010 | 可定制 UI 系统 | `rfc-customizable-ui-system.md` | Proposed |
