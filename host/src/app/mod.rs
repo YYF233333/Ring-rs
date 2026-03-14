@@ -37,7 +37,10 @@ use crate::extensions::ExtensionRegistry;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
 use crate::resources::{LogicalPath, ResourceManager};
-use crate::ui::{Theme, ToastManager, UiContext, load_skin_from_str, load_theme_from_str};
+use crate::ui::{
+    Theme, ToastManager, UiAssetCache, UiContext, UiLayoutConfig, load_skin_from_str,
+    load_theme_from_str,
+};
 use crate::video::VideoPlayer;
 use crate::{AppConfig, AudioManager, CommandExecutor, InputManager};
 use std::collections::HashMap;
@@ -84,6 +87,10 @@ pub struct UiSystems {
     pub ui_context: UiContext,
     /// Toast 提示管理器
     pub toast_manager: ToastManager,
+    /// UI 布局配置（数据驱动的布局参数）
+    pub layout: UiLayoutConfig,
+    /// UI 素材缓存（延迟初始化，需 egui Context 可用后加载）
+    pub asset_cache: Option<UiAssetCache>,
 }
 
 /// 游戏会话状态：运行时脚本执行与推进控制
@@ -177,6 +184,8 @@ impl AppState {
                 .and_then(|content| load_skin_from_str(&content))
         };
 
+        let layout = UiLayoutConfig::load(&resource_manager);
+
         // Dev Mode: 运行脚本检查
         init::run_script_check(&config, &scripts, &resource_manager);
 
@@ -199,11 +208,13 @@ impl AppState {
             ui: UiSystems {
                 navigation: NavigationStack::new(),
                 ui_context: {
-                    let mut ui_ctx = UiContext::new(theme, width, height);
+                    let mut ui_ctx = UiContext::new(theme, width, height, &layout);
                     ui_ctx.skin = skin;
                     ui_ctx
                 },
                 toast_manager: ToastManager::new(),
+                layout,
+                asset_cache: None,
             },
             session: GameSession {
                 vn_runtime: None,

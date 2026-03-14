@@ -15,8 +15,9 @@ pub fn build_toast_overlay(ctx: &egui::Context, toast_manager: &ToastManager) {
         let text_alpha = ((1.0 - toast.fade_progress) * 255.0) as u8;
 
         egui::Area::new(egui::Id::new("toast").with(i))
-            .anchor(egui::Align2::RIGHT_TOP, [-16.0, 16.0 + i as f32 * 56.0])
+            .anchor(egui::Align2::RIGHT_TOP, [-16.0, 68.0 + i as f32 * 56.0])
             .interactable(false)
+            .order(egui::Order::Tooltip)
             .show(ctx, |ui| {
                 egui::Frame::new()
                     .fill(bg)

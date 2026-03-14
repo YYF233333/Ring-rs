@@ -67,6 +67,11 @@ impl ResourceManager {
         }
     }
 
+    /// 获取底层资源来源的引用
+    pub fn source(&self) -> &dyn ResourceSource {
+        &*self.source
+    }
+
     /// 注入纹理上下文
     ///
     /// 在 WgpuBackend 创建后调用，使 load_texture 能够创建纹理。

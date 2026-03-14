@@ -22,6 +22,14 @@ pub enum EguiAction {
     SaveToSlot(u32),
     LoadFromSlot(u32),
     DeleteSlot(u32),
+    QuickSave,
+    QuickLoad,
+    ToggleSkip,
+    ToggleAuto,
+    ShowConfirm {
+        message: String,
+        on_confirm: Box<EguiAction>,
+    },
 }
 
 pub fn handle_egui_action(
@@ -98,6 +106,35 @@ pub fn handle_egui_action(
             } else {
                 app_state.ui.toast_manager.error("Delete failed");
             }
+        }
+        EguiAction::QuickSave => {
+            app::quick_save(app_state);
+            app_state.ui.toast_manager.success("Quick saved");
+        }
+        EguiAction::QuickLoad => {
+            app::load_continue(app_state);
+            app_state.ui.toast_manager.success("Quick loaded");
+        }
+        EguiAction::ToggleSkip => {
+            use host::PlaybackMode;
+            app_state.session.playback_mode =
+                if app_state.session.playback_mode == PlaybackMode::Skip {
+                    PlaybackMode::Normal
+                } else {
+                    PlaybackMode::Skip
+                };
+        }
+        EguiAction::ToggleAuto => {
+            use host::PlaybackMode;
+            app_state.session.playback_mode =
+                if app_state.session.playback_mode == PlaybackMode::Auto {
+                    PlaybackMode::Normal
+                } else {
+                    PlaybackMode::Auto
+                };
+        }
+        EguiAction::ShowConfirm { .. } => {
+            // Handled in host_app.rs before reaching here
         }
     }
 }

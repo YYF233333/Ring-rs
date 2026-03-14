@@ -146,6 +146,11 @@ impl InputManager {
         self.mouse_just_pressed
     }
 
+    /// 抑制本帧鼠标点击（当 egui 交互元素处于指针下方时调用）
+    pub fn suppress_mouse_click(&mut self) {
+        self.mouse_just_pressed = false;
+    }
+
     // ── 选择分支 API ─────────────────────────────────────────────────
 
     /// 重置选择状态
