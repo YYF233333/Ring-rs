@@ -119,12 +119,15 @@ impl ApplicationHandler for HostApp {
 
                 let dt = backend.frame_delta().min(0.1);
                 app_state.input_manager.begin_frame(dt);
-                app::ensure_render_resources(app_state);
 
                 let (w, h) = backend.size();
                 app_state.core.renderer.set_screen_size(w as f32, h as f32);
                 let mode_before_update = app_state.ui.navigation.current();
                 app::update(app_state, dt);
+
+                // 在 update 之后、渲染之前加载缺失纹理，
+                // 确保 update 中新增的资源引用（如差分切换）在本帧即可渲染
+                app::ensure_render_resources(app_state);
 
                 // Esc 返回：仅当更新前已处于菜单/子界面时才触发，
                 // 避免与 update_ingame 中 Esc 打开菜单在同一帧冲突。
