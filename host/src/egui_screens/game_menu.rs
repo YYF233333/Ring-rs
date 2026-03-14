@@ -121,12 +121,24 @@ fn build_nav_panel(
     let spacing = scale.y(layout.game_menu.navigation_spacing);
 
     let entries: &[(&str, EguiAction)] = &[
-        ("历史", EguiAction::NavigateTo(AppMode::History)),
+        ("历史", EguiAction::ReplaceTo(AppMode::History)),
         ("保存", EguiAction::OpenSave),
         ("读取", EguiAction::OpenLoad),
-        ("设置", EguiAction::NavigateTo(AppMode::Settings)),
-        ("返回标题", EguiAction::ReturnToTitle),
-        ("退出", EguiAction::Exit),
+        ("设置", EguiAction::ReplaceTo(AppMode::Settings)),
+        (
+            "返回标题",
+            EguiAction::ShowConfirm {
+                message: "确定返回标题画面？".into(),
+                on_confirm: Box::new(EguiAction::ReturnToTitle),
+            },
+        ),
+        (
+            "退出",
+            EguiAction::ShowConfirm {
+                message: "确定退出游戏？".into(),
+                on_confirm: Box::new(EguiAction::Exit),
+            },
+        ),
     ];
 
     let total_h = entries.len() as f32 * (btn_h + spacing);
@@ -177,7 +189,7 @@ fn build_nav_panel(
         ret_color,
     );
     if return_resp.clicked() {
-        action = EguiAction::GoBack;
+        action = EguiAction::ReturnToGame;
     }
 
     action

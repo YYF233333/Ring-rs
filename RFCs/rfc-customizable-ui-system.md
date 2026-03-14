@@ -590,21 +590,20 @@ ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAss
 
 已完成的架构为以下后续工作奠定基础：
 
-| 项目 | 说明 | 优先级 |
-|------|------|--------|
-| 季节切换逻辑 | `title.rs` 根据 `persistent_store.complete_summer` 选择 summer/winter 背景 | 高 |
-| 确认弹窗触发整合 | Exit/ReturnToTitle/SaveToSlot(非空) 触发 ShowConfirm 而非直接执行 | 高 |
-| `game_menu_frame` 采用 | save_load/settings/history 从独立 CentralPanel 切换到 game_menu_frame 包裹 | 中 |
-| 存档删除按钮 | save_load 网格中每个非空槽位添加 DeleteSlot 按钮 | 中 |
-| 分页导航 | save_load 底部分页按钮栏 (< 1-9 >) | 中 |
-| 冬篇入口 | 标题画面仅 `complete_summer` 后显示冬篇按钮 | 中 |
-| 存档截图 | 保存时截取当前画面缩略图填入 slot（需 GPU 帧回读） | 低 |
-| `skin.rs` 清理 | 删除已废弃的 `UiSkinConfig`/`load_skin`，移除 `UiContext.skin` 字段 | 低 |
-| Theme 兼容字段清理 | `Theme` 中的旧兼容字段确认无引用后删除 | 低 |
-| notify.png 背景 | Toast 使用 `notify.png` NinePatch 背景替代纯色 | 低 |
-| 自定义滑块样式 | 使用 `slider/` 素材替代 egui 原生滑块 | 低 |
-| NVL 模式 UI | 另开 RFC | -- |
-| 运行时主题切换 | 另开 RFC | -- |
+| 项目 | 说明 | 优先级 | 状态 |
+|------|------|--------|------|
+| 季节切换逻辑 | `title.rs` 根据 `persistent_store.complete_summer` 选择 summer/winter 背景 | 高 | 待做 |
+| ~~确认弹窗触发整合~~ | Exit/ReturnToTitle/SaveToSlot(非空)/DeleteSlot 触发 ShowConfirm | 高 | ✓ 已完成 |
+| ~~`game_menu_frame` 采用~~ | save_load/settings/history 使用 game_menu_frame 包裹 | 中 | ✓ 已完成 |
+| ~~存档删除按钮~~ | save_load 网格中每个非空槽位添加 DeleteSlot 按钮 | 中 | ✓ 已完成 |
+| 分页导航 | save_load 底部分页按钮栏 (< 1-9 >) | 中 | 待做 |
+| 冬篇入口 | 标题画面仅 `complete_summer` 后显示冬篇按钮 | 中 | 待做 |
+| 存档截图 | 保存时截取当前画面缩略图填入 slot（需 GPU 帧回读） | 低 | 待做 |
+| ~~`skin.rs` 清理~~ | 删除 `skin.rs`、`theme.rs`、`theme_loader.rs`、`helpers.rs`，移除 `UiContext` 中的 `skin`/`theme` 字段 | 低 | ✓ 已完成 |
+| ~~Theme 兼容字段清理~~ | `Theme` 整体移除（颜色/尺寸全由 `UiLayoutConfig` 管理） | 低 | ✓ 已完成 |
+| notify.png 背景 | Toast 使用 `notify.png` NinePatch 背景替代纯色 | 低 | 待做 |
+| 自定义滑块样式 | 使用 `slider/` 素材替代 egui 原生滑块 | 低 | 待做 |
+| NVL 模式 UI | 另开 RFC | -- | |
 
 ---
 
@@ -646,20 +645,20 @@ ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAss
 | `UiAssetCache::load` 通过 `ResourceManager` | 通过 `ResourceManager::source()` 获取底层 `ResourceSource` | `ResourceManager::read_bytes` 返回 `GpuTexture`，GUI 需要原始字节做 image 解码 |
 | 选项按钮在 Phase 4 改造 | 随 Phase 2 对话框一并改造 | 选项是 `ingame.rs` 的一部分，拆分不自然 |
 | `ingame_menu.rs` 使用 `game_menu_frame` | 保持独立半透明覆盖层 + 居中按钮 | 游戏暂停菜单和游戏菜单（设置/存档等）的交互范式不同；暂停菜单不需要左导航 |
-| `game_menu_frame` 被 save_load/settings/history 采用 | 已抽取但尚未被各子页面采用 | 作为后续工作，各子页面目前独立渲染也可用 |
+| `game_menu_frame` 被 save_load/settings/history 采用 | ✓ 后续收尾阶段已采用 | 三个子页面均通过 `build_game_menu_frame` 包裹，共享左导航 |
 | 分页导航 (< A Q 1-9 >) | 未实现 | 基本网格布局已可用，分页作为后续增强 |
 | 存档缩略图 | 占位区域已预留，灰色背景填充 | 截图功能需 GPU 帧回读，另行实现 |
 | 自定义滑块样式（`slider/` 素材） | 使用 egui 原生滑块 + 数据驱动尺寸 | 自定义滑块需较多 egui Painter 工作，优先保证功能完整 |
-| `skin.rs` 废弃删除 | 未删除 | 仅清理依赖方 `helpers.rs`，skin.rs 本身作为低优先级后续清理 |
+| `skin.rs` 废弃删除 | ✓ 后续收尾阶段已删除 | `skin.rs`、`theme.rs`、`theme_loader.rs`、`helpers.rs` 均已移除，`UiConfig` 配置段同步删除 |
 | UI 定制文档 | 未撰写 | 系统已支持 JSON override，文档作为后续工作 |
 
 ### 7.4 已知限制
 
 1. **季节切换未接入**：标题/菜单页面固定使用夏篇背景，未读取 persistent store 判断切换
-2. **确认弹窗未触发**：`ShowConfirm` 变体已定义并处理，但尚无业务逻辑发出该 action
+2. ~~**确认弹窗未触发**~~ → ✓ 后续收尾已接入：退出/返回标题/覆盖存档/删除存档均经 `ShowConfirm` 确认
 3. **快捷菜单"回退"缺失**：runtime 暂不支持 rollback，该按钮未添加
 4. **字体未加载 NotoSansSC**：仍使用 egui 默认字体，CJK 字符依赖 egui 内置 fallback
-5. **3 个编译 warning**：`DeleteSlot`/`ShowConfirm` 变体未构造、`game_menu` 模块未被调用——均为预期（公开 API 等待后续采用）
+5. ~~**3 个编译 warning**~~ → ✓ 后续收尾已消除：`DeleteSlot` 已有 UI 触发、`ShowConfirm` 已接入、`game_menu_frame` 已被采用
 
 ## 8. 验收标准
 
@@ -669,9 +668,9 @@ ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAss
 | 2 | 标题画面呈现 ref-project 的季节背景 + 导航布局 | ◐ | 夏篇背景 ✓，季节切换待接入 persistent store |
 | 3 | 对话框使用 `textbox.png` / `namebox.png`，文本位置与 ref-project 一致 | ✓ | NinePatch 渲染 |
 | 4 | 快捷菜单可用且位于对话框区域 | ✓ | 7 个功能按钮 |
-| 5 | 游戏菜单各子页面视觉风格统一且接近 ref-project | ◐ | 各页面已数据驱动，统一框架待采用 |
+| 5 | 游戏菜单各子页面视觉风格统一且接近 ref-project | ✓ | 各页面通过 `game_menu_frame` 统一包裹，共享左导航 + 右内容区布局 |
 | 6 | 选项按钮使用图片背景且居中显示 | ✓ | NinePatch choice 背景 |
-| 7 | 确认弹窗功能完整（退出/覆盖存档/返回标题） | ◐ | 组件已实现，触发逻辑待接入 |
+| 7 | 确认弹窗功能完整（退出/覆盖存档/返回标题） | ✓ | 退出/返回标题/覆盖存档/删除存档均经 `ShowConfirm` 确认 |
 | 8 | 无 `layout.json` 时 fallback 到内置默认值 | ✓ | `Default` 手写实现 |
 | 9 | 窗口缩放时 UI 元素保持正确比例 | ✓ | `ScaleContext` 统一缩放 |
 

@@ -11,24 +11,25 @@
 - 子模块与入口函数：
   - `title::build_title_ui` -- 主标题界面（全屏背景 + 左侧中文导航）
   - `ingame::build_ingame_ui` -- 游戏中对话框（图片背景 + 名字框 + 快捷菜单 + 选项）
-  - `ingame_menu::build_ingame_menu_ui` -- 游戏内暂停菜单（半透明覆盖 + 居中按钮）
-  - `settings::build_settings_ui` -- 设置界面（音量/文字速度 + 中文标签）
-  - `save_load::build_save_load_ui` -- 存档/读档界面（网格布局 + 缩略图占位）
-  - `history::build_history_ui` -- 对话历史回看（双列布局：角色名 + 对话文本）
+  - `ingame_menu::build_ingame_menu_ui` -- 游戏内暂停菜单（半透明覆盖 + 居中按钮，退出/返回标题经确认弹窗）
+  - `game_menu::build_game_menu_frame` -- 游戏菜单通用框架（左侧导航 + 右侧内容），Settings/SaveLoad/History 共用
+  - `settings::build_settings_content` -- 设置内容区（音量/文字速度滑块 + 中文标签）
+  - `save_load::build_save_load_content` -- 存档/读档内容区（Tab 切换 + 网格 + 删除按钮 + 覆盖确认）
+  - `history::build_history_content` -- 对话历史内容区（双列布局：角色名 + 对话文本）
   - `confirm::build_confirm_overlay` -- 确认弹窗（模态覆盖 + NinePatch 框架）
-  - `game_menu::build_game_menu_frame` -- 游戏菜单通用框架（左侧导航 + 右侧内容）
   - `skip_indicator::build_skip_indicator` -- 快进指示器（左上角动画提示）
   - `toast::build_toast_overlay` -- Toast 通知浮层
-  - `helpers` -- 已废弃（功能迁移到 UiLayoutConfig 驱动的各页面）
 
 ## KeyFlow
 
-1. `host_app` 根据当前 `AppMode` 调用对应 `build_*_ui`，传入 `layout` + `assets` + `scale`
-2. 各函数通过 `ScaleContext` 将基准 1920×1080 坐标缩放到实际窗口尺寸
-3. 使用 `UiAssetCache` 获取 GUI 素材纹理，通过 `NinePatch` 渲染可拉伸元素
-4. 返回 `EguiAction`，`host_app` 按需拦截（如 `ShowConfirm`）或转发到 `handle_egui_action`
-5. Skip 指示器在 `InGame` + `Skip` 模式下自动显示
-6. 确认弹窗在所有 UI 之上渲染，阻塞其他交互
+1. `host_app` 根据当前 `AppMode` 调用对应页面构建函数
+2. Settings/SaveLoad/History 通过 `build_game_menu_frame` 包裹，共享左侧导航面板
+3. 各内容函数通过 `ScaleContext` 将基准 1920×1080 坐标缩放到实际窗口尺寸
+4. 使用 `UiAssetCache` 获取 GUI 素材纹理，通过 `NinePatch` 渲染可拉伸元素
+5. 返回 `EguiAction`，`host_app` 按需拦截（如 `ShowConfirm`）或转发到 `handle_egui_action`
+6. 退出/返回标题/覆盖存档/删除存档操作经 `ShowConfirm` 确认弹窗拦截
+7. Skip 指示器在 `InGame` + `Skip` 模式下自动显示
+8. 确认弹窗在所有 UI 之上渲染，阻塞其他交互
 
 ## Dependencies
 

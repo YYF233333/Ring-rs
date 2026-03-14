@@ -36,11 +36,8 @@ use self::state::HostState;
 use crate::extensions::ExtensionRegistry;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
-use crate::resources::{LogicalPath, ResourceManager};
-use crate::ui::{
-    Theme, ToastManager, UiAssetCache, UiContext, UiLayoutConfig, load_skin_from_str,
-    load_theme_from_str,
-};
+use crate::resources::ResourceManager;
+use crate::ui::{ToastManager, UiAssetCache, UiContext, UiLayoutConfig};
 use crate::video::VideoPlayer;
 use crate::{AppConfig, AudioManager, CommandExecutor, InputManager};
 use std::collections::HashMap;
@@ -166,24 +163,6 @@ impl AppState {
         let scripts = init::scan_script_list(&config, &resource_manager);
         let (width, height) = init::window_size(&config);
         let user_settings = init::load_user_settings(USER_SETTINGS_PATH);
-        let theme = if config.ui.theme_path.trim().is_empty() {
-            Theme::dark()
-        } else {
-            let theme_lp = LogicalPath::new(&config.ui.theme_path);
-            match resource_manager.read_text_optional(&theme_lp) {
-                Some(content) => load_theme_from_str(Theme::dark(), &content),
-                None => Theme::dark(),
-            }
-        };
-        let skin = if config.ui.skin_path.trim().is_empty() {
-            None
-        } else {
-            let skin_lp = LogicalPath::new(&config.ui.skin_path);
-            resource_manager
-                .read_text_optional(&skin_lp)
-                .and_then(|content| load_skin_from_str(&content))
-        };
-
         let layout = UiLayoutConfig::load(&resource_manager);
 
         // Dev Mode: 运行脚本检查
@@ -207,11 +186,7 @@ impl AppState {
             },
             ui: UiSystems {
                 navigation: NavigationStack::new(),
-                ui_context: {
-                    let mut ui_ctx = UiContext::new(theme, width, height, &layout);
-                    ui_ctx.skin = skin;
-                    ui_ctx
-                },
+                ui_context: UiContext::new(width, height, &layout),
                 toast_manager: ToastManager::new(),
                 layout,
                 asset_cache: None,

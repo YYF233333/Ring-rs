@@ -58,7 +58,14 @@ pub fn build_title_ui(
                 ("继续游戏", EguiAction::ContinueGame, has_continue),
                 ("读取游戏", EguiAction::OpenLoad, true),
                 ("设置", EguiAction::NavigateTo(AppMode::Settings), true),
-                ("退出", EguiAction::Exit, true),
+                (
+                    "退出",
+                    EguiAction::ShowConfirm {
+                        message: "确定退出游戏？".into(),
+                        on_confirm: Box::new(EguiAction::Exit),
+                    },
+                    true,
+                ),
             ];
 
             let total_h =

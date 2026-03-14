@@ -7,13 +7,14 @@
 ## PublicSurface
 
 - 文件：`host/src/egui_actions.rs`
-- `EguiAction` 枚举：`None`、`StartGame`、`ContinueGame`、`NavigateTo`、`GoBack`、`ReturnToTitle`、`Exit`、`ApplySettings`、`OpenSave`、`OpenLoad`、`SaveToSlot`、`LoadFromSlot`、`DeleteSlot`
+- `EguiAction` 枚举：`None`、`StartGame`、`ContinueGame`、`NavigateTo`、`GoBack`、`ReturnToTitle`、`Exit`、`ApplySettings`、`OpenSave`、`OpenLoad`、`SaveToSlot`、`LoadFromSlot`、`DeleteSlot`、`QuickSave`、`QuickLoad`、`ToggleSkip`、`ToggleAuto`、`ShowConfirm { message, on_confirm }`
 - `handle_egui_action(app_state, action, save_load_tab, event_loop)` 消费 `EguiAction` 并执行对应状态变更
 
 ## KeyFlow
 
 1. `egui_screens` 中的 UI 构建函数返回 `EguiAction`
-2. `host_app` 在帧末尾调用 `handle_egui_action` 将动作翻译为 `AppState` 操作（导航、存档、设置保存等）
+2. `host_app` 拦截 `ShowConfirm` 变体，弹出确认对话框；用户确认后转发内嵌的 `on_confirm` 动作
+3. 其余动作由 `handle_egui_action` 翻译为 `AppState` 操作（导航、存档、设置保存等）
 
 ## Dependencies
 
@@ -32,7 +33,7 @@
 
 ## LastVerified
 
-2026-03-11
+2026-03-15
 
 ## Owner
 

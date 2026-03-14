@@ -13,7 +13,11 @@ pub enum EguiAction {
     StartGame,
     ContinueGame,
     NavigateTo(AppMode),
+    /// 替换当前模式（不压栈），用于同级页面间切换
+    ReplaceTo(AppMode),
     GoBack,
+    /// 清空导航栈，直接回到 InGame
+    ReturnToGame,
     ReturnToTitle,
     Exit,
     ApplySettings(UserSettings),
@@ -50,8 +54,14 @@ pub fn handle_egui_action(
         EguiAction::NavigateTo(mode) => {
             app_state.ui.navigation.navigate_to(mode);
         }
+        EguiAction::ReplaceTo(mode) => {
+            app_state.ui.navigation.replace_current(mode);
+        }
         EguiAction::GoBack => {
             app_state.ui.navigation.go_back();
+        }
+        EguiAction::ReturnToGame => {
+            app_state.ui.navigation.switch_to(AppMode::InGame);
         }
         EguiAction::ReturnToTitle => {
             app::return_to_title_from_game(app_state, true);
@@ -72,15 +82,30 @@ pub fn handle_egui_action(
             } else {
                 app_state.ui.toast_manager.success("Settings saved");
             }
-            app_state.ui.navigation.go_back();
         }
         EguiAction::OpenSave => {
             *save_load_tab = SaveLoadTab::Save;
-            app_state.ui.navigation.navigate_to(AppMode::SaveLoad);
+            let cur = app_state.ui.navigation.current();
+            if matches!(
+                cur,
+                AppMode::SaveLoad | AppMode::Settings | AppMode::History
+            ) {
+                app_state.ui.navigation.replace_current(AppMode::SaveLoad);
+            } else {
+                app_state.ui.navigation.navigate_to(AppMode::SaveLoad);
+            }
         }
         EguiAction::OpenLoad => {
             *save_load_tab = SaveLoadTab::Load;
-            app_state.ui.navigation.navigate_to(AppMode::SaveLoad);
+            let cur = app_state.ui.navigation.current();
+            if matches!(
+                cur,
+                AppMode::SaveLoad | AppMode::Settings | AppMode::History
+            ) {
+                app_state.ui.navigation.replace_current(AppMode::SaveLoad);
+            } else {
+                app_state.ui.navigation.navigate_to(AppMode::SaveLoad);
+            }
         }
         EguiAction::SaveToSlot(slot) => {
             app_state.current_save_slot = slot;

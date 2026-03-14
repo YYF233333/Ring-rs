@@ -1,44 +1,32 @@
 //! # UI 组件模块
 //!
-//! 提供主题、布局配置、素材缓存、NinePatch、Toast 和 UI 上下文等基础设施。
+//! 提供布局配置、素材缓存、NinePatch、Toast 和 UI 上下文等基础设施。
 
 pub mod asset_cache;
 pub mod layout;
 pub mod nine_patch;
-pub mod skin;
-pub mod theme;
-pub mod theme_loader;
 pub mod toast;
 
 pub use asset_cache::UiAssetCache;
 pub use layout::{ScaleContext, UiLayoutConfig};
-pub use skin::{UiSkinConfig, load_skin, load_skin_from_str};
-pub use theme::Theme;
-pub use theme_loader::{load_theme_from_str, load_theme_with_override};
 pub use toast::{Toast, ToastManager, ToastType};
 
 /// UI 上下文，存储 UI 渲染所需的共享状态
 pub struct UiContext {
-    /// 当前主题
-    pub theme: Theme,
     /// 屏幕宽度
     pub screen_width: f32,
     /// 屏幕高度
     pub screen_height: f32,
-    /// UI 皮肤配置（可选，即将废弃）
-    pub skin: Option<UiSkinConfig>,
     /// 分辨率缩放上下文
     pub scale: ScaleContext,
 }
 
 impl UiContext {
     /// 创建 UI 上下文
-    pub fn new(theme: Theme, width: f32, height: f32, layout: &UiLayoutConfig) -> Self {
+    pub fn new(width: f32, height: f32, layout: &UiLayoutConfig) -> Self {
         Self {
-            theme,
             screen_width: width,
             screen_height: height,
-            skin: None,
             scale: ScaleContext::new(layout.base_width, layout.base_height, width, height),
         }
     }

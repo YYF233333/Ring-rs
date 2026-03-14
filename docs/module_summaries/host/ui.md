@@ -3,7 +3,7 @@
 ## Purpose
 
 `ui` 提供 UI 基础设施：数据驱动的布局配置（`UiLayoutConfig`）、分辨率缩放（`ScaleContext`）、
-素材缓存（`UiAssetCache`）、NinePatch 九宫格渲染、主题系统、Toast 通知和 UI 上下文。
+素材缓存（`UiAssetCache`）、NinePatch 九宫格渲染、Toast 通知和 UI 上下文。
 界面渲染使用 egui（在 `main.rs` / `egui_screens/` 中构建）。
 
 ## PublicSurface
@@ -14,10 +14,9 @@
   - `ScaleContext`：基准分辨率 → 实际窗口尺寸的缩放映射
   - `UiAssetCache`：将 GUI 图片素材加载为 `egui::TextureHandle` 缓存
   - `NinePatch`/`Borders`：九宫格渲染器，用于可拉伸 UI 元素
-  - `UiContext`：存储主题、屏幕尺寸、缩放上下文
-  - `Theme`（token 分层 + 自定义 `Color` 类型）
+  - `UiContext`：存储屏幕尺寸、缩放上下文
   - `ToastManager`
-- 子模块：`layout`、`asset_cache`、`nine_patch`、`theme`、`theme_loader`、`toast`、`skin`（即将废弃）
+- 子模块：`layout`、`asset_cache`、`nine_patch`、`toast`
 
 ## KeyFlow
 
@@ -39,7 +38,7 @@
 - `UiLayoutConfig` 中的像素值均基于 1920×1080 基准分辨率，渲染时通过 `ScaleContext` 缩放。
 - `UiAssetCache` 必须在 `egui::Context` 可用后创建（需要 `ctx.load_texture`）。
 - `TextureHandle` 是 `Arc` 引用计数，`UiAssetCache` 持有时纹理不被释放。
-- Theme 的 `Color` 类型为 `ui::theme::Color`（RGBA f32），与 egui `Color32` 独立。
+- 旧的 `Theme`/`skin` 系统已移除，颜色/尺寸全部由 `UiLayoutConfig` 统一管理。
 
 ## WhenToReadSource
 

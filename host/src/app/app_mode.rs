@@ -76,6 +76,11 @@ impl NavigationStack {
         self.current = mode;
     }
 
+    /// 替换当前模式（不压栈也不弹栈），用于同级页面间切换
+    pub fn replace_current(&mut self, mode: AppMode) {
+        self.current = mode;
+    }
+
     /// 返回上一个模式
     pub fn go_back(&mut self) -> Option<AppMode> {
         if let Some(prev) = self.stack.pop() {

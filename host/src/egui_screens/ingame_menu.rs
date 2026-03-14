@@ -32,8 +32,20 @@ pub fn build_ingame_menu_ui(
                 ("读取", EguiAction::OpenLoad),
                 ("设置", EguiAction::NavigateTo(AppMode::Settings)),
                 ("历史", EguiAction::NavigateTo(AppMode::History)),
-                ("返回标题", EguiAction::ReturnToTitle),
-                ("退出", EguiAction::Exit),
+                (
+                    "返回标题",
+                    EguiAction::ShowConfirm {
+                        message: "确定返回标题画面？".into(),
+                        on_confirm: Box::new(EguiAction::ReturnToTitle),
+                    },
+                ),
+                (
+                    "退出",
+                    EguiAction::ShowConfirm {
+                        message: "确定退出游戏？".into(),
+                        on_confirm: Box::new(EguiAction::Exit),
+                    },
+                ),
             ];
 
             let total_h = entries.len() as f32 * (btn_h + spacing);

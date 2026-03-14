@@ -204,6 +204,7 @@ impl ApplicationHandler for HostApp {
                 let scale = &app_state.ui.ui_context.scale;
 
                 let mut ui_action = EguiAction::None;
+                let mut confirm_resolved = false;
                 backend.render_frame(
                     |ctx| {
                         ui_action = if app_state.video_player.is_playing() {
@@ -232,28 +233,58 @@ impl ApplicationHandler for HostApp {
                                         scale,
                                     )
                                 }
-                                AppMode::Settings => egui_screens::settings::build_settings_ui(
+                                AppMode::Settings => {
+                                    egui_screens::game_menu::build_game_menu_frame(
+                                        ctx,
+                                        "设置",
+                                        layout,
+                                        asset_cache,
+                                        scale,
+                                        |ui| {
+                                            egui_screens::settings::build_settings_content(
+                                                ui,
+                                                settings_draft,
+                                                layout,
+                                                scale,
+                                            )
+                                        },
+                                    )
+                                }
+                                AppMode::SaveLoad => {
+                                    egui_screens::game_menu::build_game_menu_frame(
+                                        ctx,
+                                        if sl_tab == SaveLoadTab::Save {
+                                            "保存"
+                                        } else {
+                                            "读取"
+                                        },
+                                        layout,
+                                        asset_cache,
+                                        scale,
+                                        |ui| {
+                                            egui_screens::save_load::build_save_load_content(
+                                                ui,
+                                                sl_tab,
+                                                &save_infos,
+                                                can_save,
+                                                layout,
+                                                asset_cache,
+                                                scale,
+                                            )
+                                        },
+                                    )
+                                }
+                                AppMode::History => egui_screens::game_menu::build_game_menu_frame(
                                     ctx,
-                                    settings_draft,
+                                    "历史",
                                     layout,
                                     asset_cache,
                                     scale,
-                                ),
-                                AppMode::SaveLoad => egui_screens::save_load::build_save_load_ui(
-                                    ctx,
-                                    sl_tab,
-                                    &save_infos,
-                                    can_save,
-                                    layout,
-                                    asset_cache,
-                                    scale,
-                                ),
-                                AppMode::History => egui_screens::history::build_history_ui(
-                                    ctx,
-                                    app_state,
-                                    layout,
-                                    asset_cache,
-                                    scale,
+                                    |ui| {
+                                        egui_screens::history::build_history_content(
+                                            ui, app_state, layout, scale,
+                                        )
+                                    },
                                 ),
                             }
                         };
@@ -281,6 +312,7 @@ impl ApplicationHandler for HostApp {
                                 )
                             {
                                 ui_action = confirm_action;
+                                confirm_resolved = true;
                             }
                         }
 
@@ -289,13 +321,8 @@ impl ApplicationHandler for HostApp {
                     &sprite_cmds,
                 );
 
-                // If confirm dialog was resolved, clear it
-                if pending_confirm.is_some() {
-                    if !matches!(ui_action, EguiAction::None) {
-                        let resolved_action = ui_action.clone();
-                        *pending_confirm = None;
-                        ui_action = resolved_action;
-                    }
+                if confirm_resolved {
+                    *pending_confirm = None;
                 }
 
                 match ui_action {
