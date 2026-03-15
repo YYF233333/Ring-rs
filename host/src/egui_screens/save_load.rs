@@ -3,27 +3,26 @@
 use std::collections::HashMap;
 
 use host::save_manager::SaveInfo;
-use host::ui::asset_cache::UiAssetCache;
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use host::ui::UiRenderContext;
 use host::ui::nine_patch::{Borders, NinePatch};
 use host::{SaveLoadPage, SaveLoadTab};
 
 use crate::egui_actions::EguiAction;
 
 /// 存读档页面内容区（由 `game_menu_frame` 包裹）
-#[allow(clippy::too_many_arguments)] // UI 构建入口，参数均为调用方已有引用，抽 struct 收益有限
 pub fn build_save_load_content(
     ui: &mut egui::Ui,
     tab: SaveLoadTab,
     page: &mut SaveLoadPage,
     save_infos: &[Option<SaveInfo>],
     can_save: bool,
-    layout: &UiLayoutConfig,
-    assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
     thumbnails: &HashMap<u32, egui::TextureHandle>,
 ) -> EguiAction {
     let mut action = EguiAction::None;
+    let layout = ui_ctx.layout;
+    let assets = ui_ctx.assets;
+    let scale = ui_ctx.scale;
 
     let label_size = scale.uniform(layout.fonts.label_text_size);
     let accent_color = layout.colors.accent.to_egui();

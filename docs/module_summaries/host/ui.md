@@ -3,7 +3,8 @@
 ## Purpose
 
 `ui` 提供 UI 基础设施：数据驱动的布局配置（`UiLayoutConfig`）、分辨率缩放（`ScaleContext`）、
-素材缓存（`UiAssetCache`）、NinePatch 九宫格渲染、Toast 通知和 UI 上下文。
+素材缓存（`UiAssetCache`）、NinePatch 九宫格渲染、Toast 通知、UI 上下文、
+声明式界面行为定义（`ScreenDefinitions`）和统一渲染上下文（`UiRenderContext`）。
 界面渲染使用 egui（在 `main.rs` / `egui_screens/` 中构建）。
 
 ## PublicSurface
@@ -15,16 +16,20 @@
   - `UiAssetCache`：将 GUI 图片素材加载为 `egui::TextureHandle` 缓存
   - `NinePatch`/`Borders`：九宫格渲染器，用于可拉伸 UI 元素
   - `UiContext`：存储屏幕尺寸、缩放上下文
+  - `ScreenDefinitions`：声明式界面行为定义（按钮列表、动作映射、可见性条件、背景切换），从 `ui/screens.json` 加载
+  - `UiRenderContext`：统一渲染上下文，合并 `(layout, assets, scale, screen_defs, conditions)` 为一体
+  - `ConditionContext`：条件求值上下文（`has_continue` + `&PersistentStore`）
   - `ToastManager`
-- 子模块：`layout`、`asset_cache`、`nine_patch`、`toast`
+- 子模块：`layout`、`asset_cache`、`nine_patch`、`toast`、`screen_defs`、`render_context`
 
 ## KeyFlow
 
-1. 启动时 `UiLayoutConfig::load()` 尝试从 `ui/layout.json` 加载布局，失败回退默认。
+1. 启动时 `UiLayoutConfig::load()` 从 `ui/layout.json` 加载布局，`ScreenDefinitions::load()` 从 `ui/screens.json` 加载行为定义，缺失时回退默认。
 2. `UiAssetCache::load()` 在 WgpuBackend 初始化后、首帧渲染前加载所有 GUI 素材为 `egui::TextureHandle`。
 3. `ScaleContext` 由 `UiContext` 持有，随 winit resize 事件更新。
-4. 各 egui 页面接收 `&UiLayoutConfig` + `Option<&UiAssetCache>` + `&ScaleContext` 参数，实现数据驱动渲染。
-5. `UiAssetPaths` 定义所有 GUI 素材的逻辑路径，支持 JSON 覆盖。
+4. `host_app.rs` 每帧构造 `UiRenderContext`（含预求值的 `ConditionContext`），传给所有 `build_*` 函数。
+5. `build_*` 函数从 `UiRenderContext` 读取布局、素材、条件和界面定义，不直接访问 `AppState`。
+6. `UiAssetPaths` 定义所有 GUI 素材的逻辑路径，支持 JSON 覆盖。
 
 ## Dependencies
 
@@ -51,6 +56,8 @@
 - [host 总览](../host.md)
 - [backend 摘要](backend.md)
 - RFC-010: 可定制 UI 系统
+- RFC-012: UI 行为定制系统
+- [UI 行为定制指南](../../screens_customization.md)
 
 ## LastVerified
 

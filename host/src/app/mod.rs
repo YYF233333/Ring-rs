@@ -38,7 +38,7 @@ use crate::extensions::ExtensionRegistry;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
 use crate::resources::ResourceManager;
-use crate::ui::{ToastManager, UiAssetCache, UiContext, UiLayoutConfig};
+use crate::ui::{ScreenDefinitions, ToastManager, UiAssetCache, UiContext, UiLayoutConfig};
 use crate::video::VideoPlayer;
 use crate::{AppConfig, AudioManager, CommandExecutor, InputManager};
 use std::collections::HashMap;
@@ -87,6 +87,8 @@ pub struct UiSystems {
     pub layout: UiLayoutConfig,
     /// UI 素材缓存（延迟初始化，需 egui Context 可用后加载）
     pub asset_cache: Option<UiAssetCache>,
+    /// 界面行为定义（按钮列表、动作映射、条件等）
+    pub screen_defs: ScreenDefinitions,
 }
 
 /// 游戏会话状态：运行时脚本执行与推进控制
@@ -175,6 +177,7 @@ impl AppState {
         let (width, height) = init::window_size(&config);
         let user_settings = init::load_user_settings(USER_SETTINGS_PATH);
         let layout = UiLayoutConfig::load(&resource_manager);
+        let screen_defs = ScreenDefinitions::load(&resource_manager);
 
         // Dev Mode: 运行脚本检查
         init::run_script_check(&config, &scripts, &resource_manager);
@@ -200,6 +203,7 @@ impl AppState {
                 toast_manager: ToastManager::new(),
                 layout,
                 asset_cache: None,
+                screen_defs,
             },
             session: GameSession {
                 vn_runtime: None,

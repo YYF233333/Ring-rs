@@ -2,8 +2,7 @@
 //!
 //! 模态覆盖层，在需要用户确认的操作前显示（退出/覆盖存档/返回标题等）。
 
-use host::ui::asset_cache::UiAssetCache;
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use host::ui::UiRenderContext;
 use host::ui::nine_patch::{Borders, NinePatch};
 
 use crate::egui_actions::EguiAction;
@@ -22,11 +21,11 @@ pub struct ConfirmDialog {
 pub fn build_confirm_overlay(
     ctx: &egui::Context,
     dialog: &ConfirmDialog,
-    layout: &UiLayoutConfig,
-    assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
 ) -> Option<EguiAction> {
     let mut result = None;
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
 
     // Semi-transparent overlay
     egui::Area::new(egui::Id::new("confirm_overlay"))
@@ -36,8 +35,7 @@ pub fn build_confirm_overlay(
             let screen_rect = ctx.screen_rect();
             let (_, resp) = ui.allocate_exact_size(screen_rect.size(), egui::Sense::click());
 
-            // Draw semi-transparent background
-            if let Some(assets) = assets {
+            if let Some(assets) = ui_ctx.assets {
                 if let Some(tex) = assets.get("confirm_overlay") {
                     ui.painter().image(
                         tex.id(),
@@ -61,7 +59,7 @@ pub fn build_confirm_overlay(
             let frame_rect =
                 egui::Rect::from_center_size(screen_rect.center(), egui::vec2(frame_w, frame_h));
 
-            if let Some(assets) = assets {
+            if let Some(assets) = ui_ctx.assets {
                 if let Some(tex) = assets.get("frame") {
                     let np = NinePatch::new(tex, Borders::from_array(borders));
                     np.paint(ui.painter(), frame_rect, egui::Color32::WHITE);

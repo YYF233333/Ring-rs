@@ -3,11 +3,10 @@
 //! 提供统一的「左侧导航 + 右侧内容」布局，
 //! 供 SaveLoad、Settings、History 等页面复用。
 
-use host::AppMode;
-use host::ui::asset_cache::UiAssetCache;
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use host::ui::UiRenderContext;
+use host::ui::screen_defs::ConditionalAsset;
 
-use crate::egui_actions::EguiAction;
+use crate::egui_actions::{self, EguiAction};
 
 /// 游戏菜单框架的构建入口。
 ///
@@ -16,14 +15,14 @@ use crate::egui_actions::EguiAction;
 pub fn build_game_menu_frame(
     ctx: &egui::Context,
     title: &str,
-    is_winter: bool,
-    layout: &UiLayoutConfig,
-    assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
     content_builder: impl FnOnce(&mut egui::Ui) -> EguiAction,
 ) -> EguiAction {
     let mut action = EguiAction::None;
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
     let nav_width = scale.x(layout.game_menu.nav_width);
+    let game_menu_def = &ui_ctx.screen_defs.game_menu;
 
     egui::CentralPanel::default()
         .frame(
@@ -34,13 +33,11 @@ pub fn build_game_menu_frame(
         .show(ctx, |ui| {
             let screen_rect = ui.max_rect();
 
-            if let Some(assets) = assets {
-                let bg_key = if is_winter {
-                    "main_winter"
-                } else {
-                    "game_menu_bg"
-                };
-                if let Some(tex) = assets.get(bg_key) {
+            if let Some(assets) = ui_ctx.assets {
+                if let Some(bg_key) =
+                    ConditionalAsset::resolve(&game_menu_def.background, &ui_ctx.conditions)
+                    && let Some(tex) = assets.get(bg_key)
+                {
                     ui.painter().image(
                         tex.id(),
                         screen_rect,
@@ -48,7 +45,9 @@ pub fn build_game_menu_frame(
                         egui::Color32::WHITE,
                     );
                 }
-                if let Some(overlay) = assets.get("game_menu_overlay") {
+                if let Some(overlay_key) = &game_menu_def.overlay
+                    && let Some(overlay) = assets.get(overlay_key)
+                {
                     ui.painter().image(
                         overlay.id(),
                         screen_rect,
@@ -64,7 +63,7 @@ pub fn build_game_menu_frame(
                 egui::vec2(nav_width, screen_rect.height()),
             );
 
-            let nav_action = build_nav_panel(ui, nav_rect, layout, scale);
+            let nav_action = build_nav_panel(ui, nav_rect, ui_ctx);
             if !matches!(nav_action, EguiAction::None) {
                 action = nav_action;
             }
@@ -116,36 +115,27 @@ pub fn build_game_menu_frame(
 fn build_nav_panel(
     ui: &mut egui::Ui,
     nav_rect: egui::Rect,
-    layout: &UiLayoutConfig,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
 ) -> EguiAction {
     let mut action = EguiAction::None;
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
+    let game_menu_def = &ui_ctx.screen_defs.game_menu;
     let text_size = scale.uniform(layout.fonts.interface_text_size);
     let btn_h = text_size + 16.0;
     let spacing = scale.y(layout.game_menu.navigation_spacing);
 
-    let entries: &[(&str, EguiAction)] = &[
-        ("历史", EguiAction::ReplaceTo(AppMode::History)),
-        ("保存", EguiAction::OpenSave),
-        ("读取", EguiAction::OpenLoad),
-        ("设置", EguiAction::ReplaceTo(AppMode::Settings)),
-        (
-            "返回标题",
-            EguiAction::ShowConfirm {
-                message: "确定返回标题画面？".into(),
-                on_confirm: Box::new(EguiAction::ReturnToTitle),
-            },
-        ),
-        (
-            "退出",
-            EguiAction::ShowConfirm {
-                message: "确定退出游戏？".into(),
-                on_confirm: Box::new(EguiAction::Exit),
-            },
-        ),
-    ];
+    let visible_buttons: Vec<_> = game_menu_def
+        .nav_buttons
+        .iter()
+        .filter(|btn| {
+            btn.visible
+                .as_ref()
+                .is_none_or(|cond| cond.evaluate(&ui_ctx.conditions))
+        })
+        .collect();
 
-    let total_h = entries.len() as f32 * (btn_h + spacing);
+    let total_h = visible_buttons.len() as f32 * (btn_h + spacing);
     let start_y = nav_rect.center().y - total_h / 2.0;
     let btn_x = nav_rect.left() + scale.x(layout.title.navigation_xpos);
     let btn_w = nav_rect.width() - scale.x(layout.title.navigation_xpos) - scale.x(20.0);
@@ -154,7 +144,7 @@ fn build_nav_panel(
     let hover_color = layout.colors.hover.to_egui();
 
     let mut y = start_y;
-    for (label, btn_action) in entries {
+    for btn_def in &visible_buttons {
         let btn_rect = egui::Rect::from_min_size(egui::pos2(btn_x, y), egui::vec2(btn_w, btn_h));
         let resp = ui.allocate_rect(btn_rect, egui::Sense::click());
         let is_hover = resp.hovered();
@@ -163,18 +153,19 @@ fn build_nav_panel(
         ui.painter().text(
             egui::pos2(btn_rect.left() + 10.0, btn_rect.center().y),
             egui::Align2::LEFT_CENTER,
-            *label,
+            &btn_def.label,
             egui::FontId::proportional(text_size),
             text_color,
         );
 
         if resp.clicked() {
-            action = btn_action.clone();
+            action = egui_actions::button_def_to_egui(btn_def);
         }
         y += btn_h + spacing;
     }
 
     // Return button at bottom
+    let return_btn = &game_menu_def.return_button;
     let return_rect = egui::Rect::from_min_size(
         egui::pos2(btn_x, nav_rect.bottom() - btn_h - scale.y(40.0)),
         egui::vec2(btn_w, btn_h),
@@ -188,12 +179,12 @@ fn build_nav_panel(
     ui.painter().text(
         egui::pos2(return_rect.left() + 10.0, return_rect.center().y),
         egui::Align2::LEFT_CENTER,
-        "返回",
+        &return_btn.label,
         egui::FontId::proportional(text_size),
         ret_color,
     );
     if return_resp.clicked() {
-        action = EguiAction::ReturnToGame;
+        action = egui_actions::button_def_to_egui(return_btn);
     }
 
     action

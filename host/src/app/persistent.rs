@@ -38,6 +38,14 @@ pub struct PersistentStore {
 }
 
 impl PersistentStore {
+    /// 创建空的持久化变量存储（无磁盘关联，用于测试或默认初始化）
+    pub fn empty() -> Self {
+        Self {
+            saves_dir: PathBuf::new(),
+            variables: HashMap::new(),
+        }
+    }
+
     /// 从存档目录加载持久化变量
     ///
     /// 若文件不存在，返回空 store；若 JSON 解析失败，打印警告并返回空 store。

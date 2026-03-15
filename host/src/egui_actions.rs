@@ -3,6 +3,7 @@
 //! 将 egui UI 层产生的动作与 AppState 的状态变更解耦。
 
 use host::app::{self, AppState, USER_SETTINGS_PATH};
+use host::ui::screen_defs::{ActionDef, ButtonDef};
 use host::{AppMode, SaveLoadTab, UserSettings};
 use winit::event_loop::ActiveEventLoop;
 
@@ -11,8 +12,8 @@ use winit::event_loop::ActiveEventLoop;
 pub enum EguiAction {
     None,
     StartGame,
-    /// 从冬篇标签开始新游戏（跳转到 main.md 的 "Winter" label）
-    StartWinter,
+    /// 从指定标签开始新游戏（泛化的章节入口）
+    StartAtLabel(String),
     ContinueGame,
     NavigateTo(AppMode),
     /// 替换当前模式（不压栈），用于同级页面间切换
@@ -51,10 +52,9 @@ pub fn handle_egui_action(
             let _ = app_state.save_manager.delete_continue();
             app::start_new_game(app_state);
         }
-        EguiAction::StartWinter => {
-            // 同上
+        EguiAction::StartAtLabel(ref label) => {
             let _ = app_state.save_manager.delete_continue();
-            app::start_new_game_at_label(app_state, "Winter");
+            app::start_new_game_at_label(app_state, label);
         }
         EguiAction::ContinueGame => {
             app::load_continue(app_state);
@@ -169,5 +169,42 @@ pub fn handle_egui_action(
         EguiAction::ShowConfirm { .. } => {
             unreachable!("ShowConfirm must be intercepted by the caller before handle_egui_action")
         }
+    }
+}
+
+// ─── ActionDef → EguiAction 转换 ─────────────────────────────────────────────
+
+/// 将声明式 [`ActionDef`] 转换为 [`EguiAction`]
+pub fn action_def_to_egui(action: &ActionDef) -> EguiAction {
+    match action {
+        ActionDef::StartGame => EguiAction::StartGame,
+        ActionDef::ContinueGame => EguiAction::ContinueGame,
+        ActionDef::OpenLoad => EguiAction::OpenLoad,
+        ActionDef::OpenSave => EguiAction::OpenSave,
+        ActionDef::NavigateSettings => EguiAction::NavigateTo(AppMode::Settings),
+        ActionDef::NavigateHistory => EguiAction::NavigateTo(AppMode::History),
+        ActionDef::ReplaceSettings => EguiAction::ReplaceTo(AppMode::Settings),
+        ActionDef::ReplaceHistory => EguiAction::ReplaceTo(AppMode::History),
+        ActionDef::QuickSave => EguiAction::QuickSave,
+        ActionDef::QuickLoad => EguiAction::QuickLoad,
+        ActionDef::ToggleSkip => EguiAction::ToggleSkip,
+        ActionDef::ToggleAuto => EguiAction::ToggleAuto,
+        ActionDef::GoBack => EguiAction::GoBack,
+        ActionDef::ReturnToTitle => EguiAction::ReturnToTitle,
+        ActionDef::ReturnToGame => EguiAction::ReturnToGame,
+        ActionDef::Exit => EguiAction::Exit,
+        ActionDef::StartAtLabel(label) => EguiAction::StartAtLabel(label.clone()),
+    }
+}
+
+/// 将 [`ButtonDef`] 转换为 [`EguiAction`]，自动处理 `confirm` 包装
+pub fn button_def_to_egui(button: &ButtonDef) -> EguiAction {
+    let base = action_def_to_egui(&button.action);
+    match &button.confirm {
+        Some(message) => EguiAction::ShowConfirm {
+            message: message.clone(),
+            on_confirm: Box::new(base),
+        },
+        None => base,
     }
 }

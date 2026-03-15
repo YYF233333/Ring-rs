@@ -7,8 +7,11 @@
 ## PublicSurface
 
 - 文件：`host/src/egui_actions.rs`
-- `EguiAction` 枚举：`None`、`StartGame`、`ContinueGame`、`NavigateTo`、`GoBack`、`ReturnToTitle`、`Exit`、`ApplySettings`、`OpenSave`、`OpenLoad`、`SaveToSlot`、`LoadFromSlot`、`DeleteSlot`、`QuickSave`、`QuickLoad`、`ToggleSkip`、`ToggleAuto`、`ShowConfirm { message, on_confirm }`
+- `EguiAction` 枚举：`None`、`StartGame`、`StartAtLabel(String)`、`ContinueGame`、`NavigateTo`、`ReplaceTo`、`GoBack`、`ReturnToGame`、`ReturnToTitle`、`Exit`、`ApplySettings`、`OpenSave`、`OpenLoad`、`SaveToSlot`、`LoadFromSlot`、`DeleteSlot`、`QuickSave`、`QuickLoad`、`ToggleSkip`、`ToggleAuto`、`ShowConfirm { message, on_confirm }`
 - `handle_egui_action(app_state, action, save_load_tab, event_loop)` 消费 `EguiAction` 并执行对应状态变更
+- `action_def_to_egui(action: &ActionDef) -> EguiAction` 将声明式 `ActionDef` 转换为 `EguiAction`
+- `button_def_to_egui(button: &ButtonDef) -> EguiAction` 转换含 confirm 包装的按钮动作
+- 注：`StartWinter` 已泛化为 `StartAtLabel(String)`（RFC-012）
 
 ## KeyFlow
 

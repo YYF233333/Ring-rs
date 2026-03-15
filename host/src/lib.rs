@@ -59,5 +59,8 @@ pub use save_manager::SaveManager;
 // 阶段 27：子系统容器类型
 pub use app::{CoreSystems, GameSession, UiSystems};
 
-// UI 布局配置 + 素材缓存
-pub use ui::{ScaleContext, UiAssetCache, UiLayoutConfig};
+// UI 布局配置 + 素材缓存 + 行为定义
+pub use ui::{
+    ConditionContext, ScaleContext, ScreenDefinitions, UiAssetCache, UiLayoutConfig,
+    UiRenderContext,
+};

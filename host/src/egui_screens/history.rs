@@ -1,7 +1,6 @@
 //! History 页面 UI
 
-use host::app::AppState;
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use host::ui::UiRenderContext;
 use vn_runtime::HistoryEvent;
 
 use crate::egui_actions::EguiAction;
@@ -9,13 +8,13 @@ use crate::egui_actions::EguiAction;
 /// 历史页面内容区（由 `game_menu_frame` 包裹）
 pub fn build_history_content(
     ui: &mut egui::Ui,
-    app_state: &AppState,
-    layout: &UiLayoutConfig,
-    scale: &ScaleContext,
+    history_events: &[HistoryEvent],
+    ui_ctx: &UiRenderContext<'_>,
 ) -> EguiAction {
-    let events: Vec<&HistoryEvent> = app_state
-        .session
-        .history_events()
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
+
+    let events: Vec<&HistoryEvent> = history_events
         .iter()
         .filter(|e| {
             matches!(

@@ -1,27 +1,25 @@
 //! InGame 页面 UI（对话框 + 快捷菜单 + 选项 + 章节标记 + 标题字卡）
 
 use host::RenderState;
-use host::ui::asset_cache::UiAssetCache;
+use host::ui::UiRenderContext;
 use host::ui::layout::{ScaleContext, UiLayoutConfig};
 use host::ui::nine_patch::{Borders, NinePatch};
 
-use crate::egui_actions::EguiAction;
+use crate::egui_actions::{self, EguiAction};
 
 pub fn build_ingame_ui(
     ctx: &egui::Context,
     render_state: &RenderState,
-    layout: &UiLayoutConfig,
-    assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
 ) -> EguiAction {
     let mut action = EguiAction::None;
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
 
-    // 标题字卡（全屏居中，阻塞式）
     if let Some(ref tc) = render_state.title_card {
         build_title_card(ctx, tc, layout, scale);
     }
 
-    // 章节标记（左上角，非阻塞，带淡入淡出）
     if let Some(ref cm) = render_state.chapter_mark {
         build_chapter_mark(ctx, cm, layout, scale);
     }
@@ -34,7 +32,6 @@ pub fn build_ingame_ui(
             egui::vec2(screen_w, tb_height),
         );
 
-        // 对话框背景+文本：不拦截点击，让鼠标穿透以推进游戏
         egui::Area::new(egui::Id::new("dialogue_area"))
             .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
             .order(egui::Order::Middle)
@@ -44,7 +41,7 @@ pub fn build_ingame_ui(
 
                 let painter = ui.painter();
 
-                if let Some(assets) = assets
+                if let Some(assets) = ui_ctx.assets
                     && let Some(tex) = assets.get("textbox")
                 {
                     painter.image(
@@ -60,7 +57,7 @@ pub fn build_ingame_ui(
                     let name_y = scale.y(layout.dialogue.name_ypos);
                     let name_pos = egui::pos2(name_x, area_rect.top() + name_y);
 
-                    if let Some(assets) = assets
+                    if let Some(assets) = ui_ctx.assets
                         && let Some(tex) = assets.get("namebox")
                     {
                         let borders = Borders::from_array(layout.dialogue.namebox_borders);
@@ -111,15 +108,14 @@ pub fn build_ingame_ui(
                 painter.galley(text_rect.min, galley, egui::Color32::WHITE);
             });
 
-        // 快捷菜单：独立 Area，拦截点击以避免同时推进游戏
-        let qm_action = build_quick_menu(ctx, layout, scale, area_rect);
+        let qm_action = build_quick_menu(ctx, ui_ctx, area_rect);
         if !matches!(qm_action, EguiAction::None) {
             action = qm_action;
         }
     }
 
     if let Some(ref choices) = render_state.choices {
-        let choice_action = build_choices_ui(ctx, choices, layout, assets, scale);
+        let choice_action = build_choices_ui(ctx, choices, ui_ctx);
         if !matches!(choice_action, EguiAction::None) {
             action = choice_action;
         }
@@ -130,24 +126,17 @@ pub fn build_ingame_ui(
 
 fn build_quick_menu(
     ctx: &egui::Context,
-    layout: &UiLayoutConfig,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
     textbox_rect: egui::Rect,
 ) -> EguiAction {
     let mut action = EguiAction::None;
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
     let text_size = scale.uniform(layout.quick_menu.text_size);
     let button_h = text_size + 8.0;
     let y = textbox_rect.bottom() - button_h - scale.y(4.0);
 
-    let buttons: &[(&str, EguiAction)] = &[
-        ("历史", EguiAction::NavigateTo(host::AppMode::History)),
-        ("快进", EguiAction::ToggleSkip),
-        ("自动", EguiAction::ToggleAuto),
-        ("保存", EguiAction::OpenSave),
-        ("快存", EguiAction::QuickSave),
-        ("快读", EguiAction::QuickLoad),
-        ("设置", EguiAction::NavigateTo(host::AppMode::Settings)),
-    ];
+    let buttons = &ui_ctx.screen_defs.quick_menu.buttons;
 
     let total_w: f32 = buttons.len() as f32 * scale.x(90.0);
     let start_x = textbox_rect.center().x - total_w / 2.0;
@@ -161,10 +150,18 @@ fn build_quick_menu(
                 let idle_color = layout.colors.idle.to_egui();
                 let hover_color = layout.colors.hover.to_egui();
 
-                for (label, btn_action) in buttons {
+                for btn_def in buttons {
+                    let visible = btn_def
+                        .visible
+                        .as_ref()
+                        .is_none_or(|cond| cond.evaluate(&ui_ctx.conditions));
+                    if !visible {
+                        continue;
+                    }
+
                     let resp = ui.add(
                         egui::Button::new(
-                            egui::RichText::new(*label)
+                            egui::RichText::new(&btn_def.label)
                                 .size(text_size)
                                 .color(idle_color),
                         )
@@ -174,13 +171,13 @@ fn build_quick_menu(
                         ui.painter().text(
                             resp.rect.center(),
                             egui::Align2::CENTER_CENTER,
-                            *label,
+                            &btn_def.label,
                             egui::FontId::proportional(text_size),
                             hover_color,
                         );
                     }
                     if resp.clicked() {
-                        action = btn_action.clone();
+                        action = egui_actions::button_def_to_egui(btn_def);
                     }
                 }
             });
@@ -192,15 +189,14 @@ fn build_quick_menu(
 fn build_choices_ui(
     ctx: &egui::Context,
     choices: &host::renderer::render_state::ChoicesState,
-    layout: &UiLayoutConfig,
-    assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
 ) -> EguiAction {
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
     let choice_w = scale.x(layout.choice.button_width);
     let spacing = scale.y(layout.choice.spacing);
     let text_size = scale.uniform(layout.fonts.text_size);
 
-    // 选项不拦截点击——选择由 InputManager 的 choice_rects 驱动
     egui::Area::new(egui::Id::new("choices_area"))
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .order(egui::Order::Foreground)
@@ -222,7 +218,7 @@ fn build_choices_ui(
 
                     let painter = ui.painter();
 
-                    if let Some(assets) = assets {
+                    if let Some(assets) = ui_ctx.assets {
                         let key = if is_hover {
                             "choice_hover"
                         } else {
@@ -327,7 +323,6 @@ fn build_chapter_mark(
         .order(egui::Order::Foreground)
         .interactable(false)
         .show(ctx, |ui| {
-            // 先测量文本尺寸来确定背景大小
             let font_id = egui::FontId::proportional(text_size);
             let galley =
                 ctx.fonts(|f| f.layout_no_wrap(cm.title.clone(), font_id, egui::Color32::WHITE));

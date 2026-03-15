@@ -1,15 +1,19 @@
 //! # UI 组件模块
 //!
-//! 提供布局配置、素材缓存、NinePatch、Toast 和 UI 上下文等基础设施。
+//! 提供布局配置、素材缓存、NinePatch、Toast、UI 上下文和界面行为定义等基础设施。
 
 pub mod asset_cache;
 pub mod image_slider;
 pub mod layout;
 pub mod nine_patch;
+pub mod render_context;
+pub mod screen_defs;
 pub mod toast;
 
 pub use asset_cache::UiAssetCache;
 pub use layout::{ScaleContext, UiLayoutConfig};
+pub use render_context::UiRenderContext;
+pub use screen_defs::{ConditionContext, ScreenDefinitions};
 pub use toast::{Toast, ToastManager, ToastType};
 
 /// UI 上下文，存储 UI 渲染所需的共享状态

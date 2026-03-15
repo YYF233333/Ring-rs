@@ -2,16 +2,12 @@
 //!
 //! 在游戏画面左上角显示"正在快进"提示，仅在 Skip 模式下可见。
 
-use host::ui::asset_cache::UiAssetCache;
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use host::ui::UiRenderContext;
 use host::ui::nine_patch::{Borders, NinePatch};
 
-pub fn build_skip_indicator(
-    ctx: &egui::Context,
-    layout: &UiLayoutConfig,
-    assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
-) {
+pub fn build_skip_indicator(ctx: &egui::Context, ui_ctx: &UiRenderContext<'_>) {
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
     let y = scale.y(layout.skip_indicator.ypos);
     let text_size = scale.uniform(layout.fonts.notify_text_size);
     let borders = layout.skip_indicator.frame_borders;
@@ -37,7 +33,7 @@ pub fn build_skip_indicator(
 
             let painter = ui.painter();
 
-            if let Some(assets) = assets {
+            if let Some(assets) = ui_ctx.assets {
                 if let Some(tex) = assets.get("skip") {
                     let np = NinePatch::new(tex, Borders::from_array(borders));
                     np.paint(painter, rect, egui::Color32::WHITE);

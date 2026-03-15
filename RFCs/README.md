@@ -26,3 +26,4 @@
 | RFC-009 | Cutscene 视频播放 | `rfc-cutscene-video-playback.md` | Accepted |
 | RFC-010 | 可定制 UI 系统 | `rfc-customizable-ui-system.md` | Accepted |
 | RFC-011 | UI 系统后续增强 | `rfc-ui-enhancements.md` | Accepted |
+| RFC-012 | UI 行为定制系统 | `Accepted/rfc-ui-behavior-customization.md` | Accepted |

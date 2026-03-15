@@ -1,9 +1,9 @@
 //! Settings 页面 UI
 
 use host::UserSettings;
+use host::ui::UiRenderContext;
 use host::ui::asset_cache::UiAssetCache;
 use host::ui::image_slider::{self, SliderTextures};
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
 
 use crate::egui_actions::EguiAction;
 
@@ -11,13 +11,14 @@ use crate::egui_actions::EguiAction;
 pub fn build_settings_content(
     ui: &mut egui::Ui,
     draft: &mut Option<UserSettings>,
-    layout: &UiLayoutConfig,
-    assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
 ) -> EguiAction {
     let Some(ref mut d) = *draft else {
         return EguiAction::GoBack;
     };
+    let layout = ui_ctx.layout;
+    let assets = ui_ctx.assets;
+    let scale = ui_ctx.scale;
     let mut action = EguiAction::None;
 
     let text_size = scale.uniform(layout.fonts.interface_text_size);

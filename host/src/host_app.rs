@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use host::app::{self, AppState};
 use host::backend::WgpuBackend;
-use host::ui::UiAssetCache;
+use host::ui::{ConditionContext, UiAssetCache, UiRenderContext};
 use host::{AppConfig, AppMode, SaveLoadPage, SaveLoadTab, UserSettings};
 use tracing::info;
 use winit::application::ApplicationHandler;
@@ -227,10 +227,17 @@ impl ApplicationHandler for HostApp {
                 let can_save = app_state.session.vn_runtime.is_some();
                 let sl_tab = *save_load_tab;
 
-                let layout = &app_state.ui.layout;
-                let asset_cache = app_state.ui.asset_cache.as_ref();
-                let scale = &app_state.ui.ui_context.scale;
-                let is_winter = app_state.persistent_store.is_season_complete("summer");
+                let ui_ctx = UiRenderContext {
+                    layout: &app_state.ui.layout,
+                    assets: app_state.ui.asset_cache.as_ref(),
+                    scale: &app_state.ui.ui_context.scale,
+                    screen_defs: &app_state.ui.screen_defs,
+                    conditions: ConditionContext {
+                        has_continue: app_state.save_manager.has_continue(),
+                        persistent: &app_state.persistent_store,
+                    },
+                };
+                let history_events = app_state.session.history_events();
 
                 let mut ui_action = EguiAction::None;
                 let mut confirm_resolved = false;
@@ -240,43 +247,25 @@ impl ApplicationHandler for HostApp {
                             EguiAction::None
                         } else {
                             match current_mode {
-                                AppMode::Title => egui_screens::title::build_title_ui(
-                                    ctx,
-                                    app_state,
-                                    layout,
-                                    asset_cache,
-                                    scale,
-                                ),
+                                AppMode::Title => egui_screens::title::build_title_ui(ctx, &ui_ctx),
                                 AppMode::InGame => egui_screens::ingame::build_ingame_ui(
                                     ctx,
                                     &app_state.core.render_state,
-                                    layout,
-                                    asset_cache,
-                                    scale,
+                                    &ui_ctx,
                                 ),
                                 AppMode::InGameMenu => {
-                                    egui_screens::ingame_menu::build_ingame_menu_ui(
-                                        ctx,
-                                        layout,
-                                        asset_cache,
-                                        scale,
-                                    )
+                                    egui_screens::ingame_menu::build_ingame_menu_ui(ctx, &ui_ctx)
                                 }
                                 AppMode::Settings => {
                                     egui_screens::game_menu::build_game_menu_frame(
                                         ctx,
                                         "设置",
-                                        is_winter,
-                                        layout,
-                                        asset_cache,
-                                        scale,
+                                        &ui_ctx,
                                         |ui| {
                                             egui_screens::settings::build_settings_content(
                                                 ui,
                                                 settings_draft,
-                                                layout,
-                                                asset_cache,
-                                                scale,
+                                                &ui_ctx,
                                             )
                                         },
                                     )
@@ -289,10 +278,7 @@ impl ApplicationHandler for HostApp {
                                         } else {
                                             "读取"
                                         },
-                                        is_winter,
-                                        layout,
-                                        asset_cache,
-                                        scale,
+                                        &ui_ctx,
                                         |ui| {
                                             egui_screens::save_load::build_save_load_content(
                                                 ui,
@@ -300,9 +286,7 @@ impl ApplicationHandler for HostApp {
                                                 save_load_page,
                                                 &save_infos,
                                                 can_save,
-                                                layout,
-                                                asset_cache,
-                                                scale,
+                                                &ui_ctx,
                                                 &slot_thumbnails,
                                             )
                                         },
@@ -311,13 +295,12 @@ impl ApplicationHandler for HostApp {
                                 AppMode::History => egui_screens::game_menu::build_game_menu_frame(
                                     ctx,
                                     "历史",
-                                    is_winter,
-                                    layout,
-                                    asset_cache,
-                                    scale,
+                                    &ui_ctx,
                                     |ui| {
                                         egui_screens::history::build_history_content(
-                                            ui, app_state, layout, scale,
+                                            ui,
+                                            history_events,
+                                            &ui_ctx,
                                         )
                                     },
                                 ),
@@ -327,24 +310,13 @@ impl ApplicationHandler for HostApp {
                         if current_mode == AppMode::InGame
                             && app_state.session.playback_mode == host::PlaybackMode::Skip
                         {
-                            egui_screens::skip_indicator::build_skip_indicator(
-                                ctx,
-                                layout,
-                                asset_cache,
-                                scale,
-                            );
+                            egui_screens::skip_indicator::build_skip_indicator(ctx, &ui_ctx);
                         }
 
                         // Confirm dialog overlay (drawn on top of everything)
                         if let Some(dialog) = pending_confirm.as_ref()
                             && let Some(confirm_action) =
-                                egui_screens::confirm::build_confirm_overlay(
-                                    ctx,
-                                    dialog,
-                                    layout,
-                                    asset_cache,
-                                    scale,
-                                )
+                                egui_screens::confirm::build_confirm_overlay(ctx, dialog, &ui_ctx)
                         {
                             ui_action = confirm_action;
                             confirm_resolved = true;
@@ -353,9 +325,7 @@ impl ApplicationHandler for HostApp {
                         egui_screens::toast::build_toast_overlay(
                             ctx,
                             &app_state.ui.toast_manager,
-                            layout,
-                            asset_cache,
-                            scale,
+                            &ui_ctx,
                         );
                     },
                     &sprite_cmds,

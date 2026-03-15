@@ -1,18 +1,12 @@
 //! InGameMenu 页面 UI
 
-use host::AppMode;
-use host::ui::asset_cache::UiAssetCache;
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use host::ui::UiRenderContext;
 
-use crate::egui_actions::EguiAction;
+use crate::egui_actions::{self, EguiAction};
 
-pub fn build_ingame_menu_ui(
-    ctx: &egui::Context,
-    layout: &UiLayoutConfig,
-    _assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
-) -> EguiAction {
+pub fn build_ingame_menu_ui(ctx: &egui::Context, ui_ctx: &UiRenderContext<'_>) -> EguiAction {
     let mut action = EguiAction::None;
+    let buttons = &ui_ctx.screen_defs.ingame_menu.buttons;
 
     egui::CentralPanel::default()
         .frame(
@@ -22,33 +16,22 @@ pub fn build_ingame_menu_ui(
         )
         .show(ctx, |ui| {
             let screen_rect = ui.max_rect();
+            let layout = ui_ctx.layout;
+            let scale = ui_ctx.scale;
             let text_size = scale.uniform(layout.fonts.interface_text_size);
             let btn_h = text_size + 16.0;
             let spacing = scale.y(10.0);
 
-            let entries: &[(&str, EguiAction)] = &[
-                ("继续", EguiAction::GoBack),
-                ("保存", EguiAction::OpenSave),
-                ("读取", EguiAction::OpenLoad),
-                ("设置", EguiAction::NavigateTo(AppMode::Settings)),
-                ("历史", EguiAction::NavigateTo(AppMode::History)),
-                (
-                    "返回标题",
-                    EguiAction::ShowConfirm {
-                        message: "确定返回标题画面？".into(),
-                        on_confirm: Box::new(EguiAction::ReturnToTitle),
-                    },
-                ),
-                (
-                    "退出",
-                    EguiAction::ShowConfirm {
-                        message: "确定退出游戏？".into(),
-                        on_confirm: Box::new(EguiAction::Exit),
-                    },
-                ),
-            ];
+            let visible_buttons: Vec<_> = buttons
+                .iter()
+                .filter(|btn| {
+                    btn.visible
+                        .as_ref()
+                        .is_none_or(|cond| cond.evaluate(&ui_ctx.conditions))
+                })
+                .collect();
 
-            let total_h = entries.len() as f32 * (btn_h + spacing);
+            let total_h = visible_buttons.len() as f32 * (btn_h + spacing);
             let start_y = screen_rect.center().y - total_h / 2.0;
             let btn_w = scale.x(260.0);
             let center_x = screen_rect.center().x - btn_w / 2.0;
@@ -57,7 +40,7 @@ pub fn build_ingame_menu_ui(
             let hover_color = layout.colors.hover.to_egui();
 
             let mut y = start_y;
-            for (label, btn_action) in entries {
+            for btn_def in &visible_buttons {
                 let btn_rect =
                     egui::Rect::from_min_size(egui::pos2(center_x, y), egui::vec2(btn_w, btn_h));
                 let resp = ui.allocate_rect(btn_rect, egui::Sense::click());
@@ -74,13 +57,13 @@ pub fn build_ingame_menu_ui(
                 ui.painter().text(
                     btn_rect.center(),
                     egui::Align2::CENTER_CENTER,
-                    *label,
+                    &btn_def.label,
                     egui::FontId::proportional(text_size),
                     text_color,
                 );
 
                 if resp.clicked() {
-                    action = btn_action.clone();
+                    action = egui_actions::button_def_to_egui(btn_def);
                 }
                 y += btn_h + spacing;
             }

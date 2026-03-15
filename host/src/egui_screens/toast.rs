@@ -1,18 +1,17 @@
 //! Toast 覆盖层 UI
 
 use host::ui::ToastManager;
-use host::ui::asset_cache::UiAssetCache;
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use host::ui::UiRenderContext;
 use host::ui::nine_patch::{Borders, NinePatch};
 use host::ui::toast::ToastType;
 
 pub fn build_toast_overlay(
     ctx: &egui::Context,
     toast_manager: &ToastManager,
-    layout: &UiLayoutConfig,
-    assets: Option<&UiAssetCache>,
-    scale: &ScaleContext,
+    ui_ctx: &UiRenderContext<'_>,
 ) {
+    let layout = ui_ctx.layout;
+    let scale = ui_ctx.scale;
     let text_size = scale.uniform(layout.fonts.notify_text_size);
     let ypos = scale.y(layout.notify.ypos);
     let toast_h = text_size + scale.y(20.0);
@@ -53,7 +52,7 @@ pub fn build_toast_overlay(
                 let painter = ui.painter();
 
                 let mut drew_ninepatch = false;
-                if let Some(assets) = assets
+                if let Some(assets) = ui_ctx.assets
                     && let Some(tex) = assets.get("notify")
                 {
                     let np = NinePatch::new(tex, borders);
