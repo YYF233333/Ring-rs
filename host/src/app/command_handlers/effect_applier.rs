@@ -7,6 +7,12 @@
 //!
 //! 阶段 27：函数签名从 `&mut AppState` 改为 `(&mut CoreSystems, &Manifest)`，
 //! 不再依赖完整的应用状态。
+//!
+//! ## Capability 与回退策略
+//!
+//! 效果请求按 `capability_id` 由 [`crate::extensions::ExtensionRegistry`] 分发；若返回 MissingCapability 或 Failed，
+//! 会按 target + effect.kind 尝试**回退**到更基础的 capability（见 `build_fallback_request`）。
+//! 完整 capability 列表与回退表见 **`docs/extension_effects_capability.md`**。
 
 use crate::extensions::{
     CAP_EFFECT_DISSOLVE, CAP_EFFECT_FADE, CAP_EFFECT_MOVE, CAP_EFFECT_RULE_MASK,
@@ -147,6 +153,9 @@ fn dispatch_fallback(
     }
 }
 
+/// 根据 target + effect.kind 构造回退用 EffectRequest。
+///
+/// 回退表与文档一致，修改时请同步更新 `docs/extension_effects_capability.md`。
 fn build_fallback_request(request: &EffectRequest) -> Option<EffectRequest> {
     match (&request.target, &request.effect.kind) {
         (EffectTarget::CharacterShow { .. }, _) => {

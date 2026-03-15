@@ -85,6 +85,7 @@
 - 子模块：[host_app](module_summaries/host/host_app.md)
 - 子模块：[egui_actions](module_summaries/host/egui_actions.md)
 - 子模块：[egui_screens](module_summaries/host/egui_screens.md)
+- **效果扩展 capability 与回退**：[extension_effects_capability.md](extension_effects_capability.md)（capability ID 表、回退策略、排查）
 
 ### 应用层（App：生命周期/主循环胶水）
 
