@@ -137,6 +137,7 @@ fn resolve_slider_textures<'a>(assets: Option<&'a UiAssetCache>) -> Option<Slide
     })
 }
 
+// egui 滑动条需要同时传入标签、宽度、字号、颜色等布局参数，提取结构体会增加调用复杂度
 #[allow(clippy::too_many_arguments)]
 fn setting_slider(
     ui: &mut egui::Ui,

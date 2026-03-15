@@ -25,6 +25,7 @@ pub fn create_resource_source(config: &AppConfig) -> Arc<dyn crate::resources::R
             let zip_path = config
                 .zip_path
                 .as_ref()
+                // 启动期配置错误属于不可恢复的 fail-fast 场景
                 .expect("Zip mode requires zip_path");
             Arc::new(ZipSource::new(zip_path))
         }
@@ -52,7 +53,11 @@ pub fn create_resource_manager(config: &AppConfig) -> ResourceManager {
             ResourceManager::new(&assets_root, config.resources.texture_cache_size_mb)
         }
         AssetSourceType::Zip => {
-            let zip_path = config.zip_path.as_ref().expect("Zip 模式必须配置 zip_path");
+            let zip_path = config
+                .zip_path
+                .as_ref()
+                // 启动期配置错误属于不可恢复的 fail-fast 场景
+                .expect("Zip 模式必须配置 zip_path");
             info!(zip_path = %zip_path, "资源来源: ZIP 文件");
             ResourceManager::with_source(
                 Arc::new(ZipSource::new(zip_path)),

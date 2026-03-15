@@ -104,4 +104,14 @@ impl PersistentStore {
             error!(error = %e, "持久化变量保存失败");
         }
     }
+
+    /// 检查指定赛季是否已通关
+    ///
+    /// 等价于 `variables["complete_<season>"] == true`。
+    pub fn is_season_complete(&self, season: &str) -> bool {
+        let key = format!("complete_{season}");
+        self.variables
+            .get(&key)
+            .is_some_and(|v| matches!(v, VarValue::Bool(true)))
+    }
 }

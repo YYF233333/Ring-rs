@@ -74,7 +74,7 @@ impl Renderer {
         if self.shake.active {
             let progress = self.shake.elapsed / self.shake.duration;
             let decay = 1.0 - progress;
-            let t = self.shake.elapsed * 30.0;
+            let t = self.shake.elapsed * super::SHAKE_FREQUENCY;
             (
                 t.sin() * self.shake.amplitude_x * decay,
                 (t * 1.3).cos() * self.shake.amplitude_y * decay,

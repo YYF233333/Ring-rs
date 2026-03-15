@@ -19,7 +19,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::animation::{Animatable, AnimationSystem, EasingFunction, ObjectId};
-use tracing::info;
+use tracing::{info, warn};
 
 /// 场景过渡类型
 #[derive(Debug, Clone)]
@@ -288,7 +288,7 @@ impl SceneTransitionManager {
         match &self.transition_type {
             Some(SceneTransitionType::Fade) | Some(SceneTransitionType::FadeWhite) => {
                 // Fade/FadeWhite: mask_alpha 0 → 1
-                let _ = self
+                if let Err(e) = self
                     .animation_system
                     .animate_object_with_easing::<AnimatableSceneTransition>(
                         self.object_id,
@@ -297,11 +297,14 @@ impl SceneTransitionManager {
                         1.0,
                         self.duration,
                         EasingFunction::EaseInOutQuad,
-                    );
+                    )
+                {
+                    warn!(error = %e, "场景过渡 FadeIn 动画启动失败");
+                }
             }
             Some(SceneTransitionType::Rule { .. }) => {
                 // Rule: progress 0 → 1（旧背景溶解到黑屏）
-                let _ = self
+                if let Err(e) = self
                     .animation_system
                     .animate_object_with_easing::<AnimatableSceneTransition>(
                         self.object_id,
@@ -310,7 +313,10 @@ impl SceneTransitionManager {
                         1.0,
                         self.duration,
                         EasingFunction::EaseInOutQuad,
-                    );
+                    )
+                {
+                    warn!(error = %e, "场景过渡 Rule FadeIn 动画启动失败");
+                }
             }
             None => {}
         }
@@ -321,7 +327,7 @@ impl SceneTransitionManager {
         match &self.transition_type {
             Some(SceneTransitionType::Fade) | Some(SceneTransitionType::FadeWhite) => {
                 // Fade/FadeWhite: mask_alpha 1 → 0
-                let _ = self
+                if let Err(e) = self
                     .animation_system
                     .animate_object_with_easing::<AnimatableSceneTransition>(
                         self.object_id,
@@ -330,13 +336,16 @@ impl SceneTransitionManager {
                         0.0,
                         self.duration,
                         EasingFunction::EaseInOutQuad,
-                    );
+                    )
+                {
+                    warn!(error = %e, "场景过渡 FadeOut 动画启动失败");
+                }
             }
             Some(SceneTransitionType::Rule { .. }) => {
                 // Rule: progress 0 → 1（黑屏溶解到新背景）
                 // 注意：这里重新从 0 开始，因为是新的一轮溶解
                 self.transition_state.set_progress(0.0);
-                let _ = self
+                if let Err(e) = self
                     .animation_system
                     .animate_object_with_easing::<AnimatableSceneTransition>(
                         self.object_id,
@@ -345,7 +354,10 @@ impl SceneTransitionManager {
                         1.0,
                         self.duration,
                         EasingFunction::EaseInOutQuad,
-                    );
+                    )
+                {
+                    warn!(error = %e, "场景过渡 Rule FadeOut 动画启动失败");
+                }
             }
             None => {}
         }
@@ -353,7 +365,7 @@ impl SceneTransitionManager {
 
     /// 启动 UI 淡入动画
     fn start_ui_fade_in_animations(&mut self) {
-        let _ = self
+        if let Err(e) = self
             .animation_system
             .animate_object_with_easing::<AnimatableSceneTransition>(
                 self.object_id,
@@ -362,7 +374,10 @@ impl SceneTransitionManager {
                 1.0,
                 UI_FADE_DURATION,
                 EasingFunction::EaseOutQuad,
-            );
+            )
+        {
+            warn!(error = %e, "场景过渡 UI 淡入动画启动失败");
+        }
     }
 
     /// 更新过渡效果

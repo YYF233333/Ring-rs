@@ -14,7 +14,7 @@ pub struct GpuTexture {
     /// 底层 wgpu 纹理句柄（视频帧注入等场景需要 `queue.write_texture` 访问）
     #[allow(dead_code)]
     pub(crate) texture: wgpu::Texture,
-    /// 纹理视图（用于绑定到渲染管线）
+    /// 纹理视图（生命周期需与 texture 绑定；bind_group 持有其引用）
     #[allow(dead_code)]
     pub(crate) view: wgpu::TextureView,
     pub(crate) bind_group: wgpu::BindGroup,
@@ -80,6 +80,7 @@ impl Texture for GpuTexture {
 }
 
 /// 从 RGBA 字节数据创建 GPU 纹理
+// GPU 纹理创建需要所有 wgpu 句柄，不宜拆为结构体（均为借用，生命周期复杂）
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn create_gpu_texture(
     device: &wgpu::Device,

@@ -113,6 +113,16 @@ pub struct GameSession {
     pub wait_timer: f32,
 }
 
+impl GameSession {
+    /// 返回对话/章节标记历史事件列表（无会话时返回空切片）
+    pub fn history_events(&self) -> &[vn_runtime::HistoryEvent] {
+        self.vn_runtime
+            .as_ref()
+            .map(|rt| rt.history().events())
+            .unwrap_or(&[])
+    }
+}
+
 // ─── AppState ────────────────────────────────────────────────────────────────────
 
 /// 应用状态

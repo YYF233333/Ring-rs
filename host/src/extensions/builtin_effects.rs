@@ -1,4 +1,4 @@
-//! 内建效果扩展（Phase A 首批能力）。
+//! 内建效果扩展。
 
 use std::rc::Rc;
 use std::sync::Arc;

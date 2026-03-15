@@ -34,6 +34,7 @@ fn main() {
         "error" => LevelFilter::ERROR,
         "off" => LevelFilter::OFF,
         other => {
+            // logger 未初始化前的唯一合法 stderr 输出（CLAUDE.md eprintln 禁令的例外）
             eprintln!("Invalid log_level: '{other}', fallback to info.");
             LevelFilter::INFO
         }
@@ -47,6 +48,7 @@ fn main() {
             .and_then(|path| match std::fs::File::create(path) {
                 Ok(file) => Some(file),
                 Err(e) => {
+                    // logger 未初始化前的唯一合法 stderr 输出（CLAUDE.md eprintln 禁令的例外）
                     eprintln!("Failed to create log file '{path}': {e}");
                     None
                 }

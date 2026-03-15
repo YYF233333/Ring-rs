@@ -1,12 +1,10 @@
 //! Title 页面 UI
 
+use crate::egui_actions::EguiAction;
 use host::AppMode;
 use host::app::AppState;
 use host::ui::asset_cache::UiAssetCache;
 use host::ui::layout::{ScaleContext, UiLayoutConfig};
-use vn_runtime::state::VarValue;
-
-use crate::egui_actions::EguiAction;
 
 pub fn build_title_ui(
     ctx: &egui::Context,
@@ -16,11 +14,7 @@ pub fn build_title_ui(
     scale: &ScaleContext,
 ) -> EguiAction {
     let has_continue = app_state.save_manager.has_continue();
-    let is_winter = app_state
-        .persistent_store
-        .variables
-        .get("complete_summer")
-        .is_some_and(|v| matches!(v, VarValue::Bool(true)));
+    let is_winter = app_state.persistent_store.is_season_complete("summer");
     let mut action = EguiAction::None;
 
     egui::CentralPanel::default()

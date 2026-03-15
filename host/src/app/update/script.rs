@@ -33,6 +33,7 @@ pub fn skip_all_active_effects(core: &mut CoreSystems) {
     // 1. 跳过所有角色动画
     if core.animation_system.has_active_animations() {
         core.animation_system.skip_all();
+        // update(0.0) 将已跳过的动画状态刷新到对象；返回值为"是否仍有活跃动画"，此处不需要
         let _ = core.animation_system.update(0.0);
         cleanup_fading_characters(core);
     }
@@ -92,7 +93,7 @@ pub fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
     // 如果有动画正在进行，跳过所有动画
     if app_state.core.animation_system.has_active_animations() {
         app_state.core.animation_system.skip_all();
-        // 应用最终状态
+        // 同上：刷新跳过后的状态，返回值不需要
         let _ = app_state.core.animation_system.update(0.0);
 
         // 清理淡出完成的角色

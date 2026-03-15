@@ -47,10 +47,12 @@ pub fn handle_egui_action(
     match action {
         EguiAction::None => {}
         EguiAction::StartGame => {
+            // 开始新游戏时删除 continue 存档（best-effort；即使失败也继续）
             let _ = app_state.save_manager.delete_continue();
             app::start_new_game(app_state);
         }
         EguiAction::StartWinter => {
+            // 同上
             let _ = app_state.save_manager.delete_continue();
             app::start_new_game_at_label(app_state, "Winter");
         }
@@ -165,7 +167,7 @@ pub fn handle_egui_action(
                 };
         }
         EguiAction::ShowConfirm { .. } => {
-            // Handled in host_app.rs before reaching here
+            unreachable!("ShowConfirm must be intercepted by the caller before handle_egui_action")
         }
     }
 }

@@ -784,7 +784,7 @@ fn test_explicit_duration_overrides_default_for_all_targets() {
     );
 }
 
-// ========== Phase 2.2: 边界测试补充 ==========
+// ========== 边界测试补充 ==========
 
 #[test]
 fn test_scene_effect_dim_produces_effect_request() {

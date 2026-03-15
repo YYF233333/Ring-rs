@@ -77,7 +77,7 @@ impl SaveMetadata {
     pub fn new(slot: u32) -> Self {
         Self {
             slot,
-            timestamp: chrono_now_iso8601(),
+            timestamp: unix_timestamp_secs(),
             chapter_title: None,
             play_time_secs: 0,
         }
@@ -244,17 +244,14 @@ impl std::fmt::Display for SaveError {
 
 impl std::error::Error for SaveError {}
 
-/// 获取当前时间的 ISO 8601 格式字符串
-///
-/// 简单实现，不依赖 chrono 库
-fn chrono_now_iso8601() -> String {
+/// 获取当前 Unix 时间戳（秒）
+fn unix_timestamp_secs() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
 
-    // 简单格式化为 Unix 时间戳（后续可替换为真正的 ISO 8601）
     format!("{}", duration.as_secs())
 }
 

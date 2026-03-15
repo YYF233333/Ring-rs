@@ -55,10 +55,6 @@ pub enum RuntimeError {
     #[error("当前状态不允许此操作：期望 {expected}，实际 {actual}")]
     StateMismatch { expected: String, actual: String },
 
-    /// 脚本执行结束
-    #[error("脚本已执行完毕")]
-    ScriptEnded,
-
     /// 无效的状态操作
     #[error("无效的状态操作: {message}")]
     InvalidState { message: String },

@@ -195,6 +195,7 @@ impl DissolveRenderer {
     }
 
     /// 绘制一次溶解叠加
+    // GPU 渲染管线参数不宜拆为结构体（wgpu 对象不可 Clone，按帧传递）
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,

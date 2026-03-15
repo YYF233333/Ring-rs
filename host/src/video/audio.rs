@@ -116,7 +116,6 @@ impl VideoAudio {
     /// 检查音频提取是否完成，如完成则缓存样本数据。
     ///
     /// 由 `VideoPlayer::update()` 每帧调用。
-    /// 实际播放需要外部传入 rodio mixer（Phase 2 集成时实现）。
     pub fn try_start_playback(&mut self) {
         if self.playback_started || self.samples.is_some() {
             return;
@@ -156,8 +155,7 @@ impl VideoAudio {
 
     /// 获取已提取的音频样本（消耗）。
     ///
-    /// Phase 2 中 Host 集成代码调用此方法获取样本数据，
-    /// 然后通过 AudioManager 的 mixer 创建 SamplesBuffer 播放。
+    /// 由 Host 集成代码调用，通过 AudioManager 的 mixer 创建 SamplesBuffer 播放。
     pub fn take_samples(&mut self) -> Option<Vec<f32>> {
         let samples = self.samples.take();
         if samples.is_some() {

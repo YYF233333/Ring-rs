@@ -314,6 +314,8 @@ impl AppConfig {
     }
 
     /// 获取 manifest 完整路径
+    ///
+    /// bootstrap-only: 仅在 ResourceManager 初始化之前使用，后续资源加载需通过 ResourceManager。
     pub fn manifest_full_path(&self) -> PathBuf {
         self.assets_root.join(&self.manifest_path)
     }
@@ -386,6 +388,8 @@ impl AppConfig {
     }
 
     /// 获取入口脚本完整路径
+    ///
+    /// bootstrap-only: 仅在 ResourceManager 初始化之前使用，后续资源加载需通过 ResourceManager。
     pub fn start_script_full_path(&self) -> PathBuf {
         self.assets_root.join(&self.start_script_path)
     }

@@ -10,10 +10,24 @@ use super::scene_transition::SceneTransitionPhase;
 use super::{DrawMode, RenderState, Renderer, SceneTransitionType};
 
 impl Renderer {
-    /// 获取选择框的矩形区域
+    /// 计算选项矩形区域（用于点击检测）
+    ///
+    /// 返回每个选项的 (x, y, width, height) 元组数组。
     pub fn get_choice_rects(&self, choice_count: usize) -> Vec<(f32, f32, f32, f32)> {
-        self.text_renderer
-            .get_choice_rects(choice_count, self.screen_width, self.screen_height)
+        let choice_height = 50.0;
+        let choice_spacing = 10.0;
+        let total_height = choice_count as f32 * (choice_height + choice_spacing) - choice_spacing;
+        let start_y = (self.screen_height - total_height) / 2.0;
+
+        let box_w = self.screen_width * 0.6;
+        let box_x = (self.screen_width - box_w) / 2.0;
+
+        (0..choice_count)
+            .map(|i| {
+                let y = start_y + i as f32 * (choice_height + choice_spacing);
+                (box_x, y, box_w, choice_height)
+            })
+            .collect()
     }
 
     /// 生成背景绘制命令（带过渡效果）
@@ -175,7 +189,7 @@ impl Renderer {
                         commands.push(DrawCommand::Dissolve {
                             mask_texture,
                             progress: dissolve_progress,
-                            ramp: self.image_dissolve.ramp(),
+                            ramp: self.dissolve_ramp,
                             reversed: *reversed,
                             overlay_color: [0.0, 0.0, 0.0, overlay_alpha],
                             x: 0.0,

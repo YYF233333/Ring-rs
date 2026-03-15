@@ -55,7 +55,7 @@ impl CommandExecutor {
         &mut self,
         command: &Command,
         render_state: &mut RenderState,
-        resource_manager: &ResourceManager,
+        _resource_manager: &ResourceManager,
     ) -> ExecuteResult {
         // 重置输出
         self.last_output = CommandOutput::default();
@@ -66,7 +66,7 @@ impl CommandExecutor {
             }
             Command::ChangeScene { path, transition } => {
                 // ChangeScene：遮罩过渡 + 切换背景（不再隐式清理 UI/立绘）
-                self.execute_change_scene(path, transition.clone(), render_state, resource_manager)
+                self.execute_change_scene(path, transition.clone(), render_state)
             }
             Command::ShowCharacter {
                 path,

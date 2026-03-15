@@ -15,21 +15,15 @@ pub fn build_history_content(
 ) -> EguiAction {
     let events: Vec<&HistoryEvent> = app_state
         .session
-        .vn_runtime
-        .as_ref()
-        .map(|rt| {
-            rt.history()
-                .events()
-                .iter()
-                .filter(|e| {
-                    matches!(
-                        e,
-                        HistoryEvent::Dialogue { .. } | HistoryEvent::ChapterMark { .. }
-                    )
-                })
-                .collect()
+        .history_events()
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                HistoryEvent::Dialogue { .. } | HistoryEvent::ChapterMark { .. }
+            )
         })
-        .unwrap_or_default();
+        .collect();
 
     let text_size = scale.uniform(layout.fonts.text_size);
     let name_width = scale.x(layout.history.name_width);

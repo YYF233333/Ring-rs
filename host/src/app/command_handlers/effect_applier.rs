@@ -23,7 +23,7 @@ use super::super::CoreSystems;
 /// 遍历 `command_executor.last_output.effect_requests`，
 /// 对每个请求执行 capability 路由；缺失或失败时回退 legacy 路径。
 pub fn apply_effect_requests(core: &mut CoreSystems, manifest: &Manifest) {
-    let requests = core.command_executor.last_output.effect_requests.clone();
+    let requests = std::mem::take(&mut core.command_executor.last_output.effect_requests);
     if !requests.is_empty() {
         debug!(count = requests.len(), "开始应用效果请求");
     }

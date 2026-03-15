@@ -67,7 +67,7 @@ impl ApplicationHandler for HostApp {
                     ))
                     .with_resizable(false),
             )
-            .unwrap(),
+            .expect("window creation failed"),
         );
 
         let backend = WgpuBackend::new(win, self.font_data.take());
@@ -230,11 +230,7 @@ impl ApplicationHandler for HostApp {
                 let layout = &app_state.ui.layout;
                 let asset_cache = app_state.ui.asset_cache.as_ref();
                 let scale = &app_state.ui.ui_context.scale;
-                let is_winter = app_state
-                    .persistent_store
-                    .variables
-                    .get("complete_summer")
-                    .is_some_and(|v| matches!(v, vn_runtime::state::VarValue::Bool(true)));
+                let is_winter = app_state.persistent_store.is_season_complete("summer");
 
                 let mut ui_action = EguiAction::None;
                 let mut confirm_resolved = false;

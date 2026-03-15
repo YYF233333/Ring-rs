@@ -16,7 +16,7 @@ pub fn build_skip_indicator(
     let text_size = scale.uniform(layout.fonts.notify_text_size);
     let borders = layout.skip_indicator.frame_borders;
 
-    let _label = "正在快进 >>>";
+    // Animate arrow cycling
 
     // Animate arrow cycling
     let time = ctx.input(|i| i.time);

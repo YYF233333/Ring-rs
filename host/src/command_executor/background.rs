@@ -4,7 +4,7 @@
 
 use crate::renderer::RenderState;
 use crate::renderer::effects::{self, EffectKind, EffectRequest, EffectTarget};
-use crate::resources::{LogicalPath, ResourceManager};
+use crate::resources::LogicalPath;
 use tracing::debug;
 
 use super::CommandExecutor;
@@ -53,7 +53,6 @@ impl CommandExecutor {
         path: &str,
         transition: Option<vn_runtime::command::Transition>,
         render_state: &mut RenderState,
-        _resource_manager: &ResourceManager,
     ) -> ExecuteResult {
         // 保存旧背景用于过渡效果
         let old_background = render_state.current_background.clone();

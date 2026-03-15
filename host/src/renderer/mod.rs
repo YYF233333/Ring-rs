@@ -32,11 +32,9 @@ pub mod background_transition;
 pub mod character_animation;
 mod draw_commands;
 pub mod effects;
-mod image_dissolve;
 pub mod render_state;
 mod scene_effects;
 pub mod scene_transition;
-mod text_renderer;
 mod transition;
 
 pub use animation::{AnimationSystem, ObjectId};
@@ -44,23 +42,19 @@ pub use character_animation::AnimatableCharacter;
 pub use render_state::{ChoiceItem, RenderState, SceneEffectState, TitleCardState};
 pub use scene_transition::SceneTransitionType;
 
-use image_dissolve::ImageDissolve;
 use scene_transition::SceneTransitionManager;
-use text_renderer::TextRenderer;
 use transition::{TransitionManager, TransitionType};
 
 /// 渲染器
 ///
 /// 负责将 RenderState 转换为 DrawCommand 列表。
 pub struct Renderer {
-    /// 文本渲染器（保留用于兼容，Phase 4 将迁移到 egui）
-    pub text_renderer: TextRenderer,
     /// 过渡效果管理器（用于背景 dissolve 过渡）
     pub transition: TransitionManager,
     /// 场景过渡管理器（用于 changeScene 的 Fade/FadeWhite/Rule 效果）
     pub scene_transition: SceneTransitionManager,
-    /// ImageDissolve 效果器（用于 Rule 过渡，Phase 2 迁移到 WGSL）
-    pub image_dissolve: ImageDissolve,
+    /// Rule 过渡渐变带宽（0.0 = 硬边）
+    dissolve_ramp: f32,
     /// 设计分辨率
     design_width: f32,
     design_height: f32,
@@ -99,10 +93,9 @@ impl Renderer {
     /// 创建新的渲染器
     pub fn new(design_width: f32, design_height: f32) -> Self {
         Self {
-            text_renderer: TextRenderer::new(),
             transition: TransitionManager::new(),
             scene_transition: SceneTransitionManager::new(),
-            image_dissolve: ImageDissolve::new(),
+            dissolve_ramp: 0.0,
             design_width,
             design_height,
             screen_width: design_width,
@@ -127,14 +120,6 @@ impl Renderer {
     /// 获取当前屏幕高度
     pub fn screen_height(&self) -> f32 {
         self.screen_height
-    }
-
-    /// 异步初始化（Phase 2 前为空操作）
-    ///
-    /// 保留签名用于兼容；ImageDissolve shader 将在 Phase 2 迁移到 WGSL。
-    pub fn init(&mut self) {
-        // ImageDissolve WGSL shader 将在 Phase 2 初始化
-        // TextRenderer 字体加载已迁移到 egui 的 FontDefinitions
     }
 
     /// 生成完整画面的绘制命令

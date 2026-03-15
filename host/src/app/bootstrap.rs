@@ -10,9 +10,6 @@ use tracing::{debug, error, info};
 pub fn load_resources(app_state: &mut AppState) {
     info!("开始加载资源...");
 
-    // Renderer 初始化（Phase 2 前为空操作）
-    app_state.core.renderer.init();
-
     // 预加载必需的 UI 纹理（用于过渡效果）
     let essential_textures = ["backgrounds/black.png", "backgrounds/white.png"];
     for path in &essential_textures {

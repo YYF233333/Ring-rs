@@ -107,6 +107,7 @@ impl SaveManager {
         // 同时删除缩略图（如果存在）
         let thumb = self.thumbnail_path(slot);
         if thumb.exists() {
+            // best-effort：缩略图删除失败不影响存档删除结果
             let _ = fs::remove_file(&thumb);
         }
 

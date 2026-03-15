@@ -69,7 +69,9 @@ impl GpuContext {
     fn new(window: &Arc<Window>) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
-        let surface = instance.create_surface(window.clone()).unwrap();
+        let surface = instance
+            .create_surface(window.clone())
+            .expect("surface creation failed");
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             compatible_surface: Some(&surface),
@@ -179,12 +181,12 @@ impl EguiIntegration {
         fonts
             .families
             .get_mut(&egui::FontFamily::Proportional)
-            .unwrap()
+            .expect("egui builtin font family must exist")
             .insert(0, "cjk".to_owned());
         fonts
             .families
             .get_mut(&egui::FontFamily::Monospace)
-            .unwrap()
+            .expect("egui builtin font family must exist")
             .insert(0, "cjk".to_owned());
         ctx.set_fonts(fonts);
     }
