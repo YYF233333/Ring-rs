@@ -99,21 +99,21 @@ fn button_def_minimal() {
 }
 
 #[test]
-fn screen_definitions_partial_override() {
+fn screen_definitions_missing_field_returns_error() {
     let json = r#"{
             "title": {
+                "background": [],
+                "overlay": null,
                 "buttons": [
                     {"label": "Play", "action": "start_game"}
                 ]
             }
         }"#;
-    let defs: ScreenDefinitions = serde_json::from_str(json).unwrap();
-    assert_eq!(defs.title.buttons.len(), 1);
-    assert_eq!(defs.title.buttons[0].label, "Play");
-    // Other screens keep defaults
-    assert_eq!(defs.ingame_menu.buttons.len(), 7);
-    assert_eq!(defs.quick_menu.buttons.len(), 7);
-    assert_eq!(defs.game_menu.nav_buttons.len(), 6);
+    let result = serde_json::from_str::<ScreenDefinitions>(json);
+    assert!(
+        result.is_err(),
+        "missing ingame_menu/quick_menu/game_menu should fail"
+    );
 }
 
 #[test]

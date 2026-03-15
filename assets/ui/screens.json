@@ -1,0 +1,55 @@
+{
+  "title": {
+    "background": [
+      { "when": "$persistent.complete_summer", "asset": "main_winter" },
+      { "asset": "main_summer" }
+    ],
+    "overlay": "main_menu_overlay",
+    "buttons": [
+      { "label": "开始游戏", "action": "start_game" },
+      { "label": "冬篇", "action": { "start_at_label": "Winter" }, "visible": "$persistent.complete_summer" },
+      { "label": "继续游戏", "action": "continue_game", "visible": "$has_continue" },
+      { "label": "读取游戏", "action": "open_load" },
+      { "label": "设置", "action": "navigate_settings" },
+      { "label": "退出", "action": "exit", "confirm": "确定退出游戏？" }
+    ]
+  },
+  "ingame_menu": {
+    "buttons": [
+      { "label": "继续", "action": "go_back" },
+      { "label": "保存", "action": "open_save" },
+      { "label": "读取", "action": "open_load" },
+      { "label": "设置", "action": "navigate_settings" },
+      { "label": "历史", "action": "navigate_history" },
+      { "label": "返回标题", "action": "return_to_title", "confirm": "确定返回标题画面？" },
+      { "label": "退出", "action": "exit", "confirm": "确定退出游戏？" }
+    ]
+  },
+  "quick_menu": {
+    "buttons": [
+      { "label": "历史", "action": "navigate_history" },
+      { "label": "快进", "action": "toggle_skip" },
+      { "label": "自动", "action": "toggle_auto" },
+      { "label": "保存", "action": "open_save" },
+      { "label": "快存", "action": "quick_save" },
+      { "label": "快读", "action": "quick_load" },
+      { "label": "设置", "action": "navigate_settings" }
+    ]
+  },
+  "game_menu": {
+    "background": [
+      { "when": "$persistent.complete_summer", "asset": "main_winter" },
+      { "asset": "game_menu_bg" }
+    ],
+    "overlay": "game_menu_overlay",
+    "nav_buttons": [
+      { "label": "历史", "action": "replace_history" },
+      { "label": "保存", "action": "open_save" },
+      { "label": "读取", "action": "open_load" },
+      { "label": "设置", "action": "replace_settings" },
+      { "label": "返回标题", "action": "return_to_title", "confirm": "确定返回标题画面？" },
+      { "label": "退出", "action": "exit", "confirm": "确定退出游戏？" }
+    ],
+    "return_button": { "label": "返回", "action": "return_to_game" }
+  }
+}

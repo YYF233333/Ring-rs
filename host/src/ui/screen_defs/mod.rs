@@ -3,7 +3,7 @@
 //! 从 `ui/screens.json` 加载声明式界面行为配置（按钮列表、动作映射、可见性条件、背景切换），
 //! 使新项目无需修改引擎源码即可自定义 UI 行为。
 //!
-//! 缺失配置时回退到 [`ScreenDefinitions::default()`]，等价于引擎当前硬编码行为。
+//! 配置文件必须存在且字段完整，否则启动报错。
 
 use std::fmt;
 
@@ -241,174 +241,104 @@ impl ConditionalAsset {
 
 /// 标题页定义
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TitleScreenDef {
-    #[serde(default = "defaults::title_background")]
     pub background: Vec<ConditionalAsset>,
-    #[serde(default = "defaults::title_overlay")]
     pub overlay: Option<String>,
-    #[serde(default = "defaults::title_buttons")]
     pub buttons: Vec<ButtonDef>,
 }
 
 impl Default for TitleScreenDef {
     fn default() -> Self {
         Self {
-            background: defaults::title_background(),
-            overlay: defaults::title_overlay(),
-            buttons: defaults::title_buttons(),
+            background: vec![
+                ConditionalAsset {
+                    when: Some(ConditionDef::PersistentVar("complete_summer".into())),
+                    asset: "main_winter".into(),
+                },
+                ConditionalAsset {
+                    when: None,
+                    asset: "main_summer".into(),
+                },
+            ],
+            overlay: Some("main_menu_overlay".into()),
+            buttons: vec![
+                ButtonDef {
+                    label: "开始游戏".into(),
+                    action: ActionDef::StartGame,
+                    visible: None,
+                    confirm: None,
+                },
+                ButtonDef {
+                    label: "冬篇".into(),
+                    action: ActionDef::StartAtLabel("Winter".into()),
+                    visible: Some(ConditionDef::PersistentVar("complete_summer".into())),
+                    confirm: None,
+                },
+                ButtonDef {
+                    label: "继续游戏".into(),
+                    action: ActionDef::ContinueGame,
+                    visible: Some(ConditionDef::HasContinue),
+                    confirm: None,
+                },
+                ButtonDef {
+                    label: "读取游戏".into(),
+                    action: ActionDef::OpenLoad,
+                    visible: None,
+                    confirm: None,
+                },
+                ButtonDef {
+                    label: "设置".into(),
+                    action: ActionDef::NavigateSettings,
+                    visible: None,
+                    confirm: None,
+                },
+                ButtonDef {
+                    label: "退出".into(),
+                    action: ActionDef::Exit,
+                    visible: None,
+                    confirm: Some("确定退出游戏？".into()),
+                },
+            ],
         }
     }
 }
 
 /// 纯按钮列表定义（ingame_menu / quick_menu）
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ButtonListDef {
-    #[serde(default)]
     pub buttons: Vec<ButtonDef>,
 }
 
 /// 游戏菜单定义（左导航 + 右内容）
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GameMenuDef {
-    #[serde(default = "defaults::game_menu_background")]
     pub background: Vec<ConditionalAsset>,
-    #[serde(default = "defaults::game_menu_overlay")]
     pub overlay: Option<String>,
-    #[serde(default = "defaults::game_menu_nav_buttons")]
     pub nav_buttons: Vec<ButtonDef>,
-    #[serde(default = "defaults::game_menu_return_button")]
     pub return_button: ButtonDef,
 }
 
 impl Default for GameMenuDef {
     fn default() -> Self {
         Self {
-            background: defaults::game_menu_background(),
-            overlay: defaults::game_menu_overlay(),
-            nav_buttons: defaults::game_menu_nav_buttons(),
-            return_button: defaults::game_menu_return_button(),
-        }
-    }
-}
-
-/// 所有界面的行为定义
-#[derive(Debug, Clone, Deserialize)]
-pub struct ScreenDefinitions {
-    #[serde(default)]
-    pub title: TitleScreenDef,
-    #[serde(default = "defaults::ingame_menu")]
-    pub ingame_menu: ButtonListDef,
-    #[serde(default = "defaults::quick_menu")]
-    pub quick_menu: ButtonListDef,
-    #[serde(default)]
-    pub game_menu: GameMenuDef,
-}
-
-impl Default for ScreenDefinitions {
-    fn default() -> Self {
-        Self {
-            title: TitleScreenDef::default(),
-            ingame_menu: defaults::ingame_menu(),
-            quick_menu: defaults::quick_menu(),
-            game_menu: GameMenuDef::default(),
-        }
-    }
-}
-
-impl ScreenDefinitions {
-    /// 从 `ResourceManager` 加载界面行为配置。
-    ///
-    /// 尝试读取 `ui/screens.json`，失败或缺失时回退到默认值。
-    pub fn load(resource_manager: &ResourceManager) -> Self {
-        let path = LogicalPath::new("ui/screens.json");
-        match resource_manager.read_text_optional(&path) {
-            Some(content) => match serde_json::from_str::<Self>(&content) {
-                Ok(defs) => {
-                    tracing::info!("Screen definitions loaded from ui/screens.json");
-                    defs
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "Failed to parse ui/screens.json, using defaults");
-                    Self::default()
-                }
-            },
-            None => {
-                tracing::info!("No ui/screens.json found, using default screen definitions");
-                Self::default()
-            }
-        }
-    }
-}
-
-// ─── Defaults (等价于当前硬编码行为) ──────────────────────────────────────────
-
-mod defaults {
-    use super::*;
-
-    pub fn title_background() -> Vec<ConditionalAsset> {
-        vec![
-            ConditionalAsset {
-                when: Some(ConditionDef::PersistentVar("complete_summer".into())),
-                asset: "main_winter".into(),
-            },
-            ConditionalAsset {
-                when: None,
-                asset: "main_summer".into(),
-            },
-        ]
-    }
-
-    pub fn title_overlay() -> Option<String> {
-        Some("main_menu_overlay".into())
-    }
-
-    pub fn title_buttons() -> Vec<ButtonDef> {
-        vec![
-            ButtonDef {
-                label: "开始游戏".into(),
-                action: ActionDef::StartGame,
-                visible: None,
-                confirm: None,
-            },
-            ButtonDef {
-                label: "冬篇".into(),
-                action: ActionDef::StartAtLabel("Winter".into()),
-                visible: Some(ConditionDef::PersistentVar("complete_summer".into())),
-                confirm: None,
-            },
-            ButtonDef {
-                label: "继续游戏".into(),
-                action: ActionDef::ContinueGame,
-                visible: Some(ConditionDef::HasContinue),
-                confirm: None,
-            },
-            ButtonDef {
-                label: "读取游戏".into(),
-                action: ActionDef::OpenLoad,
-                visible: None,
-                confirm: None,
-            },
-            ButtonDef {
-                label: "设置".into(),
-                action: ActionDef::NavigateSettings,
-                visible: None,
-                confirm: None,
-            },
-            ButtonDef {
-                label: "退出".into(),
-                action: ActionDef::Exit,
-                visible: None,
-                confirm: Some("确定退出游戏？".into()),
-            },
-        ]
-    }
-
-    pub fn ingame_menu() -> ButtonListDef {
-        ButtonListDef {
-            buttons: vec![
+            background: vec![
+                ConditionalAsset {
+                    when: Some(ConditionDef::PersistentVar("complete_summer".into())),
+                    asset: "main_winter".into(),
+                },
+                ConditionalAsset {
+                    when: None,
+                    asset: "game_menu_bg".into(),
+                },
+            ],
+            overlay: Some("game_menu_overlay".into()),
+            nav_buttons: vec![
                 ButtonDef {
-                    label: "继续".into(),
-                    action: ActionDef::GoBack,
+                    label: "历史".into(),
+                    action: ActionDef::ReplaceHistory,
                     visible: None,
                     confirm: None,
                 },
@@ -426,13 +356,7 @@ mod defaults {
                 },
                 ButtonDef {
                     label: "设置".into(),
-                    action: ActionDef::NavigateSettings,
-                    visible: None,
-                    confirm: None,
-                },
-                ButtonDef {
-                    label: "历史".into(),
-                    action: ActionDef::NavigateHistory,
+                    action: ActionDef::ReplaceSettings,
                     visible: None,
                     confirm: None,
                 },
@@ -449,123 +373,162 @@ mod defaults {
                     confirm: Some("确定退出游戏？".into()),
                 },
             ],
+            return_button: ButtonDef {
+                label: "返回".into(),
+                action: ActionDef::ReturnToGame,
+                visible: None,
+                confirm: None,
+            },
         }
     }
+}
 
-    pub fn quick_menu() -> ButtonListDef {
-        ButtonListDef {
-            buttons: vec![
-                ButtonDef {
-                    label: "历史".into(),
-                    action: ActionDef::NavigateHistory,
-                    visible: None,
-                    confirm: None,
-                },
-                ButtonDef {
-                    label: "快进".into(),
-                    action: ActionDef::ToggleSkip,
-                    visible: None,
-                    confirm: None,
-                },
-                ButtonDef {
-                    label: "自动".into(),
-                    action: ActionDef::ToggleAuto,
-                    visible: None,
-                    confirm: None,
-                },
-                ButtonDef {
-                    label: "保存".into(),
-                    action: ActionDef::OpenSave,
-                    visible: None,
-                    confirm: None,
-                },
-                ButtonDef {
-                    label: "快存".into(),
-                    action: ActionDef::QuickSave,
-                    visible: None,
-                    confirm: None,
-                },
-                ButtonDef {
-                    label: "快读".into(),
-                    action: ActionDef::QuickLoad,
-                    visible: None,
-                    confirm: None,
-                },
-                ButtonDef {
-                    label: "设置".into(),
-                    action: ActionDef::NavigateSettings,
-                    visible: None,
-                    confirm: None,
-                },
-            ],
+/// 所有界面的行为定义
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScreenDefinitions {
+    pub title: TitleScreenDef,
+    pub ingame_menu: ButtonListDef,
+    pub quick_menu: ButtonListDef,
+    pub game_menu: GameMenuDef,
+}
+
+impl Default for ScreenDefinitions {
+    fn default() -> Self {
+        Self {
+            title: TitleScreenDef::default(),
+            ingame_menu: ButtonListDef {
+                buttons: vec![
+                    ButtonDef {
+                        label: "继续".into(),
+                        action: ActionDef::GoBack,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "保存".into(),
+                        action: ActionDef::OpenSave,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "读取".into(),
+                        action: ActionDef::OpenLoad,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "设置".into(),
+                        action: ActionDef::NavigateSettings,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "历史".into(),
+                        action: ActionDef::NavigateHistory,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "返回标题".into(),
+                        action: ActionDef::ReturnToTitle,
+                        visible: None,
+                        confirm: Some("确定返回标题画面？".into()),
+                    },
+                    ButtonDef {
+                        label: "退出".into(),
+                        action: ActionDef::Exit,
+                        visible: None,
+                        confirm: Some("确定退出游戏？".into()),
+                    },
+                ],
+            },
+            quick_menu: ButtonListDef {
+                buttons: vec![
+                    ButtonDef {
+                        label: "历史".into(),
+                        action: ActionDef::NavigateHistory,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "快进".into(),
+                        action: ActionDef::ToggleSkip,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "自动".into(),
+                        action: ActionDef::ToggleAuto,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "保存".into(),
+                        action: ActionDef::OpenSave,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "快存".into(),
+                        action: ActionDef::QuickSave,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "快读".into(),
+                        action: ActionDef::QuickLoad,
+                        visible: None,
+                        confirm: None,
+                    },
+                    ButtonDef {
+                        label: "设置".into(),
+                        action: ActionDef::NavigateSettings,
+                        visible: None,
+                        confirm: None,
+                    },
+                ],
+            },
+            game_menu: GameMenuDef::default(),
         }
     }
+}
 
-    pub fn game_menu_background() -> Vec<ConditionalAsset> {
-        vec![
-            ConditionalAsset {
-                when: Some(ConditionDef::PersistentVar("complete_summer".into())),
-                asset: "main_winter".into(),
-            },
-            ConditionalAsset {
-                when: None,
-                asset: "game_menu_bg".into(),
-            },
-        ]
-    }
+/// 界面行为配置加载错误
+#[derive(Debug)]
+pub enum ScreenDefsError {
+    /// 配置文件缺失或读取失败
+    NotFound(String),
+    /// JSON 解析失败
+    ParseFailed(String),
+}
 
-    pub fn game_menu_overlay() -> Option<String> {
-        Some("game_menu_overlay".into())
-    }
-
-    pub fn game_menu_nav_buttons() -> Vec<ButtonDef> {
-        vec![
-            ButtonDef {
-                label: "历史".into(),
-                action: ActionDef::ReplaceHistory,
-                visible: None,
-                confirm: None,
-            },
-            ButtonDef {
-                label: "保存".into(),
-                action: ActionDef::OpenSave,
-                visible: None,
-                confirm: None,
-            },
-            ButtonDef {
-                label: "读取".into(),
-                action: ActionDef::OpenLoad,
-                visible: None,
-                confirm: None,
-            },
-            ButtonDef {
-                label: "设置".into(),
-                action: ActionDef::ReplaceSettings,
-                visible: None,
-                confirm: None,
-            },
-            ButtonDef {
-                label: "返回标题".into(),
-                action: ActionDef::ReturnToTitle,
-                visible: None,
-                confirm: Some("确定返回标题画面？".into()),
-            },
-            ButtonDef {
-                label: "退出".into(),
-                action: ActionDef::Exit,
-                visible: None,
-                confirm: Some("确定退出游戏？".into()),
-            },
-        ]
-    }
-
-    pub fn game_menu_return_button() -> ButtonDef {
-        ButtonDef {
-            label: "返回".into(),
-            action: ActionDef::ReturnToGame,
-            visible: None,
-            confirm: None,
+impl std::fmt::Display for ScreenDefsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScreenDefsError::NotFound(msg) => write!(f, "界面配置加载失败: {}", msg),
+            ScreenDefsError::ParseFailed(msg) => write!(f, "界面配置解析失败: {}", msg),
         }
+    }
+}
+
+impl std::error::Error for ScreenDefsError {}
+
+impl ScreenDefinitions {
+    /// 从 `ResourceManager` 加载界面行为配置。
+    ///
+    /// 配置文件 `ui/screens.json` 必须存在且字段完整，否则返回错误。
+    pub fn load(resource_manager: &ResourceManager) -> Result<Self, ScreenDefsError> {
+        let path = LogicalPath::new("ui/screens.json");
+        let content = resource_manager
+            .read_text_optional(&path)
+            .ok_or_else(|| ScreenDefsError::NotFound("ui/screens.json 不存在".into()))?;
+
+        let defs: Self = serde_json::from_str(&content)
+            .map_err(|e| ScreenDefsError::ParseFailed(format!("ui/screens.json: {e}")))?;
+
+        tracing::info!("Screen definitions loaded from ui/screens.json");
+        Ok(defs)
     }
 }
 

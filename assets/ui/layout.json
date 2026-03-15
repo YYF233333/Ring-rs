@@ -1,0 +1,104 @@
+{
+  "base_width": 1920.0,
+  "base_height": 1080.0,
+  "fonts": {
+    "text_size": 33.0,
+    "name_text_size": 45.0,
+    "interface_text_size": 33.0,
+    "label_text_size": 36.0,
+    "notify_text_size": 24.0,
+    "title_text_size": 75.0
+  },
+  "colors": {
+    "accent": "#ffffff",
+    "idle": "#888888",
+    "hover": "#ff9900",
+    "selected": "#ffffff",
+    "insensitive": "#7878787f",
+    "text": "#000000",
+    "interface_text": "#ffffff"
+  },
+  "dialogue": {
+    "textbox_height": 278.0,
+    "name_xpos": 360.0,
+    "name_ypos": 0.0,
+    "namebox_borders": [5.0, 5.0, 5.0, 5.0],
+    "dialogue_xpos": 402.0,
+    "dialogue_ypos": 75.0,
+    "dialogue_width": 1116.0
+  },
+  "choice": {
+    "button_width": 1185.0,
+    "spacing": 33.0,
+    "button_borders": [150.0, 8.0, 150.0, 8.0]
+  },
+  "quick_menu": {
+    "text_size": 21.0,
+    "button_borders": [15.0, 6.0, 15.0, 0.0]
+  },
+  "title": {
+    "navigation_xpos": 60.0,
+    "navigation_spacing": 6.0
+  },
+  "game_menu": {
+    "nav_width": 420.0,
+    "navigation_spacing": 6.0
+  },
+  "save_load": {
+    "cols": 3,
+    "rows": 2,
+    "slot_width": 414.0,
+    "slot_height": 309.0,
+    "thumbnail_width": 384.0,
+    "thumbnail_height": 216.0,
+    "slot_spacing": 15.0,
+    "page_spacing": 0.0
+  },
+  "history": {
+    "entry_height": 210.0,
+    "name_width": 233.0,
+    "text_width": 1110.0,
+    "name_xpos": 233.0,
+    "text_xpos": 255.0
+  },
+  "settings": {
+    "pref_spacing": 15.0,
+    "pref_button_spacing": 0.0
+  },
+  "confirm": {
+    "frame_borders": [60.0, 60.0, 60.0, 60.0]
+  },
+  "skip_indicator": {
+    "ypos": 15.0,
+    "frame_borders": [24.0, 8.0, 75.0, 8.0]
+  },
+  "notify": {
+    "ypos": 68.0,
+    "frame_borders": [24.0, 8.0, 60.0, 8.0]
+  },
+  "assets": {
+    "textbox": "gui/textbox.png",
+    "namebox": "gui/namebox.png",
+    "frame": "gui/frame.png",
+    "main_menu_overlay": "gui/overlay/main_menu.png",
+    "game_menu_overlay": "gui/overlay/game_menu.png",
+    "confirm_overlay": "gui/overlay/confirm.png",
+    "skip": "gui/skip.png",
+    "notify": "gui/notify.png",
+    "main_summer": "gui/main_summer.jpg",
+    "main_winter": "gui/main_winter.jpg",
+    "game_menu_bg": "gui/game_menu.png",
+    "button_idle": "gui/button/idle_background.png",
+    "button_hover": "gui/button/hover_background.png",
+    "choice_idle": "gui/button/choice_idle_background.png",
+    "choice_hover": "gui/button/choice_hover_background.png",
+    "slot_idle": "gui/button/slot_idle_background.png",
+    "slot_hover": "gui/button/slot_hover_background.png",
+    "quick_idle": "gui/button/quick_idle_background.png",
+    "quick_hover": "gui/button/quick_hover_background.png",
+    "slider_idle_bar": "gui/slider/horizontal_idle_bar.png",
+    "slider_hover_bar": "gui/slider/horizontal_hover_bar.png",
+    "slider_idle_thumb": "gui/slider/horizontal_idle_thumb.png",
+    "slider_hover_thumb": "gui/slider/horizontal_hover_thumb.png"
+  }
+}

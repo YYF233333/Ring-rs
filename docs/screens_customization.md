@@ -13,7 +13,7 @@
 - **quick_menu**：快捷菜单（按钮列表）
 - **game_menu**：游戏菜单框架（背景、overlay、导航按钮、返回按钮）
 
-不提供 `screens.json` 时，自动使用引擎内置默认值。
+**配置文件 `screens.json` 必须存在且包含所有字段**，缺失文件或字段将导致启动报错。仓库自带完整的默认配置文件，直接修改即可。
 
 ## 配置文件
 
@@ -23,24 +23,9 @@
 assets/ui/screens.json
 ```
 
-### 最小示例
+### 修改示例
 
-只覆盖标题页按钮：
-
-```json
-{
-  "title": {
-    "buttons": [
-      { "label": "New Game", "action": "start_game" },
-      { "label": "Load", "action": "open_load" },
-      { "label": "Settings", "action": "navigate_settings" },
-      { "label": "Quit", "action": "exit", "confirm": "Really quit?" }
-    ]
-  }
-}
-```
-
-未指定的界面（如 `ingame_menu`、`quick_menu`、`game_menu`）保持引擎默认行为。
+要自定义标题页按钮，直接编辑 `assets/ui/screens.json` 中的 `title.buttons` 字段。注意所有四个界面（`title`、`ingame_menu`、`quick_menu`、`game_menu`）都必须在文件中定义。
 
 ## 动作词汇表
 

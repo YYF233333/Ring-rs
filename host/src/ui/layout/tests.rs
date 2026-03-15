@@ -56,13 +56,23 @@ fn hex_color_parsing() {
 }
 
 #[test]
-fn json_partial_override() {
+fn json_missing_field_returns_error() {
     let json = r#"{ "fonts": { "text_size": 40.0 } }"#;
-    let config: UiLayoutConfig = serde_json::from_str(json).unwrap();
-    assert_eq!(config.fonts.text_size, 40.0);
-    // other fields keep defaults
-    assert_eq!(config.fonts.name_text_size, 45.0);
-    assert_eq!(config.dialogue.textbox_height, 278.0);
+    let result = serde_json::from_str::<UiLayoutConfig>(json);
+    assert!(
+        result.is_err(),
+        "partial JSON should fail without serde(default)"
+    );
+}
+
+#[test]
+fn json_unknown_field_returns_error() {
+    let json = r#"{ "text_size": 33.0, "name_text_size": 45.0, "interface_text_size": 33.0, "label_text_size": 36.0, "notify_text_size": 24.0, "title_text_size": 75.0, "bogus": true }"#;
+    let result = serde_json::from_str::<FontConfig>(json);
+    assert!(
+        result.is_err(),
+        "unknown field should fail with deny_unknown_fields"
+    );
 }
 
 #[test]

@@ -16,7 +16,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 const CONFIG_PATH: &str = "config.json";
 
 fn main() {
-    let config = AppConfig::load(CONFIG_PATH);
+    let config = AppConfig::load(CONFIG_PATH).unwrap_or_else(|e| panic!("{}", e));
 
     let configured = config
         .debug

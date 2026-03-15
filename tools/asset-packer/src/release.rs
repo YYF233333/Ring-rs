@@ -189,7 +189,7 @@ fn read_game_name(config_path: &Path) -> Result<String> {
     }
 }
 
-/// 更新发行版 config.json：设置 asset_source = "zip" 和 zip_path
+/// 更新发行版 config.json：设置 ZIP 模式 + release 调试配置
 fn update_config_for_release(config_path: &Path, zip_filename: &str) -> Result<()> {
     let content = std::fs::read_to_string(config_path)?;
     let mut config: serde_json::Value = serde_json::from_str(&content)?;
@@ -197,6 +197,11 @@ fn update_config_for_release(config_path: &Path, zip_filename: &str) -> Result<(
     if let Some(obj) = config.as_object_mut() {
         obj.insert("asset_source".into(), "zip".into());
         obj.insert("zip_path".into(), zip_filename.into());
+
+        if let Some(debug) = obj.get_mut("debug").and_then(|v| v.as_object_mut()) {
+            debug.insert("script_check".into(), false.into());
+            debug.insert("log_file".into(), "game.log".into());
+        }
     }
 
     let updated = serde_json::to_string_pretty(&config)?;

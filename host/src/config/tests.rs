@@ -80,7 +80,6 @@ fn test_config_serialization() {
     let config = AppConfig::default();
     let json = serde_json::to_string_pretty(&config).unwrap();
 
-    // 反序列化
     let loaded: AppConfig = serde_json::from_str(&json).unwrap();
     assert_eq!(loaded.window.width, config.window.width);
 }
@@ -100,37 +99,74 @@ fn unique_temp_path(prefix: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{}-{}", prefix, nanos))
 }
 
-fn minimal_config_json(start_script_path: &str) -> String {
-    format!(r#"{{"start_script_path":"{}"}}"#, start_script_path)
+fn full_config_json(start_script_path: &str) -> String {
+    format!(
+        r#"{{
+  "name": null,
+  "assets_root": "assets",
+  "saves_dir": "saves",
+  "manifest_path": "manifest.json",
+  "default_font": "fonts/simhei.ttf",
+  "start_script_path": "{}",
+  "asset_source": "fs",
+  "zip_path": null,
+  "window": {{ "width": 1920, "height": 1080, "title": "Ring VN Engine", "fullscreen": false }},
+  "debug": {{ "script_check": true, "log_level": null, "log_file": null }},
+  "audio": {{ "master_volume": 1.0, "bgm_volume": 0.8, "sfx_volume": 1.0, "muted": false }},
+  "resources": {{ "texture_cache_size_mb": 256 }}
+}}"#,
+        start_script_path
+    )
 }
 
 #[test]
-fn test_load_branches() {
+fn test_load_missing_file_returns_error() {
     let missing = unique_temp_path("ring-config-test-missing");
-    let loaded_missing = AppConfig::load(&missing);
-    assert_eq!(
-        loaded_missing.window.width,
-        AppConfig::default().window.width
-    );
+    let result = AppConfig::load(&missing);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, ConfigError::LoadFailed(_)));
+}
 
+#[test]
+fn test_load_parse_error_returns_error() {
     let parse_err_file = TempPath::file("ring-config-test-parse-error.json");
     fs::write(parse_err_file.as_path(), "{ this is not json").unwrap();
-    let loaded_parse_err = AppConfig::load(parse_err_file.as_path());
-    assert_eq!(
-        loaded_parse_err.window.height,
-        AppConfig::default().window.height
-    );
+    let result = AppConfig::load(parse_err_file.as_path());
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), ConfigError::LoadFailed(_)));
+}
 
-    let read_err_dir = TempPath::dir("ring-config-test-read-error-dir");
-    let loaded_read_err = AppConfig::load(read_err_dir.as_path());
-    assert_eq!(
-        loaded_read_err.window.title,
-        AppConfig::default().window.title
-    );
+#[test]
+fn test_load_missing_field_returns_error() {
+    let incomplete_file = TempPath::file("ring-config-test-incomplete.json");
+    fs::write(
+        incomplete_file.as_path(),
+        r#"{"start_script_path":"entry.md"}"#,
+    )
+    .unwrap();
+    let result = AppConfig::load(incomplete_file.as_path());
+    assert!(result.is_err());
+}
 
+#[test]
+fn test_load_unknown_field_returns_error() {
+    let bad_file = TempPath::file("ring-config-test-unknown-field.json");
+    let mut json = full_config_json("entry.md");
+    json = json.replace(
+        r#""resources": { "texture_cache_size_mb": 256 }"#,
+        r#""resources": { "texture_cache_size_mb": 256 }, "bogus_field": true"#,
+    );
+    fs::write(bad_file.as_path(), json).unwrap();
+    let result = AppConfig::load(bad_file.as_path());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_load_complete_json_succeeds() {
     let ok_file = TempPath::file("ring-config-test-ok.json");
-    fs::write(ok_file.as_path(), minimal_config_json("entry.md")).unwrap();
-    let loaded = AppConfig::load(ok_file.as_path());
+    fs::write(ok_file.as_path(), full_config_json("entry.md")).unwrap();
+    let loaded = AppConfig::load(ok_file.as_path()).unwrap();
     assert_eq!(loaded.start_script_path, "entry.md");
 }
 
@@ -273,6 +309,7 @@ fn test_validate_zip_ok() {
 #[test]
 fn test_config_error_display() {
     let cases = [
+        (ConfigError::LoadFailed("x".to_string()), "配置加载失败"),
         (
             ConfigError::SerializationFailed("x".to_string()),
             "配置序列化失败",

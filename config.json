@@ -5,6 +5,8 @@
   "manifest_path": "manifest.json",
   "default_font": "fonts/simhei.ttf",
   "start_script_path": "scripts/remake/main.md",
+  "asset_source": "fs",
+  "zip_path": null,
   "window": {
     "width": 1280,
     "height": 720,
@@ -13,7 +15,8 @@
   },
   "debug": {
     "script_check": true,
-    "log_level": "info"
+    "log_level": "info",
+    "log_file": null
   },
   "audio": {
     "master_volume": 1.0,

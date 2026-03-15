@@ -176,8 +176,9 @@ impl AppState {
         let scripts = init::scan_script_list(&config, &resource_manager);
         let (width, height) = init::window_size(&config);
         let user_settings = init::load_user_settings(USER_SETTINGS_PATH);
-        let layout = UiLayoutConfig::load(&resource_manager);
-        let screen_defs = ScreenDefinitions::load(&resource_manager);
+        let layout = UiLayoutConfig::load(&resource_manager).unwrap_or_else(|e| panic!("{}", e));
+        let screen_defs =
+            ScreenDefinitions::load(&resource_manager).unwrap_or_else(|e| panic!("{}", e));
 
         // Dev Mode: 运行脚本检查
         init::run_script_check(&config, &scripts, &resource_manager);
