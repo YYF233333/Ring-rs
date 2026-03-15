@@ -9,11 +9,43 @@
 //! - `WaitForTime` 由 Host 处理，Runtime 不需要接收时间流逝事件
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
-/// 信号标识符
+/// 信号标识符（newtype）
 ///
 /// 用于 `WaitForSignal` 等待模式，允许外部系统触发 Runtime 继续执行。
-pub type SignalId = String;
+/// 编译期区分信号 ID 与普通字符串，防止误传。
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SignalId(String);
+
+impl SignalId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for SignalId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<&str> for SignalId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl From<String> for SignalId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
 
 /// Host 向 Runtime 传递的输入
 ///
@@ -74,7 +106,7 @@ mod tests {
         assert_eq!(
             signal,
             RuntimeInput::Signal {
-                id: "animation_done".to_string()
+                id: SignalId::new("animation_done")
             }
         );
     }

@@ -925,7 +925,7 @@ fn test_execute_scene_effect_with_duration_waits() {
     ));
     assert!(matches!(
         result.waiting,
-        Some(WaitingReason::WaitForSignal(ref id)) if id == "scene_effect"
+        Some(WaitingReason::WaitForSignal(ref id)) if id.as_str() == "scene_effect"
     ));
 }
 
@@ -945,7 +945,7 @@ fn test_execute_title_card_waits_for_signal() {
     ));
     assert!(matches!(
         result.waiting,
-        Some(WaitingReason::WaitForSignal(ref id)) if id == "title_card"
+        Some(WaitingReason::WaitForSignal(ref id)) if id.as_str() == "title_card"
     ));
 }
 
@@ -1110,7 +1110,7 @@ fn test_execute_cutscene_waits_for_signal() {
     ));
     assert!(matches!(
         result.waiting,
-        Some(WaitingReason::WaitForSignal(ref id)) if id == "cutscene"
+        Some(WaitingReason::WaitForSignal(ref id)) if id.as_str() == "cutscene"
     ));
 }
 

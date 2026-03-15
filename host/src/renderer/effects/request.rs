@@ -18,6 +18,7 @@
 //! ```
 
 use super::resolver::ResolvedEffect;
+use crate::extensions::CapabilityId;
 use std::collections::BTreeMap;
 use vn_runtime::command::Position;
 
@@ -38,7 +39,7 @@ pub type EffectParams = BTreeMap<String, EffectParamValue>;
 #[derive(Debug, Clone)]
 pub struct EffectRequest {
     /// capability 路由 ID（扩展 API 稳定入口）
-    pub capability_id: String,
+    pub capability_id: CapabilityId,
     /// 规范化参数快照（用于诊断/调试/后续第三方扩展）
     pub params: EffectParams,
     /// 动画目标（携带上下文数据）
@@ -129,8 +130,8 @@ pub enum EffectTarget {
     },
 }
 
-fn infer_capability_id(target: &EffectTarget, effect: &ResolvedEffect) -> String {
-    match (&effect.kind, target) {
+fn infer_capability_id(target: &EffectTarget, effect: &ResolvedEffect) -> CapabilityId {
+    let id = match (&effect.kind, target) {
         (super::registry::EffectKind::Dissolve, _) => "effect.dissolve".to_string(),
         (
             super::registry::EffectKind::Fade | super::registry::EffectKind::FadeWhite,
@@ -148,7 +149,8 @@ fn infer_capability_id(target: &EffectTarget, effect: &ResolvedEffect) -> String
         }
         (_, EffectTarget::TitleCard { .. }) => "effect.scene.title_card".to_string(),
         _ => format!("effect.{}", effect.kind_name()),
-    }
+    };
+    CapabilityId::new(id)
 }
 
 /// 根据效果名推断场景效果类别

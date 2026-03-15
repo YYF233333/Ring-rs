@@ -7,7 +7,7 @@
 ## PublicSurface
 
 - 模块入口：`host/src/app/mod.rs`
-- 关键类型：`AppState`、`CoreSystems`、`UiSystems`、`GameSession`
+- 关键类型：`AppState`、`CoreSystems`、`UiSystems`、`GameSession`、`ExtensionRegistry`（已从 `CoreSystems` 提升至 `AppState` 顶层）
 - 状态/配置子模块：`app_mode`（AppMode/NavigationStack/UserSettings）、`state`（HostState）、`persistent`（PersistentStore）
 - 关键子模块：`bootstrap`、`init`、`draw`、`save`、`script_loader`、`update`、`command_handlers`
 
@@ -25,7 +25,8 @@
 
 ## Invariants
 
-- `AppState` 是 Host 主循环的状态聚合根，子系统职责分层明确（core/ui/session）。
+- `AppState` 是 Host 主循环的状态聚合根，子系统职责分层明确（core/ui/session）。`ExtensionRegistry` 位于 `AppState` 顶层而非 `CoreSystems` 内部。
+- `CoreSystems` 实现 `EngineServices` trait（impl 位于 `engine_services.rs`），为 `extensions` 模块提供抽象访问入口。
 - 脚本语义执行不在 `app` 内实现，只做编排与驱动。
 
 ## FailureModes
@@ -47,7 +48,7 @@
 
 ## LastVerified
 
-2026-03-11
+2026-03-15
 
 ## Owner
 

@@ -18,6 +18,7 @@ pub mod state;
 mod bootstrap;
 mod command_handlers;
 mod draw;
+mod engine_services;
 pub mod init;
 mod save;
 mod script_loader;
@@ -67,8 +68,6 @@ pub struct CoreSystems {
     pub character_object_ids: HashMap<String, ObjectId>,
     /// 命令执行器（将 Runtime Command 转换为渲染状态更新）
     pub command_executor: CommandExecutor,
-    /// 扩展 capability 注册表
-    pub extension_registry: Arc<ExtensionRegistry>,
     /// 音频管理器
     pub audio_manager: Option<AudioManager>,
 }
@@ -139,6 +138,8 @@ pub struct AppState {
     pub session: GameSession,
 
     // ===== 配置与基础设施 =====
+    /// 扩展 capability 注册表
+    pub extension_registry: Arc<ExtensionRegistry>,
     /// 应用配置
     pub config: AppConfig,
     /// 宿主状态（运行标志、调试模式）
@@ -191,7 +192,6 @@ impl AppState {
                 animation_system: AnimationSystem::new(),
                 character_object_ids: HashMap::new(),
                 command_executor: CommandExecutor::new(),
-                extension_registry,
                 audio_manager,
             },
             ui: UiSystems {
@@ -211,6 +211,7 @@ impl AppState {
                 auto_timer: 0.0,
                 wait_timer: 0.0,
             },
+            extension_registry,
             config,
             host_state: HostState::new(),
             input_manager: InputManager::new(),

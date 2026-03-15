@@ -10,6 +10,7 @@
 
 use crate::command::{Choice, Command, SIGNAL_CUTSCENE, SIGNAL_SCENE_EFFECT, SIGNAL_TITLE_CARD};
 use crate::error::RuntimeError;
+use crate::input::SignalId;
 use crate::script::{EvalError, Script, ScriptNode, evaluate, evaluate_to_bool};
 use crate::state::{RuntimeState, WaitingReason};
 
@@ -211,9 +212,9 @@ impl Executor {
                 if resolved_transition.is_some() {
                     Ok(ExecuteResult::with_wait(
                         commands,
-                        WaitingReason::WaitForSignal(
-                            crate::command::SIGNAL_SCENE_TRANSITION.to_string(),
-                        ),
+                        WaitingReason::WaitForSignal(SignalId::new(
+                            crate::command::SIGNAL_SCENE_TRANSITION,
+                        )),
                     ))
                 } else {
                     Ok(ExecuteResult::with_commands(commands))
@@ -406,7 +407,7 @@ impl Executor {
                 if has_duration {
                     Ok(ExecuteResult::with_wait(
                         vec![cmd],
-                        WaitingReason::WaitForSignal(SIGNAL_SCENE_EFFECT.to_string()),
+                        WaitingReason::WaitForSignal(SignalId::new(SIGNAL_SCENE_EFFECT)),
                     ))
                 } else {
                     Ok(ExecuteResult::with_commands(vec![cmd]))
@@ -418,14 +419,14 @@ impl Executor {
                     text: text.clone(),
                     duration: *duration,
                 }],
-                WaitingReason::WaitForSignal(SIGNAL_TITLE_CARD.to_string()),
+                WaitingReason::WaitForSignal(SignalId::new(SIGNAL_TITLE_CARD)),
             )),
 
             ScriptNode::Cutscene { path } => {
                 let resolved = script.resolve_path(path);
                 Ok(ExecuteResult::with_wait(
                     vec![Command::Cutscene { path: resolved }],
-                    WaitingReason::WaitForSignal(SIGNAL_CUTSCENE.to_string()),
+                    WaitingReason::WaitForSignal(SignalId::new(SIGNAL_CUTSCENE)),
                 ))
             }
         }

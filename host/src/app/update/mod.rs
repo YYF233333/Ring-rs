@@ -84,7 +84,7 @@ pub fn update(app_state: &mut AppState, dt: f32) {
         // changeScene 过渡完成检测：当 Runtime 等待 scene_transition 信号
         // 且所有过渡动画均已结束时，自动发送信号解除等待
         if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
-            && id == SIGNAL_SCENE_TRANSITION
+            && id.as_str() == SIGNAL_SCENE_TRANSITION
             && !app_state.core.renderer.is_scene_transition_active()
             && !app_state.core.renderer.transition.is_active()
         {
@@ -101,7 +101,7 @@ pub fn update(app_state: &mut AppState, dt: f32) {
         // sceneEffect 完成检测：当 Runtime 等待 scene_effect 信号
         // 且所有场景效果动画均已结束时，自动发送信号
         if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
-            && id == SIGNAL_SCENE_EFFECT
+            && id.as_str() == SIGNAL_SCENE_EFFECT
             && !app_state.core.renderer.is_scene_effect_active()
         {
             let signal_id = id.clone();
@@ -114,7 +114,7 @@ pub fn update(app_state: &mut AppState, dt: f32) {
             if tc.elapsed >= tc.duration {
                 app_state.core.render_state.title_card = None;
                 if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
-                    && id == SIGNAL_TITLE_CARD
+                    && id.as_str() == SIGNAL_TITLE_CARD
                 {
                     let signal_id = id.clone();
                     run_script_tick(app_state, Some(RuntimeInput::Signal { id: signal_id }));
@@ -124,7 +124,7 @@ pub fn update(app_state: &mut AppState, dt: f32) {
 
         // cutscene 视频播放推进
         if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
-            && id == SIGNAL_CUTSCENE
+            && id.as_str() == SIGNAL_CUTSCENE
         {
             if app_state.video_player.is_playing() {
                 // 推进视频帧

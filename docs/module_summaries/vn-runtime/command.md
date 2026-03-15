@@ -8,6 +8,7 @@
 
 - 文件入口：`vn-runtime/src/command/mod.rs`
 - 核心类型：`Command`、`Transition`、`TransitionArg`、`Choice`、`Position`、`InlineEffect`、`InlineEffectKind`
+- `SignalId`：newtype（`pub struct SignalId(String)`，`serde(transparent)`），从 `input.rs` 重导出。`SIGNAL_*` 常量保持 `&str`，构造通过 `SignalId::new()`。
 
 ## KeyFlow
 
@@ -51,7 +52,7 @@
 
 ## LastVerified
 
-2026-03-10
+2026-03-15
 
 ## Owner
 

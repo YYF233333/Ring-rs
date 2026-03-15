@@ -1,13 +1,11 @@
 //! 内建效果扩展。
 
-use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::renderer::animation::ObjectId;
 use crate::renderer::effects::{EffectKind, EffectTarget, defaults};
-use crate::renderer::{AnimatableCharacter, position_to_preset_name};
+use crate::renderer::position_to_preset_name;
 
-use super::capability::{EffectExtension, ExtensionError};
+use super::capability::{CapabilityId, EffectExtension, ExtensionError};
 use super::context::EngineContext;
 use super::manifest::ExtensionManifest;
 use super::registry::ExtensionRegistry;
@@ -60,7 +58,7 @@ impl EffectExtension for BuiltinEffectExtension {
             CAP_EFFECT_SCENE_DIM => apply_scene_dim(request, ctx),
             CAP_EFFECT_SCENE_TITLE_CARD => apply_title_card(request, ctx),
             other => Err(ExtensionError::CapabilityNotFound {
-                capability_id: other.to_string(),
+                capability_id: CapabilityId::new(other),
             }),
         }
     }
@@ -118,13 +116,12 @@ fn apply_dissolve(
             let duration = request
                 .effect
                 .duration_or(defaults::CHARACTER_ALPHA_DURATION);
-            let core = ctx.core_mut();
-            let Some(character) = core.render_state.get_character_anim(alias).cloned() else {
+            let svc = ctx.services();
+            let Some(character) = svc.get_character_anim(alias) else {
                 return Ok(());
             };
-            let object_id = ensure_character_registered(core, alias, &character);
-            core.animation_system
-                .animate_object::<AnimatableCharacter>(object_id, "alpha", 0.0, 1.0, duration)
+            let object_id = svc.ensure_character_registered(alias, &character);
+            svc.animate_character(object_id, "alpha", 0.0, 1.0, duration)
                 .map_err(|error| ExtensionError::Runtime {
                     capability_id: request.capability_id.clone(),
                     message: format!("角色淡入动画失败: {error}"),
@@ -135,12 +132,11 @@ fn apply_dissolve(
             let duration = request
                 .effect
                 .duration_or(defaults::CHARACTER_ALPHA_DURATION);
-            let core = ctx.core_mut();
-            let Some(&object_id) = core.character_object_ids.get(alias) else {
+            let svc = ctx.services();
+            let Some(object_id) = svc.get_character_object_id(alias) else {
                 return Ok(());
             };
-            core.animation_system
-                .animate_object::<AnimatableCharacter>(object_id, "alpha", 1.0, 0.0, duration)
+            svc.animate_character(object_id, "alpha", 1.0, 0.0, duration)
                 .map_err(|error| ExtensionError::Runtime {
                     capability_id: request.capability_id.clone(),
                     message: format!("角色淡出动画失败: {error}"),
@@ -148,9 +144,8 @@ fn apply_dissolve(
             Ok(())
         }
         EffectTarget::BackgroundTransition { old_background } => {
-            let core = ctx.core_mut();
-            core.renderer
-                .start_background_transition_resolved(old_background.clone(), &request.effect);
+            ctx.services()
+                .start_background_transition(old_background.clone(), &request.effect);
             Ok(())
         }
         target => Err(ExtensionError::UnsupportedTarget {
@@ -171,18 +166,16 @@ fn apply_fade_family(
         });
     };
 
-    let core = ctx.core_mut();
+    let svc = ctx.services();
     match &request.effect.kind {
         EffectKind::Fade => {
             let duration = request.effect.duration_or(defaults::FADE_DURATION);
-            core.renderer
-                .start_scene_fade(duration, pending_background.to_string());
+            svc.start_scene_fade(duration, pending_background.to_string());
             Ok(())
         }
         EffectKind::FadeWhite => {
             let duration = request.effect.duration_or(defaults::FADE_WHITE_DURATION);
-            core.renderer
-                .start_scene_fade_white(duration, pending_background.to_string());
+            svc.start_scene_fade_white(duration, pending_background.to_string());
             Ok(())
         }
         other => Err(ExtensionError::Runtime {
@@ -214,28 +207,13 @@ fn apply_rule_mask(
     };
 
     let duration = request.effect.duration_or(defaults::RULE_DURATION);
-    let core = ctx.core_mut();
-    core.renderer.start_scene_rule(
+    ctx.services().start_scene_rule(
         duration,
         pending_background.to_string(),
         mask_path.clone(),
         *reversed,
     );
     Ok(())
-}
-
-fn ensure_character_registered(
-    core: &mut crate::app::CoreSystems,
-    alias: &str,
-    character: &AnimatableCharacter,
-) -> ObjectId {
-    if let Some(&id) = core.character_object_ids.get(alias) {
-        id
-    } else {
-        let id = core.animation_system.register(Rc::new(character.clone()));
-        core.character_object_ids.insert(alias.to_string(), id);
-        id
-    }
 }
 
 pub fn apply_character_move(
@@ -260,71 +238,66 @@ pub fn apply_character_move(
     let new_preset = ctx.manifest().get_preset(new_preset_name);
     let duration = request.effect.duration_or(defaults::MOVE_DURATION);
 
-    let core = ctx.core_mut();
-    let screen_w = core.renderer.screen_width();
-    let screen_h = core.renderer.screen_height();
+    let svc = ctx.services();
+    let (screen_w, screen_h) = svc.screen_size();
     let (offset_x, offset_y, start_scale) =
         compute_move_transition(&old_preset, &new_preset, screen_w, screen_h);
-    let Some(character) = core.render_state.get_character_anim(alias).cloned() else {
+    let Some(character) = svc.get_character_anim(alias) else {
         return Ok(());
     };
-    let object_id = ensure_character_registered(core, alias, &character);
+    let object_id = svc.ensure_character_registered(alias, &character);
     character.set("position_x", offset_x);
     character.set("position_y", offset_y);
     character.set("scale_x", start_scale);
     character.set("scale_y", start_scale);
-    core.animation_system
-        .animate_object_with_easing::<AnimatableCharacter>(
-            object_id,
-            "position_x",
-            offset_x,
-            0.0,
-            duration,
-            request.effect.easing,
-        )
-        .map_err(|error| ExtensionError::Runtime {
-            capability_id: request.capability_id.clone(),
-            message: format!("角色 X 位移动画失败: {error}"),
-        })?;
-    core.animation_system
-        .animate_object_with_easing::<AnimatableCharacter>(
-            object_id,
-            "position_y",
-            offset_y,
-            0.0,
-            duration,
-            request.effect.easing,
-        )
-        .map_err(|error| ExtensionError::Runtime {
-            capability_id: request.capability_id.clone(),
-            message: format!("角色 Y 位移动画失败: {error}"),
-        })?;
-    core.animation_system
-        .animate_object_with_easing::<AnimatableCharacter>(
-            object_id,
-            "scale_x",
-            start_scale,
-            1.0,
-            duration,
-            request.effect.easing,
-        )
-        .map_err(|error| ExtensionError::Runtime {
-            capability_id: request.capability_id.clone(),
-            message: format!("角色 X 缩放动画失败: {error}"),
-        })?;
-    core.animation_system
-        .animate_object_with_easing::<AnimatableCharacter>(
-            object_id,
-            "scale_y",
-            start_scale,
-            1.0,
-            duration,
-            request.effect.easing,
-        )
-        .map_err(|error| ExtensionError::Runtime {
-            capability_id: request.capability_id.clone(),
-            message: format!("角色 Y 缩放动画失败: {error}"),
-        })?;
+    svc.animate_character_with_easing(
+        object_id,
+        "position_x",
+        offset_x,
+        0.0,
+        duration,
+        request.effect.easing,
+    )
+    .map_err(|error| ExtensionError::Runtime {
+        capability_id: request.capability_id.clone(),
+        message: format!("角色 X 位移动画失败: {error}"),
+    })?;
+    svc.animate_character_with_easing(
+        object_id,
+        "position_y",
+        offset_y,
+        0.0,
+        duration,
+        request.effect.easing,
+    )
+    .map_err(|error| ExtensionError::Runtime {
+        capability_id: request.capability_id.clone(),
+        message: format!("角色 Y 位移动画失败: {error}"),
+    })?;
+    svc.animate_character_with_easing(
+        object_id,
+        "scale_x",
+        start_scale,
+        1.0,
+        duration,
+        request.effect.easing,
+    )
+    .map_err(|error| ExtensionError::Runtime {
+        capability_id: request.capability_id.clone(),
+        message: format!("角色 X 缩放动画失败: {error}"),
+    })?;
+    svc.animate_character_with_easing(
+        object_id,
+        "scale_y",
+        start_scale,
+        1.0,
+        duration,
+        request.effect.easing,
+    )
+    .map_err(|error| ExtensionError::Runtime {
+        capability_id: request.capability_id.clone(),
+        message: format!("角色 Y 缩放动画失败: {error}"),
+    })?;
     Ok(())
 }
 
@@ -342,15 +315,15 @@ fn apply_scene_shake(
     };
 
     let duration = request.effect.duration_or(defaults::SHAKE_DURATION);
-    let core = ctx.core_mut();
+    let svc = ctx.services();
     let name_lower = effect_name.to_lowercase();
 
     if name_lower.contains("vertical") {
-        core.renderer.start_shake(0.0, 8.0, duration);
+        svc.start_shake(0.0, 8.0, duration);
     } else if name_lower.contains("bounce") {
-        core.renderer.start_shake(0.0, 5.0, duration);
+        svc.start_shake(0.0, 5.0, duration);
     } else {
-        core.renderer.start_shake(6.0, 4.0, duration);
+        svc.start_shake(6.0, 4.0, duration);
     }
 
     Ok(())
@@ -368,15 +341,15 @@ fn apply_scene_blur(
     };
 
     let duration = request.effect.duration_or(0.5);
-    let core = ctx.core_mut();
+    let svc = ctx.services();
     let name_lower = effect_name.to_lowercase();
 
     if name_lower.contains("out") {
-        core.render_state.scene_effect.blur_amount = 0.0;
-        core.renderer.start_blur_transition(1.0, 0.0, duration);
+        *svc.scene_blur_amount_mut() = 0.0;
+        svc.start_blur_transition(1.0, 0.0, duration);
     } else {
-        core.render_state.scene_effect.blur_amount = 1.0;
-        core.renderer.start_blur_transition(0.0, 1.0, duration);
+        *svc.scene_blur_amount_mut() = 1.0;
+        svc.start_blur_transition(0.0, 1.0, duration);
     }
 
     Ok(())
@@ -393,11 +366,11 @@ fn apply_scene_dim(
         });
     };
 
-    let core = ctx.core_mut();
+    let svc = ctx.services();
     let name_lower = effect_name.to_lowercase();
 
     if name_lower.contains("reset") {
-        core.render_state.scene_effect.dim_level = 0.0;
+        *svc.scene_dim_level_mut() = 0.0;
     } else {
         let level = request
             .params
@@ -408,7 +381,7 @@ fn apply_scene_dim(
             })
             .unwrap_or(1.0);
         let dim = (level / 7.0).clamp(0.0, 1.0);
-        core.render_state.scene_effect.dim_level = dim;
+        *svc.scene_dim_level_mut() = dim;
     }
 
     Ok(())

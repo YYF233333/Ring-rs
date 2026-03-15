@@ -404,25 +404,15 @@ fn test_wait_for_signal_clears_only_on_expected_id() {
     let script = create_test_script();
     let mut runtime = VNRuntime::new(script);
 
-    runtime
-        .state_mut()
-        .wait(WaitingReason::WaitForSignal("ok".to_string()));
+    runtime.state_mut().wait(WaitingReason::signal("ok"));
 
     // 错误信号：不解除等待
-    let (commands, waiting) = runtime
-        .tick(Some(RuntimeInput::Signal {
-            id: "nope".to_string(),
-        }))
-        .unwrap();
+    let (commands, waiting) = runtime.tick(Some(RuntimeInput::signal("nope"))).unwrap();
     assert!(commands.is_empty());
-    assert!(matches!(waiting, WaitingReason::WaitForSignal(id) if id == "ok"));
+    assert!(matches!(waiting, WaitingReason::WaitForSignal(ref id) if id.as_str() == "ok"));
 
     // 正确信号：解除等待并继续执行脚本
-    let (commands2, waiting2) = runtime
-        .tick(Some(RuntimeInput::Signal {
-            id: "ok".to_string(),
-        }))
-        .unwrap();
+    let (commands2, waiting2) = runtime.tick(Some(RuntimeInput::signal("ok"))).unwrap();
     assert_eq!(commands2.len(), 1);
     assert!(matches!(waiting2, WaitingReason::WaitForClick));
 }
@@ -455,11 +445,7 @@ fn test_wait_for_time_ignores_non_click_input() {
         .wait(WaitingReason::WaitForTime(Duration::from_millis(500)));
 
     // Signal 不解除 WaitForTime
-    let (commands, waiting) = runtime
-        .tick(Some(RuntimeInput::Signal {
-            id: "test".to_string(),
-        }))
-        .unwrap();
+    let (commands, waiting) = runtime.tick(Some(RuntimeInput::signal("test"))).unwrap();
     assert!(commands.is_empty());
     assert!(matches!(waiting, WaitingReason::WaitForTime(_)));
 }

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::renderer::effects::EffectRequest;
 
-use super::capability::{EffectExtension, ExtensionError};
+use super::capability::{CapabilityId, EffectExtension, ExtensionError};
 use super::context::EngineContext;
 
 #[derive(Debug, Clone)]
@@ -21,10 +21,10 @@ pub enum CapabilityDispatchResult {
         extension_name: String,
     },
     MissingCapability {
-        capability_id: String,
+        capability_id: CapabilityId,
     },
     Failed {
-        capability_id: String,
+        capability_id: CapabilityId,
         extension_name: String,
         error: String,
     },
@@ -34,7 +34,7 @@ pub enum CapabilityDispatchResult {
 #[derive(Debug, Clone)]
 pub struct ExtensionRegistry {
     engine_api_version: String,
-    bindings: HashMap<String, CapabilityBinding>,
+    bindings: HashMap<CapabilityId, CapabilityBinding>,
 }
 
 impl ExtensionRegistry {
@@ -63,19 +63,20 @@ impl ExtensionRegistry {
             });
         }
 
-        for capability_id in &manifest.capabilities {
-            if let Some(existing) = self.bindings.get(capability_id) {
+        for raw_id in &manifest.capabilities {
+            let cap_id = CapabilityId::new(raw_id);
+            if let Some(existing) = self.bindings.get(&cap_id) {
                 return Err(ExtensionError::CapabilityConflict {
-                    capability_id: capability_id.clone(),
+                    capability_id: cap_id,
                     existing_extension: existing.extension_name.clone(),
                     incoming_extension: manifest.name.clone(),
                 });
             }
         }
 
-        for capability_id in &manifest.capabilities {
+        for raw_id in &manifest.capabilities {
             self.bindings.insert(
-                capability_id.clone(),
+                CapabilityId::new(raw_id),
                 CapabilityBinding {
                     extension_name: manifest.name.clone(),
                     extension: extension.clone(),
@@ -88,7 +89,7 @@ impl ExtensionRegistry {
 
     pub fn source_of(&self, capability_id: &str) -> Option<&str> {
         self.bindings
-            .get(capability_id)
+            .get(&CapabilityId::new(capability_id))
             .map(|binding| binding.extension_name.as_str())
     }
 
@@ -97,10 +98,9 @@ impl ExtensionRegistry {
         request: &EffectRequest,
         ctx: &mut EngineContext<'_>,
     ) -> CapabilityDispatchResult {
-        let capability_id = request.capability_id.as_str();
-        let Some(binding) = self.bindings.get(capability_id) else {
+        let Some(binding) = self.bindings.get(&request.capability_id) else {
             return CapabilityDispatchResult::MissingCapability {
-                capability_id: capability_id.to_string(),
+                capability_id: request.capability_id.clone(),
             };
         };
 
@@ -109,7 +109,7 @@ impl ExtensionRegistry {
                 extension_name: binding.extension_name.clone(),
             },
             Err(error) => CapabilityDispatchResult::Failed {
-                capability_id: capability_id.to_string(),
+                capability_id: request.capability_id.clone(),
                 extension_name: binding.extension_name.clone(),
                 error: format!("{error:?}"),
             },
