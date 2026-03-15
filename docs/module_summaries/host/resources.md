@@ -18,7 +18,7 @@
 3. 音频/文本/字节资源通过 `ResourceManager` 统一接口读取。
 4. 需要真实文件系统路径的场景（如 FFmpeg）使用 `materialize_to_fs()`。
 5. 可选资源使用 `read_text_optional()` 避免 NotFound 错误。
-6. `FsSource`/`ZipSource` 只在 `init::create_resource_source()` 中构造。
+6. `FsSource`/`ZipSource` 只在 `init::create_resource_manager` 内部构造；需 source 时从 `ResourceManager::source()` 获取。
 
 ## LogicalPath
 

@@ -43,7 +43,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | `println!` / `eprintln!` 调试 | `tracing::debug!` / `log::debug!` |
 | `config.assets_root.join()` / 手工 `PathBuf` 拼接资源路径 | `ResourceManager` 方法 + `LogicalPath` |
 | 子系统自持 `base_path` 或 `use_zip_mode` 字段 | 通过 `ResourceManager` 统一读取 |
-| 直接构造 `FsSource` / `ZipSource`（`init.rs` 之外） | `create_resource_source()` 统一入口 |
+| 直接构造 `FsSource` / `ZipSource`（`init.rs` 之外） | 仅 `init::create_resource_manager` 内部构造，需 source 时从 `ResourceManager::source()` 获取 |
 | 资源路径使用裸 `&str` / `String` 调用 `ResourceManager` | 使用 `&LogicalPath` |
 
 ### 代码风格

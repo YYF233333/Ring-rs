@@ -63,8 +63,10 @@ pub fn recognize_blocks(text: &str) -> Vec<Block> {
                 if *depth > 0 {
                     *depth -= 1;
                 } else {
-                    // 条件块结束
-                    let (lines, start, _) = current_conditional.take().unwrap();
+                    // 条件块结束（depth==0 时必有对应的 if 已设置 current_conditional）
+                    let (lines, start, _) = current_conditional
+                        .take()
+                        .expect("invariant: endif at depth 0 implies current_conditional set");
                     blocks.push(Block::Conditional {
                         lines,
                         start_line: start,

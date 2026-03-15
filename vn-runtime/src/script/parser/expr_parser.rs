@@ -57,7 +57,10 @@ impl<'a> ExprParser<'a> {
 
     fn skip_whitespace(&mut self) {
         while self.pos < self.input.len() {
-            let c = self.input[self.pos..].chars().next().unwrap();
+            let c = self.input[self.pos..]
+                .chars()
+                .next()
+                .expect("invariant: non-empty slice when pos < input.len()");
             if c.is_whitespace() {
                 self.pos += c.len_utf8();
             } else {
@@ -236,7 +239,10 @@ impl<'a> ExprParser<'a> {
         let start = self.pos;
 
         while self.pos < self.input.len() {
-            let c = self.input[self.pos..].chars().next().unwrap();
+            let c = self.input[self.pos..]
+                .chars()
+                .next()
+                .expect("invariant: non-empty slice when pos < input.len()");
             // 允许 '.' 仅用于 persistent. 前缀：如果当前累积的 token 恰好是 "persistent" 且下一个字符是 '.'，继续
             if c == '.' {
                 let so_far = &self.input[start..self.pos];
@@ -270,7 +276,10 @@ impl<'a> ExprParser<'a> {
         let start = self.pos;
 
         while self.pos < self.input.len() {
-            let c = self.input[self.pos..].chars().next().unwrap();
+            let c = self.input[self.pos..]
+                .chars()
+                .next()
+                .expect("invariant: non-empty slice when pos < input.len()");
             if c == quote {
                 let s = self.input[start..self.pos].to_string();
                 self.consume_char(); // 消费结束引号
@@ -295,7 +304,10 @@ impl<'a> ExprParser<'a> {
         }
 
         while self.pos < self.input.len() {
-            let c = self.input[self.pos..].chars().next().unwrap();
+            let c = self.input[self.pos..]
+                .chars()
+                .next()
+                .expect("invariant: non-empty slice when pos < input.len()");
             if c.is_ascii_digit() {
                 self.pos += c.len_utf8();
             } else {

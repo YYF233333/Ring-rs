@@ -101,7 +101,7 @@ pub fn extract_keyword_value<'a>(s: &'a str, keyword: &str) -> Option<&'a str> {
 
     for pattern in &patterns {
         if let Some(pos) = lower.find(pattern.as_str())
-            && (best_pos.is_none() || pos < best_pos.unwrap())
+            && best_pos.is_none_or(|p| pos < p)
         {
             best_pos = Some(pos);
             best_pattern_len = pattern.len();
@@ -295,7 +295,9 @@ fn is_valid_identifier(s: &str) -> bool {
         return false;
     }
     let mut chars = s.chars();
-    let first = chars.next().unwrap();
+    let first = chars
+        .next()
+        .expect("invariant: non-empty string already checked");
     if !first.is_ascii_alphabetic() && first != '_' {
         return false;
     }

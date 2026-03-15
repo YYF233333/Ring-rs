@@ -7,7 +7,7 @@ use std::sync::Arc;
 use host::app::{self, AppState};
 use host::backend::WgpuBackend;
 use host::ui::{ConditionContext, UiAssetCache, UiRenderContext};
-use host::{AppConfig, AppMode, SaveLoadPage, SaveLoadTab, UserSettings};
+use host::{AppConfig, AppMode, LogicalPath, SaveLoadPage, SaveLoadTab, UserSettings};
 use tracing::info;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -24,7 +24,6 @@ pub struct HostApp {
     backend: Option<WgpuBackend>,
     app_state: Option<AppState>,
     pub config: AppConfig,
-    pub font_data: Option<Vec<u8>>,
     initialized: bool,
     settings_draft: Option<UserSettings>,
     save_load_tab: SaveLoadTab,
@@ -35,12 +34,11 @@ pub struct HostApp {
 }
 
 impl HostApp {
-    pub fn new(config: AppConfig, font_data: Option<Vec<u8>>) -> Self {
+    pub fn new(config: AppConfig) -> Self {
         Self {
             backend: None,
             app_state: None,
             config,
-            font_data,
             initialized: false,
             settings_draft: None,
             save_load_tab: SaveLoadTab::Load,
@@ -70,8 +68,19 @@ impl ApplicationHandler for HostApp {
             .expect("window creation failed"),
         );
 
-        let backend = WgpuBackend::new(win, self.font_data.take());
         let mut app_state = AppState::new(self.config.clone());
+        let font_path = LogicalPath::new(&app_state.config.default_font);
+        let font_data = match app_state.core.resource_manager.read_bytes(&font_path) {
+            Ok(data) => {
+                info!(font = %font_path, "CJK font loaded");
+                Some(data)
+            }
+            Err(e) => {
+                tracing::warn!(font = %font_path, error = %e, "Cannot load CJK font");
+                None
+            }
+        };
+        let backend = WgpuBackend::new(win, font_data);
         app_state
             .core
             .resource_manager

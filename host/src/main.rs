@@ -8,7 +8,7 @@ mod egui_actions;
 mod egui_screens;
 mod host_app;
 
-use host::{AppConfig, LogicalPath};
+use host::AppConfig;
 use tracing::info;
 use tracing_subscriber::filter::LevelFilter;
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -78,21 +78,7 @@ fn main() {
         panic!("Config validation failed: {}", e);
     }
 
-    let source = host::app::init::create_resource_source(&config);
-    let font_path = LogicalPath::new(&config.default_font);
-    let font_data = match source.read(&font_path) {
-        Ok(data) => {
-            info!(font = %font_path, "CJK font loaded");
-            Some(data)
-        }
-        Err(e) => {
-            tracing::warn!(font = %font_path, error = %e, "Cannot load CJK font");
-            None
-        }
-    };
-
     let el = EventLoop::new().unwrap();
     el.set_control_flow(ControlFlow::Poll);
-    el.run_app(&mut host_app::HostApp::new(config, font_data))
-        .unwrap();
+    el.run_app(&mut host_app::HostApp::new(config)).unwrap();
 }

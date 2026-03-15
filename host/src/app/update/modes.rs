@@ -2,20 +2,37 @@
 //!
 //! Title / InGameMenu / SaveLoad / Settings / History 的 UI 交互
 //! 由 egui 层处理；此处仅保留 InGame 的游戏逻辑。
+//!
+//! InGame 分为两块：`update_ingame`（输入与推进模式分支）、`tick_ingame_shared`（每帧共享的状态推进：过渡、信号检测、动画、清理）。
 
 use tracing::debug;
+use vn_runtime::command::{
+    SIGNAL_CUTSCENE, SIGNAL_SCENE_EFFECT, SIGNAL_SCENE_TRANSITION, SIGNAL_TITLE_CARD,
+};
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 use winit::keyboard::KeyCode;
 
 use super::super::AppState;
 use super::super::save::{quick_load, quick_save};
-use super::finish_cutscene;
+use super::{finish_cutscene, run_script_tick, update_scene_transition};
 use crate::AppMode;
 use crate::PlaybackMode;
 
 /// 更新主标题界面（UI 由 egui 驱动，此处为 no-op）
 pub(super) fn update_title(_app_state: &mut AppState) {}
+
+/// 更新游戏内菜单（UI 由 egui 驱动，此处为 no-op）
+pub(super) fn update_ingame_menu(_app_state: &mut AppState) {}
+
+/// 更新存档/读档界面（UI 由 egui 驱动，此处为 no-op）
+pub(super) fn update_save_load(_app_state: &mut AppState) {}
+
+/// 更新设置界面（UI 由 egui 驱动，此处为 no-op）
+pub(super) fn update_settings(_app_state: &mut AppState) {}
+
+/// 更新历史界面（UI 由 egui 驱动，此处为 no-op）
+pub(super) fn update_history(_app_state: &mut AppState) {}
 
 /// 更新游戏进行中
 pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
@@ -215,14 +232,113 @@ fn update_ingame_normal(app_state: &mut AppState, dt: f32) {
     }
 }
 
-/// 更新游戏内菜单（UI 由 egui 驱动，此处为 no-op）
-pub(super) fn update_ingame_menu(_app_state: &mut AppState) {}
+/// InGame 下每帧共享更新（过渡、信号检测、动画、清理）
+///
+/// 由 `update::update()` 在模式分发后、当 `current_mode.is_in_game()` 时调用。
+/// 不包含输入与推进模式分支，仅负责与时间推进相关的状态更新。
+pub(super) fn tick_ingame_shared(app_state: &mut AppState, dt: f32) {
+    // 更新过渡效果
+    app_state.core.renderer.update_transition(dt);
 
-/// 更新存档/读档界面（UI 由 egui 驱动，此处为 no-op）
-pub(super) fn update_save_load(_app_state: &mut AppState) {}
+    // 更新场景过渡状态（基于动画系统）
+    update_scene_transition(
+        &mut app_state.core.renderer,
+        &mut app_state.core.render_state,
+        dt,
+    );
 
-/// 更新设置界面（UI 由 egui 驱动，此处为 no-op）
-pub(super) fn update_settings(_app_state: &mut AppState) {}
+    // WaitForTime 计时推进：每帧递减 wait_timer，到期后自动解除等待
+    if matches!(
+        app_state.session.waiting_reason,
+        WaitingReason::WaitForTime(_)
+    ) {
+        app_state.session.wait_timer -= dt;
+        if app_state.session.wait_timer <= 0.0 {
+            app_state.session.wait_timer = 0.0;
+            run_script_tick(app_state, Some(RuntimeInput::Click));
+        }
+    }
 
-/// 更新历史界面（UI 由 egui 驱动，此处为 no-op）
-pub(super) fn update_history(_app_state: &mut AppState) {}
+    // changeScene 过渡完成检测：当 Runtime 等待 scene_transition 信号
+    // 且所有过渡动画均已结束时，自动发送信号解除等待
+    if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
+        && id.as_str() == SIGNAL_SCENE_TRANSITION
+        && !app_state.core.renderer.is_scene_transition_active()
+        && !app_state.core.renderer.transition.is_active()
+    {
+        let signal_id = id.clone();
+        run_script_tick(app_state, Some(RuntimeInput::Signal { id: signal_id }));
+    }
+
+    // 场景效果更新（shake/blur 动画推进）
+    app_state
+        .core
+        .renderer
+        .update_scene_effects(dt, &mut app_state.core.render_state.scene_effect);
+
+    // sceneEffect 完成检测：当 Runtime 等待 scene_effect 信号
+    // 且所有场景效果动画均已结束时，自动发送信号
+    if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
+        && id.as_str() == SIGNAL_SCENE_EFFECT
+        && !app_state.core.renderer.is_scene_effect_active()
+    {
+        let signal_id = id.clone();
+        run_script_tick(app_state, Some(RuntimeInput::Signal { id: signal_id }));
+    }
+
+    // titleCard 计时更新与完成检测
+    if let Some(ref mut tc) = app_state.core.render_state.title_card {
+        tc.elapsed += dt;
+        if tc.elapsed >= tc.duration {
+            app_state.core.render_state.title_card = None;
+            if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
+                && id.as_str() == SIGNAL_TITLE_CARD
+            {
+                let signal_id = id.clone();
+                run_script_tick(app_state, Some(RuntimeInput::Signal { id: signal_id }));
+            }
+        }
+    }
+
+    // cutscene 视频播放推进
+    if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
+        && id.as_str() == SIGNAL_CUTSCENE
+    {
+        if app_state.video_player.is_playing() {
+            app_state.video_player.update(dt);
+            try_start_video_audio(app_state);
+            if app_state.video_player.is_done() {
+                finish_cutscene(app_state);
+            }
+        } else {
+            finish_cutscene(app_state);
+        }
+    }
+
+    // 更新章节标记动画（非阻塞、不受快进影响、固定时间自动消失）
+    app_state.core.render_state.update_chapter_mark(dt);
+
+    // 更新动画系统
+    let _events = app_state.core.animation_system.update(dt);
+
+    // 检测淡出完成的角色并移除
+    super::cleanup_fading_characters(&mut app_state.core);
+}
+
+/// 检查视频音频提取是否完成，如完成则通过 AudioManager 播放。
+fn try_start_video_audio(app_state: &mut AppState) {
+    let Some(audio_mod) = app_state.video_player.audio_mut() else {
+        return;
+    };
+    audio_mod.try_start_playback();
+
+    let channels = audio_mod.channels();
+    let sample_rate = audio_mod.sample_rate();
+    let Some(samples) = audio_mod.take_samples() else {
+        return;
+    };
+
+    if let Some(ref audio_manager) = app_state.core.audio_manager {
+        let _player = audio_manager.play_video_audio(samples, channels, sample_rate);
+    }
+}

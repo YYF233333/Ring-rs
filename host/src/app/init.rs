@@ -16,22 +16,6 @@ use vn_runtime::{Parser, analyze_script, extract_resource_references};
 
 use super::script_loader::{scan_scripts, scan_scripts_from_zip};
 
-/// Create the resource source from config (centralized source creation).
-pub fn create_resource_source(config: &AppConfig) -> Arc<dyn crate::resources::ResourceSource> {
-    let assets_root = assets_root_string(config);
-    match config.asset_source {
-        AssetSourceType::Fs => Arc::new(crate::resources::FsSource::new(&assets_root)),
-        AssetSourceType::Zip => {
-            let zip_path = config
-                .zip_path
-                .as_ref()
-                // 启动期配置错误属于不可恢复的 fail-fast 场景
-                .expect("Zip mode requires zip_path");
-            Arc::new(ZipSource::new(zip_path))
-        }
-    }
-}
-
 pub fn assets_root_string(config: &AppConfig) -> String {
     config.assets_root.to_string_lossy().to_string()
 }

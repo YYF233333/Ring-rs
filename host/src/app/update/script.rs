@@ -27,15 +27,13 @@ const SKIP_LARGE_DT: f32 = 999.0;
 /// - 背景过渡（changeBG dissolve）：直接完成
 /// - 场景过渡（changeScene）：完全跳过并切换背景
 /// - 打字机：立即完成
-///
-/// 阶段 27：签名从 `&mut AppState` 改为 `&mut CoreSystems`。
 pub fn skip_all_active_effects(core: &mut CoreSystems) {
     // 1. 跳过所有角色动画
     if core.animation_system.has_active_animations() {
         core.animation_system.skip_all();
         // update(0.0) 将已跳过的动画状态刷新到对象；返回值为"是否仍有活跃动画"，此处不需要
         let _ = core.animation_system.update(0.0);
-        cleanup_fading_characters(core);
+        super::cleanup_fading_characters(core);
     }
 
     // 2. 跳过背景过渡（changeBG dissolve）
@@ -68,26 +66,6 @@ pub fn skip_all_active_effects(core: &mut CoreSystems) {
     }
 }
 
-/// 清理淡出完成的角色（从动画系统注销并从 render_state 移除）
-///
-/// 阶段 27：签名从 `&mut AppState` 改为 `&mut CoreSystems`。
-pub(super) fn cleanup_fading_characters(core: &mut CoreSystems) {
-    let fading_out: Vec<String> = core
-        .render_state
-        .visible_characters
-        .iter()
-        .filter(|(_, c)| c.fading_out)
-        .map(|(alias, _)| alias.clone())
-        .collect();
-
-    for alias in &fading_out {
-        if let Some(object_id) = core.character_object_ids.remove(alias) {
-            core.animation_system.unregister(object_id);
-        }
-    }
-    core.render_state.remove_fading_out_characters(&fading_out);
-}
-
 /// 处理脚本模式下的输入
 pub fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
     // 如果有动画正在进行，跳过所有动画
@@ -97,7 +75,7 @@ pub fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
         let _ = app_state.core.animation_system.update(0.0);
 
         // 清理淡出完成的角色
-        cleanup_fading_characters(&mut app_state.core);
+        super::cleanup_fading_characters(&mut app_state.core);
         return;
     }
 
