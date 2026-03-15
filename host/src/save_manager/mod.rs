@@ -314,9 +314,10 @@ impl SaveInfo {
     /// 格式化时间戳为可读格式（UTC，如 `2024-03-15 14:30`）
     pub fn formatted_timestamp(&self) -> String {
         if let Ok(secs) = self.timestamp.parse::<u64>()
-            && let Some(dt) = DateTime::<Utc>::from_timestamp_secs(secs as i64) {
-                return dt.format("%Y-%m-%d %H:%M").to_string();
-            }
+            && let Some(dt) = DateTime::<Utc>::from_timestamp_secs(secs as i64)
+        {
+            return dt.format("%Y-%m-%d %H:%M").to_string();
+        }
         self.timestamp.clone()
     }
 }

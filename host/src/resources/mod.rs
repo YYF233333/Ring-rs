@@ -130,14 +130,9 @@ impl ResourceManager {
         Ok(texture)
     }
 
-    /// 获取已缓存的图片资源（不加载），更新 LRU
-    pub fn get_texture(&mut self, path: &LogicalPath) -> Option<Arc<dyn Texture>> {
-        self.texture_cache.get(path.as_str())
-    }
-
-    /// 只读获取已缓存的图片资源（不更新 LRU）
+    /// 只读获取已缓存的图片资源（不加载）
     pub fn peek_texture(&self, path: &LogicalPath) -> Option<Arc<dyn Texture>> {
-        self.texture_cache.peek(path.as_str())
+        self.texture_cache.get(path.as_str())
     }
 
     /// 检查图片资源是否已加载
@@ -182,18 +177,6 @@ impl ResourceManager {
 
     pub fn texture_cache_stats(&self) -> CacheStats {
         self.texture_cache.stats()
-    }
-
-    pub fn pin_texture(&mut self, path: &LogicalPath) {
-        self.texture_cache.pin(path.as_str());
-    }
-
-    pub fn unpin_texture(&mut self, path: &LogicalPath) {
-        self.texture_cache.unpin(path.as_str());
-    }
-
-    pub fn unpin_all_textures(&mut self) {
-        self.texture_cache.unpin_all();
     }
 
     /// 读取文本资源

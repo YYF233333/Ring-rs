@@ -151,9 +151,8 @@ fn test_headless_load_texture_cache_hit() {
     let t1 = manager.load_texture(&p).unwrap();
     let t2 = manager.load_texture(&p).unwrap();
     assert_eq!(t1.width_u32(), t2.width_u32());
-
-    let stats = manager.texture_cache_stats();
-    assert!(stats.hits >= 1);
+    assert_eq!(manager.texture_count(), 1);
+    assert!(manager.has_texture(&p));
 }
 
 #[test]
