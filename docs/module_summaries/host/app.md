@@ -20,7 +20,7 @@
 
 ## Dependencies
 
-- 依赖 `renderer`、`resources`、`audio`、`input`、`screens`、`ui`、`save_manager`
+- 依赖 `renderer`、`resources`、`audio`、`input`、`ui`（含 ScreenDefinitions）、`save_manager`
 - 依赖 `vn-runtime` 提供脚本执行核心与等待模型
 
 ## Invariants

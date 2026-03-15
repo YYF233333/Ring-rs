@@ -14,7 +14,7 @@
 ### 环境要求
 
 - Rust **stable**（本仓库使用 `edition = "2024"`，建议使用较新的 toolchain）
-- 支持 OpenGL 的图形环境
+- 支持 wgpu 的图形环境（Vulkan / OpenGL / Metal / DX12 等，依平台而定）
 
 ### 运行
 
@@ -33,7 +33,6 @@ cargo run
 - **内容制作入门**：[docs/getting_started.md](docs/getting_started.md)
 - **运行配置（config.json）**：[docs/config_guide.md](docs/config_guide.md)
 - **脚本规范**：[docs/script_syntax_spec.md](docs/script_syntax_spec.md)
-- **脚本示例集**：[docs/script_language_showcase.md](docs/script_language_showcase.md)
 - **资源系统与打包**：[docs/resource_management.md](docs/resource_management.md)
 - **存档格式**：[docs/save_format.md](docs/save_format.md)
 - **仓库导航地图（改引擎时看）**：[docs/navigation_map.md](docs/navigation_map.md)

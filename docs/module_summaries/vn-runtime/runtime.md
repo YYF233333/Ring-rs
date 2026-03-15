@@ -53,8 +53,8 @@
 ## RelatedDocs
 
 - [模块总览](../vn-runtime.md)
-- [state 模块接口](../../../vn-runtime/src/state.rs)
 - [存档格式](../../save_format.md)
+- 状态与变量域定义见源码 `vn-runtime/src/state.rs`
 
 ## LastVerified
 

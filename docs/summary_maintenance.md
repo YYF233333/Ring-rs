@@ -18,7 +18,7 @@
 - 改动落在哪个子模块，就至少更新该子模块摘要。
 - `vn-runtime` 跨模块改动需同步更新 `docs/module_summaries/vn-runtime.md` 总览。
 - `host` 跨模块改动需同步更新 `docs/module_summaries/host.md` 总览。
-- 如果阅读顺序或使用协议变化，必须同步更新 `AGENTS.md`。
+- 如果阅读顺序或使用协议变化，必须同步更新 `CLAUDE.md`。
 
 ## 新鲜度与状态
 

@@ -20,7 +20,6 @@
 - **内容制作入门**：[getting_started.md](getting_started.md)（不改代码写脚本/素材 → 测试 → 打包发布）
 - **运行配置说明**：[config_guide.md](config_guide.md)（`config.json` 字段含义/默认值/校验规则）
 - **脚本语法规范**：[script_syntax_spec.md](script_syntax_spec.md)
-- **脚本示例集**：[script_language_showcase.md](script_language_showcase.md)
 - **资源系统**：[resource_management.md](resource_management.md)、[manifest_guide.md](manifest_guide.md)
 - **存档格式**：[save_format.md](save_format.md)
 - **覆盖率与门禁**：[coverage.md](coverage.md)、[CONTRIBUTING.md](../CONTRIBUTING.md)
@@ -168,7 +167,7 @@
 
 ## 开发工作流（质量门禁/覆盖率）
 
-- **一键门禁**：`cargo check-all`（由 `tools/xtask` 串行执行 fmt/clippy/test）
+- **一键门禁**：`cargo check-all`（由 `tools/xtask` 串行执行 fmt --all → clippy --fix → test）
 - **脚本检查**：`cargo script-check`（检查脚本语法/label/资源引用）
 - **Dev Mode 自动脚本检查**：Host 启动时基于 `config.json` 的 `debug.script_check` 自动运行（debug build 默认开启）
 - **覆盖率**：

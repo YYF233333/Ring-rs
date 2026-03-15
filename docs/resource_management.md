@@ -119,9 +119,6 @@ cargo run -p asset-packer
 # 指定输入输出
 cargo run -p asset-packer -- --input assets --output game.zip
 
-# 指定压缩级别（0-9，默认 6）
-cargo run -p asset-packer -- --input assets --output game.zip --level 9
-
 # 列出 ZIP 内容
 cargo run -p asset-packer -- list game.zip
 
@@ -152,9 +149,6 @@ cargo run -p asset-packer
 
 # 指定输入输出
 cargo run -p asset-packer -- --input assets --output game.zip
-
-# 指定压缩级别（0-9，默认 6）
-cargo run -p asset-packer -- --level 9
 ```
 
 #### 列出 ZIP 内容
@@ -301,9 +295,10 @@ backgrounds/../characters/角色.png  → characters/角色.png
 
 **A**: 可以尝试：
 
-1. **提高压缩级别**：`cargo run -p asset-packer -- --level 9`
-2. **压缩图片资源**：使用工具压缩 PNG/JPEG/WebP 文件
-3. **移除未使用的资源**：清理 `assets` 目录中不需要的文件
+1. **压缩图片资源**：使用工具压缩 PNG/JPEG/WebP 文件
+2. **移除未使用的资源**：清理 `assets` 目录中不需要的文件
+
+（当前 asset-packer 使用 deflate 默认压缩，不提供压缩级别参数。）
 
 ### Q: 开发时可以使用 ZIP 模式吗？
 

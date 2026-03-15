@@ -11,7 +11,7 @@
 ## 你需要准备
 
 - **Rust stable**（本仓库使用 `edition = "2024"`，建议用最新稳定版）
-- 能跑 OpenGL 的环境
+- 支持 wgpu 的图形环境（Vulkan / OpenGL / Metal / DX12 等，依平台而定）
 
 如果你只想“做内容”，但不想装 Rust：你也可以在未来使用预编译的 Player（本仓库暂以源码工作流为主）。
 
@@ -38,9 +38,8 @@ assets/
 
 按照内容需求修改仓库根目录下的 `config.json`（打包发行版时也会带上/生成对应配置）。
 
-- **最低限度**：`name`、`start_script_path`
-- **常用补充**：`manifest_path`、`default_font`、`window`、`debug`
-- **路径规则（最重要的一条）**：`start_script_path` / `manifest_path` / `default_font` 都是 **相对于 `assets_root`**
+- **必填**：`config.json` 必须包含所有字段（缺失会启动报错），建议从 [config_guide.md](config_guide.md) 的示例复制后按需修改。
+- **关键路径**：`name`、`start_script_path`、`manifest_path`、`default_font`、`window`、`debug` 等；其中 `start_script_path` / `manifest_path` / `default_font` 均为 **相对于 `assets_root`**。
 
 建议直接从配置指南的示例复制后再改字段：详见 [config_guide.md](config_guide.md)（含开发模式/发布模式示例、字段含义与校验规则）。
 
@@ -154,13 +153,13 @@ dist/
 ├── My VN.exe      # 可执行文件（根据 config.json.name 自动命名并清理非法字符）
 ├── game.zip       # 资源包（包含整个 assets/）
 └── config.json    # 已自动改成 ZIP 模式（asset_source=zip, zip_path=game.zip）
-My VN.zip          # dist目录打包压缩
+# 使用 --zip 时，仓库根目录下还会生成 My VN.zip（即 dist/ 的压缩包）
 ```
 
 说明：
 
 - `dist/config.json` 会被自动改成 ZIP 模式；**不会修改**仓库根目录的 `config.json`
-- 分发时你只需要把 `dist/` 里的这三个文件交付给玩家（不需要再带 `assets/` 目录）
+- 分发时把 `dist/` 内的可执行文件、`game.zip`、`config.json` 交付给玩家即可（若打包时检测到 FFmpeg 还会多一个 ffmpeg 可执行文件）；不需要再带 `assets/` 目录
 
 ### 发布前自检（强烈建议）
 

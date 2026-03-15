@@ -15,12 +15,14 @@
 {
   "name": "My VN",
   "assets_root": "assets",
-  "start_script_path": "scripts/main.md",
-  "asset_source": "fs",
+  "saves_dir": "saves",
   "manifest_path": "manifest.json",
   "default_font": "fonts/simhei.ttf",
+  "start_script_path": "scripts/main.md",
+  "asset_source": "fs",
+  "zip_path": null,
   "window": { "width": 1280, "height": 720, "title": "My VN", "fullscreen": false },
-  "debug": { "script_check": true, "log_level": "info" },
+  "debug": { "script_check": true, "log_level": "info", "log_file": null },
   "audio": { "master_volume": 1.0, "bgm_volume": 0.8, "sfx_volume": 1.0, "muted": false },
   "resources": { "texture_cache_size_mb": 256 }
 }
@@ -32,11 +34,16 @@
 {
   "name": "My VN",
   "assets_root": "assets",
+  "saves_dir": "saves",
+  "manifest_path": "manifest.json",
+  "default_font": "fonts/simhei.ttf",
   "start_script_path": "scripts/main.md",
   "asset_source": "zip",
   "zip_path": "game.zip",
   "window": { "width": 1280, "height": 720, "title": "My VN", "fullscreen": false },
-  "debug": { "log_file": "game.log" }
+  "debug": { "script_check": false, "log_level": null, "log_file": "game.log" },
+  "audio": { "master_volume": 1.0, "bgm_volume": 0.8, "sfx_volume": 1.0, "muted": false },
+  "resources": { "texture_cache_size_mb": 256 }
 }
 ```
 

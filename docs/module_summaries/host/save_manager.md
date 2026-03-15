@@ -13,7 +13,7 @@
 
 **持久化变量（`PersistentStore`）**：
 
-- 模块入口：`host/src/persistent.rs`
+- 模块入口：`host/src/app/persistent.rs`
 - 核心类型：`PersistentStore { variables: HashMap<String, VarValue> }`
 - 关键接口：`load(saves_dir)`、`save()`、`merge_from(vars)`、`save_or_log()`
 - 文件：`saves/persistent.json`（key 为 bare key，不含 `persistent.` 前缀）
@@ -50,7 +50,7 @@
 
 - [host 总览](../host.md)
 - [save_format](../../save_format.md)
-- [screens 摘要](screens.md)
+- [ui 摘要](ui.md)（存读档界面与 ScreenDefinitions）
 
 ## LastVerified
 
