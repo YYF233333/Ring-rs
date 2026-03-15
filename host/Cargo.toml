@@ -33,3 +33,6 @@ bytemuck = { version = "1", features = ["derive"] }
 
 # 视频解码（FFmpeg 子进程封装）
 ffmpeg-sidecar = { version = "2.4", default-features = false }
+
+# 时间格式化（存档保存时间展示）
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }

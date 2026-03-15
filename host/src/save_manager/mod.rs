@@ -17,6 +17,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::info;
 
+use chrono::{DateTime, Utc};
 use vn_runtime::{SaveData, SaveError};
 
 /// 最大存档槽位数
@@ -310,67 +311,13 @@ pub struct SaveInfo {
 }
 
 impl SaveInfo {
-    /// 格式化时间戳为可读格式
+    /// 格式化时间戳为可读格式（UTC，如 `2024-03-15 14:30`）
     pub fn formatted_timestamp(&self) -> String {
-        // 尝试解析 Unix 时间戳
-        if let Ok(secs) = self.timestamp.parse::<u64>() {
-            format_unix_timestamp(secs)
-        } else {
-            // 已经是格式化的字符串
-            self.timestamp.clone()
-        }
-    }
-
-    /// 格式化游玩时间
-    pub fn formatted_play_time(&self) -> String {
-        format_play_time(self.play_time_secs)
-    }
-}
-
-/// 格式化 Unix 时间戳为可读格式
-fn format_unix_timestamp(secs: u64) -> String {
-    use std::time::{Duration, UNIX_EPOCH};
-
-    let datetime = UNIX_EPOCH + Duration::from_secs(secs);
-
-    // 简单格式化（不依赖 chrono）
-    if let Ok(since_epoch) = datetime.duration_since(UNIX_EPOCH) {
-        let total_secs = since_epoch.as_secs();
-        // 计算年月日时分（简化版，不考虑时区和闰年精确性）
-        let days = total_secs / 86400;
-        let time_of_day = total_secs % 86400;
-        let hours = time_of_day / 3600;
-        let minutes = (time_of_day % 3600) / 60;
-
-        // 粗略计算年份（从 1970 开始）
-        let years = 1970 + (days / 365);
-        let remaining_days = days % 365;
-        let month = remaining_days / 30 + 1;
-        let day = remaining_days % 30 + 1;
-
-        format!(
-            "{:04}-{:02}-{:02} {:02}:{:02}",
-            years,
-            month.min(12),
-            day.min(31),
-            hours,
-            minutes
-        )
-    } else {
-        secs.to_string()
-    }
-}
-
-/// 格式化游玩时间
-fn format_play_time(secs: u64) -> String {
-    let hours = secs / 3600;
-    let minutes = (secs % 3600) / 60;
-    let seconds = secs % 60;
-
-    if hours > 0 {
-        format!("{}:{:02}:{:02}", hours, minutes, seconds)
-    } else {
-        format!("{}:{:02}", minutes, seconds)
+        if let Ok(secs) = self.timestamp.parse::<u64>()
+            && let Some(dt) = DateTime::<Utc>::from_timestamp_secs(secs as i64) {
+                return dt.format("%Y-%m-%d %H:%M").to_string();
+            }
+        self.timestamp.clone()
     }
 }
 
