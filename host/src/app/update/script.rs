@@ -234,7 +234,11 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                 }
 
                 // 应用动画/过渡效果请求（统一入口）
-                apply_effect_requests(&mut app_state.core, &app_state.session.manifest);
+                apply_effect_requests(
+                    &app_state.extension_registry,
+                    &mut app_state.core,
+                    &app_state.session.manifest,
+                );
 
                 // 处理音频命令
                 handle_audio_command(&mut app_state.core, &app_state.config);
@@ -287,12 +291,7 @@ pub fn finish_cutscene(app_state: &mut AppState) {
     if let Some(ref mut audio) = app_state.core.audio_manager {
         audio.unduck();
     }
-    run_script_tick(
-        app_state,
-        Some(RuntimeInput::Signal {
-            id: SIGNAL_CUTSCENE.to_string(),
-        }),
-    );
+    run_script_tick(app_state, Some(RuntimeInput::signal(SIGNAL_CUTSCENE)));
 }
 
 /// 解析视频路径为真实文件系统路径。

@@ -1,7 +1,9 @@
 //! 扩展执行上下文（受控访问核心系统 + 诊断上报）。
 
-use crate::app::CoreSystems;
 use crate::manifest::Manifest;
+
+use super::capability::CapabilityId;
+use super::services::EngineServices;
 
 /// 扩展诊断级别。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,30 +17,30 @@ pub enum DiagnosticLevel {
 #[derive(Debug, Clone)]
 pub struct ExtensionDiagnostic {
     pub level: DiagnosticLevel,
-    pub capability_id: String,
+    pub capability_id: CapabilityId,
     pub extension_name: String,
     pub message: String,
 }
 
 /// 扩展执行上下文。
 pub struct EngineContext<'a> {
-    core: &'a mut CoreSystems,
+    services: &'a mut dyn EngineServices,
     manifest: &'a Manifest,
     diagnostics: Vec<ExtensionDiagnostic>,
 }
 
 impl<'a> EngineContext<'a> {
-    pub fn new(core: &'a mut CoreSystems, manifest: &'a Manifest) -> Self {
+    pub fn new(services: &'a mut dyn EngineServices, manifest: &'a Manifest) -> Self {
         Self {
-            core,
+            services,
             manifest,
             diagnostics: Vec::new(),
         }
     }
 
-    /// 获取可变核心系统引用（扩展需通过该入口访问底层能力）。
-    pub fn core_mut(&mut self) -> &mut CoreSystems {
-        self.core
+    /// 获取可变引擎服务引用（扩展通过 trait 方法访问底层能力）。
+    pub fn services(&mut self) -> &mut dyn EngineServices {
+        self.services
     }
 
     /// 只读资源清单。
@@ -86,7 +88,7 @@ impl<'a> EngineContext<'a> {
     ) {
         self.diagnostics.push(ExtensionDiagnostic {
             level,
-            capability_id: capability_id.to_string(),
+            capability_id: CapabilityId::new(capability_id),
             extension_name: extension_name.to_string(),
             message: message.to_string(),
         });

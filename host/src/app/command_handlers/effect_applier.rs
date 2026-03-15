@@ -22,14 +22,20 @@ use super::super::CoreSystems;
 ///
 /// 遍历 `command_executor.last_output.effect_requests`，
 /// 对每个请求执行 capability 路由；缺失或失败时回退 legacy 路径。
-pub fn apply_effect_requests(core: &mut CoreSystems, manifest: &Manifest) {
+pub fn apply_effect_requests(
+    registry: &crate::extensions::ExtensionRegistry,
+    core: &mut CoreSystems,
+    manifest: &Manifest,
+) {
     let requests = std::mem::take(&mut core.command_executor.last_output.effect_requests);
     if !requests.is_empty() {
         debug!(count = requests.len(), "开始应用效果请求");
     }
 
-    let registry = core.extension_registry.clone();
-    let mut ctx = crate::extensions::EngineContext::new(core, manifest);
+    let mut ctx = crate::extensions::EngineContext::new(
+        core as &mut dyn crate::extensions::EngineServices,
+        manifest,
+    );
     for request in &requests {
         match registry.dispatch(request, &mut ctx) {
             crate::extensions::CapabilityDispatchResult::Handled { extension_name } => {
@@ -44,7 +50,7 @@ pub fn apply_effect_requests(core: &mut CoreSystems, manifest: &Manifest) {
                     capability_id = %capability_id,
                     "未找到 capability 处理器，尝试 capability 级回退"
                 );
-                dispatch_fallback(&registry, &mut ctx, request, "missing");
+                dispatch_fallback(registry, &mut ctx, request, "missing");
             }
             crate::extensions::CapabilityDispatchResult::Failed {
                 capability_id,
@@ -57,7 +63,7 @@ pub fn apply_effect_requests(core: &mut CoreSystems, manifest: &Manifest) {
                     error = %error,
                     "capability 执行失败，尝试 capability 级回退"
                 );
-                dispatch_fallback(&registry, &mut ctx, request, "failed");
+                dispatch_fallback(registry, &mut ctx, request, "failed");
             }
         }
     }
@@ -186,7 +192,7 @@ fn rewrite_capability(
     };
 
     let mut fallback = EffectRequest::new(request.target.clone(), effect);
-    fallback.capability_id = capability_id.to_string();
+    fallback.capability_id = crate::extensions::CapabilityId::new(capability_id);
     fallback
 }
 
