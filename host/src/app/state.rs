@@ -13,6 +13,7 @@ pub struct HostState {
     pub debug_mode: bool,
 }
 
+#[allow(clippy::new_without_default)]
 impl HostState {
     /// 创建新的 Host 状态
     pub fn new() -> Self {
@@ -25,11 +26,5 @@ impl HostState {
     /// 停止运行
     pub fn stop(&mut self) {
         self.running = false;
-    }
-}
-
-impl Default for HostState {
-    fn default() -> Self {
-        Self::new()
     }
 }

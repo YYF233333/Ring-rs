@@ -15,11 +15,6 @@ fn test_env() -> (Executor, RuntimeState) {
 }
 
 #[test]
-fn test_executor_default() {
-    let _ = Executor::default();
-}
-
-#[test]
 fn test_execute_dialogue() {
     let (mut executor, mut state, script) = test_ctx("");
 

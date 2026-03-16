@@ -56,6 +56,7 @@ pub struct InputManager {
     last_hold_trigger_time: f64,
 }
 
+#[allow(clippy::new_without_default)]
 impl InputManager {
     /// 创建新的输入管理器
     pub fn new() -> Self {
@@ -348,12 +349,6 @@ impl InputManager {
 
         self.hovered_index = None;
         false
-    }
-}
-
-impl Default for InputManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

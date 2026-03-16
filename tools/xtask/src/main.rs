@@ -171,6 +171,7 @@ fn real_main() -> anyhow::Result<()> {
                 "cargo",
                 &[
                     "llvm-cov",
+                    "--quiet",
                     "-p",
                     "vn-runtime",
                     "--all-features",
@@ -191,6 +192,7 @@ fn real_main() -> anyhow::Result<()> {
                 "cargo",
                 &[
                     "llvm-cov",
+                    "--quiet",
                     "--workspace",
                     "--exclude",
                     "xtask",
@@ -223,15 +225,6 @@ struct ScriptCheckConfig {
     scripts_dir: PathBuf,
     /// 资源根目录（相对于 workspace root）
     assets_root: PathBuf,
-}
-
-impl Default for ScriptCheckConfig {
-    fn default() -> Self {
-        Self {
-            scripts_dir: PathBuf::from("assets/scripts"),
-            assets_root: PathBuf::from("assets"),
-        }
-    }
 }
 
 /// 脚本检查结果

@@ -28,10 +28,9 @@ use crate::input::SignalId;
 /// WaitForTime   -> Host 等待指定时长后调用 tick，Runtime 自动继续
 /// WaitForSignal -> 等待外部信号，收到匹配的 Signal 输入后继续
 /// ```
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WaitingReason {
     /// 不等待，继续执行
-    #[default]
     None,
 
     /// 等待用户点击
@@ -280,9 +279,6 @@ mod tests {
         assert!(WaitingReason::choice(3).is_waiting());
         assert!(WaitingReason::time(Duration::from_secs(1)).is_waiting());
         assert!(WaitingReason::signal("test").is_waiting());
-
-        // Default
-        assert_eq!(WaitingReason::default(), WaitingReason::None);
     }
 
     #[test]

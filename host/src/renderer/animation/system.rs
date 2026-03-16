@@ -47,12 +47,6 @@ pub struct AnimationSystem {
     events: Vec<AnimationEvent>,
 }
 
-impl Default for AnimationSystem {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl std::fmt::Debug for AnimationSystem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AnimationSystem")
@@ -62,6 +56,7 @@ impl std::fmt::Debug for AnimationSystem {
     }
 }
 
+#[allow(clippy::new_without_default)]
 impl AnimationSystem {
     /// 创建新的动画系统
     pub fn new() -> Self {

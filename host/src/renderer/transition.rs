@@ -237,12 +237,6 @@ impl std::fmt::Debug for TransitionManager {
     }
 }
 
-impl Default for TransitionManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

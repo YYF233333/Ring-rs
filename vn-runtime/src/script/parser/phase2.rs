@@ -1130,9 +1130,3 @@ fn parse_markdown_link(input: &str) -> Option<(&str, &str, &str)> {
     let rest = &after_label[path_end + 1..];
     Some((label.trim(), path.trim(), rest))
 }
-
-impl Default for Phase2Parser {
-    fn default() -> Self {
-        Self::new()
-    }
-}

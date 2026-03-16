@@ -39,6 +39,7 @@ pub struct CommandExecutor {
     pub last_output: CommandOutput,
 }
 
+#[allow(clippy::new_without_default)]
 impl CommandExecutor {
     /// 创建新的 Command 执行器
     pub fn new() -> Self {
@@ -156,12 +157,6 @@ impl CommandExecutor {
         }
 
         last_result
-    }
-}
-
-impl Default for CommandExecutor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

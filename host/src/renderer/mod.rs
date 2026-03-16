@@ -23,9 +23,6 @@ const EFFECT_THRESHOLD: f32 = 0.01;
 const BLUR_APPROX_FACTOR: f32 = 0.3;
 /// 震动效果频率（弧度/秒）
 const SHAKE_FREQUENCY: f32 = 30.0;
-/// 默认设计分辨率
-const DEFAULT_DESIGN_WIDTH: f32 = 1920.0;
-const DEFAULT_DESIGN_HEIGHT: f32 = 1080.0;
 
 pub mod animation;
 pub mod background_transition;
@@ -201,12 +198,6 @@ pub enum DrawMode {
     Contain,
     /// 拉伸模式：完全填满，不保持宽高比
     Stretch,
-}
-
-impl Default for Renderer {
-    fn default() -> Self {
-        Self::new(DEFAULT_DESIGN_WIDTH, DEFAULT_DESIGN_HEIGHT)
-    }
 }
 
 #[cfg(test)]

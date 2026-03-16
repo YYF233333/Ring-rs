@@ -53,12 +53,6 @@ impl SaveVersion {
     }
 }
 
-impl Default for SaveVersion {
-    fn default() -> Self {
-        Self::current()
-    }
-}
-
 /// 存档元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveMetadata {
@@ -274,9 +268,8 @@ mod tests {
     }
 
     #[test]
-    fn test_save_version_default_and_to_string() {
-        let v = SaveVersion::default();
-        assert_eq!(v, SaveVersion::current());
+    fn test_save_version_current_and_to_string() {
+        let v = SaveVersion::current();
         assert_eq!(
             v.to_string(),
             format!("{}.{}", SAVE_VERSION_MAJOR, SAVE_VERSION_MINOR)

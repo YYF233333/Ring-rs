@@ -51,6 +51,7 @@ pub struct Parser {
     phase2: Phase2Parser,
 }
 
+#[allow(clippy::new_without_default)]
 impl Parser {
     /// 创建新的解析器
     pub fn new() -> Self {
@@ -123,11 +124,5 @@ impl Parser {
     /// 获取解析过程中的警告
     pub fn warnings(&self) -> &[String] {
         &self.phase2.warnings
-    }
-}
-
-impl Default for Parser {
-    fn default() -> Self {
-        Self::new()
     }
 }

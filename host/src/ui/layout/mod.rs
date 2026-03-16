@@ -90,20 +90,6 @@ pub struct ColorConfig {
     pub interface_text: HexColor,
 }
 
-impl Default for ColorConfig {
-    fn default() -> Self {
-        Self {
-            accent: HexColor("#ffffff".into()),
-            idle: HexColor("#888888".into()),
-            hover: HexColor("#ff9900".into()),
-            selected: HexColor("#ffffff".into()),
-            insensitive: HexColor("#7878787f".into()),
-            text: HexColor("#000000".into()),
-            interface_text: HexColor("#ffffff".into()),
-        }
-    }
-}
-
 /// 十六进制颜色值（如 `"#ff9900"` 或 `"#7878787f"`）
 #[derive(Debug, Clone, Deserialize)]
 #[serde(transparent)]
@@ -155,19 +141,6 @@ pub struct FontConfig {
     pub title_text_size: f32,
 }
 
-impl Default for FontConfig {
-    fn default() -> Self {
-        Self {
-            text_size: 33.0,
-            name_text_size: 45.0,
-            interface_text_size: 33.0,
-            label_text_size: 36.0,
-            notify_text_size: 24.0,
-            title_text_size: 75.0,
-        }
-    }
-}
-
 // ─── Dialogue layout ─────────────────────────────────────────────────────────
 
 /// 对话框布局配置
@@ -190,20 +163,6 @@ pub struct DialogueLayoutConfig {
     pub dialogue_width: f32,
 }
 
-impl Default for DialogueLayoutConfig {
-    fn default() -> Self {
-        Self {
-            textbox_height: 278.0,
-            name_xpos: 360.0,
-            name_ypos: 0.0,
-            namebox_borders: [5.0, 5.0, 5.0, 5.0],
-            dialogue_xpos: 402.0,
-            dialogue_ypos: 75.0,
-            dialogue_width: 1116.0,
-        }
-    }
-}
-
 // ─── Choice layout ───────────────────────────────────────────────────────────
 
 /// 选项按钮布局配置
@@ -218,16 +177,6 @@ pub struct ChoiceLayoutConfig {
     pub button_borders: [f32; 4],
 }
 
-impl Default for ChoiceLayoutConfig {
-    fn default() -> Self {
-        Self {
-            button_width: 1185.0,
-            spacing: 33.0,
-            button_borders: [150.0, 8.0, 150.0, 8.0],
-        }
-    }
-}
-
 // ─── Quick menu ───────────────────────────────────────────────────────────────
 
 /// 快捷菜单配置
@@ -238,15 +187,6 @@ pub struct QuickMenuConfig {
     pub text_size: f32,
     /// 按钮边框 (left, top, right, bottom)
     pub button_borders: [f32; 4],
-}
-
-impl Default for QuickMenuConfig {
-    fn default() -> Self {
-        Self {
-            text_size: 21.0,
-            button_borders: [15.0, 6.0, 15.0, 0.0],
-        }
-    }
 }
 
 // ─── Title layout ─────────────────────────────────────────────────────────────
@@ -261,15 +201,6 @@ pub struct TitleLayoutConfig {
     pub navigation_spacing: f32,
 }
 
-impl Default for TitleLayoutConfig {
-    fn default() -> Self {
-        Self {
-            navigation_xpos: 60.0,
-            navigation_spacing: 6.0,
-        }
-    }
-}
-
 // ─── Game menu layout ─────────────────────────────────────────────────────────
 
 /// 游戏菜单框架布局
@@ -280,15 +211,6 @@ pub struct GameMenuLayoutConfig {
     pub nav_width: f32,
     /// 导航按钮间距
     pub navigation_spacing: f32,
-}
-
-impl Default for GameMenuLayoutConfig {
-    fn default() -> Self {
-        Self {
-            nav_width: 420.0,
-            navigation_spacing: 6.0,
-        }
-    }
 }
 
 // ─── Save/Load layout ────────────────────────────────────────────────────────
@@ -315,21 +237,6 @@ pub struct SaveLoadLayoutConfig {
     pub page_spacing: f32,
 }
 
-impl Default for SaveLoadLayoutConfig {
-    fn default() -> Self {
-        Self {
-            cols: 3,
-            rows: 2,
-            slot_width: 414.0,
-            slot_height: 309.0,
-            thumbnail_width: 384.0,
-            thumbnail_height: 216.0,
-            slot_spacing: 15.0,
-            page_spacing: 0.0,
-        }
-    }
-}
-
 // ─── History layout ──────────────────────────────────────────────────────────
 
 /// 历史记录布局配置
@@ -348,18 +255,6 @@ pub struct HistoryLayoutConfig {
     pub text_xpos: f32,
 }
 
-impl Default for HistoryLayoutConfig {
-    fn default() -> Self {
-        Self {
-            entry_height: 210.0,
-            name_width: 233.0,
-            text_width: 1110.0,
-            name_xpos: 233.0,
-            text_xpos: 255.0,
-        }
-    }
-}
-
 // ─── Settings layout ─────────────────────────────────────────────────────────
 
 /// 设置页面布局配置
@@ -372,15 +267,6 @@ pub struct SettingsLayoutConfig {
     pub pref_button_spacing: f32,
 }
 
-impl Default for SettingsLayoutConfig {
-    fn default() -> Self {
-        Self {
-            pref_spacing: 15.0,
-            pref_button_spacing: 0.0,
-        }
-    }
-}
-
 // ─── Confirm layout ──────────────────────────────────────────────────────────
 
 /// 确认弹窗布局配置
@@ -389,14 +275,6 @@ impl Default for SettingsLayoutConfig {
 pub struct ConfirmLayoutConfig {
     /// 确认框边框 (left, top, right, bottom)
     pub frame_borders: [f32; 4],
-}
-
-impl Default for ConfirmLayoutConfig {
-    fn default() -> Self {
-        Self {
-            frame_borders: [60.0, 60.0, 60.0, 60.0],
-        }
-    }
 }
 
 // ─── Skip indicator ──────────────────────────────────────────────────────────
@@ -411,15 +289,6 @@ pub struct SkipIndicatorConfig {
     pub frame_borders: [f32; 4],
 }
 
-impl Default for SkipIndicatorConfig {
-    fn default() -> Self {
-        Self {
-            ypos: 15.0,
-            frame_borders: [24.0, 8.0, 75.0, 8.0],
-        }
-    }
-}
-
 // ─── Notify ──────────────────────────────────────────────────────────────────
 
 /// 通知配置
@@ -430,15 +299,6 @@ pub struct NotifyConfig {
     pub ypos: f32,
     /// 通知框架边框 (left, top, right, bottom)
     pub frame_borders: [f32; 4],
-}
-
-impl Default for NotifyConfig {
-    fn default() -> Self {
-        Self {
-            ypos: 68.0,
-            frame_borders: [24.0, 8.0, 60.0, 8.0],
-        }
-    }
 }
 
 // ─── Asset paths ─────────────────────────────────────────────────────────────
@@ -470,36 +330,6 @@ pub struct UiAssetPaths {
     pub slider_hover_bar: String,
     pub slider_idle_thumb: String,
     pub slider_hover_thumb: String,
-}
-
-impl Default for UiAssetPaths {
-    fn default() -> Self {
-        Self {
-            textbox: "gui/textbox.png".into(),
-            namebox: "gui/namebox.png".into(),
-            frame: "gui/frame.png".into(),
-            main_menu_overlay: "gui/overlay/main_menu.png".into(),
-            game_menu_overlay: "gui/overlay/game_menu.png".into(),
-            confirm_overlay: "gui/overlay/confirm.png".into(),
-            skip: "gui/skip.png".into(),
-            notify: "gui/notify.png".into(),
-            main_summer: "gui/main_summer.jpg".into(),
-            main_winter: "gui/main_winter.jpg".into(),
-            game_menu_bg: "gui/game_menu.png".into(),
-            button_idle: "gui/button/idle_background.png".into(),
-            button_hover: "gui/button/hover_background.png".into(),
-            choice_idle: "gui/button/choice_idle_background.png".into(),
-            choice_hover: "gui/button/choice_hover_background.png".into(),
-            slot_idle: "gui/button/slot_idle_background.png".into(),
-            slot_hover: "gui/button/slot_hover_background.png".into(),
-            quick_idle: "gui/button/quick_idle_background.png".into(),
-            quick_hover: "gui/button/quick_hover_background.png".into(),
-            slider_idle_bar: "gui/slider/horizontal_idle_bar.png".into(),
-            slider_hover_bar: "gui/slider/horizontal_hover_bar.png".into(),
-            slider_idle_thumb: "gui/slider/horizontal_idle_thumb.png".into(),
-            slider_hover_thumb: "gui/slider/horizontal_hover_thumb.png".into(),
-        }
-    }
 }
 
 impl UiAssetPaths {
@@ -574,29 +404,6 @@ pub struct UiLayoutConfig {
     pub notify: NotifyConfig,
     /// 素材路径
     pub assets: UiAssetPaths,
-}
-
-impl Default for UiLayoutConfig {
-    fn default() -> Self {
-        Self {
-            base_width: 1920.0,
-            base_height: 1080.0,
-            fonts: FontConfig::default(),
-            colors: ColorConfig::default(),
-            dialogue: DialogueLayoutConfig::default(),
-            choice: ChoiceLayoutConfig::default(),
-            quick_menu: QuickMenuConfig::default(),
-            title: TitleLayoutConfig::default(),
-            game_menu: GameMenuLayoutConfig::default(),
-            save_load: SaveLoadLayoutConfig::default(),
-            history: HistoryLayoutConfig::default(),
-            settings: SettingsLayoutConfig::default(),
-            confirm: ConfirmLayoutConfig::default(),
-            skip_indicator: SkipIndicatorConfig::default(),
-            notify: NotifyConfig::default(),
-            assets: UiAssetPaths::default(),
-        }
-    }
 }
 
 /// UI 布局配置加载错误

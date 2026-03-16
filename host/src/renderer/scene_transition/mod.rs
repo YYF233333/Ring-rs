@@ -76,6 +76,7 @@ struct SceneTransitionData {
     ui_alpha: f32,
 }
 
+#[allow(clippy::new_without_default)]
 impl AnimatableSceneTransition {
     /// 创建新的场景过渡状态
     pub fn new() -> Self {
@@ -132,12 +133,6 @@ impl AnimatableSceneTransition {
     /// 直接设置 UI 透明度
     pub fn set_ui_alpha(&self, value: f32) {
         self.inner.borrow_mut().ui_alpha = value;
-    }
-}
-
-impl Default for AnimatableSceneTransition {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -205,6 +200,7 @@ pub struct SceneTransitionManager {
     phase_timer: f32,
 }
 
+#[allow(clippy::new_without_default)]
 impl SceneTransitionManager {
     /// 创建新的场景过渡管理器
     pub fn new() -> Self {
@@ -577,12 +573,6 @@ impl SceneTransitionManager {
     /// 获取当前 UI 透明度
     pub fn ui_alpha(&self) -> f32 {
         self.transition_state.ui_alpha()
-    }
-}
-
-impl Default for SceneTransitionManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

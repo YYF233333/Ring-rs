@@ -96,6 +96,7 @@ pub struct Executor {
     // 未来可添加执行上下文
 }
 
+#[allow(clippy::new_without_default)]
 impl Executor {
     /// 创建新的执行器
     pub fn new() -> Self {
@@ -511,12 +512,6 @@ impl Executor {
 fn eval_error_to_runtime(e: EvalError) -> RuntimeError {
     RuntimeError::EvalError {
         message: e.to_string(),
-    }
-}
-
-impl Default for Executor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
