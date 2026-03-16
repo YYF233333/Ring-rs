@@ -14,7 +14,6 @@ use vn_runtime::state::WaitingReason;
 use winit::keyboard::KeyCode;
 
 use super::super::AppState;
-use super::super::save::{quick_load, quick_save};
 use super::{finish_cutscene, run_script_tick, update_scene_transition};
 use crate::AppMode;
 use crate::PlaybackMode;
@@ -60,16 +59,6 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
         app_state.session.auto_timer = 0.0;
         app_state.ui.navigation.navigate_to(AppMode::InGameMenu);
         return;
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        if app_state.input_manager.is_key_just_pressed(KeyCode::F5) {
-            quick_save(app_state);
-        }
-        if app_state.input_manager.is_key_just_pressed(KeyCode::F9) {
-            quick_load(app_state);
-        }
     }
 
     // --- 播放推进模式检测 ---

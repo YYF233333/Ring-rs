@@ -172,7 +172,7 @@
 - **参考值**：`256`
 - **调参建议**：
   - 资源体量大、目标设备显存充足：可以适当增大
-  - 发布前可按 [resource_management.md](resource_management.md) 的 Debug Overlay（F1）观察命中率/驱逐次数再调整
+  - 发布前可通过日志中的缓存统计观察命中率/驱逐次数再调整（参见 [resource_management.md](resource_management.md)）
 
 ## 配置校验（会检查什么）
 

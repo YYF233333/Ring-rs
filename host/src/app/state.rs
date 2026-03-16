@@ -9,18 +9,13 @@
 pub struct HostState {
     /// 是否正在运行
     pub running: bool,
-    /// 调试模式
-    pub debug_mode: bool,
 }
 
 #[allow(clippy::new_without_default)]
 impl HostState {
     /// 创建新的 Host 状态
     pub fn new() -> Self {
-        Self {
-            running: true,
-            debug_mode: false,
-        }
+        Self { running: true }
     }
 
     /// 停止运行

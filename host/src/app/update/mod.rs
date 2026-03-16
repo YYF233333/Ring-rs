@@ -13,9 +13,6 @@ pub use script::{
     finish_cutscene, handle_script_mode_input, run_script_tick, skip_all_active_effects,
 };
 
-use tracing::debug;
-use winit::keyboard::KeyCode;
-
 use super::AppState;
 use super::CoreSystems;
 use crate::AppMode;
@@ -53,15 +50,6 @@ pub fn update(app_state: &mut AppState, dt: f32) {
 
     // 更新 Toast
     app_state.ui.toast_manager.update(dt);
-
-    // 切换调试模式（全局可用）
-    if app_state.input_manager.is_key_just_pressed(KeyCode::F1) {
-        app_state.host_state.debug_mode = !app_state.host_state.debug_mode;
-        debug!(
-            enabled = app_state.host_state.debug_mode,
-            "Debug mode toggled"
-        );
-    }
 
     // 根据当前模式处理更新
     let current_mode = app_state.ui.navigation.current();
