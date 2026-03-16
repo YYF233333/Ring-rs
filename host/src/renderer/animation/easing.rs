@@ -169,4 +169,117 @@ mod tests {
         assert_eq!(easing.apply(0.0), 0.0);
         assert!((easing.apply(1.0) - 1.0).abs() < 0.001);
     }
+
+    #[test]
+    fn all_easings_boundary_values() {
+        let easings = [
+            EasingFunction::Linear,
+            EasingFunction::EaseIn,
+            EasingFunction::EaseOut,
+            EasingFunction::EaseInOut,
+            EasingFunction::EaseInQuad,
+            EasingFunction::EaseOutQuad,
+            EasingFunction::EaseInOutQuad,
+            EasingFunction::EaseInCubic,
+            EasingFunction::EaseOutCubic,
+            EasingFunction::EaseInOutCubic,
+            EasingFunction::EaseInSine,
+            EasingFunction::EaseOutSine,
+            EasingFunction::EaseInOutSine,
+            EasingFunction::EaseOutElastic,
+            EasingFunction::EaseOutBounce,
+        ];
+        for easing in &easings {
+            let v0 = easing.apply(0.0);
+            let v1 = easing.apply(1.0);
+            assert!(
+                v0.abs() < 0.01,
+                "{easing:?}: apply(0.0) = {v0}, expected ~0"
+            );
+            assert!(
+                (v1 - 1.0).abs() < 0.01,
+                "{easing:?}: apply(1.0) = {v1}, expected ~1"
+            );
+        }
+    }
+
+    #[test]
+    fn ease_in_quad_midpoint() {
+        let v = EasingFunction::EaseInQuad.apply(0.5);
+        assert!((v - 0.25).abs() < 0.001);
+    }
+
+    #[test]
+    fn ease_out_quad_midpoint() {
+        let v = EasingFunction::EaseOutQuad.apply(0.5);
+        assert!((v - 0.75).abs() < 0.001);
+    }
+
+    #[test]
+    fn ease_in_out_quad_symmetry() {
+        let e = EasingFunction::EaseInOutQuad;
+        let low = e.apply(0.25);
+        let high = e.apply(0.75);
+        assert!((low + high - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn ease_in_cubic_below_linear() {
+        let v = EasingFunction::EaseInCubic.apply(0.5);
+        assert!(v < 0.5);
+    }
+
+    #[test]
+    fn ease_out_cubic_above_linear() {
+        let v = EasingFunction::EaseOutCubic.apply(0.5);
+        assert!(v > 0.5);
+    }
+
+    #[test]
+    fn ease_in_out_cubic_midpoint() {
+        let v = EasingFunction::EaseInOutCubic.apply(0.5);
+        assert!((v - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn ease_in_sine_below_linear() {
+        let v = EasingFunction::EaseInSine.apply(0.5);
+        assert!(v < 0.5);
+    }
+
+    #[test]
+    fn ease_out_sine_above_linear() {
+        let v = EasingFunction::EaseOutSine.apply(0.5);
+        assert!(v > 0.5);
+    }
+
+    #[test]
+    fn ease_in_out_sine_midpoint() {
+        let v = EasingFunction::EaseInOutSine.apply(0.5);
+        assert!((v - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn ease_out_elastic_overshoots() {
+        let v = EasingFunction::EaseOutElastic.apply(0.3);
+        assert!(v > 0.0);
+    }
+
+    #[test]
+    fn ease_out_bounce_segments() {
+        let e = EasingFunction::EaseOutBounce;
+        let v1 = e.apply(0.2);
+        let v2 = e.apply(0.5);
+        let v3 = e.apply(0.8);
+        let v4 = e.apply(0.95);
+        assert!(v1 > 0.0);
+        assert!(v2 > 0.0);
+        assert!(v3 > 0.0);
+        assert!(v4 > 0.0);
+    }
+
+    #[test]
+    fn default_is_ease_in_out() {
+        assert_eq!(EasingFunction::default(), EasingFunction::EaseInOut);
+    }
 }

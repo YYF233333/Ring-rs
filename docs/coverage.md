@@ -61,3 +61,8 @@ CLAUDE.md 定义了"不值得测试"的代码类型：
 | `host/src/audio/*` | rodio 硬件依赖，含设备初始化与播放控制 |
 | `host/src/video/*` | FFmpeg 子进程 + rodio 解码，完全硬件依赖 |
 | `host/src/app/draw.rs` | 渲染管线薄包装，仅转发调用 |
+| `host/src/app/(bootstrap\|init\|mod\|state\|save\|script_loader\|engine_services).rs` | App 层集成胶水，依赖完整 AppState |
+| `host/src/app/update/*` | 每帧更新分发，依赖完整 AppState |
+| `host/src/app/command_handlers/audio.rs` | 音频命令处理，依赖硬件 |
+| `host/src/ui/(asset_cache\|image_slider\|mod\|nine_patch).rs` | egui UI 组件 |
+| `host/src/extensions/manifest.rs` | 极小 serde struct |

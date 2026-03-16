@@ -246,4 +246,115 @@ mod tests {
         assert_eq!(fallback.capability_id, CAP_EFFECT_MOVE);
         assert_eq!(fallback.effect.kind, EffectKind::Move);
     }
+
+    #[test]
+    fn fallback_character_show_to_dissolve() {
+        let request = req(
+            EffectTarget::CharacterShow {
+                alias: "hero".to_string(),
+            },
+            EffectKind::Dissolve,
+        );
+        let fallback = build_fallback_request(&request).expect("fallback should exist");
+        assert_eq!(fallback.capability_id, CAP_EFFECT_DISSOLVE);
+    }
+
+    #[test]
+    fn fallback_character_hide_to_dissolve() {
+        let request = req(
+            EffectTarget::CharacterHide {
+                alias: "hero".to_string(),
+            },
+            EffectKind::Dissolve,
+        );
+        let fallback = build_fallback_request(&request).expect("fallback should exist");
+        assert_eq!(fallback.capability_id, CAP_EFFECT_DISSOLVE);
+    }
+
+    #[test]
+    fn fallback_background_transition_to_dissolve() {
+        let request = req(
+            EffectTarget::BackgroundTransition {
+                old_background: Some("bg_old.png".to_string()),
+            },
+            EffectKind::Dissolve,
+        );
+        let fallback = build_fallback_request(&request).expect("fallback should exist");
+        assert_eq!(fallback.capability_id, CAP_EFFECT_DISSOLVE);
+    }
+
+    #[test]
+    fn fallback_scene_rule_to_rule_mask() {
+        let request = req(
+            EffectTarget::SceneTransition {
+                pending_background: "bg.png".to_string(),
+            },
+            EffectKind::Rule {
+                mask_path: "masks/wipe.png".to_string(),
+                reversed: false,
+            },
+        );
+        let fallback = build_fallback_request(&request).expect("fallback should exist");
+        assert_eq!(fallback.capability_id, CAP_EFFECT_RULE_MASK);
+    }
+
+    #[test]
+    fn fallback_scene_fade_keeps_fade_capability() {
+        let request = req(
+            EffectTarget::SceneTransition {
+                pending_background: "bg.png".to_string(),
+            },
+            EffectKind::Fade,
+        );
+        let fallback = build_fallback_request(&request).expect("fallback should exist");
+        assert_eq!(fallback.capability_id, CAP_EFFECT_FADE);
+        assert_eq!(fallback.effect.kind, EffectKind::Fade);
+    }
+
+    #[test]
+    fn fallback_scene_fade_white_keeps_fade_capability() {
+        let request = req(
+            EffectTarget::SceneTransition {
+                pending_background: "bg.png".to_string(),
+            },
+            EffectKind::FadeWhite,
+        );
+        let fallback = build_fallback_request(&request).expect("fallback should exist");
+        assert_eq!(fallback.capability_id, CAP_EFFECT_FADE);
+        assert_eq!(fallback.effect.kind, EffectKind::FadeWhite);
+    }
+
+    #[test]
+    fn fallback_scene_effect_returns_none() {
+        let request = req(
+            EffectTarget::SceneEffect {
+                effect_name: "shakeSmall".to_string(),
+            },
+            EffectKind::None,
+        );
+        assert!(build_fallback_request(&request).is_none());
+    }
+
+    #[test]
+    fn fallback_title_card_returns_none() {
+        let request = req(
+            EffectTarget::TitleCard {
+                text: "Chapter 1".to_string(),
+            },
+            EffectKind::None,
+        );
+        assert!(build_fallback_request(&request).is_none());
+    }
+
+    #[test]
+    fn rewrite_capability_preserves_duration() {
+        let request = req(
+            EffectTarget::SceneTransition {
+                pending_background: "bg.png".to_string(),
+            },
+            EffectKind::None,
+        );
+        let fallback = build_fallback_request(&request).expect("fallback should exist");
+        assert_eq!(fallback.effect.duration, Some(0.5));
+    }
 }

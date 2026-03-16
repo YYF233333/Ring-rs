@@ -353,34 +353,4 @@ impl InputManager {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_input_manager_creation() {
-        let manager = InputManager::new();
-        assert_eq!(manager.selected_index, 0);
-        assert_eq!(manager.choice_count, 0);
-        assert!(manager.pending_input.is_none());
-    }
-
-    #[test]
-    fn test_reset_choice() {
-        let mut manager = InputManager::new();
-        manager.selected_index = 5;
-        manager.reset_choice(3);
-        assert_eq!(manager.selected_index, 0);
-        assert_eq!(manager.choice_count, 3);
-    }
-
-    #[test]
-    fn test_inject_input() {
-        let mut manager = InputManager::new();
-        manager.inject_input(RuntimeInput::Click);
-        assert!(manager.pending_input.is_some());
-
-        let result = manager.update(&WaitingReason::WaitForClick, 0.016);
-        assert_eq!(result, Some(RuntimeInput::Click));
-        assert!(manager.pending_input.is_none());
-    }
-}
+mod tests;

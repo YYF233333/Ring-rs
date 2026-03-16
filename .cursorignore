@@ -8,6 +8,6 @@ dist/
 # 覆盖率/构建产物
 **/*.profraw
 **/*.profdata
-target/llvm-cov/
+!target/llvm-cov/
 target/doc/
 

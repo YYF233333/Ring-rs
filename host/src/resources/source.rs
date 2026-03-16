@@ -241,6 +241,21 @@ unsafe impl Sync for ZipSource {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+
+    fn temp_dir_with_files(files: &[(&str, &[u8])]) -> (tempfile::TempDir, FsSource) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        for (name, content) in files {
+            let path = dir.path().join(name);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            let mut f = std::fs::File::create(&path).unwrap();
+            f.write_all(content).unwrap();
+        }
+        let source = FsSource::new(dir.path().to_path_buf());
+        (dir, source)
+    }
 
     #[test]
     fn test_fs_source_resolve() {
@@ -268,5 +283,143 @@ mod tests {
             source.backing_path(&p),
             Some(PathBuf::from("assets/backgrounds/bg.png"))
         );
+    }
+
+    #[test]
+    fn test_fs_source_exists_and_read() {
+        let (_dir, source) = temp_dir_with_files(&[("hello.txt", b"world")]);
+
+        let p = LogicalPath::new("hello.txt");
+        assert!(source.exists(&p));
+        assert_eq!(source.read(&p).unwrap(), b"world");
+    }
+
+    #[test]
+    fn test_fs_source_not_exists() {
+        let (_dir, source) = temp_dir_with_files(&[]);
+
+        let p = LogicalPath::new("ghost.txt");
+        assert!(!source.exists(&p));
+        assert!(source.read(&p).is_err());
+    }
+
+    #[test]
+    fn test_fs_source_full_path_contains_name() {
+        let source = FsSource::new("/base");
+        let p = LogicalPath::new("img/bg.png");
+        let full = source.full_path(&p);
+        assert!(full.contains("img") && full.contains("bg.png"));
+    }
+
+    #[test]
+    fn test_fs_source_list_files() {
+        let (_dir, source) = temp_dir_with_files(&[
+            ("scripts/a.json", b"{}"),
+            ("scripts/b.json", b"{}"),
+            ("other/c.txt", b"hi"),
+        ]);
+
+        let dir_path = LogicalPath::new("scripts");
+        let mut files = source.list_files(&dir_path);
+        files.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+
+        assert_eq!(files.len(), 2);
+        assert!(files[0].as_str().contains("a.json"));
+        assert!(files[1].as_str().contains("b.json"));
+    }
+
+    #[test]
+    fn test_fs_source_list_files_empty_dir() {
+        let (_dir, source) = temp_dir_with_files(&[]);
+
+        let p = LogicalPath::new("nonexistent");
+        let files = source.list_files(&p);
+        assert!(files.is_empty());
+    }
+
+    // ── ZipSource ──────────────────────────────────────────────────────────────
+
+    fn create_test_zip(files: &[(&str, &[u8])]) -> (tempfile::TempDir, PathBuf) {
+        use std::io::Write as _;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let zip_path = dir.path().join("test.zip");
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        for (name, content) in files {
+            zip.start_file(*name, opts).unwrap();
+            zip.write_all(content).unwrap();
+        }
+        zip.finish().unwrap();
+        (dir, zip_path)
+    }
+
+    #[test]
+    fn test_zip_source_exists_and_read() {
+        let (_dir, zip_path) = create_test_zip(&[("bg/sky.png", b"fake-png")]);
+        let source = ZipSource::new(&zip_path);
+
+        let p = LogicalPath::new("bg/sky.png");
+        assert!(source.exists(&p));
+        assert_eq!(source.read(&p).unwrap(), b"fake-png");
+    }
+
+    #[test]
+    fn test_zip_source_not_exists() {
+        let (_dir, zip_path) = create_test_zip(&[("a.txt", b"hi")]);
+        let source = ZipSource::new(&zip_path);
+
+        let p = LogicalPath::new("ghost.txt");
+        assert!(!source.exists(&p));
+        assert!(matches!(
+            source.read(&p),
+            Err(ResourceError::NotFound { .. })
+        ));
+    }
+
+    #[test]
+    fn test_zip_source_full_path_format() {
+        let source = ZipSource::new("/data/pack.zip");
+        let p = LogicalPath::new("images/bg.png");
+        let fp = source.full_path(&p);
+        assert!(fp.starts_with("zip://"));
+        assert!(fp.contains("images/bg.png"));
+    }
+
+    #[test]
+    fn test_zip_source_list_files() {
+        let (_dir, zip_path) = create_test_zip(&[
+            ("scripts/a.json", b"{}"),
+            ("scripts/b.json", b"{}"),
+            ("other/c.txt", b"hi"),
+        ]);
+        let source = ZipSource::new(&zip_path);
+
+        let dir_p = LogicalPath::new("scripts");
+        let mut files = source.list_files(&dir_p);
+        files.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|f| f.as_str().contains("a.json")));
+        assert!(files.iter().any(|f| f.as_str().contains("b.json")));
+    }
+
+    #[test]
+    fn test_zip_source_backing_path_is_none() {
+        let (_dir, zip_path) = create_test_zip(&[("a.txt", b"hi")]);
+        let source = ZipSource::new(&zip_path);
+        let p = LogicalPath::new("a.txt");
+        assert!(source.backing_path(&p).is_none());
+    }
+
+    #[test]
+    fn test_zip_source_invalid_zip_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad_path = dir.path().join("bad.zip");
+        std::fs::write(&bad_path, b"not a zip file").unwrap();
+        let source = ZipSource::new(&bad_path);
+
+        let p = LogicalPath::new("any.txt");
+        assert!(!source.exists(&p));
     }
 }

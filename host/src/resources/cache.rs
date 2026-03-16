@@ -214,4 +214,108 @@ mod tests {
             DEFAULT_TEXTURE_BUDGET_MB * 1024 * 1024
         );
     }
+
+    fn null_texture(w: u32, h: u32) -> Arc<dyn Texture> {
+        use crate::rendering_types::NullTexture;
+        Arc::new(NullTexture::new(w, h))
+    }
+
+    #[test]
+    fn test_insert_and_get() {
+        let mut cache = TextureCache::new(256);
+        let tex = null_texture(64, 64);
+        cache.insert("bg.png".to_string(), Arc::clone(&tex));
+
+        assert!(cache.contains("bg.png"));
+        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.used_bytes(), 64 * 64 * 4);
+
+        let got = cache.get("bg.png").unwrap();
+        assert_eq!(got.width_u32(), 64);
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut cache = TextureCache::new(256);
+        cache.insert("a.png".to_string(), null_texture(32, 32));
+        assert!(cache.contains("a.png"));
+
+        cache.remove("a.png");
+        assert!(!cache.contains("a.png"));
+        assert_eq!(cache.used_bytes(), 0);
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn test_remove_nonexistent_is_noop() {
+        let mut cache = TextureCache::new(256);
+        cache.remove("ghost.png"); // should not panic
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut cache = TextureCache::new(256);
+        cache.insert("a.png".to_string(), null_texture(32, 32));
+        cache.insert("b.png".to_string(), null_texture(64, 64));
+        assert_eq!(cache.len(), 2);
+
+        cache.clear();
+        assert!(cache.is_empty());
+        assert_eq!(cache.used_bytes(), 0);
+    }
+
+    #[test]
+    fn test_fifo_eviction() {
+        // budget = 2 textures of 4 bytes each (2x2x4 = 16 bytes), budget set to 16 bytes
+        // But TextureCache::new takes MB, so use a very small budget via a direct-bytes workaround.
+        // Use 1 MB budget but insert textures that together exceed it.
+        // Create budget that holds exactly 2 textures of size 1x1 (4 bytes each) = 8 bytes
+        // We need budget in MB; smallest is 1 MB. Instead, track that eviction happens with large textures.
+
+        // Use 1 MB budget; insert textures of ~600 KB each; third insert should evict first.
+        let budget_mb = 1usize;
+        let mut cache = TextureCache::new(budget_mb);
+        // Each NullTexture(512,300) → 512*300*4 = 614400 bytes ≈ 0.586 MB
+        let w = 512u32;
+        let h = 300u32;
+
+        cache.insert("first".to_string(), null_texture(w, h));
+        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.stats().evictions, 0);
+
+        cache.insert("second".to_string(), null_texture(w, h));
+        // Total: 2 * 614400 = 1228800 > 1MB; first should be evicted
+        assert_eq!(cache.len(), 1, "first entry should have been evicted");
+        assert!(!cache.contains("first"));
+        assert!(cache.contains("second"));
+        assert_eq!(cache.stats().evictions, 1);
+    }
+
+    #[test]
+    fn test_overwrite_same_key_updates_size() {
+        let mut cache = TextureCache::new(256);
+        cache.insert("img.png".to_string(), null_texture(64, 64));
+        let old_bytes = cache.used_bytes();
+
+        cache.insert("img.png".to_string(), null_texture(128, 128));
+        let new_bytes = cache.used_bytes();
+
+        assert_ne!(old_bytes, new_bytes);
+        assert_eq!(new_bytes, 128 * 128 * 4);
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn test_stats_eviction_count() {
+        let budget_mb = 1usize;
+        let mut cache = TextureCache::new(budget_mb);
+
+        // Insert 3 textures, each ~0.586MB → evictions happen
+        for i in 0..3 {
+            cache.insert(format!("tex_{i}"), null_texture(512, 300));
+        }
+
+        assert!(cache.stats().evictions >= 2);
+    }
 }

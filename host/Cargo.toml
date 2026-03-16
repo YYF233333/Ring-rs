@@ -36,3 +36,6 @@ ffmpeg-sidecar = { version = "2.4", default-features = false }
 
 # 时间格式化（存档保存时间展示）
 chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,5 +1,19 @@
 use super::*;
-use vn_runtime::command::Position;
+use vn_runtime::command::{InlineEffect, InlineEffectKind, Position};
+
+/// 启动打字机并在位置 1 设置 Wait 效果并推进一次，用于 inline_wait 相关测试。
+fn start_tw_with_wait(state: &mut RenderState, wait_secs: Option<f64>) {
+    state.start_typewriter(
+        None,
+        "A".to_string(),
+        vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::Wait(wait_secs),
+        }],
+        false,
+    );
+    state.advance_typewriter();
+}
 
 #[test]
 fn test_render_state_default() {
@@ -238,4 +252,272 @@ fn test_character_z_order() {
     // 后添加的角色 z_order 更大
     assert_eq!(state.visible_characters.get("first").unwrap().z_order, 0);
     assert_eq!(state.visible_characters.get("second").unwrap().z_order, 1);
+}
+
+// ============ advance_typewriter 内联效果测试 ============
+
+#[test]
+fn test_advance_typewriter_inline_wait_timed() {
+    let mut state = RenderState::new();
+    start_tw_with_wait(&mut state, Some(2.5));
+    let d = state.dialogue.as_ref().unwrap();
+    assert_eq!(d.inline_wait.as_ref().unwrap().remaining, Some(2.5));
+}
+
+#[test]
+fn test_advance_typewriter_inline_wait_click() {
+    let mut state = RenderState::new();
+    start_tw_with_wait(&mut state, None);
+    let d = state.dialogue.as_ref().unwrap();
+    assert!(d.inline_wait.as_ref().unwrap().remaining.is_none());
+}
+
+#[test]
+fn test_advance_typewriter_set_cps_absolute() {
+    let mut state = RenderState::new();
+    state.start_typewriter(
+        None,
+        "AB".to_string(),
+        vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::SetCpsAbsolute(30.0),
+        }],
+        false,
+    );
+
+    state.advance_typewriter();
+    let d = state.dialogue.as_ref().unwrap();
+    assert!(matches!(d.effective_cps, Some(EffectiveCps::Absolute(n)) if (n - 30.0).abs() < 0.01));
+}
+
+#[test]
+fn test_advance_typewriter_set_cps_relative() {
+    let mut state = RenderState::new();
+    state.start_typewriter(
+        None,
+        "AB".to_string(),
+        vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::SetCpsRelative(2.0),
+        }],
+        false,
+    );
+
+    state.advance_typewriter();
+    let d = state.dialogue.as_ref().unwrap();
+    assert!(matches!(d.effective_cps, Some(EffectiveCps::Relative(m)) if (m - 2.0).abs() < 0.01));
+}
+
+#[test]
+fn test_advance_typewriter_reset_cps() {
+    let mut state = RenderState::new();
+    state.start_typewriter(
+        None,
+        "ABC".to_string(),
+        vec![
+            InlineEffect {
+                position: 1,
+                kind: InlineEffectKind::SetCpsAbsolute(50.0),
+            },
+            InlineEffect {
+                position: 2,
+                kind: InlineEffectKind::ResetCps,
+            },
+        ],
+        false,
+    );
+
+    state.advance_typewriter();
+    assert!(state.dialogue.as_ref().unwrap().effective_cps.is_some());
+
+    state.advance_typewriter();
+    assert!(state.dialogue.as_ref().unwrap().effective_cps.is_none());
+}
+
+#[test]
+fn test_advance_typewriter_returns_bool() {
+    let mut state = RenderState::new();
+    state.start_typewriter(None, "A".to_string(), vec![], false);
+    assert!(state.advance_typewriter());
+}
+
+#[test]
+fn test_advance_typewriter_no_dialogue_returns_true() {
+    let mut state = RenderState::new();
+    assert!(state.advance_typewriter());
+}
+
+// ============ inline_wait 状态管理测试 ============
+
+#[test]
+fn test_has_inline_wait() {
+    let mut state = RenderState::new();
+    assert!(!state.has_inline_wait());
+    start_tw_with_wait(&mut state, Some(1.0));
+    assert!(state.has_inline_wait());
+}
+
+#[test]
+fn test_is_inline_click_wait_vs_timed() {
+    let mut state = RenderState::new();
+    start_tw_with_wait(&mut state, Some(1.0));
+    assert!(!state.is_inline_click_wait());
+
+    start_tw_with_wait(&mut state, None);
+    assert!(state.is_inline_click_wait());
+}
+
+#[test]
+fn test_clear_inline_wait() {
+    let mut state = RenderState::new();
+    start_tw_with_wait(&mut state, None);
+    assert!(state.has_inline_wait());
+    state.clear_inline_wait();
+    assert!(!state.has_inline_wait());
+}
+
+#[test]
+fn test_update_inline_wait_timed_countdown() {
+    let mut state = RenderState::new();
+    start_tw_with_wait(&mut state, Some(1.0));
+    assert!(state.has_inline_wait());
+
+    let done = state.update_inline_wait(0.5);
+    assert!(!done);
+    assert!(state.has_inline_wait());
+
+    let done = state.update_inline_wait(0.6);
+    assert!(done);
+    assert!(!state.has_inline_wait());
+}
+
+#[test]
+fn test_update_inline_wait_click_wait_not_consumed_by_time() {
+    let mut state = RenderState::new();
+    start_tw_with_wait(&mut state, None);
+    let done = state.update_inline_wait(999.0);
+    assert!(!done);
+    assert!(state.has_inline_wait());
+}
+
+// ============ extend_dialogue 测试 ============
+
+#[test]
+fn test_extend_dialogue_appends_content() {
+    let mut state = RenderState::new();
+    state.start_typewriter(None, "Hello".to_string(), vec![], false);
+    state.complete_typewriter();
+    assert!(state.is_dialogue_complete());
+
+    state.extend_dialogue(" World", vec![], false);
+    let d = state.dialogue.as_ref().unwrap();
+    assert_eq!(d.content, "Hello World");
+    assert!(!d.is_complete);
+    assert_eq!(d.visible_chars, 5);
+}
+
+#[test]
+fn test_extend_dialogue_offsets_inline_effects() {
+    let mut state = RenderState::new();
+    state.start_typewriter(None, "AB".to_string(), vec![], false);
+    state.complete_typewriter();
+
+    state.extend_dialogue(
+        "CD",
+        vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::Wait(None),
+        }],
+        false,
+    );
+    let d = state.dialogue.as_ref().unwrap();
+    assert_eq!(d.inline_effects.len(), 1);
+    assert_eq!(d.inline_effects[0].position, 3);
+}
+
+// ============ effective_text_speed 测试 ============
+
+#[test]
+fn test_effective_text_speed_no_override() {
+    let mut state = RenderState::new();
+    state.start_typewriter(None, "A".to_string(), vec![], false);
+    assert_eq!(state.effective_text_speed(20.0), 20.0);
+}
+
+#[test]
+fn test_effective_text_speed_absolute() {
+    let mut state = RenderState::new();
+    state.start_typewriter(
+        None,
+        "AB".to_string(),
+        vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::SetCpsAbsolute(50.0),
+        }],
+        false,
+    );
+    state.advance_typewriter();
+    assert_eq!(state.effective_text_speed(20.0), 50.0);
+}
+
+#[test]
+fn test_effective_text_speed_relative() {
+    let mut state = RenderState::new();
+    state.start_typewriter(
+        None,
+        "AB".to_string(),
+        vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::SetCpsRelative(3.0),
+        }],
+        false,
+    );
+    state.advance_typewriter();
+    assert!((state.effective_text_speed(20.0) - 60.0).abs() < 0.01);
+}
+
+#[test]
+fn test_effective_text_speed_no_dialogue() {
+    let state = RenderState::new();
+    assert_eq!(state.effective_text_speed(15.0), 15.0);
+}
+
+// ============ get_character_anim 测试 ============
+
+#[test]
+fn test_get_character_anim_some() {
+    let mut state = RenderState::new();
+    state.show_character(
+        "alice".to_string(),
+        "alice.png".to_string(),
+        Position::Center,
+    );
+    assert!(state.get_character_anim("alice").is_some());
+    assert!(state.get_character_anim("bob").is_none());
+}
+
+#[test]
+fn test_get_character_anim_mut_some() {
+    let mut state = RenderState::new();
+    state.show_character(
+        "alice".to_string(),
+        "alice.png".to_string(),
+        Position::Center,
+    );
+    assert!(state.get_character_anim_mut("alice").is_some());
+    assert!(state.get_character_anim_mut("bob").is_none());
+}
+
+// ============ remove_fading_out_characters 边界测试 ============
+
+#[test]
+fn test_remove_fading_out_only_removes_fading() {
+    let mut state = RenderState::new();
+    state.show_character("alice".to_string(), "a.png".to_string(), Position::Center);
+    state.show_character("bob".to_string(), "b.png".to_string(), Position::Left);
+    state.mark_character_fading_out("alice");
+
+    state.remove_fading_out_characters(&["alice".to_string(), "bob".to_string()]);
+    assert!(!state.visible_characters.contains_key("alice"));
+    assert!(state.visible_characters.contains_key("bob"));
 }

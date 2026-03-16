@@ -90,6 +90,11 @@ fn run(step: &str, sh: &Shell, program: &str, args: &[&str]) -> anyhow::Result<(
 /// - `audio/*`：rodio 硬件依赖，含设备初始化与播放控制
 /// - `video/*`：FFmpeg 子进程 + rodio 解码，完全硬件依赖
 /// - `app/draw.rs`：渲染管线薄包装
+/// - `app/(bootstrap|init|mod|state|save|script_loader|engine_services).rs`：App 层集成胶水
+/// - `app/update/*`：每帧更新分发，依赖完整 AppState
+/// - `app/command_handlers/audio.rs`：音频命令处理，依赖硬件
+/// - `ui/(asset_cache|image_slider|mod|nine_patch).rs`：egui UI 组件
+/// - `extensions/manifest.rs`：极小 serde struct
 const COV_IGNORE: &str = concat!(
     r"src[/\\]lib\.rs$|",
     r"vn-runtime[/\\]src[/\\]error\.rs$|",
@@ -98,7 +103,12 @@ const COV_IGNORE: &str = concat!(
     r"host[/\\]src[/\\]backend[/\\](mod|egui_integration|gpu_context|sprite_renderer|gpu_texture|dissolve_renderer)\.rs$|",
     r"host[/\\]src[/\\]audio[/\\]|",
     r"host[/\\]src[/\\]video[/\\]|",
-    r"host[/\\]src[/\\]app[/\\]draw\.rs$",
+    r"host[/\\]src[/\\]app[/\\]draw\.rs$|",
+    r"host[/\\]src[/\\]app[/\\](bootstrap|init|mod|state|save|script_loader|engine_services)\.rs$|",
+    r"host[/\\]src[/\\]app[/\\]update[/\\]|",
+    r"host[/\\]src[/\\]app[/\\]command_handlers[/\\]audio\.rs$|",
+    r"host[/\\]src[/\\]ui[/\\](asset_cache|image_slider|mod|nine_patch)\.rs$|",
+    r"host[/\\]src[/\\]extensions[/\\]manifest\.rs$",
 );
 
 fn ensure_cargo_llvm_cov_available(sh: &Shell) -> anyhow::Result<()> {

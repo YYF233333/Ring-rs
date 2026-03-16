@@ -123,3 +123,141 @@ impl PersistentStore {
             .is_some_and(|v| matches!(v, VarValue::Bool(true)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use tempfile::TempDir;
+
+    #[test]
+    fn empty_store_has_no_variables() {
+        let store = PersistentStore::empty();
+        assert!(store.variables.is_empty());
+    }
+
+    #[test]
+    fn merge_from_inserts_new_keys() {
+        let mut store = PersistentStore::empty();
+        let mut vars = HashMap::new();
+        vars.insert("key1".to_string(), VarValue::Int(42));
+        store.merge_from(&vars);
+        assert_eq!(store.variables.get("key1"), Some(&VarValue::Int(42)));
+    }
+
+    #[test]
+    fn merge_from_overwrites_existing() {
+        let mut store = PersistentStore::empty();
+        store.variables.insert("key1".to_string(), VarValue::Int(1));
+        let mut vars = HashMap::new();
+        vars.insert("key1".to_string(), VarValue::Int(99));
+        store.merge_from(&vars);
+        assert_eq!(store.variables.get("key1"), Some(&VarValue::Int(99)));
+    }
+
+    #[test]
+    fn merge_from_preserves_keys_not_in_source() {
+        let mut store = PersistentStore::empty();
+        store
+            .variables
+            .insert("keep".to_string(), VarValue::Bool(true));
+        let vars: HashMap<String, VarValue> = HashMap::new();
+        store.merge_from(&vars);
+        assert!(store.variables.contains_key("keep"));
+    }
+
+    #[test]
+    fn is_season_complete_true() {
+        let mut store = PersistentStore::empty();
+        store
+            .variables
+            .insert("complete_s1".to_string(), VarValue::Bool(true));
+        assert!(store.is_season_complete("s1"));
+    }
+
+    #[test]
+    fn is_season_complete_false_when_bool_false() {
+        let mut store = PersistentStore::empty();
+        store
+            .variables
+            .insert("complete_s1".to_string(), VarValue::Bool(false));
+        assert!(!store.is_season_complete("s1"));
+    }
+
+    #[test]
+    fn is_season_complete_false_when_missing() {
+        let store = PersistentStore::empty();
+        assert!(!store.is_season_complete("s1"));
+    }
+
+    #[test]
+    fn is_season_complete_false_when_wrong_type() {
+        let mut store = PersistentStore::empty();
+        store
+            .variables
+            .insert("complete_s1".to_string(), VarValue::Int(1));
+        assert!(!store.is_season_complete("s1"));
+    }
+
+    #[test]
+    fn load_returns_empty_when_file_not_found() {
+        let tmp = TempDir::new().unwrap();
+        let store = PersistentStore::load(tmp.path());
+        assert!(store.variables.is_empty());
+    }
+
+    #[test]
+    fn load_valid_json_populates_variables() {
+        let tmp = TempDir::new().unwrap();
+        let json = r#"{"complete_s1":{"Bool":true},"score":{"Int":100}}"#;
+        std::fs::write(tmp.path().join("persistent.json"), json).unwrap();
+        let store = PersistentStore::load(tmp.path());
+        assert_eq!(
+            store.variables.get("complete_s1"),
+            Some(&VarValue::Bool(true))
+        );
+        assert_eq!(store.variables.get("score"), Some(&VarValue::Int(100)));
+    }
+
+    #[test]
+    fn load_invalid_json_returns_empty() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("persistent.json"), "not valid json").unwrap();
+        let store = PersistentStore::load(tmp.path());
+        assert!(store.variables.is_empty());
+    }
+
+    #[test]
+    fn save_and_reload_round_trip() {
+        let tmp = TempDir::new().unwrap();
+        let mut store = PersistentStore::load(tmp.path());
+        store
+            .variables
+            .insert("complete_s2".to_string(), VarValue::Bool(true));
+        store
+            .variables
+            .insert("high_score".to_string(), VarValue::Int(9999));
+        store.save().expect("save should succeed");
+
+        let loaded = PersistentStore::load(tmp.path());
+        assert_eq!(
+            loaded.variables.get("complete_s2"),
+            Some(&VarValue::Bool(true))
+        );
+        assert_eq!(
+            loaded.variables.get("high_score"),
+            Some(&VarValue::Int(9999))
+        );
+    }
+
+    #[test]
+    fn save_or_log_does_not_panic() {
+        let tmp = TempDir::new().unwrap();
+        let mut store = PersistentStore::load(tmp.path());
+        store
+            .variables
+            .insert("flag".to_string(), VarValue::Bool(false));
+        store.save_or_log(); // should complete without panic
+        assert!(tmp.path().join("persistent.json").exists());
+    }
+}

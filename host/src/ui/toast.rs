@@ -114,3 +114,108 @@ impl ToastManager {
         self.toasts.clear();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toast_new_initializes_fields() {
+        let t = Toast::new("hello", ToastType::Info, 2.0);
+        assert_eq!(t.message, "hello");
+        assert_eq!(t.toast_type, ToastType::Info);
+        assert_eq!(t.remaining_time, 2.0);
+        assert_eq!(t.fade_progress, 0.0);
+    }
+
+    #[test]
+    fn toast_update_decrements_time() {
+        let mut t = Toast::new("msg", ToastType::Success, 1.0);
+        let expired = t.update(0.5);
+        assert!(!expired);
+        assert!((t.remaining_time - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn toast_update_returns_true_when_expired() {
+        let mut t = Toast::new("msg", ToastType::Warning, 0.5);
+        let expired = t.update(0.6);
+        assert!(expired);
+    }
+
+    #[test]
+    fn toast_fade_starts_in_last_300ms() {
+        let mut t = Toast::new("msg", ToastType::Error, 1.0);
+        t.update(0.5);
+        assert_eq!(t.fade_progress, 0.0);
+
+        t.update(0.3);
+        assert!(t.fade_progress > 0.0);
+    }
+
+    #[test]
+    fn toast_fade_progress_reaches_one_at_zero() {
+        let mut t = Toast::new("msg", ToastType::Info, 0.3);
+        t.update(0.3);
+        assert!((t.fade_progress - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn manager_default_is_empty() {
+        let mgr = ToastManager::new();
+        assert!(!mgr.has_toasts());
+        assert!(mgr.toasts().is_empty());
+    }
+
+    #[test]
+    fn manager_info_adds_toast() {
+        let mut mgr = ToastManager::new();
+        mgr.info("test");
+        assert!(mgr.has_toasts());
+        assert_eq!(mgr.toasts().len(), 1);
+        assert_eq!(mgr.toasts()[0].toast_type, ToastType::Info);
+    }
+
+    #[test]
+    fn manager_success_warning_error() {
+        let mut mgr = ToastManager::new();
+        mgr.success("ok");
+        mgr.warning("warn");
+        mgr.error("err");
+        assert_eq!(mgr.toasts().len(), 3);
+        assert_eq!(mgr.toasts()[0].toast_type, ToastType::Success);
+        assert_eq!(mgr.toasts()[1].toast_type, ToastType::Warning);
+        assert_eq!(mgr.toasts()[2].toast_type, ToastType::Error);
+    }
+
+    #[test]
+    fn manager_update_removes_expired() {
+        let mut mgr = ToastManager::new();
+        mgr.show("short", ToastType::Info);
+        mgr.update(3.0);
+        assert!(!mgr.has_toasts());
+    }
+
+    #[test]
+    fn manager_update_keeps_alive() {
+        let mut mgr = ToastManager::new();
+        mgr.show("msg", ToastType::Info);
+        mgr.update(0.1);
+        assert!(mgr.has_toasts());
+    }
+
+    #[test]
+    fn manager_clear_removes_all() {
+        let mut mgr = ToastManager::new();
+        mgr.info("a");
+        mgr.info("b");
+        mgr.clear();
+        assert!(!mgr.has_toasts());
+    }
+
+    #[test]
+    fn manager_default_trait() {
+        let mgr = ToastManager::default();
+        assert!(!mgr.has_toasts());
+    }
+}

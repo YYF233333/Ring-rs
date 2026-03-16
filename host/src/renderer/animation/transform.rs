@@ -167,4 +167,121 @@ mod tests {
         assert_eq!(mid.x, 5.0);
         assert_eq!(mid.y, 10.0);
     }
+
+    #[test]
+    fn test_vec2_constructors() {
+        let z = Vec2::zero();
+        assert_eq!(z.x, 0.0);
+        assert_eq!(z.y, 0.0);
+
+        let o = Vec2::one();
+        assert_eq!(o.x, 1.0);
+        assert_eq!(o.y, 1.0);
+    }
+
+    #[test]
+    fn test_vec2_from_tuple() {
+        let v: Vec2 = (3.0, 4.0).into();
+        assert_eq!(v.x, 3.0);
+        assert_eq!(v.y, 4.0);
+
+        let t: (f32, f32) = v.into();
+        assert_eq!(t, (3.0, 4.0));
+    }
+
+    #[test]
+    fn test_vec2_lerp_boundaries() {
+        let a = Vec2::new(1.0, 2.0);
+        let b = Vec2::new(5.0, 8.0);
+        let start = a.lerp(b, 0.0);
+        assert_eq!(start.x, 1.0);
+        assert_eq!(start.y, 2.0);
+
+        let end = a.lerp(b, 1.0);
+        assert_eq!(end.x, 5.0);
+        assert_eq!(end.y, 8.0);
+    }
+
+    #[test]
+    fn test_transform_identity() {
+        let t = Transform::identity();
+        assert_eq!(t.alpha, 1.0);
+        assert_eq!(t.position, Vec2::zero());
+        assert_eq!(t.scale, Vec2::one());
+        assert_eq!(t.rotation, 0.0);
+    }
+
+    #[test]
+    fn test_transform_with_alpha() {
+        let t = Transform::with_alpha(0.5);
+        assert!((t.alpha - 0.5).abs() < 0.001);
+        assert_eq!(t.position, Vec2::zero());
+    }
+
+    #[test]
+    fn test_transform_with_position() {
+        let t = Transform::with_position(10.0, 20.0);
+        assert_eq!(t.position.x, 10.0);
+        assert_eq!(t.position.y, 20.0);
+        assert_eq!(t.alpha, 1.0);
+    }
+
+    #[test]
+    fn test_transform_with_scale() {
+        let t = Transform::with_scale(2.0, 3.0);
+        assert_eq!(t.scale.x, 2.0);
+        assert_eq!(t.scale.y, 3.0);
+    }
+
+    #[test]
+    fn test_transform_with_uniform_scale() {
+        let t = Transform::with_uniform_scale(1.5);
+        assert_eq!(t.scale.x, 1.5);
+        assert_eq!(t.scale.y, 1.5);
+    }
+
+    #[test]
+    fn test_transform_set_methods() {
+        let mut t = Transform::identity();
+
+        t.set_alpha(0.3);
+        assert!((t.alpha - 0.3).abs() < 0.001);
+
+        t.set_alpha(1.5);
+        assert_eq!(t.alpha, 1.0);
+        t.set_alpha(-0.5);
+        assert_eq!(t.alpha, 0.0);
+
+        t.set_position(5.0, 10.0);
+        assert_eq!(t.position, Vec2::new(5.0, 10.0));
+
+        t.set_scale(2.0, 3.0);
+        assert_eq!(t.scale, Vec2::new(2.0, 3.0));
+
+        t.set_rotation(1.57);
+        assert!((t.rotation - 1.57).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_transform_lerp_full() {
+        let a = Transform {
+            position: Vec2::new(0.0, 0.0),
+            scale: Vec2::new(1.0, 1.0),
+            rotation: 0.0,
+            alpha: 0.0,
+        };
+        let b = Transform {
+            position: Vec2::new(10.0, 20.0),
+            scale: Vec2::new(3.0, 3.0),
+            rotation: std::f32::consts::PI,
+            alpha: 1.0,
+        };
+
+        let mid = a.lerp(&b, 0.5);
+        assert!((mid.position.x - 5.0).abs() < 0.001);
+        assert!((mid.position.y - 10.0).abs() < 0.001);
+        assert!((mid.scale.x - 2.0).abs() < 0.001);
+        assert!((mid.rotation - std::f32::consts::FRAC_PI_2).abs() < 0.001);
+        assert!((mid.alpha - 0.5).abs() < 0.001);
+    }
 }

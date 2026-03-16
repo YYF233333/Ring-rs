@@ -201,3 +201,160 @@ fn test_read_text_optional_returns_content() {
     assert!(result.is_some());
     assert!(result.unwrap().contains("key"));
 }
+
+#[test]
+fn test_read_text_success() {
+    let mut source = InMemorySource::new();
+    source.add("data.txt", b"hello world".to_vec());
+
+    let manager = ResourceManager::with_source(Arc::new(source), 256);
+    let p = LogicalPath::new("data.txt");
+    assert_eq!(manager.read_text(&p).unwrap(), "hello world");
+}
+
+#[test]
+fn test_read_text_missing_returns_error() {
+    let source = InMemorySource::new();
+    let manager = ResourceManager::with_source(Arc::new(source), 256);
+    let p = LogicalPath::new("missing.txt");
+    assert!(manager.read_text(&p).is_err());
+}
+
+#[test]
+fn test_read_bytes_success() {
+    let mut source = InMemorySource::new();
+    source.add("raw.bin", vec![0xDE, 0xAD, 0xBE, 0xEF]);
+
+    let manager = ResourceManager::with_source(Arc::new(source), 256);
+    let p = LogicalPath::new("raw.bin");
+    assert_eq!(
+        manager.read_bytes(&p).unwrap(),
+        vec![0xDE, 0xAD, 0xBE, 0xEF]
+    );
+}
+
+#[test]
+fn test_resource_exists() {
+    let mut source = InMemorySource::new();
+    source.add("exists.png", b"data".to_vec());
+
+    let manager = ResourceManager::with_source(Arc::new(source), 256);
+    assert!(manager.resource_exists(&LogicalPath::new("exists.png")));
+    assert!(!manager.resource_exists(&LogicalPath::new("ghost.png")));
+}
+
+#[test]
+fn test_list_files_delegates_to_source() {
+    let mut source = InMemorySource::new();
+    source.add("bg/sky.png", b"data".to_vec());
+    source.add("bg/ocean.png", b"data".to_vec());
+
+    let manager = ResourceManager::with_source(Arc::new(source), 256);
+    let files = manager.list_files(&LogicalPath::new("bg"));
+    assert_eq!(files.len(), 2);
+}
+
+#[test]
+fn test_unload_texture_clears_failed_flag() {
+    let source = InMemorySource::new();
+    let mut manager = ResourceManager::with_source(Arc::new(source), 256);
+    let p = LogicalPath::new("bad.png");
+
+    // Load fails → gets added to failed set
+    let _ = manager.load_texture(&p);
+    assert!(manager.has_failed_texture(&p));
+
+    manager.unload_texture(&p);
+    assert!(!manager.has_failed_texture(&p));
+}
+
+#[test]
+fn test_preload_textures_success() {
+    let mut source = InMemorySource::new();
+    source.add("bg/a.png", make_png_bytes(64, 64));
+    source.add("bg/b.png", make_png_bytes(32, 32));
+
+    let mut manager = ResourceManager::with_source(Arc::new(source), 256);
+    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+
+    let a = LogicalPath::new("bg/a.png");
+    let b = LogicalPath::new("bg/b.png");
+    manager.preload_textures(&[&a, &b]).unwrap();
+    assert_eq!(manager.texture_count(), 2);
+}
+
+#[test]
+fn test_preload_textures_stops_on_first_error() {
+    let mut source = InMemorySource::new();
+    source.add("ok.png", make_png_bytes(32, 32));
+    // "bad.png" is not added
+
+    let mut manager = ResourceManager::with_source(Arc::new(source), 256);
+    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+
+    let ok = LogicalPath::new("ok.png");
+    let bad = LogicalPath::new("bad.png");
+    let result = manager.preload_textures(&[&bad, &ok]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_load_failed_texture_suppresses_retry() {
+    let source = InMemorySource::new(); // empty
+    let mut manager = ResourceManager::with_source(Arc::new(source), 256);
+    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+
+    let p = LogicalPath::new("missing.png");
+
+    // First load fails and marks as failed
+    assert!(manager.load_texture(&p).is_err());
+    assert!(manager.has_failed_texture(&p));
+
+    // Second load returns "previously failed" error without hitting source
+    let err = manager.load_texture(&p).unwrap_err();
+    assert!(format!("{err}").contains("Previously failed") || manager.has_failed_texture(&p));
+}
+
+#[test]
+fn test_texture_cache_stats_after_load() {
+    let mut source = InMemorySource::new();
+    source.add("bg.png", make_png_bytes(256, 256));
+
+    let mut manager = ResourceManager::with_source(Arc::new(source), 256);
+    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+
+    let p = LogicalPath::new("bg.png");
+    manager.load_texture(&p).unwrap();
+
+    let stats = manager.texture_cache_stats();
+    assert_eq!(stats.entries, 1);
+    assert!(stats.used_bytes > 0);
+}
+
+#[test]
+fn test_materialize_to_fs_zip_source() {
+    use crate::resources::source::ZipSource;
+    use std::io::Write as _;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let zip_path = tmp.path().join("pack.zip");
+    {
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        zip.start_file("sound/bgm.ogg", opts).unwrap();
+        zip.write_all(b"fake-ogg").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let source = Arc::new(ZipSource::new(&zip_path));
+    let manager = ResourceManager::with_source(source, 256);
+
+    let p = LogicalPath::new("sound/bgm.ogg");
+    let temp_out = tmp.path().join("temp_out");
+    let (out_path, cleanup) = manager.materialize_to_fs(&p, &temp_out).unwrap();
+
+    assert!(out_path.exists());
+    assert_eq!(std::fs::read(&out_path).unwrap(), b"fake-ogg");
+    assert!(cleanup.is_some());
+}

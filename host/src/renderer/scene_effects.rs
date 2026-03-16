@@ -181,3 +181,172 @@ impl Renderer {
         self.scene_transition.is_ui_fading_in()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_renderer() -> Renderer {
+        Renderer::new(1920.0, 1080.0)
+    }
+
+    // ===== shake =====
+
+    #[test]
+    fn start_shake_sets_active() {
+        let mut r = make_renderer();
+        r.start_shake(10.0, 5.0, 0.5);
+        assert!(r.is_scene_effect_active());
+    }
+
+    #[test]
+    fn shake_completes_after_duration() {
+        let mut r = make_renderer();
+        let mut fx = SceneEffectState::default();
+        r.start_shake(10.0, 5.0, 0.5);
+
+        let active = r.update_scene_effects(0.6, &mut fx);
+        assert!(!active);
+        assert!(!r.is_scene_effect_active());
+        assert_eq!(fx.shake_offset_x, 0.0);
+        assert_eq!(fx.shake_offset_y, 0.0);
+    }
+
+    #[test]
+    fn shake_mid_progress_produces_offset() {
+        let mut r = make_renderer();
+        let mut fx = SceneEffectState::default();
+        r.start_shake(10.0, 5.0, 1.0);
+
+        let active = r.update_scene_effects(0.3, &mut fx);
+        assert!(active);
+        assert!(fx.shake_offset_x != 0.0 || fx.shake_offset_y != 0.0);
+    }
+
+    #[test]
+    fn current_shake_offset_inactive() {
+        let r = make_renderer();
+        assert_eq!(r.current_shake_offset(), (0.0, 0.0));
+    }
+
+    #[test]
+    fn current_shake_offset_active() {
+        let mut r = make_renderer();
+        let mut fx = SceneEffectState::default();
+        r.start_shake(10.0, 5.0, 1.0);
+        r.update_scene_effects(0.2, &mut fx);
+
+        let (ox, oy) = r.current_shake_offset();
+        assert!(ox != 0.0 || oy != 0.0);
+    }
+
+    // ===== blur transition =====
+
+    #[test]
+    fn blur_transition_sets_active() {
+        let mut r = make_renderer();
+        r.start_blur_transition(0.0, 1.0, 0.5);
+        assert!(r.is_scene_effect_active());
+    }
+
+    #[test]
+    fn blur_transition_completes_to_target() {
+        let mut r = make_renderer();
+        let mut fx = SceneEffectState::default();
+        r.start_blur_transition(0.0, 5.0, 0.5);
+
+        let active = r.update_scene_effects(0.6, &mut fx);
+        assert!(!active);
+        assert_eq!(fx.blur_amount, 5.0);
+    }
+
+    #[test]
+    fn blur_transition_mid_progress() {
+        let mut r = make_renderer();
+        let mut fx = SceneEffectState::default();
+        r.start_blur_transition(0.0, 10.0, 1.0);
+
+        let active = r.update_scene_effects(0.5, &mut fx);
+        assert!(active);
+        assert!(fx.blur_amount > 0.0);
+        assert!(fx.blur_amount < 10.0);
+    }
+
+    // ===== combined =====
+
+    #[test]
+    fn both_effects_active() {
+        let mut r = make_renderer();
+        let mut fx = SceneEffectState::default();
+        r.start_shake(10.0, 5.0, 1.0);
+        r.start_blur_transition(0.0, 1.0, 1.0);
+
+        let active = r.update_scene_effects(0.3, &mut fx);
+        assert!(active);
+        assert!(r.is_scene_effect_active());
+    }
+
+    #[test]
+    fn no_effects_returns_false() {
+        let mut r = make_renderer();
+        let mut fx = SceneEffectState::default();
+        let active = r.update_scene_effects(0.1, &mut fx);
+        assert!(!active);
+    }
+
+    // ===== scene transition delegation =====
+
+    #[test]
+    fn scene_transition_ui_alpha_default() {
+        let r = make_renderer();
+        assert_eq!(r.get_scene_transition_ui_alpha(), 1.0);
+    }
+
+    #[test]
+    fn scene_transition_not_active_by_default() {
+        let r = make_renderer();
+        assert!(!r.is_scene_transition_active());
+        assert!(!r.is_scene_transition_at_midpoint());
+        assert!(!r.is_scene_transition_ui_fading_in());
+    }
+
+    #[test]
+    fn scene_fade_starts_transition() {
+        let mut r = make_renderer();
+        r.start_scene_fade(1.0, "bg/new.png".to_string());
+        assert!(r.is_scene_transition_active());
+    }
+
+    #[test]
+    fn scene_fade_white_starts_transition() {
+        let mut r = make_renderer();
+        r.start_scene_fade_white(1.0, "bg/new.png".to_string());
+        assert!(r.is_scene_transition_active());
+    }
+
+    #[test]
+    fn scene_rule_starts_transition() {
+        let mut r = make_renderer();
+        r.start_scene_rule(1.0, "bg/new.png".to_string(), "mask.png".to_string(), false);
+        assert!(r.is_scene_transition_active());
+    }
+
+    #[test]
+    fn skip_scene_transition_to_end_returns_bg() {
+        let mut r = make_renderer();
+        r.start_scene_fade(1.0, "bg/new.png".to_string());
+        let bg = r.skip_scene_transition_to_end();
+        assert_eq!(bg.as_deref(), Some("bg/new.png"));
+        assert!(!r.is_scene_transition_active());
+    }
+
+    #[test]
+    fn background_transition_start_and_skip() {
+        let mut r = make_renderer();
+        r.start_background_transition(Some("old.png".to_string()), None);
+        assert!(r.update_transition(0.01));
+
+        r.skip_transition();
+        assert!(!r.update_transition(0.01));
+    }
+}

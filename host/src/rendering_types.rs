@@ -218,4 +218,82 @@ mod tests {
         assert_eq!(tex.width_u32(), 800);
         assert_eq!(tex.height_u32(), 600);
     }
+
+    #[test]
+    fn null_texture_clone_is_independent() {
+        let tex = NullTexture::new(256, 128);
+        let cloned = tex.clone();
+        assert_eq!(cloned.width_u32(), 256);
+        assert_eq!(cloned.height_u32(), 128);
+    }
+
+    #[test]
+    fn null_texture_size_bytes_zero_dimension() {
+        let tex = NullTexture::new(0, 0);
+        assert_eq!(tex.size_bytes(), 0);
+    }
+
+    #[test]
+    fn texture_context_create_texture_delegates_to_factory() {
+        let factory = Arc::new(NullTextureFactory);
+        let ctx = TextureContext::new(factory);
+        let tex = ctx.create_texture(320, 240, &[], Some("test_label"));
+        assert_eq!(tex.width_u32(), 320);
+        assert_eq!(tex.height_u32(), 240);
+    }
+
+    #[test]
+    fn draw_command_sprite_params_sprite() {
+        let tex: Arc<dyn Texture> = Arc::new(NullTexture::new(64, 64));
+        let cmd = DrawCommand::Sprite {
+            texture: tex,
+            x: 10.0,
+            y: 20.0,
+            width: 100.0,
+            height: 200.0,
+            color: [1.0, 0.5, 0.0, 0.8],
+        };
+        let params = cmd.sprite_params().expect("Sprite should have params");
+        assert!((params.0 - 10.0).abs() < 0.001); // x
+        assert!((params.1 - 20.0).abs() < 0.001); // y
+        assert!((params.2 - 100.0).abs() < 0.001); // width
+        assert!((params.3 - 200.0).abs() < 0.001); // height
+        assert_eq!(params.4, [1.0, 0.5, 0.0, 0.8]); // color
+        assert!(params.5); // has_uv = true for Sprite
+    }
+
+    #[test]
+    fn draw_command_sprite_params_rect() {
+        let cmd = DrawCommand::Rect {
+            x: 5.0,
+            y: 15.0,
+            width: 50.0,
+            height: 60.0,
+            color: [0.0, 0.0, 0.0, 0.5],
+        };
+        let params = cmd.sprite_params().expect("Rect should have params");
+        assert!((params.0 - 5.0).abs() < 0.001); // x
+        assert!((params.1 - 15.0).abs() < 0.001); // y
+        assert!((params.2 - 50.0).abs() < 0.001); // width
+        assert!((params.3 - 60.0).abs() < 0.001); // height
+        assert_eq!(params.4, [0.0, 0.0, 0.0, 0.5]); // color
+        assert!(!params.5); // has_uv = false for Rect
+    }
+
+    #[test]
+    fn draw_command_sprite_params_dissolve_returns_none() {
+        let mask: Arc<dyn Texture> = Arc::new(NullTexture::new(64, 64));
+        let cmd = DrawCommand::Dissolve {
+            mask_texture: mask,
+            progress: 0.5,
+            ramp: 0.1,
+            reversed: false,
+            overlay_color: [1.0, 1.0, 1.0, 1.0],
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
+        assert!(cmd.sprite_params().is_none(), "Dissolve should return None");
+    }
 }
