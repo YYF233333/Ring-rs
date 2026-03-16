@@ -15,161 +15,16 @@
 //! - **FadeWhite（白屏）**: 同上，使用白色遮罩
 //! - **Rule（图片遮罩）**: 使用 ImageDissolve shader，progress 控制溶解进度
 
-use std::cell::RefCell;
+mod animatable;
+mod types;
+
+pub use animatable::AnimatableSceneTransition;
+pub use types::{SceneTransitionPhase, SceneTransitionType};
+
 use std::rc::Rc;
 
-use super::animation::{Animatable, AnimationSystem, EasingFunction, ObjectId};
+use super::animation::{AnimationSystem, EasingFunction, ObjectId};
 use tracing::{info, warn};
-
-/// 场景过渡类型
-#[derive(Debug, Clone)]
-pub enum SceneTransitionType {
-    /// 黑屏淡入淡出
-    Fade,
-    /// 白屏淡入淡出
-    FadeWhite,
-    /// 图片遮罩（Rule-based dissolve）
-    Rule {
-        /// 遮罩图片路径
-        mask_path: String,
-        /// 是否反向
-        reversed: bool,
-    },
-}
-
-/// 场景过渡阶段
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SceneTransitionPhase {
-    /// 空闲状态
-    Idle,
-    /// 阶段 1：遮罩淡入 / 旧背景溶解到黑屏
-    FadeIn,
-    /// 阶段 2：黑屏停顿（仅 Rule 效果）
-    Blackout,
-    /// 阶段 3：遮罩淡出 / 黑屏溶解到新背景
-    FadeOut,
-    /// 阶段 4：UI 淡入
-    UIFadeIn,
-    /// 完成
-    Completed,
-}
-
-/// 可动画的场景过渡状态
-///
-/// 实现 `Animatable` trait，暴露以下属性供动画系统驱动：
-/// - `progress`: 溶解进度 (0.0 - 1.0)，用于 ImageDissolve shader
-/// - `mask_alpha`: 遮罩透明度 (0.0 - 1.0)，用于 Fade/FadeWhite
-/// - `ui_alpha`: UI 透明度 (0.0 - 1.0)，用于 UI 淡入
-#[derive(Debug)]
-pub struct AnimatableSceneTransition {
-    inner: RefCell<SceneTransitionData>,
-}
-
-/// 场景过渡内部数据
-#[derive(Debug, Clone)]
-struct SceneTransitionData {
-    /// 溶解进度（用于 Rule 效果的 shader）
-    progress: f32,
-    /// 遮罩透明度（用于 Fade/FadeWhite）
-    mask_alpha: f32,
-    /// UI 透明度
-    ui_alpha: f32,
-}
-
-#[allow(clippy::new_without_default)]
-impl AnimatableSceneTransition {
-    /// 创建新的场景过渡状态
-    pub fn new() -> Self {
-        Self {
-            inner: RefCell::new(SceneTransitionData {
-                progress: 0.0,
-                mask_alpha: 0.0,
-                ui_alpha: 1.0,
-            }),
-        }
-    }
-
-    /// 重置为过渡开始状态
-    pub fn reset(&self) {
-        let mut data = self.inner.borrow_mut();
-        data.progress = 0.0;
-        data.mask_alpha = 0.0;
-        data.ui_alpha = 0.0;
-    }
-
-    /// 设置为完成状态
-    pub fn set_completed(&self) {
-        let mut data = self.inner.borrow_mut();
-        data.progress = 1.0;
-        data.mask_alpha = 0.0;
-        data.ui_alpha = 1.0;
-    }
-
-    /// 获取当前溶解进度
-    pub fn progress(&self) -> f32 {
-        self.inner.borrow().progress
-    }
-
-    /// 获取当前遮罩透明度
-    pub fn mask_alpha(&self) -> f32 {
-        self.inner.borrow().mask_alpha
-    }
-
-    /// 获取当前 UI 透明度
-    pub fn ui_alpha(&self) -> f32 {
-        self.inner.borrow().ui_alpha
-    }
-
-    /// 直接设置进度（用于跳过动画）
-    pub fn set_progress(&self, value: f32) {
-        self.inner.borrow_mut().progress = value;
-    }
-
-    /// 直接设置遮罩透明度
-    pub fn set_mask_alpha(&self, value: f32) {
-        self.inner.borrow_mut().mask_alpha = value;
-    }
-
-    /// 直接设置 UI 透明度
-    pub fn set_ui_alpha(&self, value: f32) {
-        self.inner.borrow_mut().ui_alpha = value;
-    }
-}
-
-impl Animatable for AnimatableSceneTransition {
-    fn get_property(&self, property_id: &str) -> Option<f32> {
-        let data = self.inner.borrow();
-        match property_id {
-            "progress" => Some(data.progress),
-            "mask_alpha" => Some(data.mask_alpha),
-            "ui_alpha" => Some(data.ui_alpha),
-            _ => None,
-        }
-    }
-
-    fn set_property(&self, property_id: &str, value: f32) -> bool {
-        let mut data = self.inner.borrow_mut();
-        match property_id {
-            "progress" => {
-                data.progress = value;
-                true
-            }
-            "mask_alpha" => {
-                data.mask_alpha = value;
-                true
-            }
-            "ui_alpha" => {
-                data.ui_alpha = value;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    fn property_list(&self) -> &'static [&'static str] {
-        &["progress", "mask_alpha", "ui_alpha"]
-    }
-}
 
 /// UI 淡入时长（秒）
 const UI_FADE_DURATION: f32 = 0.2;
@@ -182,15 +37,11 @@ const RULE_BLACKOUT_DURATION: f32 = 0.2;
 /// 使用 Trait-based AnimationSystem 管理场景切换动画。
 /// 支持多阶段动画序列，自动处理阶段转换。
 pub struct SceneTransitionManager {
-    /// 内部动画系统
     animation_system: AnimationSystem,
-    /// 场景过渡状态对象
     transition_state: Rc<AnimatableSceneTransition>,
     /// 对象 ID（注册到动画系统）
     object_id: ObjectId,
-    /// 过渡类型
     transition_type: Option<SceneTransitionType>,
-    /// 当前阶段
     phase: SceneTransitionPhase,
     /// 过渡时长（每个主要阶段）
     duration: f32,
@@ -202,7 +53,6 @@ pub struct SceneTransitionManager {
 
 #[allow(clippy::new_without_default)]
 impl SceneTransitionManager {
-    /// 创建新的场景过渡管理器
     pub fn new() -> Self {
         let mut animation_system = AnimationSystem::new();
         let transition_state = Rc::new(AnimatableSceneTransition::new());
@@ -252,34 +102,28 @@ impl SceneTransitionManager {
         );
     }
 
-    /// 内部启动方法
     fn start_internal(
         &mut self,
         transition_type: SceneTransitionType,
         duration: f32,
         pending_background: String,
     ) {
-        // 跳过并清理之前的动画
         self.animation_system.skip_all();
         self.animation_system.update(0.0);
 
-        // 保存参数
         self.transition_type = Some(transition_type.clone());
         self.duration = duration.max(0.01);
         self.pending_background = Some(pending_background);
         self.phase_timer = 0.0;
 
-        // 重置状态
         self.transition_state.reset();
 
-        // 进入第一阶段
         self.phase = SceneTransitionPhase::FadeIn;
         self.start_fade_in_animations();
 
         info!(transition_type = ?transition_type, duration = %duration, "SceneTransition: 开始过渡");
     }
 
-    /// 启动 FadeIn 阶段的动画
     fn start_fade_in_animations(&mut self) {
         match &self.transition_type {
             Some(SceneTransitionType::Fade) | Some(SceneTransitionType::FadeWhite) => {
@@ -318,7 +162,6 @@ impl SceneTransitionManager {
         }
     }
 
-    /// 启动 FadeOut 阶段的动画
     fn start_fade_out_animations(&mut self) {
         match &self.transition_type {
             Some(SceneTransitionType::Fade) | Some(SceneTransitionType::FadeWhite) => {
@@ -359,7 +202,6 @@ impl SceneTransitionManager {
         }
     }
 
-    /// 启动 UI 淡入动画
     fn start_ui_fade_in_animations(&mut self) {
         if let Err(e) = self
             .animation_system
@@ -387,23 +229,18 @@ impl SceneTransitionManager {
             return false;
         }
 
-        // 更新动画系统
         self.animation_system.update(dt);
 
-        // 检查阶段转换
         match self.phase {
             SceneTransitionPhase::FadeIn => {
                 if !self.animation_system.has_active_animations() {
-                    // FadeIn 完成，进入下一阶段
                     match &self.transition_type {
                         Some(SceneTransitionType::Rule { .. }) => {
-                            // Rule: 进入黑屏停顿阶段
                             self.phase = SceneTransitionPhase::Blackout;
                             self.phase_timer = 0.0;
-                            self.transition_state.set_progress(1.0); // 保持全黑
+                            self.transition_state.set_progress(1.0);
                         }
                         _ => {
-                            // Fade/FadeWhite: 直接进入 FadeOut
                             self.phase = SceneTransitionPhase::FadeOut;
                             self.start_fade_out_animations();
                         }
@@ -411,7 +248,6 @@ impl SceneTransitionManager {
                 }
             }
             SceneTransitionPhase::Blackout => {
-                // Rule 专用：黑屏停顿
                 self.phase_timer += dt;
                 if self.phase_timer >= RULE_BLACKOUT_DURATION {
                     self.phase = SceneTransitionPhase::FadeOut;
@@ -420,14 +256,12 @@ impl SceneTransitionManager {
             }
             SceneTransitionPhase::FadeOut => {
                 if !self.animation_system.has_active_animations() {
-                    // FadeOut 完成，进入 UI 淡入
                     self.phase = SceneTransitionPhase::UIFadeIn;
                     self.start_ui_fade_in_animations();
                 }
             }
             SceneTransitionPhase::UIFadeIn => {
                 if !self.animation_system.has_active_animations() {
-                    // UI 淡入完成，过渡结束
                     self.phase = SceneTransitionPhase::Completed;
                     self.transition_state.set_completed();
                     info!("SceneTransition: 过渡完成");
@@ -447,27 +281,21 @@ impl SceneTransitionManager {
         self.animation_system.update(0.0);
 
         match self.phase {
-            SceneTransitionPhase::FadeIn => {
-                // 跳到中间点（遮罩完全显现）
-                match &self.transition_type {
-                    Some(SceneTransitionType::Rule { .. }) => {
-                        // Rule: 跳到 FadeOut 开始
-                        self.phase = SceneTransitionPhase::FadeOut;
-                        self.transition_state.set_progress(0.0);
-                        self.start_fade_out_animations();
-                    }
-                    _ => {
-                        // Fade/FadeWhite: 跳到 FadeOut 开始
-                        self.phase = SceneTransitionPhase::FadeOut;
-                        self.transition_state.set_mask_alpha(1.0);
-                        self.start_fade_out_animations();
-                    }
+            SceneTransitionPhase::FadeIn => match &self.transition_type {
+                Some(SceneTransitionType::Rule { .. }) => {
+                    self.phase = SceneTransitionPhase::FadeOut;
+                    self.transition_state.set_progress(0.0);
+                    self.start_fade_out_animations();
                 }
-            }
+                _ => {
+                    self.phase = SceneTransitionPhase::FadeOut;
+                    self.transition_state.set_mask_alpha(1.0);
+                    self.start_fade_out_animations();
+                }
+            },
             SceneTransitionPhase::Blackout
             | SceneTransitionPhase::FadeOut
             | SceneTransitionPhase::UIFadeIn => {
-                // 直接完成
                 self.phase = SceneTransitionPhase::Completed;
                 self.transition_state.set_completed();
             }
@@ -493,7 +321,6 @@ impl SceneTransitionManager {
         bg
     }
 
-    /// 获取当前阶段
     pub fn phase(&self) -> SceneTransitionPhase {
         self.phase
     }
@@ -512,13 +339,13 @@ impl SceneTransitionManager {
             return false;
         }
 
-        // 只要 pending_background 仍存在，就意味着“背景尚未切换”，
+        // 只要 pending_background 仍存在，就意味着"背景尚未切换"，
         // 中间点只应触发一次：切换后会通过 take_pending_background() 清空。
         if self.pending_background.is_none() {
             return false;
         }
 
-        // 关键：这里的“中间点”必须发生在进入 FadeOut 之后、FadeOut 动画推进之前。
+        // 关键：这里的"中间点"必须发生在进入 FadeOut 之后、FadeOut 动画推进之前。
         // 由于 update() 先推进动画，再进行阶段转换并启动 FadeOut 动画，
         // 因此在进入 FadeOut 的那一帧，属性值仍保持在 FadeOut 的起始值：
         // - Fade/FadeWhite：mask_alpha == 1.0（全遮罩）
@@ -555,7 +382,6 @@ impl SceneTransitionManager {
         self.pending_background.as_deref()
     }
 
-    /// 获取过渡类型
     pub fn transition_type(&self) -> Option<&SceneTransitionType> {
         self.transition_type.as_ref()
     }
@@ -565,12 +391,10 @@ impl SceneTransitionManager {
         self.transition_state.progress()
     }
 
-    /// 获取当前遮罩透明度
     pub fn mask_alpha(&self) -> f32 {
         self.transition_state.mask_alpha()
     }
 
-    /// 获取当前 UI 透明度
     pub fn ui_alpha(&self) -> f32 {
         self.transition_state.ui_alpha()
     }
