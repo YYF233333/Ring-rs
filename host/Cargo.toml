@@ -23,11 +23,11 @@ rodio = { version = "0.22", default-features = false, features = ["mp3", "wav", 
 zip = { version = "8.1", default-features = false, features = ["deflate-flate2"] }
 
 # 渲染后端 (winit + wgpu + egui)
-winit = "0.30"
-wgpu = "24"
-egui = "0.31"
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+wgpu = { version = "24", default-features = false, features = ["wgsl", "dx12"] }
+egui = { version = "0.31", default-features = false }
 egui-wgpu = "0.31"
-egui-winit = "0.31"
+egui-winit = { version = "0.31", default-features = false, features = ["clipboard"] }
 pollster = "0.4"
 bytemuck = { version = "1", features = ["derive"] }
 
