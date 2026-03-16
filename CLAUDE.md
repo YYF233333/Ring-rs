@@ -71,7 +71,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 |------|------|
 | 一键门禁 | `cargo check-all` |
 | 测试 | `cargo test -p vn-runtime --lib` |
-| 覆盖率 | `cargo cov-runtime` / `cargo cov-workspace` |
+| 覆盖率 | `cargo cov` |
 
 覆盖率报告：`target/llvm-cov/html/index.html`
 

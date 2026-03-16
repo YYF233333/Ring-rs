@@ -19,12 +19,8 @@ test-host-lib = "test -p host --lib"
 check-all = "run -p xtask -- check-all"
 
 # -------- Coverage (local) --------
-# Primary goal: vn-runtime coverage (close to 100%).
 # Requires: cargo install cargo-llvm-cov && rustup component add llvm-tools-preview
-cov-runtime = "run -p xtask -- cov-runtime"
-
-# Secondary goal: workspace coverage (trend only; excludes tool crates).
-cov-workspace = "run -p xtask -- cov-workspace"
+cov = "run -p xtask -- cov"
 
 # -------- Script checking --------
 # Static analysis for VN scripts: syntax, labels, resource references.

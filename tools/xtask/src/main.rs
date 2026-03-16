@@ -5,8 +5,7 @@
 //! ## 命令
 //!
 //! - `check-all`: fmt（直接应用）、clippy（自动 fix）、test（仅输出最终结果）
-//! - `cov-runtime`: 运行 vn-runtime 覆盖率
-//! - `cov-workspace`: 运行 workspace 覆盖率
+//! - `cov`: 运行 workspace 覆盖率（排除工具 crate 与平台胶水代码）
 //! - `script-check`: 检查脚本文件（语法、label、资源引用）
 
 use std::path::{Path, PathBuf};
@@ -26,10 +25,9 @@ use xshell::Shell;
     about = "开发辅助工具（本地门禁/覆盖率/脚本静态检查）",
     arg_required_else_help = true,
     after_help = r#"ALIASES (in .cargo/config.toml):
-  cargo check-all     -> cargo run -p xtask -- check-all
-  cargo cov-runtime   -> cargo run -p xtask -- cov-runtime
-  cargo cov-workspace -> cargo run -p xtask -- cov-workspace
-  cargo script-check  -> cargo run -p xtask -- script-check
+  cargo check-all   -> cargo run -p xtask -- check-all
+  cargo cov         -> cargo run -p xtask -- cov
+  cargo script-check -> cargo run -p xtask -- script-check
 "#
 )]
 struct Cli {
@@ -42,11 +40,8 @@ enum XtaskCommand {
     /// 运行 fmt（直接应用）、clippy（自动 fix）、test（--quiet，仅最终结果）
     CheckAll,
 
-    /// 运行 vn-runtime 覆盖率报告（HTML）
-    CovRuntime,
-
-    /// 运行 workspace 覆盖率报告（HTML；排除工具 crate）
-    CovWorkspace,
+    /// 运行 workspace 覆盖率报告（HTML；排除工具 crate 与平台胶水代码）
+    Cov,
 
     /// 检查脚本文件（语法、label、资源引用）
     ScriptCheck(ScriptCheckArgs),
@@ -84,29 +79,25 @@ fn run(step: &str, sh: &Shell, program: &str, args: &[&str]) -> anyhow::Result<(
     Ok(())
 }
 
-/// 覆盖率排除规则：vn-runtime 主口径
+/// 覆盖率排除规则
 ///
-/// 排除纯声明/derive 文件，不含可测试业务逻辑：
-/// - `lib.rs`：模块声明与重导出
-/// - `error.rs`：thiserror derive，无手写逻辑
-const COV_RUNTIME_IGNORE: &str = r"vn-runtime[/\\]src[/\\](lib|error)\.rs$";
-
-/// 覆盖率排除规则：workspace 次口径
-///
-/// 在 vn-runtime 排除基础上，额外排除不可单元测试的平台/框架胶水代码：
-/// - `src/lib.rs`：两个 crate 的模块声明与重导出
+/// 排除不可单元测试的平台/框架胶水代码：
+/// - `src/lib.rs`：模块声明与重导出（两个 crate）
+/// - `vn-runtime/src/error.rs`：thiserror derive，无手写逻辑
 /// - `main.rs` / `host_app.rs` / `egui_actions.rs`：平台入口与事件循环
 /// - `egui_screens/*`：egui UI 构建逻辑（三方框架行为）
 /// - `backend/*`（除 `math.rs`）：GPU 渲染管线（需真实设备）
-/// - `audio/playback.rs`：硬件依赖的音频播放
+/// - `audio/*`：rodio 硬件依赖，含设备初始化与播放控制
+/// - `video/*`：FFmpeg 子进程 + rodio 解码，完全硬件依赖
 /// - `app/draw.rs`：渲染管线薄包装
-const COV_WORKSPACE_IGNORE: &str = concat!(
+const COV_IGNORE: &str = concat!(
     r"src[/\\]lib\.rs$|",
     r"vn-runtime[/\\]src[/\\]error\.rs$|",
     r"host[/\\]src[/\\](main|host_app|egui_actions)\.rs$|",
     r"host[/\\]src[/\\]egui_screens[/\\]|",
-    r"host[/\\]src[/\\]backend[/\\](mod|sprite_renderer|gpu_texture|dissolve_renderer)\.rs$|",
-    r"host[/\\]src[/\\]audio[/\\]playback\.rs$|",
+    r"host[/\\]src[/\\]backend[/\\](mod|egui_integration|gpu_context|sprite_renderer|gpu_texture|dissolve_renderer)\.rs$|",
+    r"host[/\\]src[/\\]audio[/\\]|",
+    r"host[/\\]src[/\\]video[/\\]|",
     r"host[/\\]src[/\\]app[/\\]draw\.rs$",
 );
 
@@ -162,28 +153,7 @@ fn real_main() -> anyhow::Result<()> {
                 &["test", "--workspace", "--quiet"],
             )?;
         }
-        XtaskCommand::CovRuntime => {
-            ensure_cargo_llvm_cov_available(&sh)?;
-
-            run(
-                "cargo llvm-cov -p vn-runtime (with exclusions)",
-                &sh,
-                "cargo",
-                &[
-                    "llvm-cov",
-                    "--quiet",
-                    "-p",
-                    "vn-runtime",
-                    "--all-features",
-                    "--html",
-                    "--ignore-filename-regex",
-                    COV_RUNTIME_IGNORE,
-                ],
-            )?;
-
-            eprintln!("\nCoverage HTML: target/llvm-cov/html/index.html");
-        }
-        XtaskCommand::CovWorkspace => {
+        XtaskCommand::Cov => {
             ensure_cargo_llvm_cov_available(&sh)?;
 
             run(
@@ -201,7 +171,7 @@ fn real_main() -> anyhow::Result<()> {
                     "--all-features",
                     "--html",
                     "--ignore-filename-regex",
-                    COV_WORKSPACE_IGNORE,
+                    COV_IGNORE,
                 ],
             )?;
 

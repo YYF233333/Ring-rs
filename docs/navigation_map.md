@@ -171,10 +171,7 @@
 - **一键门禁**：`cargo check-all`（由 `tools/xtask` 串行执行 fmt --all → clippy --fix → test）
 - **脚本检查**：`cargo script-check`（检查脚本语法/label/资源引用）
 - **Dev Mode 自动脚本检查**：Host 启动时基于 `config.json` 的 `debug.script_check` 自动运行（debug build 默认开启）
-- **覆盖率**：
-  - `cargo cov-runtime`（主看 `vn-runtime`）
-  - `cargo cov-workspace`（趋势观察）
-  - 报告：`target/llvm-cov/html/index.html`
+- **覆盖率**：`cargo cov`，报告：`target/llvm-cov/html/index.html`
 
 ## “不要读/不要改”的目录（常见噪音）
 
