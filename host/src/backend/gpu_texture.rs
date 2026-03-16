@@ -12,7 +12,6 @@ use crate::rendering_types::Texture;
 /// 通过 `Arc<GpuTexture>` 在缓存和渲染系统间共享。
 pub struct GpuTexture {
     /// 底层 wgpu 纹理句柄（视频帧注入等场景需要 `queue.write_texture` 访问）
-    #[allow(dead_code)]
     pub(crate) texture: wgpu::Texture,
     /// 纹理视图（生命周期需与 texture 绑定；bind_group 持有其引用）
     #[allow(dead_code)]

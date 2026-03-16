@@ -313,7 +313,7 @@ fn test_execute_chapter_mark() {
         level: 1,
     };
 
-    // 阶段 24：ChapterMark 是非阻塞的
+    // ChapterMark 是非阻塞的
     let result = ctx.execute(&cmd);
     assert_eq!(result, ExecuteResult::Ok);
     assert!(ctx.render_state.chapter_mark.is_some());
@@ -438,7 +438,7 @@ fn test_execute_batch() {
     );
 }
 
-// ========== 阶段 25：效果矩阵测试 ==========
+// ========== 效果矩阵测试 ==========
 // 验证同名效果在不同 target 上的解析一致性
 
 #[test]

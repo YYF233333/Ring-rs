@@ -1,7 +1,4 @@
 //! 音频命令处理
-//!
-//! 阶段 27：函数签名从 `&mut AppState` 改为 `(&mut CoreSystems, &AppConfig)`，
-//! 不再依赖完整的应用状态。
 
 use crate::command_executor::AudioCommand;
 use crate::config::AppConfig;

@@ -106,7 +106,7 @@ impl Renderer {
         }
     }
 
-    /// 开始背景过渡（阶段 25：基于 ResolvedEffect 的统一入口）
+    /// 开始背景过渡（基于 ResolvedEffect 的统一入口）
     pub fn start_background_transition_resolved(
         &mut self,
         old_bg: Option<String>,

@@ -5,9 +5,6 @@
 //!
 //! 这是 command_handlers 层中处理所有动画/过渡效果的**唯一入口**。
 //!
-//! 阶段 27：函数签名从 `&mut AppState` 改为 `(&mut CoreSystems, &Manifest)`，
-//! 不再依赖完整的应用状态。
-//!
 //! ## Capability 与回退策略
 //!
 //! 效果请求按 `capability_id` 由 [`crate::extensions::ExtensionRegistry`] 分发；若返回 MissingCapability 或 Failed，
@@ -27,7 +24,7 @@ use super::super::CoreSystems;
 /// 应用所有效果请求
 ///
 /// 遍历 `command_executor.last_output.effect_requests`，
-/// 对每个请求执行 capability 路由；缺失或失败时回退 legacy 路径。
+/// 对每个请求执行 capability 路由；缺失或失败时回退到更基础的 capability。
 pub fn apply_effect_requests(
     registry: &crate::extensions::ExtensionRegistry,
     core: &mut CoreSystems,

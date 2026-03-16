@@ -43,7 +43,7 @@ impl CommandExecutor {
     ) -> ExecuteResult {
         // 清除对话框（选择分支替代对话）
         render_state.clear_dialogue();
-        // 阶段 24：不再隐式清除 ChapterMark
+        // 不再隐式清除 ChapterMark
 
         // 转换选项格式
         let choice_items: Vec<ChoiceItem> = choices
@@ -64,7 +64,6 @@ impl CommandExecutor {
 
     /// 执行 ChapterMark（非阻塞，异步显示）
     ///
-    /// 阶段 24 重构：
     /// - 章节标记是**非阻塞**的，不产生 WaitForClick
     /// - 固定持续时间后自动消失（由 Host 更新循环驱动）
     /// - 不受用户快进/点击影响

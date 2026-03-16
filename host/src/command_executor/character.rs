@@ -14,9 +14,8 @@ use super::types::ExecuteResult;
 impl CommandExecutor {
     /// 执行 ShowCharacter
     ///
-    /// 阶段 24 扩展：如果角色已存在且位置变更，生成 Move 动画命令。
-    /// 阶段 25 重构：使用统一 `effects::resolve()` 解析过渡效果。
-    /// 阶段 25 续：产出 `EffectRequest` 替代 `CharacterAnimationCommand`。
+    /// 如果角色已存在且位置变更，生成 Move 动画命令。
+    /// 使用统一 `effects::resolve()` 解析过渡效果。
     pub(super) fn execute_show_character(
         &mut self,
         path: &str,
@@ -165,8 +164,7 @@ impl CommandExecutor {
 
     /// 执行 HideCharacter
     ///
-    /// 阶段 25 重构：使用统一 `effects::resolve()` 解析过渡效果。
-    /// 阶段 25 续：产出 `EffectRequest` 替代 `CharacterAnimationCommand`。
+    /// 使用统一 `effects::resolve()` 解析过渡效果，产出 `EffectRequest`。
     pub(super) fn execute_hide_character(
         &mut self,
         alias: &str,

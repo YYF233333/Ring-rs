@@ -150,7 +150,7 @@ impl TransitionManager {
         self.start(transition_type, duration);
     }
 
-    /// 从 ResolvedEffect 启动过渡（阶段 25：统一入口）
+    /// 从 ResolvedEffect 启动过渡（统一入口）
     ///
     /// 使用已解析的效果信息启动过渡，避免重复解析 Transition。
     /// 仅支持 `Dissolve` / `None`，其他效果降级为 Dissolve。
@@ -310,7 +310,7 @@ mod tests {
         assert_eq!(manager.old_content_alpha(), 0.0);
     }
 
-    // ===== 阶段 26 新增：skip 语义测试 =====
+    // ===== skip 语义测试 =====
 
     #[test]
     fn test_skip_mid_dissolve_completes() {

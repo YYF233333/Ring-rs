@@ -115,7 +115,7 @@ fn test_midpoint_detected_for_rule_after_blackout_and_consumed() {
     assert!(!manager.is_at_midpoint());
 }
 
-// ===== 阶段 26 新增：skip_to_end / 逐阶段跳过语义测试 =====
+// ===== skip_to_end / 逐阶段跳过语义测试 =====
 
 #[test]
 fn test_skip_to_end_fade() {

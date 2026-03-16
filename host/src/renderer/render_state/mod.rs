@@ -474,7 +474,7 @@ pub enum ChapterMarkPhase {
 
 /// 章节标记状态
 ///
-/// 阶段 24 重构：非阻塞、固定持续时间、不受快进影响。
+/// 非阻塞、固定持续时间、不受快进影响。
 /// 在左上角异步显示，固定时间后自动消失。
 #[derive(Debug, Clone)]
 pub struct ChapterMarkState {

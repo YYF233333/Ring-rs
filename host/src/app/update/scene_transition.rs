@@ -9,7 +9,7 @@ use crate::renderer::RenderState;
 /// - Fade/FadeWhite: FadeIn → FadeOut → UIFadeIn → Completed
 /// - Rule: FadeIn → Blackout → FadeOut → UIFadeIn → Completed
 ///
-/// 阶段 24 重构：changeScene 不再隐式管理 UI 可见性，
+/// changeScene 不再隐式管理 UI 可见性，
 /// UI 显示/隐藏由编剧通过 textBoxHide/textBoxShow 显式控制。
 /// 此函数只负责驱动过渡动画和在中间点切换背景。
 pub fn update_scene_transition(renderer: &mut Renderer, render_state: &mut RenderState, dt: f32) {

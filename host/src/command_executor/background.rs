@@ -11,9 +11,6 @@ use super::CommandExecutor;
 use super::types::ExecuteResult;
 
 impl CommandExecutor {
-    /// 执行 ShowBackground
-    ///
-    /// 阶段 25 续：产出 `EffectRequest` 替代 `TransitionInfo`。
     pub(super) fn execute_show_background(
         &mut self,
         path: &str,
@@ -42,12 +39,10 @@ impl CommandExecutor {
 
     /// 执行 ChangeScene（场景切换 — 遮罩过渡 + 切换背景）
     ///
-    /// 阶段 24 重构后，changeScene **只负责**：
+    /// changeScene **只负责**：
     /// - 拉遮罩/蒙版过渡 + 切换背景
     /// - **不再隐式隐藏 UI**（由编剧通过 textBoxHide 显式控制）
     /// - **不再隐式清除立绘**（由编剧通过 clearCharacters / hide 显式控制）
-    ///
-    /// 阶段 25 续：产出 `EffectRequest` 替代 `SceneTransitionCommand` / `TransitionInfo`。
     pub(super) fn execute_change_scene(
         &mut self,
         path: &str,
