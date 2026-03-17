@@ -263,6 +263,33 @@ fn test_runtime_with_goto() {
 }
 
 #[test]
+fn test_runtime_find_label_delegates_to_current_script() {
+    let script = Script::new(
+        "test",
+        vec![
+            ScriptNode::Label {
+                name: "first".to_string(),
+            },
+            ScriptNode::Label {
+                name: "second".to_string(),
+            },
+            ScriptNode::Dialogue {
+                speaker: None,
+                content: "tail".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
+            },
+        ],
+        "",
+    );
+    let runtime = VNRuntime::new(script);
+
+    assert_eq!(runtime.find_label("first"), Some(0));
+    assert_eq!(runtime.find_label("second"), Some(1));
+    assert_eq!(runtime.find_label("missing"), None);
+}
+
+#[test]
 fn test_runtime_with_choice() {
     use crate::script::ChoiceOption;
 

@@ -40,6 +40,54 @@ fn test_script_node_is_jump_target() {
 }
 
 #[test]
+fn test_script_node_is_control_flow() {
+    assert!(
+        ScriptNode::Label {
+            name: "start".to_string()
+        }
+        .is_control_flow()
+    );
+    assert!(
+        ScriptNode::Goto {
+            target_label: "end".to_string()
+        }
+        .is_control_flow()
+    );
+    assert!(
+        ScriptNode::CallScript {
+            path: "chapter1.md".to_string(),
+            display_label: Some("entry".to_string()),
+        }
+        .is_control_flow()
+    );
+    assert!(ScriptNode::ReturnFromScript.is_control_flow());
+    assert!(
+        ScriptNode::SetVar {
+            name: "flag".to_string(),
+            value: crate::script::Expr::bool(true),
+        }
+        .is_control_flow()
+    );
+    assert!(
+        ScriptNode::Conditional {
+            branches: vec![ConditionalBranch {
+                condition: Some(crate::script::Expr::bool(true)),
+                body: vec![],
+            }],
+        }
+        .is_control_flow()
+    );
+
+    let dialogue = ScriptNode::Dialogue {
+        speaker: None,
+        content: "hi".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
+    };
+    assert!(!dialogue.is_control_flow());
+}
+
+#[test]
 fn test_script_label_index() {
     let nodes = vec![
         ScriptNode::Label {
@@ -94,6 +142,23 @@ fn test_script_is_empty() {
         "",
     );
     assert!(!s.is_empty());
+}
+
+#[test]
+fn test_script_has_source_map_matches_actual_map() {
+    let no_map = Script::new("plain", vec![], "");
+    assert!(!no_map.has_source_map());
+
+    let with_map = Script::with_source_map(
+        "mapped",
+        vec![ScriptNode::Label {
+            name: "start".to_string(),
+        }],
+        "",
+        vec![7],
+    );
+    assert!(with_map.has_source_map());
+    assert_eq!(with_map.get_source_line(0), Some(7));
 }
 
 #[test]

@@ -235,6 +235,18 @@ fn test_diagnostic_result_merge() {
 }
 
 #[test]
+fn test_diagnostic_result_warn_count_and_non_empty() {
+    let mut result = DiagnosticResult::new();
+    result.push(Diagnostic::warn("test.md", "warn1"));
+    result.push(Diagnostic::warn("test.md", "warn2"));
+    result.push(Diagnostic::info("test.md", "info1"));
+
+    assert_eq!(result.warn_count(), 2);
+    assert!(!result.is_empty());
+    assert!(!result.has_errors());
+}
+
+#[test]
 fn test_diagnostic_display_without_line_and_detail() {
     let diag = Diagnostic::warn("test.md", "some warning");
     let display = format!("{}", diag);
@@ -301,6 +313,20 @@ endif
     assert_eq!(refs.len(), 2);
     assert_eq!(refs[0].resource_type, ResourceType::Background);
     assert_eq!(refs[1].resource_type, ResourceType::Background);
+}
+
+#[test]
+fn test_extract_resource_references_includes_cutscene() {
+    let mut parser = Parser::new();
+    let script = parser
+        .parse_with_base_path("test", r#"cutscene "video/opening.mp4""#, "scripts")
+        .unwrap();
+    let refs = extract_resource_references(&script);
+
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].resource_type, ResourceType::Video);
+    assert_eq!(refs[0].path, "video/opening.mp4");
+    assert_eq!(refs[0].resolved_path, "scripts/video/opening.mp4");
 }
 
 #[test]

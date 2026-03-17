@@ -59,6 +59,14 @@ fn test_extract_audio_src_and_requires_quoted_value() {
 }
 
 #[test]
+fn test_extract_audio_src_supports_single_quoted_value() {
+    assert_eq!(
+        extract_audio_src(r#"<audio src='voice.ogg'></audio>"#),
+        Some("voice.ogg")
+    );
+}
+
+#[test]
 fn test_extract_keyword_value() {
     let line = "show <img src=\"char.png\" /> as royu at center with dissolve";
     assert_eq!(extract_keyword_value(line, "as"), Some("royu"));
@@ -168,12 +176,55 @@ fn test_parse_transition_duplicate_key_error() {
 }
 
 #[test]
+fn test_parse_transition_args_preserve_quoted_commas_and_colons() {
+    let args = parse_transition_args(r#"mask: "rule,a.png", easing: 'ease:in'"#).unwrap();
+
+    assert_eq!(
+        args,
+        vec![
+            (
+                Some("mask".to_string()),
+                TransitionArg::String("rule,a.png".to_string()),
+            ),
+            (
+                Some("easing".to_string()),
+                TransitionArg::String("ease:in".to_string()),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_parse_transition_args_invalid_identifier_causes_error() {
+    let err = parse_transition_args("duration: 1.0, 1invalid: 2.0").unwrap_err();
+    assert!(err.contains("不允许混用"));
+
+    let err = parse_transition_args("duration: 1.0, bad-key: 2.0").unwrap_err();
+    assert!(err.contains("不允许混用"));
+}
+
+#[test]
+fn test_parse_arg_value_unterminated_quotes_are_plain_strings() {
+    assert_eq!(
+        parse_arg_value("\"unterminated"),
+        TransitionArg::String("\"unterminated".to_string())
+    );
+    assert_eq!(parse_arg_value("'"), TransitionArg::String("'".to_string()));
+}
+
+#[test]
 fn test_is_table_separator() {
     assert!(is_table_separator("| --- | --- |"));
     assert!(is_table_separator("|---|---|"));
     assert!(is_table_separator("| :---: | ---: |"));
     assert!(!is_table_separator("| text | text |"));
     assert!(!is_table_separator("not a table"));
+}
+
+#[test]
+fn test_is_table_separator_requires_both_edge_pipes() {
+    assert!(!is_table_separator("| --- | --- "));
+    assert!(!is_table_separator(" --- | --- |"));
 }
 
 #[test]
@@ -1891,6 +1942,21 @@ fn test_parse_goto_missing_label() {
     assert!(matches!(
         err,
         crate::error::ParseError::MissingParameter { .. }
+    ));
+}
+
+#[test]
+fn test_parse_goto_malformed_emphasis_is_not_stripped() {
+    let node = parse_single_node("goto **end");
+    assert!(matches!(
+        node,
+        ScriptNode::Goto { target_label } if target_label == "**end"
+    ));
+
+    let node = parse_single_node("goto end**");
+    assert!(matches!(
+        node,
+        ScriptNode::Goto { target_label } if target_label == "end**"
     ));
 }
 

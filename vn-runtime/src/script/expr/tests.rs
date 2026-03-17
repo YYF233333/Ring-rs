@@ -105,6 +105,28 @@ fn test_not_equal_comparison() {
 }
 
 #[test]
+fn test_numeric_equality_comparison() {
+    let ctx = TestContext::new()
+        .with_var("score", VarValue::Int(42))
+        .with_var("ratio", VarValue::Float(1.0));
+
+    let expr = Expr::eq(Expr::var("score"), Expr::int(42));
+    assert_eq!(evaluate(&expr, &ctx).unwrap(), VarValue::Bool(true));
+
+    let expr = Expr::eq(Expr::var("score"), Expr::int(7));
+    assert_eq!(evaluate(&expr, &ctx).unwrap(), VarValue::Bool(false));
+
+    let expr = Expr::eq(
+        Expr::var("ratio"),
+        Expr::Literal(VarValue::Float(1.0 + f64::EPSILON / 2.0)),
+    );
+    assert_eq!(evaluate(&expr, &ctx).unwrap(), VarValue::Bool(true));
+
+    let expr = Expr::eq(Expr::var("ratio"), Expr::Literal(VarValue::Float(1.5)));
+    assert_eq!(evaluate(&expr, &ctx).unwrap(), VarValue::Bool(false));
+}
+
+#[test]
 fn test_logical_and() {
     let ctx = TestContext::new()
         .with_var("a", VarValue::Bool(true))

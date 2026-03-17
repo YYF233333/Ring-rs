@@ -315,6 +315,49 @@ mod tests {
     }
 
     #[test]
+    fn test_history_event_timestamp_returns_stored_value() {
+        let cases = [
+            HistoryEvent::Dialogue {
+                speaker: Some("A".to_string()),
+                content: "内容".to_string(),
+                timestamp: 11,
+            },
+            HistoryEvent::ChapterMark {
+                title: "第一章".to_string(),
+                timestamp: 12,
+            },
+            HistoryEvent::ChoiceMade {
+                options: vec!["A".to_string(), "B".to_string()],
+                selected_index: 1,
+                timestamp: 13,
+            },
+            HistoryEvent::Jump {
+                label: "end".to_string(),
+                timestamp: 14,
+            },
+            HistoryEvent::BackgroundChange {
+                path: "bg.png".to_string(),
+                timestamp: 15,
+            },
+            HistoryEvent::BgmChange {
+                path: Some("bgm.mp3".to_string()),
+                timestamp: 16,
+            },
+        ];
+
+        let expected = [11, 12, 13, 14, 15, 16];
+        for (event, timestamp) in cases.iter().zip(expected) {
+            assert_eq!(event.timestamp(), timestamp);
+        }
+    }
+
+    #[test]
+    fn test_history_event_constructors_use_current_timestamp() {
+        assert!(HistoryEvent::dialogue(None, "内容".to_string()).timestamp() > 1);
+        assert!(HistoryEvent::chapter_mark("第一章".to_string()).timestamp() > 1);
+    }
+
+    #[test]
     fn test_history_clear() {
         let mut history = History::new();
         history.push(HistoryEvent::dialogue(None, "对话1".to_string()));

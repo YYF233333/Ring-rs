@@ -286,6 +286,8 @@ mod tests {
         assert_eq!(md.play_time_secs, 123);
         // timestamp 只要求存在且非空（当前实现是 unix seconds）
         assert!(!md.timestamp.is_empty());
+        assert!(md.timestamp.chars().all(|c| c.is_ascii_digit()));
+        assert!(md.timestamp.parse::<u64>().is_ok());
     }
 
     #[test]

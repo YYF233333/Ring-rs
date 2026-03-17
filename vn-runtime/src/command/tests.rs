@@ -29,6 +29,24 @@ fn test_position_from_str() {
 }
 
 #[test]
+fn test_position_parse_supports_all_variants() {
+    let cases = [
+        ("right", Position::Right),
+        ("NearRight", Position::NearRight),
+        ("nearmiddle", Position::NearMiddle),
+        ("farleft", Position::FarLeft),
+        ("FARRIGHT", Position::FarRight),
+        ("farmiddle", Position::FarMiddle),
+    ];
+
+    for (raw, expected) in cases {
+        assert_eq!(Position::parse(raw), Some(expected), "raw = {raw}");
+    }
+
+    assert_eq!(Position::parse("not-a-position"), None);
+}
+
+#[test]
 fn test_command_serialization() {
     let cmd = Command::ShowText {
         speaker: Some("羽艾".to_string()),
@@ -55,6 +73,14 @@ fn test_transition_with_named_args() {
     assert_eq!(t.args.len(), 2);
     assert!(t.is_all_named());
     assert!(!t.is_all_positional());
+}
+
+#[test]
+fn test_transition_is_all_named_false_for_positional_args() {
+    let t = Transition::with_args("Dissolve", vec![TransitionArg::Number(1.5)]);
+
+    assert!(!t.is_all_named());
+    assert!(t.is_all_positional());
 }
 
 #[test]
