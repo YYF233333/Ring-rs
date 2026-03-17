@@ -25,3 +25,8 @@ cov = "run -p xtask -- cov"
 # -------- Script checking --------
 # Static analysis for VN scripts: syntax, labels, resource references.
 script-check = "run -p xtask -- script-check"
+
+# -------- Mutation testing --------
+# Requires: cargo install cargo-mutants
+# Tests vn-runtime only. Pass extra args after --: cargo mutants-check -- --file src/state.rs
+mutants-check = "run -p xtask -- mutants"

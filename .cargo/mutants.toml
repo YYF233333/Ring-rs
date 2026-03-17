@@ -1,0 +1,44 @@
+# cargo-mutants 配置
+#
+# 变异测试专注于 vn-runtime（纯逻辑层），host 因硬件依赖不参与。
+# 运行方式：
+#   全量：cargo mutants -p vn-runtime
+#   单文件：cargo mutants -p vn-runtime --file "vn-runtime/src/script/parser/phase2.rs"
+#   列出变异：cargo mutants --list -p vn-runtime
+
+# ---------------------------------------------------------------------------
+# 文件排除
+# ---------------------------------------------------------------------------
+exclude_globs = [
+    # thiserror derive，无手写逻辑
+    "vn-runtime/src/error.rs",
+]
+
+# ---------------------------------------------------------------------------
+# 函数/变异排除（正则匹配变异全名）
+# ---------------------------------------------------------------------------
+exclude_re = [
+    # Display/Debug 格式化——变异只会测字符串输出细节，不反映逻辑正确性
+    "impl .+Display",
+    "impl .+Debug",
+
+    # Diagnostic builder 方法——纯字段赋值，变异价值低
+    "Diagnostic::(error|warn|info|with_line|with_detail|new)",
+
+    # Default trait 实现——编译器/derive 行为
+    "impl Default",
+
+    # new() 构造函数如果只是设置默认值，变异意义不大
+    "DiagnosticResult::new",
+]
+
+# ---------------------------------------------------------------------------
+# 执行控制
+# ---------------------------------------------------------------------------
+
+# 单个变异测试的超时倍数（相对于基线测试时间）
+# vn-runtime 测试很快（<1s），给 20x 余量避免误报
+timeout_multiplier = 20.0
+
+# 最小超时秒数（避免极快测试被卡住时长等待）
+minimum_test_timeout = 20
