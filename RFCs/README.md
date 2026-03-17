@@ -28,3 +28,4 @@
 | RFC-011 | UI 系统后续增强 | `rfc-ui-enhancements.md` | Accepted |
 | RFC-012 | UI 行为定制系统 | `rfc-ui-behavior-customization.md` | Accepted |
 | RFC-013 | 配置默认值外部化 | `rfc-config-externalization.md` | Accepted |
+| RFC-014 | 测试分层与维护策略 | `Accepted/rfc-test-tiering.md` | Accepted |
