@@ -114,13 +114,15 @@ exclude_re = [
 # 执行控制
 # ---------------------------------------------------------------------------
 
-# 显式总超时（秒）。
-# 使用 `--baseline skip` 时，cargo-mutants 无法从基线自动估算测试时长，
-# 会退回 300s 默认值并给出警告。这里显式给 180s，既覆盖 host 在
-# Windows 上较慢的变异构建，也避免默认 300s 等待过长。
-timeout = 180
+# 使用专用 cargo profile，关闭 debug symbols 以缩短 mutants 编译时间。
+profile = "mutants"
+
+# 与 CI verify 对齐：仅运行 unit/integration tests，显式排除 doctest，
+# 同时避免 `--all-targets` 额外拉入 examples/benches。
+additional_cargo_test_args = ["--tests"]
 
 # 单个变异测试的超时倍数（相对于基线测试时间）。
+# 常规场景使用基线估算；CI 若需固定上限，改在命令行传 `--timeout`。
 timeout_multiplier = 5.0
 
 # 自动估算测试超时时的最小下限（秒）

@@ -10,7 +10,7 @@
 //! - `mutants`: 运行变异测试（vn-runtime / host），检测测试质量
 
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{ExitCode, ExitStatus};
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
@@ -91,6 +91,10 @@ struct MutantsArgs {
     #[arg(long, value_enum, default_value_t = MutantsPackage::VnRuntime)]
     package: MutantsPackage,
 
+    /// cargo-mutants 并发数；本地默认 3，不可和--in-place一起使用
+    #[arg(long, default_value_t = 3, value_parser = parse_jobs)]
+    jobs: usize,
+
     /// 透传给 cargo-mutants 的额外参数（如 --file, --re 等）
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     extra: Vec<String>,
@@ -126,6 +130,15 @@ fn run(step: &str, sh: &Shell, program: &str, args: &[&str]) -> anyhow::Result<(
         .run()
         .with_context(|| format!("{step} failed"))?;
     Ok(())
+}
+
+fn run_status(step: &str, program: &str, args: &[&str]) -> anyhow::Result<ExitStatus> {
+    eprintln!("\n==> {step}");
+    eprintln!("$ {program} {}", args.join(" "));
+    std::process::Command::new(program)
+        .args(args)
+        .status()
+        .with_context(|| format!("{step} failed to start"))
 }
 
 /// 覆盖率排除规则
@@ -251,6 +264,14 @@ fn real_main() -> anyhow::Result<()> {
 // mutants 命令实现
 //=============================================================================
 
+#[derive(Debug, Default)]
+struct MutantsReportSummary {
+    caught: usize,
+    missed: usize,
+    timeout: usize,
+    unviable: usize,
+}
+
 fn ensure_cargo_mutants_available(sh: &Shell) -> anyhow::Result<()> {
     if sh.cmd("cargo").args(["mutants", "--version"]).run().is_ok() {
         return Ok(());
@@ -262,38 +283,133 @@ fn ensure_cargo_mutants_available(sh: &Shell) -> anyhow::Result<()> {
     )
 }
 
+fn mutants_output_dir(extra: &[String]) -> PathBuf {
+    let mut iter = extra.iter();
+    while let Some(arg) = iter.next() {
+        if arg == "--output" {
+            if let Some(path) = iter.next() {
+                return PathBuf::from(path);
+            }
+            break;
+        }
+
+        if let Some(path) = arg.strip_prefix("--output=") {
+            return PathBuf::from(path);
+        }
+    }
+
+    PathBuf::from("mutants.out")
+}
+
+fn mutants_report_dir(extra: &[String]) -> PathBuf {
+    let output_dir = mutants_output_dir(extra);
+    if output_dir.file_name().and_then(|name| name.to_str()) == Some("mutants.out") {
+        output_dir
+    } else {
+        output_dir.join("mutants.out")
+    }
+}
+
+fn mutants_generates_report(extra: &[String]) -> bool {
+    !extra.iter().any(|arg| arg == "--list")
+}
+
+fn count_non_empty_lines(path: &Path) -> usize {
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|content| {
+            content
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+fn collect_mutants_report_summary(report_dir: &Path) -> MutantsReportSummary {
+    MutantsReportSummary {
+        caught: count_non_empty_lines(&report_dir.join("caught.txt")),
+        missed: count_non_empty_lines(&report_dir.join("missed.txt")),
+        timeout: count_non_empty_lines(&report_dir.join("timeout.txt")),
+        unviable: count_non_empty_lines(&report_dir.join("unviable.txt")),
+    }
+}
+
+fn print_mutants_report_overview(report_dir: &Path, summary: &MutantsReportSummary) {
+    eprintln!("\nFull Report: {}/", report_dir.display());
+    eprintln!("  - missed: {}", summary.missed);
+    eprintln!("  - caught: {}", summary.caught);
+    eprintln!("  - timeout: {}", summary.timeout);
+    eprintln!("  - unviable: {}", summary.unviable);
+}
+
+fn cargo_mutants_runs_in_place(extra: &[String]) -> bool {
+    extra
+        .iter()
+        .any(|arg| arg == "--in-place" || arg.starts_with("--in-place="))
+}
+
+fn build_mutants_command_args(package: &str, jobs: usize, extra: Vec<String>) -> Vec<String> {
+    let in_place = cargo_mutants_runs_in_place(&extra);
+    let mut cmd_args = vec!["mutants".to_string(), "-p".to_string(), package.to_string()];
+    if !in_place {
+        cmd_args.push("-j".to_string());
+        cmd_args.push(jobs.to_string());
+    }
+    cmd_args.extend(extra);
+    cmd_args
+}
+
+fn parse_jobs(raw: &str) -> Result<usize, String> {
+    let jobs = raw
+        .parse::<usize>()
+        .map_err(|_| "jobs 必须是正整数".to_string())?;
+
+    if jobs == 0 {
+        return Err("jobs 必须大于 0".to_string());
+    }
+
+    Ok(jobs)
+}
+
 fn run_mutants(sh: &Shell, args: MutantsArgs) -> anyhow::Result<()> {
     ensure_cargo_mutants_available(sh)?;
 
-    let package_kind = args.package;
-    let package = package_kind.cargo_package_name();
-    let mut cmd_args = vec![
-        "mutants".to_string(),
-        "-p".to_string(),
-        package.to_string(),
-        "-j".to_string(),
-        "2".to_string(),
-    ];
-    cmd_args.extend(args.extra);
+    let package = args.package.cargo_package_name();
+    let report_dir = mutants_report_dir(&args.extra);
+    let expects_report = mutants_generates_report(&args.extra);
+    let cmd_args = build_mutants_command_args(package, args.jobs, args.extra);
 
     let str_args: Vec<&str> = cmd_args.iter().map(String::as_str).collect();
-    run(
-        &format!("cargo mutants -p {package}"),
-        sh,
-        "cargo",
-        &str_args,
-    )?;
+    let status = run_status(&format!("cargo mutants -p {package}"), "cargo", &str_args)?;
 
-    eprintln!("\n完整报告：mutants.out/");
-    eprintln!("  - missed.txt：未被测试捕获的变异（需要关注）");
-    eprintln!("  - caught.txt：被测试成功捕获的变异");
-    eprintln!("  - timeout.txt：测试超时的变异（通常是无限循环，视为隐式捕获）");
-    eprintln!("  - unviable.txt：无法编译的变异（可忽略）");
-    if matches!(package_kind, MutantsPackage::Host) {
-        eprintln!("  - host 默认已排除平台/硬件/框架胶水，只覆盖可单元测试模块");
+    let summary = expects_report.then(|| collect_mutants_report_summary(&report_dir));
+    if let Some(summary) = &summary {
+        print_mutants_report_overview(&report_dir, summary);
     }
 
-    Ok(())
+    if status.success() {
+        return Ok(());
+    }
+
+    if let Some(summary) = &summary
+        && summary.missed > 0
+    {
+        anyhow::bail!(
+            "mutation testing found {} missed mutants; see {}/",
+            summary.missed,
+            report_dir.display()
+        );
+    }
+
+    let code = status
+        .code()
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    anyhow::bail!(
+        "cargo-mutants exited with code {code}; see {}/",
+        report_dir.display()
+    );
 }
 
 //=============================================================================
@@ -516,5 +632,43 @@ fn print_check_result(result: &ScriptCheckResult) {
         eprintln!("⚠️  0 个错误, {} 个警告", warn_count);
     } else {
         eprintln!("✅ 检查通过，无错误");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_mutants_command_args, cargo_mutants_runs_in_place};
+
+    #[test]
+    fn build_mutants_command_args_includes_jobs_without_in_place() {
+        let args = build_mutants_command_args("host", 3, vec!["--timeout".into(), "60".into()]);
+
+        assert_eq!(
+            args,
+            vec!["mutants", "-p", "host", "-j", "3", "--timeout", "60"]
+        );
+    }
+
+    #[test]
+    fn build_mutants_command_args_omits_jobs_with_in_place() {
+        let args = build_mutants_command_args(
+            "host",
+            3,
+            vec!["--in-place".into(), "--timeout".into(), "60".into()],
+        );
+
+        assert_eq!(
+            args,
+            vec!["mutants", "-p", "host", "--in-place", "--timeout", "60"]
+        );
+    }
+
+    #[test]
+    fn cargo_mutants_runs_in_place_matches_explicit_bool_value() {
+        assert!(cargo_mutants_runs_in_place(&["--in-place=true".into()]));
+        assert!(!cargo_mutants_runs_in_place(&[
+            "--timeout".into(),
+            "60".into()
+        ]));
     }
 }
