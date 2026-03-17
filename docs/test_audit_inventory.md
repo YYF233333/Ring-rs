@@ -56,6 +56,9 @@
 - 次高风险点是 `vn-runtime/src/runtime/engine/mod.rs::handle_script_control()` 的跨脚本恢复分支。
 - `vn-runtime/src/script/expr/mod.rs::values_equal()` 仅有一个 `EPSILON` 边界 miss，更接近可接受噪音。
 - 当前 mutation 结果没有显示 `state.rs`、`command/mod.rs`、`diagnostic/mod.rs` 存在集中 missed；这些模块的高价值测试更多体现在契约回归，而不是 mutation 薄弱点。
+- `host` 推广策略采用“白名单思路”：先只纳入已有高价值测试、且不依赖真实窗口 / GPU / rodio / FFmpeg / egui 事件循环的纯逻辑模块。
+- `host` 当前适合纳入 mutants 的首批模块：`command_executor`、`resources`、`save_manager`、`config`、`manifest`、`input`、`extensions`，以及 `renderer/render_state`、`renderer/effects/resolver`、`renderer/scene_transition`。
+- `host` 当前不适合默认纳入 mutants 的区域：`backend/*`、`audio/*`、`video/*`、`egui_screens/*`、`app/update/*`、`app/command_handlers/*`，以及噪音较高的 UI / 渲染辅助模块。
 
 ## 热点文件的函数级样本
 

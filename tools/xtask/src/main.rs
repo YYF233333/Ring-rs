@@ -7,7 +7,7 @@
 //! - `check-all`: fmt（直接应用）、clippy（自动 fix）、test（仅输出最终结果）
 //! - `cov`: 运行 workspace 覆盖率（排除工具 crate 与平台胶水代码）
 //! - `script-check`: 检查脚本文件（语法、label、资源引用）
-//! - `mutants`: 运行变异测试（vn-runtime），检测测试质量
+//! - `mutants`: 运行变异测试（vn-runtime / host），检测测试质量
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -26,10 +26,11 @@ use xshell::Shell;
     about = "开发辅助工具（本地门禁/覆盖率/脚本静态检查）",
     arg_required_else_help = true,
     after_help = r#"ALIASES (in .cargo/config.toml):
-  cargo check-all      -> cargo run -p xtask -- check-all
-  cargo cov            -> cargo run -p xtask -- cov
-  cargo script-check   -> cargo run -p xtask -- script-check
-  cargo mutants-check  -> cargo run -p xtask -- mutants
+  cargo check-all         -> cargo run -p xtask -- check-all
+  cargo cov               -> cargo run -p xtask -- cov
+  cargo script-check      -> cargo run -p xtask -- script-check
+  cargo mutants-check     -> cargo run -p xtask -- mutants
+  cargo mutants-host-check -> cargo run -p xtask -- mutants --package host
 "#
 )]
 struct Cli {
@@ -48,8 +49,25 @@ enum XtaskCommand {
     /// 检查脚本文件（语法、label、资源引用）
     ScriptCheck(ScriptCheckArgs),
 
-    /// 运行变异测试（vn-runtime），检测测试质量
+    /// 运行变异测试（vn-runtime / host），检测测试质量
     Mutants(MutantsArgs),
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum MutantsPackage {
+    #[value(name = "vn-runtime")]
+    VnRuntime,
+    #[value(name = "host")]
+    Host,
+}
+
+impl MutantsPackage {
+    fn cargo_package_name(self) -> &'static str {
+        match self {
+            Self::VnRuntime => "vn-runtime",
+            Self::Host => "host",
+        }
+    }
 }
 
 #[derive(Args, Debug)]
@@ -58,14 +76,21 @@ enum XtaskCommand {
   "missed" 表示测试未能发现该变异——意味着测试覆盖不足或断言太弱。
 
   默认测试 vn-runtime 全部可变异函数（排除规则见 .cargo/mutants.toml）。
+  host 仅覆盖已分层、可稳定单元测试的纯逻辑模块；
+  GPU / egui / 音视频 / App 胶水默认排除。
   可用 --file 缩小范围加速迭代。
 
 示例：
   cargo mutants-check                                          # 全量
-  cargo mutants-check -- --file vn-runtime/src/state.rs        # 单文件
-  cargo mutants-check -- --file vn-runtime/src/runtime/        # 单目录
+  cargo mutants-check -- --file vn-runtime/src/state.rs        # vn-runtime 单文件
+  cargo mutants-check -- --package host                        # host 纯逻辑子集
+  cargo mutants-check -- --package host -- --file host/src/resources/mod.rs
 "#)]
 struct MutantsArgs {
+    /// 目标 crate（默认 vn-runtime）
+    #[arg(long, value_enum, default_value_t = MutantsPackage::VnRuntime)]
+    package: MutantsPackage,
+
     /// 透传给 cargo-mutants 的额外参数（如 --file, --re 等）
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     extra: Vec<String>,
@@ -240,23 +265,33 @@ fn ensure_cargo_mutants_available(sh: &Shell) -> anyhow::Result<()> {
 fn run_mutants(sh: &Shell, args: MutantsArgs) -> anyhow::Result<()> {
     ensure_cargo_mutants_available(sh)?;
 
+    let package_kind = args.package;
+    let package = package_kind.cargo_package_name();
     let mut cmd_args = vec![
         "mutants".to_string(),
         "-p".to_string(),
-        "vn-runtime".to_string(),
+        package.to_string(),
         "-j".to_string(),
         "2".to_string(),
     ];
     cmd_args.extend(args.extra);
 
     let str_args: Vec<&str> = cmd_args.iter().map(String::as_str).collect();
-    run("cargo mutants -p vn-runtime", sh, "cargo", &str_args)?;
+    run(
+        &format!("cargo mutants -p {package}"),
+        sh,
+        "cargo",
+        &str_args,
+    )?;
 
     eprintln!("\n完整报告：mutants.out/");
     eprintln!("  - missed.txt：未被测试捕获的变异（需要关注）");
     eprintln!("  - caught.txt：被测试成功捕获的变异");
     eprintln!("  - timeout.txt：测试超时的变异（通常是无限循环，视为隐式捕获）");
     eprintln!("  - unviable.txt：无法编译的变异（可忽略）");
+    if matches!(package_kind, MutantsPackage::Host) {
+        eprintln!("  - host 默认已排除平台/硬件/框架胶水，只覆盖可单元测试模块");
+    }
 
     Ok(())
 }

@@ -28,5 +28,7 @@ script-check = "run -p xtask -- script-check"
 
 # -------- Mutation testing --------
 # Requires: cargo install cargo-mutants
-# Tests vn-runtime only. Pass extra args after --: cargo mutants-check -- --file src/state.rs
+# Default target is vn-runtime. Use --package host or cargo mutants-host-check for host.
+# Pass extra args after --: cargo mutants-check -- --file vn-runtime/src/state.rs
 mutants-check = "run -p xtask -- mutants"
+mutants-host-check = "run -p xtask -- mutants --package host"
