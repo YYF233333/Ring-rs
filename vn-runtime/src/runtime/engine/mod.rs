@@ -53,6 +53,15 @@ pub struct VNRuntime {
     history: History,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct ProgressSnapshot {
+    script_id: String,
+    script_path: String,
+    node_index: usize,
+    waiting: WaitingReason,
+    call_stack_len: usize,
+}
+
 impl VNRuntime {
     /// 创建新的 Runtime 实例
     ///
@@ -103,6 +112,30 @@ impl VNRuntime {
             .or_insert(script);
     }
 
+    fn progress_snapshot(&self) -> ProgressSnapshot {
+        ProgressSnapshot {
+            script_id: self.state.position.script_id.clone(),
+            script_path: self.state.position.script_path.clone(),
+            node_index: self.state.position.node_index,
+            waiting: self.state.waiting.clone(),
+            call_stack_len: self.state.call_stack.len(),
+        }
+    }
+
+    fn ensure_progress(
+        &self,
+        before: &ProgressSnapshot,
+        context: &str,
+    ) -> Result<(), RuntimeError> {
+        let after = self.progress_snapshot();
+        if &after == before {
+            return Err(RuntimeError::InvalidState {
+                message: format!("{context} 时执行位置未推进，已停止以避免死循环"),
+            });
+        }
+        Ok(())
+    }
+
     /// 核心驱动函数
     ///
     /// 根据输入推进脚本执行，返回产生的 Command 和新的等待状态。
@@ -141,7 +174,9 @@ impl VNRuntime {
                     // - 若在调用栈中，则自动 return 到调用点
                     // - 否则视为入口脚本结束
                     if !self.state.call_stack.is_empty() {
+                        let progress = self.progress_snapshot();
                         self.handle_script_control(ScriptControlFlow::Return)?;
+                        self.ensure_progress(&progress, "子脚本结束后自动返回")?;
                         continue;
                     }
                     return Ok((commands, WaitingReason::None));
@@ -161,7 +196,9 @@ impl VNRuntime {
             commands.extend(result.commands);
 
             if let Some(control) = result.script_control {
+                let progress = self.progress_snapshot();
                 self.handle_script_control(control)?;
+                self.ensure_progress(&progress, "执行脚本控制流")?;
                 continue;
             }
 
@@ -171,12 +208,16 @@ impl VNRuntime {
                 if let ScriptNode::Goto { target_label } = &node {
                     self.history.push(HistoryEvent::jump(target_label.clone()));
                 }
+                let progress = self.progress_snapshot();
                 self.state.position.jump_to(target);
+                self.ensure_progress(&progress, "执行跳转")?;
                 continue; // 继续执行跳转目标
             }
 
             // 前进到下一个节点
+            let progress = self.progress_snapshot();
             self.state.position.advance();
+            self.ensure_progress(&progress, "前进到下一个节点")?;
 
             // 如果需要等待，停止执行
             if let Some(reason) = result.waiting {

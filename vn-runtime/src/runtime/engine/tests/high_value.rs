@@ -44,6 +44,17 @@ fn test_tick_returns_early_when_still_waiting() {
 }
 
 #[test]
+fn test_progress_guard_rejects_stalled_state() {
+    let runtime = VNRuntime::new(create_test_script());
+    let snapshot = runtime.progress_snapshot();
+    let err = runtime
+        .ensure_progress(&snapshot, "测试推进保护")
+        .unwrap_err();
+    assert!(matches!(err, RuntimeError::InvalidState { .. }));
+    assert!(format!("{err}").contains("未推进"));
+}
+
+#[test]
 fn test_runtime_script_end() {
     let script = Script::new(
         "test",

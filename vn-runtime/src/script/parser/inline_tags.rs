@@ -20,15 +20,24 @@ pub fn parse_inline_tags(raw: &str) -> (String, Vec<InlineEffect>) {
         if ch == '{'
             && let Some((tag_byte_end, kind)) = try_parse_tag(raw, byte_idx)
         {
-            let position = plain.chars().count();
-            effects.push(InlineEffect { position, kind });
+            let mut advanced = false;
             // skip past the closing '}'
             while let Some(&(bi, _)) = chars.peek() {
                 if bi >= tag_byte_end {
                     break;
                 }
+                advanced = true;
                 chars.next();
             }
+            if !advanced {
+                // 只有确认游标跨过了整个 tag，才把它当作控制标签消费；
+                // 否则退回普通文本路径，避免同一个 byte_idx 被无限重复解析。
+                plain.push(ch);
+                chars.next();
+                continue;
+            }
+            let position = plain.chars().count();
+            effects.push(InlineEffect { position, kind });
             continue;
         }
         plain.push(ch);

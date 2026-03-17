@@ -25,7 +25,7 @@ pub fn parse_expression(input: &str, line_number: usize) -> Result<Expr, ParseEr
     // 使用简单的递归下降解析器
     let mut parser = ExprParser::new(input, line_number);
     let expr = parser.parse_or()?;
-    parser.skip_whitespace();
+    parser.skip_whitespace()?;
     if !parser.remaining().is_empty() {
         return Err(ParseError::InvalidLine {
             line: line_number,
@@ -55,28 +55,53 @@ impl<'a> ExprParser<'a> {
         &self.input[self.pos..]
     }
 
-    fn skip_whitespace(&mut self) {
+    fn stalled_parse_error(&self, context: &str) -> ParseError {
+        ParseError::InvalidLine {
+            line: self.line_number,
+            message: format!("{context} 时解析器未前进，已停止以避免死循环"),
+        }
+    }
+
+    fn advance_bytes(&mut self, byte_count: usize, context: &str) -> Result<(), ParseError> {
+        let old_pos = self.pos;
+        self.pos = self
+            .pos
+            .checked_add(byte_count)
+            .ok_or_else(|| ParseError::InvalidLine {
+                line: self.line_number,
+                message: format!("{context} 时解析器位置溢出"),
+            })?;
+        if self.pos <= old_pos {
+            return Err(self.stalled_parse_error(context));
+        }
+        Ok(())
+    }
+
+    fn skip_whitespace(&mut self) -> Result<(), ParseError> {
         while self.pos < self.input.len() {
             let c = self.input[self.pos..]
                 .chars()
                 .next()
                 .expect("invariant: non-empty slice when pos < input.len()");
             if c.is_whitespace() {
-                self.pos += c.len_utf8();
+                self.advance_bytes(c.len_utf8(), "跳过空白")?;
             } else {
                 break;
             }
         }
+        Ok(())
     }
 
     fn peek_char(&self) -> Option<char> {
         self.input[self.pos..].chars().next()
     }
 
-    fn consume_char(&mut self) -> Option<char> {
-        let c = self.peek_char()?;
-        self.pos += c.len_utf8();
-        Some(c)
+    fn consume_char(&mut self) -> Result<Option<char>, ParseError> {
+        let Some(c) = self.peek_char() else {
+            return Ok(None);
+        };
+        self.advance_bytes(c.len_utf8(), "消费字符")?;
+        Ok(Some(c))
     }
 
     fn starts_with_keyword(&self, keyword: &str) -> bool {
@@ -93,9 +118,9 @@ impl<'a> ExprParser<'a> {
         }
     }
 
-    fn consume_keyword(&mut self, keyword: &str) {
-        self.pos += keyword.len();
-        self.skip_whitespace();
+    fn consume_keyword(&mut self, keyword: &str) -> Result<(), ParseError> {
+        self.advance_bytes(keyword.len(), &format!("消费关键字 '{keyword}'"))?;
+        self.skip_whitespace()
     }
 
     /// 解析 or 表达式（最低优先级）
@@ -103,9 +128,9 @@ impl<'a> ExprParser<'a> {
         let mut left = self.parse_and()?;
 
         loop {
-            self.skip_whitespace();
+            self.skip_whitespace()?;
             if self.starts_with_keyword("or") {
-                self.consume_keyword("or");
+                self.consume_keyword("or")?;
                 let right = self.parse_and()?;
                 left = Expr::or(left, right);
             } else {
@@ -121,9 +146,9 @@ impl<'a> ExprParser<'a> {
         let mut left = self.parse_not()?;
 
         loop {
-            self.skip_whitespace();
+            self.skip_whitespace()?;
             if self.starts_with_keyword("and") {
-                self.consume_keyword("and");
+                self.consume_keyword("and")?;
                 let right = self.parse_not()?;
                 left = Expr::and(left, right);
             } else {
@@ -136,9 +161,9 @@ impl<'a> ExprParser<'a> {
 
     /// 解析 not 表达式
     fn parse_not(&mut self) -> Result<Expr, ParseError> {
-        self.skip_whitespace();
+        self.skip_whitespace()?;
         if self.starts_with_keyword("not") {
-            self.consume_keyword("not");
+            self.consume_keyword("not")?;
             let expr = self.parse_not()?;
             Ok(Expr::not(expr))
         } else {
@@ -150,17 +175,17 @@ impl<'a> ExprParser<'a> {
     fn parse_comparison(&mut self) -> Result<Expr, ParseError> {
         let left = self.parse_primary()?;
 
-        self.skip_whitespace();
+        self.skip_whitespace()?;
 
         // 检查比较运算符
         if self.remaining().starts_with("==") {
-            self.pos += 2;
-            self.skip_whitespace();
+            self.advance_bytes(2, "消费比较运算符 '=='")?;
+            self.skip_whitespace()?;
             let right = self.parse_primary()?;
             Ok(Expr::eq(left, right))
         } else if self.remaining().starts_with("!=") {
-            self.pos += 2;
-            self.skip_whitespace();
+            self.advance_bytes(2, "消费比较运算符 '!='")?;
+            self.skip_whitespace()?;
             let right = self.parse_primary()?;
             Ok(Expr::not_eq(left, right))
         } else {
@@ -170,7 +195,7 @@ impl<'a> ExprParser<'a> {
 
     /// 解析基本表达式
     fn parse_primary(&mut self) -> Result<Expr, ParseError> {
-        self.skip_whitespace();
+        self.skip_whitespace()?;
 
         let c = self.peek_char().ok_or_else(|| ParseError::InvalidLine {
             line: self.line_number,
@@ -180,22 +205,22 @@ impl<'a> ExprParser<'a> {
         match c {
             // 括号
             '(' => {
-                self.consume_char();
+                self.consume_char()?;
                 let expr = self.parse_or()?;
-                self.skip_whitespace();
+                self.skip_whitespace()?;
                 if self.peek_char() != Some(')') {
                     return Err(ParseError::InvalidLine {
                         line: self.line_number,
                         message: "缺少右括号 ')'".to_string(),
                     });
                 }
-                self.consume_char();
+                self.consume_char()?;
                 Ok(expr)
             }
 
             // 变量
             '$' => {
-                self.consume_char();
+                self.consume_char()?;
                 let name = self.parse_identifier()?;
                 Ok(Expr::var(name))
             }
@@ -213,10 +238,10 @@ impl<'a> ExprParser<'a> {
             // 布尔字面量或数字
             _ => {
                 if self.starts_with_keyword("true") {
-                    self.consume_keyword("true");
+                    self.consume_keyword("true")?;
                     Ok(Expr::bool(true))
                 } else if self.starts_with_keyword("false") {
-                    self.consume_keyword("false");
+                    self.consume_keyword("false")?;
                     Ok(Expr::bool(false))
                 } else if c.is_ascii_digit() || c == '-' {
                     // 尝试解析数字
@@ -247,14 +272,14 @@ impl<'a> ExprParser<'a> {
             if c == '.' {
                 let so_far = &self.input[start..self.pos];
                 if so_far == "persistent" {
-                    self.pos += c.len_utf8();
+                    self.advance_bytes(c.len_utf8(), "解析持久变量命名空间")?;
                     continue;
                 } else {
                     break;
                 }
             }
             if c.is_alphanumeric() || c == '_' {
-                self.pos += c.len_utf8();
+                self.advance_bytes(c.len_utf8(), "解析标识符")?;
             } else {
                 break;
             }
@@ -272,7 +297,7 @@ impl<'a> ExprParser<'a> {
 
     /// 解析字符串字面量
     fn parse_string_literal(&mut self, quote: char) -> Result<String, ParseError> {
-        self.consume_char(); // 消费开始引号
+        self.consume_char()?; // 消费开始引号
         let start = self.pos;
 
         while self.pos < self.input.len() {
@@ -282,10 +307,10 @@ impl<'a> ExprParser<'a> {
                 .expect("invariant: non-empty slice when pos < input.len()");
             if c == quote {
                 let s = self.input[start..self.pos].to_string();
-                self.consume_char(); // 消费结束引号
+                self.consume_char()?; // 消费结束引号
                 return Ok(s);
             }
-            self.pos += c.len_utf8();
+            self.advance_bytes(c.len_utf8(), "解析字符串字面量")?;
         }
 
         Err(ParseError::InvalidLine {
@@ -300,7 +325,7 @@ impl<'a> ExprParser<'a> {
 
         // 处理负号
         if self.peek_char() == Some('-') {
-            self.consume_char();
+            self.consume_char()?;
         }
 
         while self.pos < self.input.len() {
@@ -309,7 +334,7 @@ impl<'a> ExprParser<'a> {
                 .next()
                 .expect("invariant: non-empty slice when pos < input.len()");
             if c.is_ascii_digit() {
-                self.pos += c.len_utf8();
+                self.advance_bytes(c.len_utf8(), "解析数字")?;
             } else {
                 break;
             }
@@ -320,5 +345,18 @@ impl<'a> ExprParser<'a> {
             line: self.line_number,
             message: format!("无法解析数字: '{}'", num_str),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_advance_bytes_rejects_zero_progress() {
+        let mut parser = ExprParser::new("abc", 7);
+        let err = parser.advance_bytes(0, "测试推进保护").unwrap_err();
+        assert!(matches!(err, ParseError::InvalidLine { .. }));
+        assert!(format!("{err}").contains("未前进"));
     }
 }
