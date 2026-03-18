@@ -1,0 +1,32 @@
+---
+description: "Domain: 媒体与 UI — audio, video, input, UI components, egui screens, extensions"
+globs: host/src/audio/**,host/src/video/**,host/src/input/**,host/src/ui/**,host/src/egui_screens/**,host/src/extensions/**
+alwaysApply: false
+---
+
+# 媒体与 UI（media-ui）
+
+## 摘要导航
+
+- [audio](docs/module_summaries/host/audio.md)
+- [video](docs/module_summaries/host/video.md)
+- [input](docs/module_summaries/host/input.md)
+- [ui](docs/module_summaries/host/ui.md)
+- [egui_screens](docs/module_summaries/host/egui_screens.md)
+- [extensions](docs/module_summaries/host/extensions.md)
+- UI 定制：[ui_customization.md](docs/ui_customization.md)
+
+## 关键不变量
+
+- 音频淡入淡出通过 `AudioManager` 的 fade 参数控制，不在调用方手动 lerp 音量。
+- `VideoPlayer` 是状态机（Idle→Playing→Finished），跳过/结束须正确清理 FFmpeg 子进程。
+- Extension capability 注册在 `registry.rs`，内置效果在 `builtin_effects.rs`。新增 capability 须同时更新 capability ID 表。
+- egui screens 是纯 UI 构建函数，不持有业务状态——状态通过 `AppState` 引用传入。
+- Input 模块只负责事件收集与映射，不决定业务语义（由 `app/update/` 消费）。
+
+## Do / Don't
+
+- **Do** 新增 UI 页面时在 `egui_screens/` 添加独立文件，并在 `EguiAction` 枚举注册入口。
+- **Do** 音频/视频资源加载走 `ResourceManager`，不自行拼路径。
+- **Don't** 在 egui screen 函数中直接修改 `AppState`——返回 `EguiAction` 让 update 循环处理。
+- **Don't** 在 `extensions/` 中硬编码具体效果值——通过 capability 系统注册和查询。

@@ -1,0 +1,28 @@
+---
+description: "Domain: 运行时引擎 — engine tick, executor, state, save, history"
+globs: vn-runtime/src/runtime/**,vn-runtime/src/state.rs,vn-runtime/src/input.rs,vn-runtime/src/save.rs,vn-runtime/src/history.rs
+alwaysApply: false
+---
+
+# 运行时引擎（runtime-engine）
+
+## 摘要导航
+
+- [runtime](docs/module_summaries/vn-runtime/runtime.md)
+- [vn-runtime 总览](docs/module_summaries/vn-runtime.md)
+- 存档格式：[save_format.md](docs/save_format.md)
+
+## 关键不变量
+
+- **确定性**：相同输入序列 → 相同 Command 输出序列。Engine 内部不依赖时钟/随机数。
+- **显式状态**：所有游戏进度信息存于 `RuntimeState`，无隐藏全局状态。
+- **Command 驱动**：Executor 只生产 `Vec<Command>`，不直接操作渲染/音频。
+- **存档兼容**：`save.rs` 的序列化结构变更须保持向后兼容，或在 `save_format.md` 记录迁移方案。
+- Engine 的 `tick()` / `handle_input()` 是纯函数风格（接收状态，返回命令+新状态）。
+
+## Do / Don't
+
+- **Do** 为状态机转换和边界条件写测试。
+- **Do** 用 `?` 传播 executor 内部错误，让调用方决定报告方式。
+- **Don't** 在 engine/executor 中引入 IO、文件系统或平台依赖。
+- **Don't** 在 `RuntimeState` 中存放 host 侧概念（纹理句柄、音频 handle 等）。
