@@ -71,7 +71,7 @@ Use this template:
 
 - 编号：RFC-XXX
 - 状态：Proposed
-- 作者：Ring-rs 开发组
+- 作者：[model name]
 - 日期：YYYY-MM-DD
 - 相关范围：[affected crates/modules]
 - 前置：[dependencies, if any]

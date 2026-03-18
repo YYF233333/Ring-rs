@@ -29,3 +29,8 @@
 | RFC-012 | UI 行为定制系统 | `rfc-ui-behavior-customization.md` | Accepted |
 | RFC-013 | 配置默认值外部化 | `rfc-config-externalization.md` | Accepted |
 | RFC-014 | 测试分层与维护策略 | `Accepted/rfc-test-tiering.md` | Accepted |
+| RFC-015 | 调试状态快照热键 | `rfc-debug-state-snapshot.md` | Proposed |
+| RFC-016 | 输入录制与回放系统 | `rfc-input-recording-replay.md` | Proposed |
+| RFC-017 | 调试覆盖层 | `rfc-debug-overlay.md` | Proposed |
+| RFC-018 | 结构化事件流调试基础设施 | `rfc-structured-event-stream.md` | Proposed |
+| RFC-019 | Headless 测试模式 | `rfc-headless-testing-mode.md` | Proposed |
