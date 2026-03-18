@@ -28,12 +28,13 @@ description: Breaks large, mostly independent work into parallel subagent batche
    |------|--------------|-------|-----------|-------------|
    | Bulk/mechanical | `/bulk-worker` | Auto | ~0$ | Renames, grep, file inventory, fixture gen |
    | Code changes | `/coder` | `gpt-5.3-codex` | ~$1.05/200K ctx | Test writing, scoped implementations, refactors |
+   | General-purpose | `/generalPurpose` | `gpt-5.4` | ~$1.25/200K ctx | Multi-step mixed tasks, research + changes, cross-cutting work |
    | Review/audit | `/reviewer` | `gpt-5.4` (readonly) | ~$1.25/200K ctx | Code review, test audit, quality checks |
    | Doc updates | `/doc-updater` | Auto | ~0$ | Summary refresh, doc-code sync |
    | Investigation | `/investigator` | inherit (readonly) | parent rate | Debugging, hypothesis testing, root cause analysis |
 
    Selection guidelines:
-   - Default to the cheapest role that can handle the chunk. Bulk > Coder > Reviewer > Investigator.
+   - Default to the cheapest role that can handle the chunk. Bulk > Coder > GeneralPurpose > Reviewer > Investigator.
    - Use `readonly: true` roles (reviewer, investigator) for any chunk that should not modify files.
    - When using the Task tool directly (without a subagent file), `model: "fast"` and omitting model (inherit parent) are the only options. Use subagent files for mid-tier models.
 6. Launch subagents in parallel.
@@ -169,5 +170,5 @@ Concrete benefits:
 ## Additional Resources
 
 - See [examples.md](examples.md) for concrete partitioning patterns.
-- Pre-defined subagent files: `.cursor/agents/` (`bulk-worker`, `coder`, `reviewer`, `doc-updater`, `investigator`).
+- Pre-defined subagent files: `.cursor/agents/` (`bulk-worker`, `coder`, `generalPurpose`, `reviewer`, `doc-updater`, `investigator`).
 - Model pricing reference: https://cursor.com/docs/models-and-pricing
