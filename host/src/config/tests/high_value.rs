@@ -129,6 +129,36 @@ fn test_validate_fs_ok() {
 }
 
 #[test]
+fn test_validate_fs_accepts_volume_boundaries() {
+    let (mut min_config, _env1) = make_valid_fs_config();
+    min_config.audio.master_volume = 0.0;
+    min_config.audio.bgm_volume = 0.0;
+    min_config.audio.sfx_volume = 0.0;
+    assert!(min_config.validate().is_ok());
+
+    let (mut max_config, _env2) = make_valid_fs_config();
+    max_config.audio.master_volume = 1.0;
+    max_config.audio.bgm_volume = 1.0;
+    max_config.audio.sfx_volume = 1.0;
+    assert!(max_config.validate().is_ok());
+}
+
+#[test]
+fn test_validate_fs_rejects_negative_and_over_max_per_audio_channel() {
+    let (mut master_negative, _env1) = make_valid_fs_config();
+    master_negative.audio.master_volume = -0.01;
+    assert_validation_failed_contains(&master_negative, "主音量");
+
+    let (mut bgm_over_max, _env2) = make_valid_fs_config();
+    bgm_over_max.audio.bgm_volume = 1.01;
+    assert_validation_failed_contains(&bgm_over_max, "BGM 音量");
+
+    let (mut sfx_negative, _env3) = make_valid_fs_config();
+    sfx_negative.audio.sfx_volume = -0.01;
+    assert_validation_failed_contains(&sfx_negative, "SFX 音量");
+}
+
+#[test]
 fn test_validate_zip_requires_zip_path() {
     let config = AppConfig {
         asset_source: AssetSourceType::Zip,

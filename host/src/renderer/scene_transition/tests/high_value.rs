@@ -224,3 +224,86 @@ fn test_skip_current_phase_rule_ensures_midpoint() {
     assert!(!manager.is_active());
     assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
 }
+
+#[test]
+fn test_fade_transition_runs_through_ui_fade_in_and_completion() {
+    let mut manager = SceneTransitionManager::new();
+    manager.start_fade(0.1, "fade_bg.png".to_string());
+
+    assert!(!manager.is_mask_complete());
+    assert!(!manager.is_ui_fading_in());
+
+    manager.update(0.11);
+    assert_eq!(manager.phase(), SceneTransitionPhase::FadeOut);
+    assert!(manager.is_at_midpoint());
+    assert!(manager.mask_alpha() >= 0.999);
+    assert!(!manager.is_mask_complete());
+
+    let _ = manager.take_pending_background();
+    manager.update(0.11);
+    assert_eq!(manager.phase(), SceneTransitionPhase::UIFadeIn);
+    assert!(manager.is_ui_fading_in());
+    assert!(manager.is_mask_complete());
+    assert!(manager.ui_alpha() < 1.0);
+
+    assert!(manager.update(0.19));
+    assert_eq!(manager.phase(), SceneTransitionPhase::UIFadeIn);
+
+    assert!(!manager.update(0.02));
+    assert_eq!(manager.phase(), SceneTransitionPhase::Completed);
+    assert!(!manager.is_ui_fading_in());
+    assert!(manager.is_mask_complete());
+    assert_eq!(manager.ui_alpha(), 1.0);
+}
+
+#[test]
+fn test_rule_transition_reports_progress_and_blackout_completion() {
+    let mut manager = SceneTransitionManager::new();
+    manager.start_rule(0.1, "rule_bg.png".to_string(), "mask.png".to_string(), false);
+
+    manager.update(0.05);
+    assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);
+    assert!(manager.progress() > 0.0);
+    assert!(!manager.is_mask_complete());
+
+    manager.update(0.06);
+    assert_eq!(manager.phase(), SceneTransitionPhase::Blackout);
+    assert!((manager.progress() - 1.0).abs() < 0.001);
+
+    manager.update(0.21);
+    assert_eq!(manager.phase(), SceneTransitionPhase::FadeOut);
+    assert!(manager.is_at_midpoint());
+    assert!(manager.progress() <= 0.001);
+}
+
+#[test]
+fn test_fade_transition_progresses_during_fade_in_and_ui_fade_in() {
+    let mut manager = SceneTransitionManager::new();
+    manager.start_fade(0.2, "fade_bg.png".to_string());
+
+    manager.update(0.05);
+    assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);
+    assert!(manager.mask_alpha() > 0.0);
+
+    manager.update(0.20);
+    let _ = manager.take_pending_background();
+    manager.update(0.20);
+    assert_eq!(manager.phase(), SceneTransitionPhase::UIFadeIn);
+    manager.update(0.05);
+    assert!(manager.ui_alpha() > 0.0);
+}
+
+#[test]
+fn test_skip_current_phase_rule_does_not_force_mask_alpha_to_one() {
+    let mut manager = SceneTransitionManager::new();
+    manager.start_rule(1.0, "rule_bg.png".to_string(), "mask.png".to_string(), false);
+
+    manager.skip_current_phase();
+
+    assert_eq!(manager.phase(), SceneTransitionPhase::FadeOut);
+    assert!(manager.progress() <= 0.001);
+    assert!(
+        manager.mask_alpha() < 0.001,
+        "Rule 跳阶段不应把 fade 用的 mask_alpha 强行设为 1.0"
+    );
+}

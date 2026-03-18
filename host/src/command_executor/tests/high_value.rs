@@ -270,3 +270,40 @@ fn test_batch_error_stops_execution() {
     assert_eq!(result, ExecuteResult::WaitForClick);
     assert!(ctx.render_state.visible_characters.contains_key("c"));
 }
+
+#[test]
+fn test_show_character_same_position_with_partial_alpha_rebuilds_and_emits_show_effect() {
+    let mut ctx = TestCtx::new();
+
+    let initial = Command::ShowCharacter {
+        path: "characters/char1_a.png".to_string(),
+        alias: "char1".to_string(),
+        position: Position::Center,
+        transition: None,
+    };
+    assert_eq!(ctx.execute(&initial), ExecuteResult::Ok);
+    ctx.render_state
+        .get_character_anim("char1")
+        .expect("角色应已创建")
+        .set_alpha(0.5);
+
+    let update = Command::ShowCharacter {
+        path: "characters/char1_b.png".to_string(),
+        alias: "char1".to_string(),
+        position: Position::Center,
+        transition: Some(Transition::simple("dissolve")),
+    };
+    assert_eq!(ctx.execute(&update), ExecuteResult::Ok);
+
+    let sprite = ctx.render_state.visible_characters.get("char1").unwrap();
+    assert_eq!(sprite.texture_path, "characters/char1_b.png");
+    assert_eq!(sprite.position, Position::Center);
+
+    assert_eq!(ctx.executor.last_output.effect_requests.len(), 1);
+    let req = &ctx.executor.last_output.effect_requests[0];
+    assert!(matches!(
+        &req.target,
+        crate::renderer::effects::EffectTarget::CharacterShow { alias } if alias == "char1"
+    ));
+    assert_eq!(req.effect.kind, crate::renderer::effects::EffectKind::Dissolve);
+}

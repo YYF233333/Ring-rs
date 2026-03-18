@@ -575,6 +575,77 @@ fn builtin_apply_title_card_is_noop() {
 }
 
 #[test]
+fn builtin_apply_move_uses_manifest_presets_for_offset_and_scale() {
+    let registry = builtin_registry();
+    let mut manifest = Manifest::with_defaults();
+    manifest.presets.insert(
+        "left".to_string(),
+        crate::manifest::PositionPreset {
+            x: 0.2,
+            y: 0.9,
+            scale: 0.9,
+        },
+    );
+    manifest.presets.insert(
+        "right".to_string(),
+        crate::manifest::PositionPreset {
+            x: 0.8,
+            y: 0.7,
+            scale: 0.6,
+        },
+    );
+
+    let mut svc = MockEngineServices {
+        screen_size: (1000.0, 500.0),
+        character_to_return: Some(AnimatableCharacter::new("alice")),
+        ..Default::default()
+    };
+
+    let request = EffectRequest::new(
+        EffectTarget::CharacterMove {
+            alias: "alice".to_string(),
+            old_position: vn_runtime::command::Position::Left,
+            new_position: vn_runtime::command::Position::Right,
+        },
+        ResolvedEffect {
+            kind: EffectKind::Move,
+            duration: Some(0.5),
+            easing: EasingFunction::Linear,
+        },
+    );
+
+    let mut ctx = make_engine_context(&mut svc, &manifest);
+    let result = registry.dispatch(&request, &mut ctx);
+    drop(ctx);
+
+    assert!(matches!(result, CapabilityDispatchResult::Handled { .. }));
+    assert_eq!(svc.animate_character_with_easing_calls.len(), 4);
+    let (prop_x, from_x, to_x, dur_x) = svc.animate_character_with_easing_calls[0];
+    assert_eq!(prop_x, "position_x");
+    assert!((from_x + 600.0).abs() < 0.01);
+    assert!((to_x - 0.0).abs() < 0.01);
+    assert!((dur_x - 0.5).abs() < 0.01);
+
+    let (prop_y, from_y, to_y, dur_y) = svc.animate_character_with_easing_calls[1];
+    assert_eq!(prop_y, "position_y");
+    assert!((from_y - 100.0).abs() < 0.01);
+    assert!((to_y - 0.0).abs() < 0.01);
+    assert!((dur_y - 0.5).abs() < 0.01);
+
+    let (prop_sx, from_sx, to_sx, dur_sx) = svc.animate_character_with_easing_calls[2];
+    assert_eq!(prop_sx, "scale_x");
+    assert!((from_sx - 1.5).abs() < 0.01);
+    assert!((to_sx - 1.0).abs() < 0.01);
+    assert!((dur_sx - 0.5).abs() < 0.01);
+
+    let (prop_sy, from_sy, to_sy, dur_sy) = svc.animate_character_with_easing_calls[3];
+    assert_eq!(prop_sy, "scale_y");
+    assert!((from_sy - 1.5).abs() < 0.01);
+    assert!((to_sy - 1.0).abs() < 0.01);
+    assert!((dur_sy - 0.5).abs() < 0.01);
+}
+
+#[test]
 fn builtin_scene_shake_source_is_registered() {
     let registry = builtin_registry();
     assert_eq!(

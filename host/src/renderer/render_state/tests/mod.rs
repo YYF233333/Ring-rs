@@ -111,6 +111,43 @@ fn test_chapter_mark_overlap_replace() {
 }
 
 #[test]
+fn test_advance_typewriter_does_not_advance_past_completion() {
+    let mut state = RenderState::new();
+    state.start_typewriter(None, "A".to_string(), vec![], false);
+
+    assert!(state.advance_typewriter());
+    assert_eq!(state.dialogue.as_ref().unwrap().visible_chars, 1);
+
+    assert!(state.advance_typewriter());
+    assert_eq!(state.dialogue.as_ref().unwrap().visible_chars, 1);
+}
+
+#[test]
+fn test_update_chapter_mark_uses_linear_fraction_for_fade_in_and_out() {
+    let mut state = RenderState::new();
+    state.set_chapter_mark("第一章".to_string(), 1);
+
+    assert!(state.update_chapter_mark(0.2));
+    let mark = state.chapter_mark.as_ref().unwrap();
+    assert_eq!(mark.phase, ChapterMarkPhase::FadeIn);
+    assert!((mark.alpha - 0.5).abs() < 0.01);
+
+    assert!(state.update_chapter_mark(0.2));
+    let mark = state.chapter_mark.as_ref().unwrap();
+    assert_eq!(mark.phase, ChapterMarkPhase::Visible);
+    assert!((mark.alpha - 1.0).abs() < 0.01);
+
+    assert!(state.update_chapter_mark(3.0));
+    let mark = state.chapter_mark.as_ref().unwrap();
+    assert_eq!(mark.phase, ChapterMarkPhase::FadeOut);
+
+    assert!(state.update_chapter_mark(0.3));
+    let mark = state.chapter_mark.as_ref().unwrap();
+    assert_eq!(mark.phase, ChapterMarkPhase::FadeOut);
+    assert!((mark.alpha - 0.5).abs() < 0.01);
+}
+
+#[test]
 fn test_choices() {
     let mut state = RenderState::new();
 

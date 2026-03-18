@@ -184,3 +184,31 @@ fn test_delete_save_also_removes_thumbnail() {
     assert!(!manager.exists(3));
     assert!(!thumb_path.exists());
 }
+
+#[test]
+fn test_save_thumbnail_and_load_thumbnail_bytes_round_trip() {
+    let (manager, _guard) = temp_manager_with_dir();
+    let rgba: Vec<u8> = vec![
+        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255,
+    ];
+
+    manager.save_thumbnail(7, &rgba, 2, 2, 2, 2).unwrap();
+
+    let bytes = manager
+        .load_thumbnail_bytes(7)
+        .expect("应能读回刚保存的缩略图");
+    assert!(!bytes.is_empty());
+    assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+}
+
+#[test]
+fn test_save_thumbnail_rejects_invalid_rgba_buffer() {
+    let (manager, _guard) = temp_manager_with_dir();
+    let rgba = vec![255, 0, 0, 255, 0, 255, 0];
+
+    let err = manager
+        .save_thumbnail(8, &rgba, 2, 2, 2, 2)
+        .expect_err("无效 RGBA 缓冲区应报错");
+    assert!(err.contains("无法从 RGBA 数据创建图像"));
+    assert!(manager.load_thumbnail_bytes(8).is_none());
+}

@@ -318,4 +318,56 @@ mod tests {
 
         assert!(cache.stats().evictions >= 2);
     }
+
+    #[test]
+    fn test_insert_exactly_fills_budget_without_eviction() {
+        let mut cache = TextureCache::new(1);
+
+        cache.insert("first".to_string(), null_texture(256, 512));
+        cache.insert("second".to_string(), null_texture(256, 512));
+
+        assert_eq!(cache.len(), 2);
+        assert!(cache.contains("first"));
+        assert!(cache.contains("second"));
+        assert_eq!(cache.stats().evictions, 0);
+        assert!(!cache.is_empty());
+    }
+
+    #[test]
+    fn test_insert_evicts_multiple_entries_until_budget_is_satisfied() {
+        let mut cache = TextureCache::new(1);
+
+        cache.insert("first".to_string(), null_texture(256, 256));
+        cache.insert("second".to_string(), null_texture(256, 256));
+        cache.insert("third".to_string(), null_texture(256, 256));
+        cache.insert("huge".to_string(), null_texture(512, 512));
+
+        assert_eq!(cache.len(), 1);
+        assert!(cache.contains("huge"));
+        assert!(!cache.contains("first"));
+        assert!(!cache.contains("second"));
+        assert!(!cache.contains("third"));
+        assert_eq!(cache.used_bytes(), 512 * 512 * 4);
+        assert_eq!(cache.stats().evictions, 3);
+    }
+
+    #[test]
+    fn test_overwrite_same_key_keeps_fifo_order_consistent() {
+        let mut cache = TextureCache::new(1);
+
+        cache.insert("shared".to_string(), null_texture(256, 256));
+        cache.insert("other".to_string(), null_texture(256, 256));
+        cache.insert("shared".to_string(), null_texture(256, 512));
+
+        assert_eq!(cache.len(), 2);
+        assert!(cache.contains("shared"));
+        assert!(cache.contains("other"));
+
+        cache.insert("new".to_string(), null_texture(256, 512));
+
+        assert_eq!(cache.len(), 2);
+        assert!(cache.contains("shared"));
+        assert!(cache.contains("new"));
+        assert!(!cache.contains("other"));
+    }
 }

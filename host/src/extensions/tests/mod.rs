@@ -83,6 +83,7 @@ struct MockEngineServices {
     start_background_transition_called: bool,
     start_scene_rule_calls: Vec<(f32, String, String, bool)>,
     screen_size: (f32, f32),
+    animate_character_with_easing_calls: Vec<(&'static str, f32, f32, f32)>,
     /// 如果非 None，则 get_character_anim 返回该角色
     character_to_return: Option<AnimatableCharacter>,
 }
@@ -118,12 +119,14 @@ impl EngineServices for MockEngineServices {
     fn animate_character_with_easing(
         &mut self,
         _id: ObjectId,
-        _property: &'static str,
-        _from: f32,
-        _to: f32,
-        _duration: f32,
+        property: &'static str,
+        from: f32,
+        to: f32,
+        duration: f32,
         _easing: EasingFunction,
     ) -> Result<(), String> {
+        self.animate_character_with_easing_calls
+            .push((property, from, to, duration));
         Ok(())
     }
 

@@ -1,4 +1,6 @@
 use super::*;
+use winit::dpi::PhysicalPosition;
+use winit::event::{DeviceId, ElementState, MouseButton, WindowEvent};
 
 #[test]
 fn test_inject_input() {
@@ -174,4 +176,125 @@ fn test_update_waiting_for_time_click_passes_debounce() {
         0.016,
     );
     assert_eq!(result, Some(RuntimeInput::Click));
+}
+
+#[test]
+fn test_process_event_updates_mouse_state_and_cursor_position() {
+    let mut manager = InputManager::new();
+
+    manager.process_event(&WindowEvent::CursorMoved {
+        device_id: DeviceId::dummy(),
+        position: PhysicalPosition::new(123.0, 456.0),
+    });
+    assert_eq!(manager.mouse_position(), (123.0, 456.0));
+
+    manager.process_event(&WindowEvent::MouseInput {
+        device_id: DeviceId::dummy(),
+        state: ElementState::Pressed,
+        button: MouseButton::Left,
+    });
+    assert!(manager.is_mouse_pressed());
+    assert!(manager.is_mouse_just_pressed());
+
+    manager.process_event(&WindowEvent::MouseInput {
+        device_id: DeviceId::dummy(),
+        state: ElementState::Released,
+        button: MouseButton::Left,
+    });
+    assert!(!manager.is_mouse_pressed());
+}
+
+#[test]
+fn test_wait_for_click_accepts_single_key_and_hold_repeat_has_boundaries() {
+    let mut manager = InputManager::new();
+    manager.current_time = 1.0;
+    manager.last_click_time = 0.0;
+    manager.just_pressed_keys.insert(KeyCode::Space);
+    assert_eq!(
+        manager.update(&WaitingReason::WaitForClick, 0.016),
+        Some(RuntimeInput::Click)
+    );
+
+    let mut manager = InputManager::new();
+    manager.current_time = 10.0;
+    manager.pressed_keys.insert(KeyCode::Enter);
+    manager.hold_timer = 0.29;
+    manager.last_hold_trigger_time = 0.0;
+    assert_eq!(
+        manager.update(&WaitingReason::WaitForClick, 0.02),
+        Some(RuntimeInput::Click),
+        "长按跨过初始阈值时应触发"
+    );
+
+    let mut manager = InputManager::new();
+    manager.current_time = 10.04;
+    manager.pressed_keys.insert(KeyCode::Enter);
+    manager.hold_timer = 0.31;
+    manager.last_hold_trigger_time = 10.0;
+    assert_eq!(
+        manager.update(&WaitingReason::WaitForClick, 0.01),
+        None,
+        "重复触发间隔未到时不应产生点击"
+    );
+}
+
+#[test]
+fn test_wait_for_time_accepts_keyboard_click_and_respects_debounce_boundary() {
+    let mut manager = InputManager::new();
+    manager.current_time = 1.0;
+    manager.last_click_time = 0.0;
+    manager.just_pressed_keys.insert(KeyCode::Enter);
+    assert_eq!(
+        manager.update(&WaitingReason::WaitForTime(std::time::Duration::from_secs(1)), 0.016),
+        Some(RuntimeInput::Click)
+    );
+
+    let mut manager = InputManager::new();
+    manager.current_time = 0.10;
+    manager.last_click_time = 0.0;
+    manager.just_pressed_keys.insert(KeyCode::Space);
+    assert_eq!(
+        manager.update(&WaitingReason::WaitForTime(std::time::Duration::from_secs(1)), 0.016),
+        None,
+        "时间等待态也应遵守点击防抖"
+    );
+}
+
+#[test]
+fn test_choice_navigation_stays_in_bounds_at_last_index() {
+    let mut manager = InputManager::new();
+    manager.choice_count = 3;
+    manager.selected_index = 2;
+    manager.just_pressed_keys.insert(KeyCode::ArrowDown);
+
+    let result = manager.update(&WaitingReason::WaitForChoice { choice_count: 3 }, 0.016);
+    assert!(result.is_none());
+    assert_eq!(manager.selected_index, 2);
+}
+
+#[test]
+fn test_choice_confirm_respects_debounce_boundary() {
+    let mut manager = InputManager::new();
+    manager.choice_count = 3;
+    manager.selected_index = 1;
+    manager.current_time = 0.10;
+    manager.last_click_time = 0.0;
+    manager.just_pressed_keys.insert(KeyCode::Enter);
+
+    let result = manager.update(&WaitingReason::WaitForChoice { choice_count: 3 }, 0.016);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_choice_hover_rejects_points_past_right_and_bottom_edges() {
+    let mut manager = InputManager::new();
+    let rects = vec![(10.0, 20.0, 100.0, 50.0)];
+
+    manager.mouse_position = (200.0, 30.0);
+    assert!(!manager.handle_choice_hover(&rects));
+    assert!(manager.hovered_index.is_none());
+
+    manager.mouse_position = (30.0, 200.0);
+    assert!(!manager.handle_choice_hover(&rects));
+    assert!(manager.hovered_index.is_none());
 }

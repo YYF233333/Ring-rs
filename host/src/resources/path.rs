@@ -364,4 +364,10 @@ mod tests {
         let b = LogicalPath::new("backgrounds/bg.png");
         assert_eq!(a, b);
     }
+
+    #[test]
+    fn test_logical_path_to_path_buf_preserves_normalized_segments() {
+        let p = LogicalPath::new("assets\\scripts/../backgrounds/bg.png");
+        assert_eq!(p.to_path_buf(), PathBuf::from("backgrounds/bg.png"));
+    }
 }
