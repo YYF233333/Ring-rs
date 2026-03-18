@@ -14,7 +14,16 @@ description: Breaks large, mostly independent work into parallel subagent batche
 
 ## Workflow
 
-1. Confirm that the task is both large and splittable. If not, stay single-agent.
+1. Route the task to the right topology. Not everything benefits from parallelism.
+
+   | Task shape | Topology | Rationale |
+   |------------|----------|-----------|
+   | Repo-wide review, audit, or broad test updates | **Parallel** (this skill) | Chunks are independent; no shared mutation. |
+   | Scoped refactor or rename with cross-file dependencies | **Sequential or single-agent** | Shared invariants require ordering. |
+   | Debugging / root cause analysis | **Single investigator** | Hypothesis chains are inherently serial. |
+   | Feature implementation spanning multiple domains | **Planner → parallel workers** | Parent designs the contract, workers implement per-domain. |
+
+   If the task does not clearly fit "parallel," stop here and handle it without this skill.
 2. Do a minimal top-level scan only. Gather the module map, constraints, and final deliverable.
 3. Partition the work into independent chunks. Prefer module, directory, feature area, or test bucket boundaries.
 4. Choose subagent count.
@@ -120,6 +129,7 @@ Return:
 - Findings or completed changes
 - Files touched
 - Tests run / not run
+- Confidence (high / medium / low)
 - Open risks or blockers
 ```
 
@@ -131,6 +141,7 @@ For review or audit tasks, ask each subagent to return:
 - Exact affected files or symbols.
 - Missing tests or validation gaps.
 - Explicit `no findings` when the chunk looks clean.
+- **Confidence (high / medium / low):** self-assessed certainty that the chunk was thoroughly covered. A `no findings` + `low confidence` combination signals the parent to re-inspect.
 
 For test update tasks, ask each subagent to return:
 
@@ -139,6 +150,7 @@ For test update tasks, ask each subagent to return:
 - Commands executed.
 - Failures or blockers.
 - Whether more integration coverage is still needed.
+- **Confidence (high / medium / low):** self-assessed certainty that the chunk was thoroughly covered.
 
 ## Parent Agent Responsibilities
 
