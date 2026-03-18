@@ -8,7 +8,7 @@
 
 - 模块入口：`host/src/manifest/mod.rs`
 - 核心类型：`Manifest`、`GroupConfig`、`PositionPreset`、`ManifestWarning`
-- 关键接口：`load`、`load_from_bytes`、`validate`、`get_group_config`、`get_preset`
+- 关键接口：`load`、`load_from_bytes`、`load_and_validate`、`validate`、`get_group_config`、`get_preset`
 
 ## KeyFlow
 
@@ -44,7 +44,7 @@
 
 ## LastVerified
 
-2026-02-28
+2026-03-18
 
 ## Owner
 

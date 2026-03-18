@@ -8,7 +8,7 @@
 
 - 模块入口：`host/src/renderer/mod.rs`（Renderer struct + `build_draw_commands` 顶层编排）
 - 绘制命令生成：`host/src/renderer/draw_commands.rs`（背景/角色/场景遮罩 -> DrawCommand）
-- 场景效果与过渡：`host/src/renderer/scene_effects.rs`（shake/blur/dissolve/fade 状态机）
+- 场景效果与过渡：`host/src/renderer/scene_effects.rs`（震动/模糊状态更新与背景过渡入口；背景 dissolve 由 `transition.rs` 的 `TransitionManager` 驱动）
 - 核心类型：`Renderer`、`DrawMode`
 - 关键公开子系统：`animation`、`effects`、`render_state`、`scene_transition`
 - 对外接口：`build_draw_commands`、`update_transition`、`start_scene_*`、`skip_scene_transition_to_end`
@@ -53,7 +53,7 @@
 
 ## LastVerified
 
-2026-03-11
+2026-03-18
 
 ## Owner
 

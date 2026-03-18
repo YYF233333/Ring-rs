@@ -8,7 +8,7 @@
 
 - 文件：`host/src/host_app.rs`
 - 关键类型：`HostApp`
-- `HostApp::new(config, font_data)` 构造应用实例
+- `HostApp::new(config)` 构造应用实例（字体在 `resumed` 中按 `config.default_font` 加载）
 - `ApplicationHandler::resumed` 创建窗口与 GPU 后端，初始化 `AppState`
 - `ApplicationHandler::window_event` 分发输入/调用 `app::update`/驱动 egui UI/提交渲染帧
 
@@ -34,7 +34,7 @@
 
 ## LastVerified
 
-2026-03-11
+2026-03-18
 
 ## Owner
 

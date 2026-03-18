@@ -8,7 +8,7 @@
 
 - 入口：`vn-runtime/src/script/parser/mod.rs`
 - 核心接口：`Parser::parse`、`Parser::parse_with_base_path`、`Parser::warnings`
-- 子模块：`phase1`、`phase2`、`helpers`、`expr_parser`、`inline_tags`
+- 子模块：`phase1`、`phase2`、`helpers`、`expr_parser`；`inline_tags` 为 crate 内（`pub(crate)`）
 
 ## KeyFlow
 
@@ -56,7 +56,7 @@
 
 ## LastVerified
 
-2026-03-10
+2026-03-18
 
 ## Owner
 

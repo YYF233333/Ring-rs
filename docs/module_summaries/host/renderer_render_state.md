@@ -7,7 +7,7 @@
 ## PublicSurface
 
 - 模块入口：`host/src/renderer/render_state/mod.rs`
-- 核心类型：`RenderState`、`CharacterSprite`、`DialogueState`、`ChoicesState`、`ChoiceItem`、`InlineWait`、`EffectiveCps`
+- 核心类型：`RenderState`、`CharacterSprite`、`DialogueState`、`ChoicesState`、`ChoiceItem`、`InlineWait`、`EffectiveCps`、`ChapterMarkState`、`SceneEffectState`、`TitleCardState`
 - 关键接口：背景/角色/对话/选择状态读写、打字机推进方法、`extend_dialogue`（台词续接）、`effective_text_speed`（字速查询）
 
 ## KeyFlow
@@ -46,7 +46,7 @@
 
 ## LastVerified
 
-2026-03-10
+2026-03-18
 
 ## Owner
 

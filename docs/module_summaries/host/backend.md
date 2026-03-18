@@ -10,7 +10,7 @@ GPU 渲染后端：封装 winit 窗口管理、wgpu GPU 初始化与帧渲染循
 - `GpuContext`：GPU 设备/队列/表面管理（初始化、resize、帧获取）
 - `EguiIntegration`：egui 上下文/状态/渲染器桥接（输入转发、字体加载、UI 渲染）
 - `SpriteRenderer`：2D textured quad batch 渲染器（WGSL shader）
-- `DissolveRenderer`：mask-based dissolve 效果渲染器（WGSL shader）
+- `DissolveRenderer`：mask-based dissolve 效果渲染器（WGSL shader，位于 `backend::dissolve_renderer` 子模块，未在 crate 根 re-export）
 - `GpuTexture`：`Arc`-wrapped wgpu 纹理 + 视图 + 绑定组（实现 `rendering_types::Texture` trait）
 - `WgpuTextureFactory`：`TextureFactory` 的 wgpu 实现（内部类型，通过 `texture_context()` 暴露）
 - `DrawCommand`：re-export from `rendering_types`（使用 `Arc<dyn Texture>`）
@@ -35,4 +35,4 @@ GPU 渲染后端：封装 winit 窗口管理、wgpu GPU 初始化与帧渲染循
 
 ## LastVerified
 
-2026-03-11
+2026-03-18

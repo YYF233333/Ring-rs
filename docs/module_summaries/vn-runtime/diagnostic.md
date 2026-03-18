@@ -41,11 +41,11 @@
 
 - [模块总览](../vn-runtime.md)
 - [parser 专题](parser.md)
-- [coverage 指南](../../../coverage.md)
+- [coverage 指南](../../coverage.md)
 
 ## LastVerified
 
-2026-02-27
+2026-03-18
 
 ## Owner
 

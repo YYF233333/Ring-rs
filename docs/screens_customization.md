@@ -162,7 +162,7 @@ assets/ui/screens.json
 
 ## 向后兼容
 
-- `screens.json` 缺失 → 使用引擎默认值（与当前硬编码行为完全一致）
+- `screens.json` 缺失 → 启动报错（须存在且字段完整，与概述一致）
 - 字段缺失 → 对应界面使用默认值
 - 未知 action ID → 启动时 warn 并跳过该按钮
 - 条件求值失败 → 视为 false（按钮不显示）

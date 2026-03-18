@@ -8,8 +8,8 @@
 
 - 模块入口：`host/src/input/mod.rs`
 - 核心类型：`InputManager`
-- 关键接口：`process_event`、`begin_frame`、`end_frame`、`update`、`set_choice_rects`、`inject_input`
-- 公开查询：`is_key_just_pressed_pub`、`is_key_down_pub`、`mouse_position`、`is_mouse_pressed`
+- 关键接口：`process_event`、`begin_frame`、`end_frame`、`update`、`set_choice_rects`、`inject_input`、`suppress_mouse_click`
+- 公开查询：`is_key_just_pressed`、`is_key_down`、`mouse_position`、`is_mouse_pressed`、`is_mouse_just_pressed`
 
 ## KeyFlow
 
@@ -17,7 +17,7 @@
 2. `begin_frame(dt)` 推进内部时间计数器。
 3. `update(waiting, dt)` 根据等待原因选择输入处理分支。
 4. `end_frame()` 清除 per-frame 的 "just pressed" 状态。
-5. egui 事件优先处理；未被 egui 消费的事件才转发给 InputManager。
+5. egui 事件优先处理；当 egui 交互元素处于指针下方时可调用 `suppress_mouse_click()` 抑制本帧点击，未被 egui 消费的事件才转发给 InputManager。
 
 ## Dependencies
 
@@ -48,7 +48,7 @@
 
 ## LastVerified
 
-2026-03-11
+2026-03-18
 
 ## Owner
 

@@ -101,10 +101,9 @@ saves/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `slot` | number | 存档槽位号 (1-99，Continue 为 0) |
-| `timestamp` | string | 保存时间（Unix 时间戳，自动格式化为可读格式） |
+| `timestamp` | string | 保存时间（Unix 时间戳字符串，UI 自动格式化为可读格式） |
 | `chapter_title` | string? | 当前章节标题（来自脚本的 `## chapter` 标记） |
 | `play_time_secs` | number | 累计游玩时间（秒），UI 显示为 `H:MM:SS` 或 `MM:SS` 格式 |
-| `script_id` | string | 当前脚本 ID（用于读档时恢复脚本） |
 
 ### runtime_state
 

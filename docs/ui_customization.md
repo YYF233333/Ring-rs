@@ -259,6 +259,6 @@ assets/gui/
 ## Fallback 行为
 
 - 素材文件不存在 → 对应控件使用纯色 fallback 渲染
-- `layout.json` 不存在 → 使用全部默认值
+- `layout.json` 不存在 → 启动报错（须存在且字段完整，与概述一致）
 - `layout.json` 字段缺失 → 仅缺失字段使用默认值
 - 字体文件不存在 → 使用 egui 内置 fallback 字体（CJK 字符可能显示为豆腐块）

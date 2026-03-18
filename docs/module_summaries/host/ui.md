@@ -58,14 +58,14 @@
 
 - [host 总览](../host.md)
 - [backend 摘要](backend.md)
-- RFC-010: 可定制 UI 系统
-- RFC-012: UI 行为定制系统
+- [RFC: 可定制 UI 系统](../../../RFCs/Accepted/rfc-customizable-ui-system.md)
+- [RFC: UI 行为定制系统](../../../RFCs/Accepted/rfc-ui-behavior-customization.md)
 - [RFC-013: 配置默认值外部化](../../../RFCs/Accepted/rfc-config-externalization.md)
 - [UI 行为定制指南](../../screens_customization.md)
 
 ## LastVerified
 
-2026-03-16
+2026-03-18
 
 ## Owner
 

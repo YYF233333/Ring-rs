@@ -1,6 +1,6 @@
 # host/src/rendering_types.rs
 
-> LastVerified: 2026-03-11
+> LastVerified: 2026-03-18
 
 ## Purpose
 

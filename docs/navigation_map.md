@@ -45,7 +45,7 @@
 - **脚本 AST**：`vn-runtime/src/script/ast.rs`
 - **脚本解析器**：`vn-runtime/src/script/parser/mod.rs`
 - **内联标签解析（节奏标签）**：`vn-runtime/src/script/parser/inline_tags.rs`
-- **脚本诊断（静态分析）**：`vn-runtime/src/diagnostic.rs`
+- **脚本诊断（静态分析）**：`vn-runtime/src/diagnostic/mod.rs`
 - **存档模型**：`vn-runtime/src/save.rs`
 - **历史记录**：`vn-runtime/src/history.rs`
 
@@ -68,6 +68,7 @@
 - 子模块：[app_command_handlers](module_summaries/host/app_command_handlers.md)
 - 子模块：[extensions](module_summaries/host/extensions.md)
 - 子模块：[command_executor](module_summaries/host/command_executor.md)
+- 子模块：[rendering_types](module_summaries/host/rendering_types.md)
 - 子模块：[renderer](module_summaries/host/renderer.md)
 - 子模块：[renderer_render_state](module_summaries/host/renderer_render_state.md)
 - 子模块：[renderer_animation](module_summaries/host/renderer_animation.md)

@@ -7,12 +7,12 @@
 ## PublicSurface
 
 - 模块入口：`host/src/extensions/mod.rs`
-- 核心类型：`ExtensionRegistry`、`EngineContext`、`ExtensionManifest`、`EffectExtension`、`EngineServices` trait（定义于 `services.rs`）、`CapabilityId` newtype
+- 核心类型：`ExtensionRegistry`、`EngineContext`、`ExtensionManifest`、`EffectExtension`、`EngineServices` trait（定义于 `services.rs`）、`CapabilityId` newtype；内建 capability 常量与 `build_builtin_registry` 在 `builtin_effects.rs`
 - 关键能力：注册扩展、版本兼容校验、capability 调度、扩展诊断记录
 
 ## KeyFlow
 
-1. `AppState::new` 构建内建扩展注册表（`effect.dissolve` / `effect.fade` / `effect.rule_mask` / `effect.move`）。
+1. `AppState::new` 构建内建扩展注册表（`builtin_effects.rs`）：`effect.dissolve`、`effect.fade`、`effect.rule_mask`、`effect.move`，以及场景效果 `effect.scene.shake`、`effect.scene.blur`、`effect.scene.dim`、`effect.scene.title_card`。
 2. `command_executor` 产出带 `capability_id` 的 `EffectRequest`。
 3. `EngineContext` 持有 `&mut dyn EngineServices`（而非 `&mut CoreSystems`），通过 trait 抽象访问核心系统，打破对 `app` 模块的反向依赖。
 4. `effect_applier` 使用 `ExtensionRegistry` 按 capability 分发请求。
@@ -49,7 +49,7 @@
 
 ## LastVerified
 
-2026-03-15
+2026-03-18
 
 ## Owner
 

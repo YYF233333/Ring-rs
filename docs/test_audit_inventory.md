@@ -15,7 +15,7 @@
 | `vn-runtime/src/script/parser/tests.rs` | 100 | 高价值密度最高，但夹杂 helper 级低价值与灰区样本 |
 | `vn-runtime/src/runtime/executor/tests.rs` | 53 | 以高价值语义/契约测试为主 |
 | `vn-runtime/src/runtime/engine/tests.rs` | 28 | 以高价值状态机/恢复测试为主 |
-| `vn-runtime/src/diagnostic/tests.rs` | 20 | 高低价值混杂，适合分层 |
+| `vn-runtime/src/diagnostic/tests/` | 20 | 高低价值混杂，适合分层 |
 | `vn-runtime/src/script/expr/tests.rs` | 14 | 高价值为主，少量 Display 低价值 |
 | `vn-runtime/src/command/tests.rs` | 13 | 灰区与低价值为主，少量契约测试可上调 |
 | `vn-runtime/src/script/ast/tests.rs` | 8 | 以灰区 helper/容器语义为主 |

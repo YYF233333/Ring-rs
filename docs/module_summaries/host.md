@@ -25,6 +25,7 @@
 - [app_command_handlers](host/app_command_handlers.md)：命令副作用处理
 - [extensions](host/extensions.md)：扩展 API 与 capability 注册表
 - [command_executor](host/command_executor.md)：`Command` 执行与状态变更
+- [rendering_types](host/rendering_types.md)：渲染抽象层（Texture/DrawCommand/TextureContext）
 - [renderer](host/renderer.md)：渲染主系统与渲染管线
 - [renderer_render_state](host/renderer_render_state.md)：渲染状态模型
 - [renderer_animation](host/renderer_animation.md)：通用动画系统
@@ -32,12 +33,16 @@
 - [renderer_scene_transition](host/renderer_scene_transition.md)：场景切换多阶段过渡
 - [resources](host/resources.md)：资源加载、缓存与路径解析
 - [audio](host/audio.md)：BGM/SFX 播放与淡入淡出
+- [video](host/video.md)：Cutscene 视频播放（RFC-009）
 - [input](host/input.md)：winit 事件驱动的输入采集与 RuntimeInput 转换
 - [ui](host/ui.md)：主题、Toast、UI 上下文（界面由 egui 在 main.rs 构建）
 - [backend](host/backend.md)：winit + wgpu + egui 渲染后端（SpriteRenderer / DissolveRenderer / GpuTexture）
 - [config](host/config.md)：运行配置加载、默认值与校验
 - [manifest](host/manifest.md)：立绘元数据与站位配置
 - [save_manager](host/save_manager.md)：槽位存档与 Continue 存档
+- [host_app](host/host_app.md)：winit ApplicationHandler、窗口生命周期与帧驱动
+- [egui_actions](host/egui_actions.md)：EguiAction 枚举与 UI 动作分发
+- [egui_screens](host/egui_screens.md)：egui 页面构建（title/ingame/settings/save_load/history 等）
 
 ## Invariants
 
@@ -68,7 +73,7 @@
 
 ## LastVerified
 
-2026-03-11
+2026-03-18
 
 ## Owner
 

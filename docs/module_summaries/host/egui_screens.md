@@ -39,7 +39,7 @@
 - `egui`（UI 构建 API）
 - `host::ui::{UiRenderContext, UiLayoutConfig, UiAssetCache, ScaleContext, ScreenDefinitions, ConditionContext, NinePatch}`
 - `host::ui::image_slider`（自定义图片滑块 widget）
-- `EguiAction`（UI 交互输出，含 StartAtLabel/QuickSave/QuickLoad/ToggleSkip/ToggleAuto/ShowConfirm 等变体）
+- `EguiAction`（定义于 `egui_actions.rs`，UI 交互输出，含 StartAtLabel/QuickSave/QuickLoad/ToggleSkip/ToggleAuto/ShowConfirm 等变体）
 - 不再依赖 `host::app::AppState`（通过 `UiRenderContext` 接收预求值数据）
 
 ## Invariants
@@ -54,9 +54,15 @@
 - 需要新增界面页面时
 - 需要理解确认弹窗或快捷菜单的交互流程时
 
+## RelatedDocs
+
+- [host 总览](../host.md)
+- [egui_actions 摘要](egui_actions.md)（EguiAction 定义与 handle_egui_action）
+- [ui 摘要](ui.md)
+
 ## LastVerified
 
-2026-03-15
+2026-03-18
 
 ## Owner
 
