@@ -5,8 +5,9 @@
 - 编号：RFC-018
 - 状态：Proposed
 - 作者：Ring-rs 开发组
-- 日期：2026-03-18
+- 日期：2026-03-18（修订：2026-03-19）
 - 相关范围：`vn-runtime`（engine、executor、state）、`host`（app、command_executor、input、audio、renderer）
+- 协同：RFC-016（输入录制与 AI 调试管线）、RFC-019（Headless 测试模式）
 - 前置：无
 
 ---
@@ -21,7 +22,7 @@
 
 该流程存在以下问题：
 
-- **多轮往返**：每次猜测错误都会增加一轮“改代码 → 运行 → 复现 → 发日志”的反馈周期；
+- **多轮往返**：每次猜测错误都会增加一轮"改代码 → 运行 → 复现 → 发日志"的反馈周期；
 - **埋点临时性**：问题解决后埋点往往被移除，同类问题再次出现时需重新猜测；
 - **上下文不完整**：`tracing` 输出为人类可读的文本，难以被模型或工具做结构化分析；
 - **边界不清晰**：埋点位置依赖开发者经验，容易遗漏关键 pipeline 边界。
@@ -32,11 +33,26 @@ Ring-rs 的核心数据流为：
 脚本文本 → Parser → AST (ScriptNode) → Executor → Command → CommandExecutor (host) → RenderState/Audio/Effects
 ```
 
-在 vn-runtime 与 host 的边界、以及 host 内部各子系统（渲染、音频、输入）的边界，存在明确的“事件发生点”。若在这些边界处**永久**输出结构化、机器可解析的事件，则：
+在 vn-runtime 与 host 的边界、以及 host 内部各子系统（渲染、音频、输入）的边界，存在明确的"事件发生点"。若在这些边界处**永久**输出结构化、机器可解析的事件，则：
 
 - 模型无需每次猜测埋点位置，可直接分析事件流；
 - 事件格式统一，便于工具链（如 jq、自定义分析脚本）处理；
 - 与 `tracing` 并存：tracing 用于人类可读的详细日志，事件流用于结构化诊断。
+
+### 1.1 在 AI 调试管线中的定位
+
+本 RFC 是三 RFC 联动的**数据输出端**：
+
+```text
+RFC-016（录制）         RFC-019（headless 回放）        RFC-018（本 RFC）
+recording.jsonl   →   headless 快进运行引擎      →   events.jsonl
+用户操作记录           CPU 全速推进逻辑帧              结构化诊断数据
+                                                        ↓
+                                                   AI 读取分析
+                                                   定位 root cause
+```
+
+事件流是 AI 理解"引擎内部发生了什么"的唯一窗口。没有它，headless 回放只能产出最终状态，但无法解释过程。
 
 ---
 
@@ -46,9 +62,10 @@ Ring-rs 的核心数据流为：
 
 - 在关键 pipeline 边界建立**永久**的结构化事件输出机制，替代临时 `tracing::debug!` 埋点。
 - 事件采用 **JSON Lines** 格式写入文件，便于流式解析与 AI/工具分析。
-- 事件流**默认关闭**，通过配置启用；启用时对稳态帧的额外开销可忽略。
+- 事件流在 **GUI 模式默认关闭**，通过配置启用；在 **headless 模式默认开启**，并允许覆盖输出路径。
 - 覆盖以下边界：脚本 tick、Command 产出/执行、状态变更、输入处理、过渡/音频事件。
 - 与现有 `tracing` 系统**共存**：tracing 负责人类可读日志，事件流负责机器可解析诊断。
+- 在 headless 快进模式（RFC-019）下默认启用，使 AI 在秒级完成"回放 + 事件采集"。
 
 ### 2.2 非目标
 
@@ -140,10 +157,10 @@ pub struct EventStream {
 
 **约束**：埋点仅位于模块边界，不进入 tight loop（如每帧渲染、打字机逐字输出）。事件在**状态转换**时触发，稳态帧无事件输出。
 
-#### 3.3.4 禁用时的性能
+#### 3.3.4 启用策略与性能
 
-- 启用检查：`if !event_stream.is_enabled() { return; }`，单次 bool 判断。
-- 禁用时：不分配、不序列化、不写文件，开销可忽略。
+- GUI 模式：`if !event_stream.is_enabled() { return; }`，单次 bool 判断；默认关闭，不分配、不序列化、不写文件，开销可忽略。
+- headless 模式：默认启用并自动生成输出文件路径；仅在显式配置关闭时才 no-op。
 - 启用时：仅在有事件时进行 JSON 序列化 + 文件写入，频率与状态转换一致，非每帧。
 
 ### 3.4 配置扩展
@@ -153,7 +170,7 @@ pub struct EventStream {
 ```rust
 // host/src/config/mod.rs - DebugConfig 扩展
 
-/// 事件流输出文件路径（None 时禁用事件流）
+/// GUI 模式下的事件流输出文件路径（None 时禁用）
 pub event_stream_file: Option<String>,
 ```
 
@@ -166,7 +183,7 @@ pub enable_event_stream: bool,
 pub event_stream_file: Option<String>,
 ```
 
-**推荐**：使用 `event_stream_file: Option<String>` 单字段——`Some(path)` 即启用并写入该路径，`None` 即禁用。与 `log_file` 的语义一致，配置更简洁。
+**推荐**：使用 `event_stream_file: Option<String>` 单字段——在 GUI 模式下 `Some(path)` 即启用并写入该路径，`None` 即禁用。headless 模式则额外提供运行时默认值：若未显式指定路径，则自动生成输出路径。
 
 **config.json 示例**：
 
@@ -181,7 +198,10 @@ pub event_stream_file: Option<String>,
 }
 ```
 
-默认值：`event_stream_file: None`，即默认禁用。
+默认值：
+
+- GUI 模式：`event_stream_file: None`，默认禁用；
+- headless 模式：默认启用，若未显式指定路径则自动生成，如 `artifacts/headless_events_<timestamp>.jsonl`。
 
 ### 3.5 与 tracing 的关系
 
@@ -191,9 +211,32 @@ pub event_stream_file: Option<String>,
 | 格式 | 人类可读文本 | JSON Lines |
 | 粒度 | 可任意细（含 debug/info 等级） | 仅 pipeline 边界 |
 | 用途 | 开发时详细排障 | 集成问题结构化诊断 |
-| 配置 | `log_level`、`log_file` | `event_stream_file` |
+| 配置 | `log_level`、`log_file` | `event_stream_file`（GUI 可选，headless 默认启用） |
 
 两者**并存**，不互相替代。开发者在需要时可同时开启 tracing 与事件流，分别用于不同分析场景。
+
+### 3.6 与 RFC-016/019 的协同
+
+事件流在 AI 调试管线中的角色：
+
+| 组合 | 使用场景 | 效果 |
+|------|----------|------|
+| 仅 RFC-018 | GUI 模式下手工启用 `event_stream_file` | 用户复现问题后将事件流文件发给 AI 分析 |
+| RFC-018 + RFC-019 | headless replay-only + 默认事件流 | AI 对已知录制路径做自动化回归验证 |
+| **RFC-016 + RFC-019 + RFC-018** | **完整调试管线** | 人类录制 → headless 以 replay 为唯一输入快进回放 → 事件流输出 → AI 全自动分析定位修复 |
+
+**典型 AI 调试命令**：
+
+```bash
+ring-rs --headless --replay-input=recording.jsonl --exit-on=replay-end
+```
+
+事件流在 headless 快进模式下的注意事项：
+
+- headless 以 replay 为唯一输入源，事件流中的 `input_received` 与 replay 注入事件一一对应，不存在 Auto-advance 之类的“辅助输入”噪声；
+- 快进模式以 CPU 全速推进，`ts_ms` 仍基于逻辑时间（固定 dt 累积），不反映墙钟时间；
+- 这正是期望行为——AI 分析的是逻辑时序因果关系，不关心实际经过了多少秒；
+- 事件流文件写入是同步的（`BufWriter` 缓冲），在快进模式下不会成为瓶颈（事件量级 < 万条/次运行）。
 
 ---
 
@@ -201,7 +244,7 @@ pub event_stream_file: Option<String>,
 
 | 模块 | 改动类型 | 风险 |
 |------|----------|------|
-| `host::config` | `DebugConfig` 新增 `event_stream_file` | 低：默认 `None`，反序列化兼容 |
+| `host::config` | `DebugConfig` 新增 `event_stream_file` | 低：GUI 默认 `None`，反序列化兼容 |
 | `host::app` / `host::init` | 构造 `EventStream`，传入 `AppState` | 低 |
 | `vn-runtime::engine` | 接收 `&EventStream`，tick 后 emit | 低：需 engine 接口扩展 |
 | `vn-runtime::executor` | 接收 `&EventStream`，产出 Command 时 emit | 低：executor 当前无 IO，需通过参数传入 |
@@ -233,8 +276,10 @@ impl EventSink for EventStream { ... }
 ### Phase 1：基础设施（1–2 天）
 
 1. 在 `host` 中新增 `event_stream` 模块，定义 `EngineEvent` 枚举与 `EventStream` 结构。
-2. 扩展 `DebugConfig`：`event_stream_file: Option<String>`，默认 `None`。
-3. 在 `main.rs` / `init` 中，根据配置创建 `EventStream` 并传入 `AppState`。
+2. 扩展 `DebugConfig`：`event_stream_file: Option<String>`，用于 GUI 模式按需启用。
+3. 在 `main.rs` / `init` 中，根据运行模式创建 `EventStream` 并传入 `AppState`：
+   - GUI：读取配置，默认关闭；
+   - headless：默认开启，未显式指定路径时自动生成输出文件。
 4. 实现 `EventStream::emit()`，支持启用时 JSON Lines 写入、禁用时 no-op。
 5. 单元测试：启用时写入临时文件，验证格式与内容；禁用时验证无写入。
 
@@ -262,10 +307,12 @@ impl EventSink for EventStream { ... }
 
 ## 6. 验收标准
 
-- [ ] `DebugConfig` 新增 `event_stream_file: Option<String>`，默认 `None`，与现有配置反序列化兼容。
-- [ ] 当 `event_stream_file` 为 `Some(path)` 时，事件写入该路径；为 `None` 时，所有 emit 调用为 no-op。
+- [ ] `DebugConfig` 新增 `event_stream_file: Option<String>`，GUI 模式默认 `None`，与现有配置反序列化兼容。
+- [ ] GUI 模式下：当 `event_stream_file` 为 `Some(path)` 时写入该路径；为 `None` 时所有 emit 调用为 no-op。
+- [ ] headless 模式下：事件流默认启用；若未显式指定路径，系统会自动生成默认输出文件。
 - [ ] 至少覆盖以下事件类型：`script_tick`、`command_produced`、`command_executed`、`state_changed`（含 `waiting`）、`input_received`。
 - [ ] 输出格式为 JSON Lines，每行可被 `serde_json::from_str` 解析。
 - [ ] 禁用时，`cargo bench` 或等价性能测试显示无明显开销（可设定阈值，如 <0.5% 帧时间增加）。
 - [ ] `config_guide.md` 已更新，包含 `event_stream_file` 的说明与示例。
 - [ ] vn-runtime 保持无 IO 依赖，`EventStream` 与 emit 逻辑均在 host 内。
+- [ ] headless 快进模式下事件流正常写入，`ts_ms` 基于逻辑时间（不受快进影响）。
