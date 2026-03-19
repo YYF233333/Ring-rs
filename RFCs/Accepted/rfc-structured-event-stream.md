@@ -3,12 +3,20 @@
 ## 元信息
 
 - 编号：RFC-018
-- 状态：Proposed
+- 状态：Accepted
 - 作者：Ring-rs 开发组
 - 日期：2026-03-18（修订：2026-03-19）
+- 实现完成：2026-03-19
 - 相关范围：`vn-runtime`（engine、executor、state）、`host`（app、command_executor、input、audio、renderer）
 - 协同：RFC-016（输入录制与 AI 调试管线）、RFC-019（Headless 测试模式）
 - 前置：无
+
+### 实现摘要
+
+- `host/src/event_stream/mod.rs`：EngineEvent 枚举（ScriptTick、CommandProduced/Executed、StateChanged、InputReceived、TransitionUpdate、AudioEvent）；EventStream（Wall/Logical 时间源）、emit/emit_with_ts、flush。
+- AppState 持有 event_stream 字段，由 AppInit.event_stream_path 控制启用；GUI 通过 `--event-stream` 启用，headless 默认启用。
+- 埋点位置：run_script_tick（ScriptTick、CommandProduced/Executed、StateChanged）、handle_audio_command 前（AudioEvent）、tick_ingame_shared（TransitionUpdate）。
+- 输出格式：JSON Lines，每行 `{"ts_ms": N, "event": "...", "data": {...}}`。
 
 ---
 

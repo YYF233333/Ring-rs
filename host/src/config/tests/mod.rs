@@ -91,7 +91,7 @@ fn full_config_json(start_script_path: &str) -> String {
   "asset_source": "fs",
   "zip_path": null,
   "window": {{ "width": 1920, "height": 1080, "title": "Ring VN Engine", "fullscreen": false }},
-  "debug": {{ "script_check": true, "log_level": null, "log_file": null }},
+  "debug": {{ "script_check": true, "log_level": null, "log_file": null, "recording_buffer_size_mb": 8, "recording_output_dir": "recordings" }},
   "audio": {{ "master_volume": 1.0, "bgm_volume": 0.8, "sfx_volume": 1.0, "muted": false }},
   "resources": {{ "texture_cache_size_mb": 256 }}
 }}"#,

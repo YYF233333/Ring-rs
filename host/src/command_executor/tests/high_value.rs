@@ -305,5 +305,8 @@ fn test_show_character_same_position_with_partial_alpha_rebuilds_and_emits_show_
         &req.target,
         crate::renderer::effects::EffectTarget::CharacterShow { alias } if alias == "char1"
     ));
-    assert_eq!(req.effect.kind, crate::renderer::effects::EffectKind::Dissolve);
+    assert_eq!(
+        req.effect.kind,
+        crate::renderer::effects::EffectKind::Dissolve
+    );
 }

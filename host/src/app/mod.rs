@@ -34,6 +34,7 @@ pub use update::*;
 use self::app_mode::{NavigationStack, PlaybackMode, UserSettings};
 use self::persistent::PersistentStore;
 use self::state::HostState;
+use crate::event_stream::EventStream;
 use crate::extensions::ExtensionRegistry;
 use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
@@ -42,12 +43,21 @@ use crate::ui::{ScreenDefinitions, ToastManager, UiAssetCache, UiContext, UiLayo
 use crate::video::VideoPlayer;
 use crate::{AppConfig, AudioManager, CommandExecutor, InputManager};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use vn_runtime::VNRuntime;
 use vn_runtime::state::WaitingReason;
 
 /// 用户设置文件路径
 pub const USER_SETTINGS_PATH: &str = "user_settings.json";
+
+/// AppState 构造时的运行模式与初始化参数
+pub struct AppInit {
+    /// 是否以 headless 模式运行
+    pub headless: bool,
+    /// 事件流输出文件路径（None 则禁用）
+    pub event_stream_path: Option<PathBuf>,
+}
 
 // ─── 子系统容器 ──────────────────────────────────────────────────────────────────
 
@@ -164,12 +174,14 @@ pub struct AppState {
     pub loading_complete: bool,
     /// 视频播放器（cutscene）
     pub video_player: VideoPlayer,
+    /// 结构化事件流（AI 调试用）
+    pub event_stream: EventStream,
 }
 
 impl AppState {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(config: AppConfig, init_params: AppInit) -> Self {
         let resource_manager = init::create_resource_manager(&config);
-        let audio_manager = init::create_audio_manager(&config);
+        let audio_manager = init::create_audio_manager(&config, init_params.headless);
         let manifest = init::load_manifest(&config, &resource_manager);
         let save_manager = init::create_save_manager(&config);
         let persistent_store = init::load_persistent_store(&config);
@@ -180,13 +192,32 @@ impl AppState {
         let screen_defs =
             ScreenDefinitions::load(&resource_manager).unwrap_or_else(|e| panic!("{}", e));
 
-        // Dev Mode: 运行脚本检查
-        init::run_script_check(&config, &scripts, &resource_manager);
+        if !init_params.headless {
+            init::run_script_check(&config, &scripts, &resource_manager);
+        }
 
         let extension_registry = Arc::new(
             crate::extensions::build_builtin_registry(crate::extensions::ENGINE_API_VERSION)
                 .expect("内建扩展注册失败"),
         );
+
+        let event_stream = match init_params.event_stream_path {
+            Some(ref path) if init_params.headless => EventStream::new_logical(path)
+                .unwrap_or_else(|e| {
+                    tracing::warn!(error = %e, "Event stream creation failed, disabling");
+                    EventStream::disabled()
+                }),
+            Some(ref path) => EventStream::new(path).unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "Event stream creation failed, disabling");
+                EventStream::disabled()
+            }),
+            None => EventStream::disabled(),
+        };
+
+        let mut input_manager = InputManager::new();
+        if !init_params.headless && config.debug.recording_buffer_size_mb > 0 {
+            input_manager.enable_recording(config.debug.recording_buffer_size_mb);
+        }
 
         Self {
             core: CoreSystems {
@@ -219,7 +250,7 @@ impl AppState {
             extension_registry,
             config,
             host_state: HostState::new(),
-            input_manager: InputManager::new(),
+            input_manager,
             user_settings,
             save_manager,
             persistent_store,
@@ -228,6 +259,56 @@ impl AppState {
             play_start_time: std::time::Instant::now(),
             loading_complete: false,
             video_player: VideoPlayer::new(),
+            event_stream,
+        }
+    }
+}
+
+/// F8 导出录制缓冲区
+pub fn export_recording(app_state: &AppState) {
+    use crate::input::recording::{RecordingExporter, RecordingMeta};
+
+    let Some(snapshot) = app_state.input_manager.recording_snapshot() else {
+        tracing::debug!("录制缓冲区未启用，跳过导出");
+        return;
+    };
+
+    if snapshot.is_empty() {
+        tracing::debug!("录制缓冲区为空，跳过导出");
+        return;
+    }
+
+    let now = chrono::Local::now();
+    let filename = format!("recording_{}.jsonl", now.format("%Y%m%d_%H%M%S"));
+    let output_dir = &app_state.config.debug.recording_output_dir;
+    let path = std::path::Path::new(output_dir).join(&filename);
+
+    let duration_ms = snapshot
+        .back()
+        .map(|(t, _)| *t)
+        .unwrap_or(0)
+        .saturating_sub(snapshot.front().map(|(t, _)| *t).unwrap_or(0));
+
+    let meta = RecordingMeta {
+        version: 1,
+        logical_width: app_state.config.window.width,
+        logical_height: app_state.config.window.height,
+        engine_version: env!("CARGO_PKG_VERSION").to_string(),
+        recorded_at: now.to_rfc3339(),
+        duration_ms,
+        entry_script: app_state.config.start_script_path.clone(),
+    };
+
+    match RecordingExporter::export(&meta, snapshot, &path) {
+        Ok(()) => {
+            tracing::info!(
+                path = %path.display(),
+                events = snapshot.len(),
+                "录制已导出"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "录制导出失败");
         }
     }
 }

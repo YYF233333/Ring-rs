@@ -8,6 +8,7 @@ use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
 
 use crate::ExecuteResult;
+use crate::event_stream::{EngineEvent, command_summary, command_variant_name};
 use crate::resources::LogicalPath;
 use crate::video::VideoError;
 
@@ -148,6 +149,18 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                 "tick 返回命令"
             );
 
+            let node_index = app_state
+                .session
+                .vn_runtime
+                .as_ref()
+                .map(|r| r.state().position.node_index)
+                .unwrap_or(0);
+            app_state.event_stream.emit(EngineEvent::ScriptTick {
+                node_index,
+                commands_count: commands.len(),
+                waiting_reason: format!("{waiting:?}"),
+            });
+
             // 收集命令中的资源路径（用于预取统计）
             let prefetch_paths = collect_prefetch_paths(&commands);
             if !prefetch_paths.is_empty() {
@@ -157,6 +170,11 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
             // 执行所有命令
             for command in &commands {
                 debug!(command = ?command, "执行命令");
+
+                app_state.event_stream.emit(EngineEvent::CommandProduced {
+                    variant: command_variant_name(command),
+                    summary: command_summary(command),
+                });
 
                 // FullRestart：持久化 persistent_variables，清空会话，返回标题
                 if matches!(command, Command::FullRestart) {
@@ -219,16 +237,48 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                 );
 
                 // 处理音频命令
+                if let Some(ref audio_cmd) =
+                    app_state.core.command_executor.last_output.audio_command
+                {
+                    app_state.event_stream.emit(EngineEvent::AudioEvent {
+                        action: format!("{audio_cmd:?}")
+                            .split_once(['(', '{', ' '])
+                            .map(|(n, _)| n.to_string())
+                            .unwrap_or_else(|| format!("{audio_cmd:?}")),
+                        path: match audio_cmd {
+                            crate::command_executor::AudioCommand::PlayBgm { path, .. } => {
+                                Some(path.clone())
+                            }
+                            crate::command_executor::AudioCommand::PlaySfx { path } => {
+                                Some(path.clone())
+                            }
+                            _ => None,
+                        },
+                        volume: None,
+                    });
+                }
                 handle_audio_command(&mut app_state.core, &app_state.config);
 
-                // 检查执行结果
+                app_state.event_stream.emit(EngineEvent::CommandExecuted {
+                    variant: command_variant_name(command),
+                    result: format!("{result:?}"),
+                });
+
                 if let ExecuteResult::Error(e) = result {
                     error!(error = %e, "命令执行失败");
                 }
             }
 
             // 更新等待状态
-            app_state.session.waiting_reason = waiting.clone();
+            let old_waiting =
+                std::mem::replace(&mut app_state.session.waiting_reason, waiting.clone());
+            if std::mem::discriminant(&old_waiting) != std::mem::discriminant(&waiting) {
+                app_state.event_stream.emit(EngineEvent::StateChanged {
+                    field: "waiting_reason".into(),
+                    from: format!("{old_waiting:?}"),
+                    to: format!("{waiting:?}"),
+                });
+            }
 
             // 如果是选择等待，重置选择索引
             if let WaitingReason::WaitForChoice { choice_count } = &waiting {

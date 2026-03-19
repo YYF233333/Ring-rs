@@ -27,7 +27,7 @@ use tracing::debug;
 /// 音频字节通过 [`cache_audio_bytes`](AudioManager::cache_audio_bytes) 注入，
 /// 不直接持有文件系统路径或资源来源。
 pub struct AudioManager {
-    device_sink: MixerDeviceSink,
+    device_sink: Option<MixerDeviceSink>,
     bgm_sink: Option<Player>,
     current_bgm_path: Option<String>,
     bgm_volume: f32,
@@ -68,13 +68,13 @@ enum FadeState {
 }
 
 impl AudioManager {
-    /// 创建新的音频管理器
+    /// 创建新的音频管理器（连接真实音频设备）
     pub fn new() -> Result<Self, String> {
         let device_sink = DeviceSinkBuilder::open_default_sink()
             .map_err(|e| format!("Failed to initialize audio output: {}", e))?;
 
         Ok(Self {
-            device_sink,
+            device_sink: Some(device_sink),
             bgm_sink: None,
             current_bgm_path: None,
             bgm_volume: 1.0,
@@ -85,6 +85,22 @@ impl AudioManager {
             duck_multiplier: 1.0,
             duck_target: 1.0,
         })
+    }
+
+    /// 创建 headless 音频管理器（无真实设备，仅追踪状态）
+    pub fn new_headless() -> Self {
+        Self {
+            device_sink: None,
+            bgm_sink: None,
+            current_bgm_path: None,
+            bgm_volume: 1.0,
+            sfx_volume: 1.0,
+            muted: false,
+            fade_state: FadeState::None,
+            audio_cache: HashMap::new(),
+            duck_multiplier: 1.0,
+            duck_target: 1.0,
+        }
     }
 
     /// 预缓存音频字节数据。
@@ -198,17 +214,24 @@ impl AudioManager {
     ///
     /// 创建 `rodio::buffer::SamplesBuffer` 并通过 mixer 播放。
     /// 返回 `Player` 句柄，调用方可用于提前停止。
-    pub fn play_video_audio(&self, samples: Vec<f32>, channels: u16, sample_rate: u32) -> Player {
+    /// headless 模式下返回 `None`。
+    pub fn play_video_audio(
+        &self,
+        samples: Vec<f32>,
+        channels: u16,
+        sample_rate: u32,
+    ) -> Option<Player> {
+        let device_sink = self.device_sink.as_ref()?;
         use std::num::NonZero;
         let source = rodio::buffer::SamplesBuffer::new(
             NonZero::new(channels).expect("invariant: channels > 0"),
             NonZero::new(sample_rate).expect("invariant: sample_rate > 0"),
             samples,
         );
-        let player = Player::connect_new(self.device_sink.mixer());
+        let player = Player::connect_new(device_sink.mixer());
         player.set_volume(self.sfx_volume);
         player.append(source);
-        player
+        Some(player)
     }
 
     /// Duck 音量比例

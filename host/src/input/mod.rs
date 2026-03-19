@@ -10,12 +10,16 @@
 //! - 实现输入防抖和长按快进
 //! - 支持选择分支的键盘导航和鼠标交互
 
+pub mod recording;
+
 use std::collections::HashSet;
 
 use vn_runtime::input::RuntimeInput;
 use vn_runtime::state::WaitingReason;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{ElementState, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
+
+use self::recording::{InputEvent, MouseButtonName, RecordingBuffer};
 
 /// 输入防抖配置
 const CLICK_DEBOUNCE_SECONDS: f64 = 0.15;
@@ -54,6 +58,10 @@ pub struct InputManager {
     choice_rects: Vec<(f32, f32, f32, f32)>,
     hold_timer: f64,
     last_hold_trigger_time: f64,
+
+    // ── 录制子系统 ──────────────────────────────────────────────────
+    recording_buffer: Option<RecordingBuffer>,
+    elapsed_ms: u64,
 }
 
 #[allow(clippy::new_without_default)]
@@ -75,53 +83,92 @@ impl InputManager {
             choice_rects: Vec::new(),
             hold_timer: 0.0,
             last_hold_trigger_time: 0.0,
+            recording_buffer: None,
+            elapsed_ms: 0,
+        }
+    }
+
+    /// 启用后台录制缓冲区
+    pub fn enable_recording(&mut self, size_mb: u32) {
+        if size_mb > 0 {
+            self.recording_buffer = Some(RecordingBuffer::new(size_mb));
         }
     }
 
     // ── 事件接口 ─────────────────────────────────────────────────────
 
-    /// 消费 winit WindowEvent 更新内部按键/鼠标状态
+    /// 消费 winit WindowEvent 更新内部按键/鼠标状态，同时写入录制缓冲区
     pub fn process_event(&mut self, event: &WindowEvent) {
+        if let Some(input_event) = recording::convert_window_event(event, self.mouse_position) {
+            if let Some(ref mut buffer) = self.recording_buffer {
+                buffer.push(self.elapsed_ms, input_event.clone());
+            }
+            self.process_input_event(&input_event);
+            return;
+        }
+
+        // 处理 convert_window_event 未覆盖的事件（如 repeat 按键）
+        if let WindowEvent::KeyboardInput { event: key_ev, .. } = event
+            && let PhysicalKey::Code(key) = key_ev.physical_key
+            && key_ev.state == ElementState::Pressed
+            && key_ev.repeat
+        {
+            self.pressed_keys.insert(key);
+        }
+    }
+
+    /// 处理语义 InputEvent（录制/回放共用入口）
+    pub fn process_input_event(&mut self, event: &InputEvent) {
         match event {
-            WindowEvent::KeyboardInput { event, .. } => {
-                if let PhysicalKey::Code(key) = event.physical_key {
-                    match event.state {
-                        ElementState::Pressed if !event.repeat => {
-                            self.just_pressed_keys.insert(key);
-                            self.pressed_keys.insert(key);
-                        }
-                        ElementState::Pressed => {
-                            self.pressed_keys.insert(key);
-                        }
-                        ElementState::Released => {
-                            self.pressed_keys.remove(&key);
-                        }
-                    }
+            InputEvent::KeyPress { key } => {
+                if let Some(code) = key.to_key_code() {
+                    self.just_pressed_keys.insert(code);
+                    self.pressed_keys.insert(code);
                 }
             }
-            WindowEvent::MouseInput {
-                state,
-                button: MouseButton::Left,
+            InputEvent::KeyRelease { key } => {
+                if let Some(code) = key.to_key_code() {
+                    self.pressed_keys.remove(&code);
+                }
+            }
+            InputEvent::MousePress {
+                button: MouseButtonName::Left,
+                x,
+                y,
+            } => {
+                self.mouse_just_pressed = true;
+                self.mouse_pressed = true;
+                self.mouse_position = (*x, *y);
+            }
+            InputEvent::MouseRelease {
+                button: MouseButtonName::Left,
                 ..
-            } => match state {
-                ElementState::Pressed => {
-                    self.mouse_just_pressed = true;
-                    self.mouse_pressed = true;
-                }
-                ElementState::Released => {
-                    self.mouse_pressed = false;
-                }
-            },
-            WindowEvent::CursorMoved { position, .. } => {
-                self.mouse_position = (position.x as f32, position.y as f32);
+            } => {
+                self.mouse_pressed = false;
+            }
+            InputEvent::MouseMove { x, y } => {
+                self.mouse_position = (*x, *y);
             }
             _ => {}
         }
     }
 
+    /// 注入回放事件（headless 用）
+    pub fn inject_replay_events(&mut self, events: &[InputEvent]) {
+        for event in events {
+            self.process_input_event(event);
+        }
+    }
+
+    /// 返回录制缓冲区快照（导出用）
+    pub fn recording_snapshot(&self) -> Option<&std::collections::VecDeque<(u64, InputEvent)>> {
+        self.recording_buffer.as_ref().map(|b| b.snapshot())
+    }
+
     /// 帧开始时调用：推进内部时钟（不清除 per-frame 状态）
     pub fn begin_frame(&mut self, dt: f32) {
         self.current_time += dt as f64;
+        self.elapsed_ms += (dt * 1000.0) as u64;
     }
 
     /// 帧结束时调用：清除 per-frame 状态（just_pressed 等）

@@ -23,5 +23,7 @@ assets/*
 saves/
 dist/
 vendor/
+recordings/
+events.jsonl
 user_settings.json
 *.zip

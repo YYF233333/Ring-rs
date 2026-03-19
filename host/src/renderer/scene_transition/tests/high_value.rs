@@ -259,7 +259,12 @@ fn test_fade_transition_runs_through_ui_fade_in_and_completion() {
 #[test]
 fn test_rule_transition_reports_progress_and_blackout_completion() {
     let mut manager = SceneTransitionManager::new();
-    manager.start_rule(0.1, "rule_bg.png".to_string(), "mask.png".to_string(), false);
+    manager.start_rule(
+        0.1,
+        "rule_bg.png".to_string(),
+        "mask.png".to_string(),
+        false,
+    );
 
     manager.update(0.05);
     assert_eq!(manager.phase(), SceneTransitionPhase::FadeIn);
@@ -296,7 +301,12 @@ fn test_fade_transition_progresses_during_fade_in_and_ui_fade_in() {
 #[test]
 fn test_skip_current_phase_rule_does_not_force_mask_alpha_to_one() {
     let mut manager = SceneTransitionManager::new();
-    manager.start_rule(1.0, "rule_bg.png".to_string(), "mask.png".to_string(), false);
+    manager.start_rule(
+        1.0,
+        "rule_bg.png".to_string(),
+        "mask.png".to_string(),
+        false,
+    );
 
     manager.skip_current_phase();
 

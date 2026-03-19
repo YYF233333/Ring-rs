@@ -28,7 +28,10 @@ fn test_scene_transition_manager_creation() {
 fn test_animatable_scene_transition_trait_property_contract() {
     let state = AnimatableSceneTransition::new();
 
-    assert_eq!(state.property_list(), &["progress", "mask_alpha", "ui_alpha"]);
+    assert_eq!(
+        state.property_list(),
+        &["progress", "mask_alpha", "ui_alpha"]
+    );
     assert_eq!(state.get_property("progress"), Some(0.0));
     assert_eq!(state.get_property("mask_alpha"), Some(0.0));
     assert_eq!(state.get_property("ui_alpha"), Some(1.0));

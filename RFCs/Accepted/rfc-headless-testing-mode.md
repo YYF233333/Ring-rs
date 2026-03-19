@@ -3,11 +3,19 @@
 ## 元信息
 
 - 编号：RFC-019
-- 状态：Proposed
+- 状态：Accepted
 - 作者：Ring-rs 开发组
 - 日期：2026-03-18（修订：2026-03-19）
+- 实现完成：2026-03-19
 - 相关范围：`host::main`、`host::host_app`、`host::app`、`host::app::init`、`host::backend`、`host::rendering_types`、`host::audio`、`host::input`
 - 前置：RFC-008 (RenderBackend Trait)
+
+### 实现摘要
+
+- `host/src/headless.rs`：run() 入口；AppState::new(config, AppInit { headless: true, event_stream_path })；NullTextureFactory、虚拟屏幕尺寸；InputReplayer::load + drain_until 注入；headless_loop 固定 dt、update_ingame_common、tick_ingame_shared、run_script_tick；退出条件 replay-end/script-finished/max-frames/timeout-sec。
+- main.rs：--headless、--replay-input（必填）、--event-stream、--exit-on、--max-frames、--timeout-sec；headless 分支调用 headless::run。
+- AppInit 结构体统一构造参数；AudioManager::new_headless()、device_sink 为 Option；update_ingame_common、tick_ingame_shared 提取为 pub(crate) 供 headless 复用。
+- 使用说明见 `docs/headless_guide.md`。
 
 ---
 

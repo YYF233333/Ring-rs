@@ -51,7 +51,11 @@ pub fn create_resource_manager(config: &AppConfig) -> ResourceManager {
     }
 }
 
-pub fn create_audio_manager(_config: &AppConfig) -> Option<AudioManager> {
+pub fn create_audio_manager(_config: &AppConfig, headless: bool) -> Option<AudioManager> {
+    if headless {
+        info!("Audio system initialized (headless, no device)");
+        return Some(AudioManager::new_headless());
+    }
     match AudioManager::new() {
         Ok(am) => {
             info!("Audio system initialized");

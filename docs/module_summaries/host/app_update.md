@@ -8,13 +8,14 @@
 
 - 模块入口：`host/src/app/update/mod.rs`
 - 对外接口：`update(app_state)`、`handle_script_mode_input`、`run_script_tick`、`skip_all_active_effects`
+- `pub(crate)`：`update_ingame_common`、`tick_ingame_shared`（供 headless 等复用 InGame 共享逻辑）
 - 子模块：`modes`、`script`、`scene_transition`
 
 ## KeyFlow
 
 1. `update` 先更新 UI 上下文与 Toast。
 2. 根据 `navigation.current()` 分发到 `modes::*` 对应界面逻辑。
-3. InGame 范围内统一推进背景/场景过渡、动画系统、章节标记状态。
+3. InGame 下 `update_ingame` 内调 `update_ingame_common`（输入与推进模式分支）；`tick_ingame_shared` 统一推进背景/场景过渡、信号检测、动画系统、章节标记与淡出清理。
 4. 打字机更新：检测 `inline_wait`（定时递减 / 点击等待暂停）、按 `effective_text_speed` 推进字符、`no_wait` 完成后自动触发 Click。
 5. 最后统一更新音频管理器状态，保证各模式音频一致推进。
 
@@ -47,7 +48,7 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-19
 
 ## Owner
 

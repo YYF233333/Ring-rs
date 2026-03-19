@@ -8,7 +8,7 @@
 ## PublicSurface
 
 - 模块入口：`host/src/config/mod.rs`
-- 核心类型：`AppConfig`、`WindowConfig`、`DebugConfig`（含 `log_file` 文件日志开关）、`AudioConfig`、`ResourceConfig`、`AssetSourceType`（Fs/Zip）
+- 核心类型：`AppConfig`、`WindowConfig`、`DebugConfig`（含 `log_file`、`recording_buffer_size_mb`、`recording_output_dir`）、`AudioConfig`、`ResourceConfig`、`AssetSourceType`（Fs/Zip）
 - 关键接口：`AppConfig::load`（返回 `Result`）、`save`、`validate`
 - 错误类型：`ConfigError`（含 `LoadFailed`、`SerializationFailed`、`IoError`、`ValidationFailed`）
 
@@ -51,7 +51,7 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-19
 
 ## Owner
 

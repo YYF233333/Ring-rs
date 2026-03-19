@@ -92,6 +92,12 @@ pub struct DebugConfig {
 
     /// 日志输出文件路径（null 时输出到控制台）
     pub log_file: Option<String>,
+
+    /// 后台录制缓冲区大小上限（MB），0 则禁用录制
+    pub recording_buffer_size_mb: u32,
+
+    /// 录制导出目录
+    pub recording_output_dir: String,
 }
 
 /// 音频配置
@@ -167,6 +173,8 @@ impl Default for DebugConfig {
             } else {
                 Some("game.log".to_string())
             },
+            recording_buffer_size_mb: 8,
+            recording_output_dir: "recordings".to_string(),
         }
     }
 }

@@ -35,7 +35,10 @@ bytemuck = { version = "1", features = ["derive"] }
 ffmpeg-sidecar = { version = "2.4", default-features = false }
 
 # 时间格式化（存档保存时间展示）
-chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+chrono = { version = "0.4", default-features = false, features = ["alloc", "clock"] }
+
+# CLI 参数解析（headless 模式）
+clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3"

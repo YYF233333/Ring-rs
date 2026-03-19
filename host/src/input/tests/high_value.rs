@@ -245,7 +245,10 @@ fn test_wait_for_time_accepts_keyboard_click_and_respects_debounce_boundary() {
     manager.last_click_time = 0.0;
     manager.just_pressed_keys.insert(KeyCode::Enter);
     assert_eq!(
-        manager.update(&WaitingReason::WaitForTime(std::time::Duration::from_secs(1)), 0.016),
+        manager.update(
+            &WaitingReason::WaitForTime(std::time::Duration::from_secs(1)),
+            0.016
+        ),
         Some(RuntimeInput::Click)
     );
 
@@ -254,7 +257,10 @@ fn test_wait_for_time_accepts_keyboard_click_and_respects_debounce_boundary() {
     manager.last_click_time = 0.0;
     manager.just_pressed_keys.insert(KeyCode::Space);
     assert_eq!(
-        manager.update(&WaitingReason::WaitForTime(std::time::Duration::from_secs(1)), 0.016),
+        manager.update(
+            &WaitingReason::WaitForTime(std::time::Duration::from_secs(1)),
+            0.016
+        ),
         None,
         "时间等待态也应遵守点击防抖"
     );

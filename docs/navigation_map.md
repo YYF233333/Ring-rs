@@ -149,6 +149,8 @@
 - **音频系统**：`host/src/audio/`（mod.rs: 结构/音量/duck; playback.rs: BGM/SFX 播放与淡入淡出）
 - **UI 基础设施**：`host/src/ui/`（layout/asset_cache/nine_patch/image_slider/toast）。定制指南见 `docs/ui_customization.md`
 - **输入（winit 事件驱动）**：`host/src/input/`
+- **事件流（结构化调试输出）**：`host/src/event_stream/`（EngineEvent + EventStream）
+- **Headless 测试模式**：`host/src/headless.rs`（无窗口回放循环）
 - **配置/manifest/save manager**：`host/src/config/`、`host/src/manifest/`、`host/src/save_manager/`
 
 ### 常见改动：节奏标签 / 打字机行为

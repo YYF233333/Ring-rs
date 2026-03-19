@@ -8,17 +8,19 @@
 
 - 模块入口：`host/src/audio/mod.rs`（AudioManager struct、音量/duck/静音控制）
 - 播放逻辑：`host/src/audio/playback.rs`（play_bgm、stop_bgm、crossfade_bgm、play_sfx、update + 淡入淡出状态机）
-- 核心类型：`AudioManager`
-- 关键接口：`play_bgm`、`stop_bgm`、`crossfade_bgm`、`play_sfx`、`duck`、`unduck`、`update`
+- 核心类型：`AudioManager`（`device_sink` 为 `Option<MixerDeviceSink>`，headless 时为 `None`）
+- 构造：`new()` 连接真实设备；`new_headless()` 无设备、仅追踪状态
+- 关键接口：`play_bgm`、`stop_bgm`、`crossfade_bgm`、`play_sfx`、`play_video_audio`、`duck`、`unduck`、`update`
 
 ## KeyFlow
 
 1. 调用方通过 `ResourceManager.read_bytes()` 读取音频字节，然后 `AudioManager.cache_audio_bytes()` 预缓存。
-2. `play_bgm` / `play_sfx` 从 `audio_cache` 读取字节，通过 `Cursor` + `Decoder` 解码播放。
-3. BGM 路径进入独立播放器并维护 `FadeState`。
-4. 每帧 `update(dt)` 推进淡入淡出状态机与 duck multiplier 过渡。
-5. SFX 采用一次性播放器通道播放并自动释放。
-6. `duck()` / `unduck()` 通过独立的 `duck_multiplier` 平滑压低/恢复 BGM 音量。
+2. `play_bgm`：先更新状态（`current_bgm_path`、`fade_state`），再在有 `device_sink` 时执行 I/O，headless 下状态仍正确推进。
+3. `play_sfx`、`play_video_audio` 在无 `device_sink` 时提前返回（headless 安全）。
+4. BGM 路径进入独立播放器并维护 `FadeState`。
+5. 每帧 `update(dt)` 推进淡入淡出状态机与 duck multiplier 过渡。
+6. SFX 采用一次性播放器通道播放并自动释放。
+7. `duck()` / `unduck()` 通过独立的 `duck_multiplier` 平滑压低/恢复 BGM 音量。
 
 ## Dependencies
 
@@ -52,7 +54,7 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-19
 
 ## Owner
 

@@ -7,16 +7,21 @@
 ## PublicSurface
 
 - 模块入口：`host/src/app/mod.rs`
+- 初始化：`AppInit { headless, event_stream_path }`，`AppState::new(config, init_params: AppInit)`
 - 关键类型：`AppState`、`CoreSystems`、`UiSystems`、`GameSession`、`ExtensionRegistry`（已从 `CoreSystems` 提升至 `AppState` 顶层）
+- `AppState` 顶层字段含 `event_stream: EventStream`（结构化调试事件流）
 - 状态/配置子模块：`app_mode`（AppMode/NavigationStack/UserSettings）、`state`（HostState）、`persistent`（PersistentStore）
 - 关键子模块：`bootstrap`、`init`、`draw`、`save`、`script_loader`、`update`、`command_handlers`
+- 导出：`export_recording(app_state)`（F8 导出录制缓冲区为 JSON Lines）
+- 相关独立模块：`event_stream`（`host/src/event_stream/mod.rs`）、headless 入口（`host/src/headless.rs`）
 
 ## KeyFlow
 
-1. `AppState::new` 创建资源/音频/渲染/执行器并加载 manifest、脚本列表与用户设置。
+1. `AppState::new(config, init_params)` 根据 `AppInit.headless` 创建 headless 或带设备音频，根据 `event_stream_path` 初始化 `EventStream`；非 headless 且 `debug.recording_buffer_size_mb > 0` 时启用输入录制。
 2. `update` 路径推进输入、Runtime tick、命令执行和过渡/动画系统。
 3. `draw` 路径将当前 `RenderState` 交给 `Renderer` 输出画面。
-4. `save` 与 `script_loader` 提供会话存档与脚本加载辅助能力（阶段 0 新增 callScript 可达脚本预注册）。
+4. `export_recording(app_state)` 将输入管理器的录制快照导出到 `config.debug.recording_output_dir`。
+5. `save` 与 `script_loader` 提供会话存档与脚本加载辅助能力（阶段 0 新增 callScript 可达脚本预注册）。
 
 ## Dependencies
 
@@ -48,7 +53,7 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-19
 
 ## Owner
 

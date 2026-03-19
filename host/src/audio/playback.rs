@@ -16,14 +16,43 @@ impl AudioManager {
     /// - `path`: BGM 逻辑路径（相对于 assets_root，如 `bgm/music.mp3`）
     /// - `looping`: 是否循环
     /// - `fade_in`: 淡入时长（秒），None 表示立即播放
+    ///
+    /// 状态更新在前、I/O 在后：headless 下 `current_bgm_path` 和 `fade_state` 正确推进。
     pub fn play_bgm(&mut self, path: &str, looping: bool, fade_in: Option<f32>) {
         use crate::resources::normalize_logical_path;
 
+        // 1. 停止旧 BGM
         if let Some(ref sink) = self.bgm_sink {
             sink.stop();
         }
+        self.bgm_sink = None;
 
+        // 2. 状态更新（始终执行，headless 也走这里）
         let logical_path = normalize_logical_path(path);
+        self.current_bgm_path = Some(logical_path.clone());
+        if let Some(duration) = fade_in
+            && duration > 0.0
+        {
+            self.fade_state = FadeState::FadeIn {
+                target_volume: self.get_effective_bgm_volume(),
+                current_volume: 0.0,
+                rate: self.get_effective_bgm_volume() / duration,
+            };
+        } else {
+            self.fade_state = FadeState::None;
+        }
+
+        debug!(
+            path = %logical_path,
+            looping = looping,
+            fade_in = ?fade_in,
+            "Playing BGM"
+        );
+
+        // 3. I/O（仅在有 device_sink 时执行）
+        let Some(ref device_sink) = self.device_sink else {
+            return;
+        };
 
         let bytes = match self.audio_cache.get(&logical_path) {
             Some(b) => b.clone(),
@@ -44,7 +73,7 @@ impl AudioManager {
             }
         };
 
-        let sink = Player::connect_new(self.device_sink.mixer());
+        let sink = Player::connect_new(device_sink.mixer());
 
         let initial_volume = if fade_in.is_some() {
             0.0
@@ -60,24 +89,6 @@ impl AudioManager {
         }
 
         self.bgm_sink = Some(sink);
-        self.current_bgm_path = Some(logical_path.clone());
-
-        if let Some(duration) = fade_in
-            && duration > 0.0
-        {
-            self.fade_state = FadeState::FadeIn {
-                target_volume: self.get_effective_bgm_volume(),
-                current_volume: 0.0,
-                rate: self.get_effective_bgm_volume() / duration,
-            };
-        }
-
-        debug!(
-            path = %logical_path,
-            looping = looping,
-            fade_in = ?fade_in,
-            "Playing BGM"
-        );
     }
 
     /// 停止 BGM
@@ -141,6 +152,10 @@ impl AudioManager {
             return;
         }
 
+        let Some(ref device_sink) = self.device_sink else {
+            return;
+        };
+
         let logical_path = normalize_logical_path(path);
 
         let bytes = match self.audio_cache.get(&logical_path) {
@@ -162,7 +177,7 @@ impl AudioManager {
             }
         };
 
-        let sink = Player::connect_new(self.device_sink.mixer());
+        let sink = Player::connect_new(device_sink.mixer());
         sink.set_volume(self.sfx_volume);
         sink.append(source);
         sink.detach();

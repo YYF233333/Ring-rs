@@ -3,11 +3,20 @@
 ## 元信息
 
 - 编号：RFC-016
-- 状态：Proposed
+- 状态：Accepted
 - 作者：Ring-rs 开发组
 - 日期：2026-03-18（修订：2026-03-19）
+- 实现完成：2026-03-19
 - 相关范围：`host/src/input`、`host/src/app`、`host/src/config`、`vn-runtime` 输入消费边界
 - 前置：RFC-018（结构化事件流）、RFC-019（Headless 测试模式）
+
+### 实现摘要
+
+- `host/src/input/recording.rs`：InputEvent、RecordingMeta、RecordingBuffer、RecordingExporter、InputReplayer；WindowEvent→InputEvent 转换。
+- `InputManager`：recording_buffer、elapsed_ms；process_input_event、inject_replay_events、recording_snapshot、enable_recording。
+- `config.json` / DebugConfig：recording_buffer_size_mb、recording_output_dir。
+- F8 热键导出在 app 层（export_recording），录制文件为 JSON Lines，首行 Meta，后续 Event。
+- 使用说明见 `docs/headless_guide.md`。
 
 ---
 

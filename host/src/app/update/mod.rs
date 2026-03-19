@@ -8,6 +8,7 @@ mod modes;
 mod scene_transition;
 mod script;
 
+pub(crate) use modes::{tick_ingame_shared, update_ingame_common};
 pub use scene_transition::update_scene_transition;
 pub use script::{
     finish_cutscene, handle_script_mode_input, run_script_tick, skip_all_active_effects,

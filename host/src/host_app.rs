@@ -31,10 +31,12 @@ pub struct HostApp {
     pending_confirm: Option<ConfirmDialog>,
     /// 待保存缩略图的存档槽位（截图已请求，等待下一帧捕获）
     pending_thumbnail_slot: Option<u32>,
+    /// 事件流输出路径（CLI 传入）
+    event_stream_path: Option<std::path::PathBuf>,
 }
 
 impl HostApp {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(config: AppConfig, event_stream_path: Option<std::path::PathBuf>) -> Self {
         Self {
             backend: None,
             app_state: None,
@@ -45,6 +47,7 @@ impl HostApp {
             save_load_page: SaveLoadPage::default(),
             pending_confirm: None,
             pending_thumbnail_slot: None,
+            event_stream_path,
         }
     }
 }
@@ -68,7 +71,13 @@ impl ApplicationHandler for HostApp {
             .expect("window creation failed"),
         );
 
-        let mut app_state = AppState::new(self.config.clone());
+        let mut app_state = AppState::new(
+            self.config.clone(),
+            app::AppInit {
+                headless: false,
+                event_stream_path: self.event_stream_path.clone(),
+            },
+        );
         let font_path = LogicalPath::new(&app_state.config.default_font);
         let font_data = match app_state.core.resource_manager.read_bytes(&font_path) {
             Ok(data) => {
@@ -152,6 +161,10 @@ impl ApplicationHandler for HostApp {
 
                 let dt = backend.frame_delta().min(0.1);
                 app_state.input_manager.begin_frame(dt);
+
+                if app_state.input_manager.is_key_just_pressed(KeyCode::F8) {
+                    app::export_recording(app_state);
+                }
 
                 // 利用上一帧的 egui 布局：若指针在交互式控件上，抑制鼠标点击
                 // 以避免游戏推进与 UI 按钮动作同帧冲突

@@ -102,7 +102,14 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
         }
     }
 
-    // --- 通用：同步选择索引到 RenderState ---
+    update_ingame_common(app_state, dt);
+}
+
+/// InGame 下通用的打字机/选择框/no_wait 更新逻辑
+///
+/// 从 `update_ingame` 提取，供 GUI 和 headless 共用。
+pub(crate) fn update_ingame_common(app_state: &mut AppState, dt: f32) {
+    // 同步选择索引到 RenderState
     if let Some(ref mut choices) = app_state.core.render_state.choices {
         let choice_rects = app_state
             .core
@@ -113,7 +120,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
         choices.hovered_index = app_state.input_manager.hovered_index;
     }
 
-    // --- 通用：更新打字机效果（Skip 模式下打字机已被 skip_all_active_effects 完成） ---
+    // 更新打字机效果
     if let Some(ref dialogue) = app_state.core.render_state.dialogue
         && !dialogue.is_complete
     {
@@ -137,7 +144,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
         }
     }
 
-    // --- 通用：no_wait 自动推进 ---
+    // no_wait 自动推进
     if app_state.session.waiting_reason == WaitingReason::WaitForClick
         && app_state.core.render_state.is_dialogue_complete()
         && app_state
@@ -225,9 +232,21 @@ fn update_ingame_normal(app_state: &mut AppState, dt: f32) {
 ///
 /// 由 `update::update()` 在模式分发后、当 `current_mode.is_in_game()` 时调用。
 /// 不包含输入与推进模式分支，仅负责与时间推进相关的状态更新。
-pub(super) fn tick_ingame_shared(app_state: &mut AppState, dt: f32) {
+pub(crate) fn tick_ingame_shared(app_state: &mut AppState, dt: f32) {
+    let had_transition = app_state.core.renderer.transition.is_active();
+
     // 更新过渡效果
     app_state.core.renderer.update_transition(dt);
+
+    if had_transition && !app_state.core.renderer.transition.is_active() {
+        app_state
+            .event_stream
+            .emit(crate::event_stream::EngineEvent::TransitionUpdate {
+                transition_type: "dissolve".into(),
+                phase: "completed".into(),
+                progress: 1.0,
+            });
+    }
 
     // 更新场景过渡状态（基于动画系统）
     update_scene_transition(

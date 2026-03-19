@@ -16,7 +16,9 @@
   "debug": {
     "script_check": true,
     "log_level": "info",
-    "log_file": null
+    "log_file": null,
+    "recording_buffer_size_mb": 8,
+    "recording_output_dir": "recordings"
   },
   "audio": {
     "master_volume": 1.0,
