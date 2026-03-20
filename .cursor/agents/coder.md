@@ -1,7 +1,11 @@
 ---
 name: coder
-description: Code-specialized worker for writing implementations, tests, and refactors within a bounded scope. Use for test additions, mechanical code changes, and scoped implementations that don't require cross-module design decisions.
-model: gpt-5.3-codex
+model: inherit
+description: >
+  Strong code agent for non-trivial implementations requiring deep code
+  comprehension, design decisions, or cross-module coordination. Inherits the
+  parent's model for maximum capability. For simple/mechanical code tasks (test
+  additions, boilerplate, renames), use worker instead.
 ---
 
 You are a code-focused engineer working on a bounded chunk of a larger task.

@@ -1,0 +1,74 @@
+---
+description: "Subagent 选型路由 — 派发子任务时选择正确的 agent 类型和模型"
+alwaysApply: true
+---
+
+# Subagent 选型路由
+
+## 模型分档
+
+只有两档，没有中间地带：
+
+| 档位 | 模型 | 适用场景 |
+|------|------|----------|
+| **fast** | composer-2-fast | 机械/简单任务：模式匹配即可完成，范围明确，结果可验证 |
+| **strong** | inherit（继承父 agent） | 复杂任务：需要跨上下文推理、设计决策、深度代码理解 |
+
+## 自定义 agent（优先使用）
+
+| Agent | 模型 | 职责 | 示例 |
+|-------|------|------|------|
+| `worker` | composer-2-fast | 所有简单任务：代码变更、批量替换、文档修正、风格检查、补测试、盘点 | "为 parse_label 补边界测试"、"将所有 old_name 改为 new_name"、"更新文档中的链接" |
+| `coder` | inherit | 非简单实现：新特性、涉及设计决策、跨模块协调 | "实现 @voice 指令的 executor"、"定位 bug → 修复 → 补测试" |
+| `investigator` | inherit | 深度只读分析：根因定位、跨模块推理、正确性/安全性审查 | "为什么切换场景后音频未停止"、"审查新增的 parser 分支" |
+
+## 系统 agent
+
+| Agent | model 参数 | 实际模型 | 备注 |
+|-------|-----------|---------|------|
+| `explore` | 无效（忽略） | composer-1.5（固定，不可覆盖） | 模型较旧且慢，**尽量用 `worker` 替代** |
+| `shell` | `fast`（必传） | composer-2 | 仅用于需要运行命令的场景 |
+
+**规则**：
+- `explore` 的 `model` 参数被系统忽略，固定使用 composer-1.5。因此**优先用 `worker` 替代**（composer-2-fast，同成本更快更强）。仅当任务必须依赖 Cursor 内置语义搜索能力时才用 `explore`。
+- `shell` 调用时始终传 `model: fast`。
+
+## 选型查找表
+
+### 只读任务
+
+| 任务特征 | 选择 | 示例 |
+|----------|------|------|
+| 搜索文件/符号/定位代码 | `worker`（优先）或 `explore` | "Command 在哪些文件中被 match" |
+| 简单假设验证（单模块内） | `worker` | "确认 X 字段是否参与序列化" |
+| 风格 / 规范一致性检查 | `worker` | "检查新文件是否遵循命名规范" |
+| 深度根因分析 / 跨模块推理 | `investigator` | "为什么切换场景后音频未停止" |
+| 正确性 / 安全性审计 | `investigator` | "审查新增的 parser 分支" |
+
+### 写入任务
+
+| 任务特征 | 选择 | 示例 |
+|----------|------|------|
+| 机械批量操作（重命名/替换/盘点） | `worker` | "将所有 old_name 改为 new_name" |
+| 简单代码变更（补测试/加字段/样板） | `worker` | "为 parse_label 补边界测试" |
+| 文档修正（字段改名/链接修正） | `worker` | "更新文档中 FooBar → BazQux" |
+| 文档语义重写（模块摘要/规范） | `coder` | "重写 parser 模块摘要反映新架构" |
+| 非简单实现（新特性/设计决策） | `coder` | "实现 @voice 指令的 executor" |
+| 多步骤混合任务（搜索+修改+验证） | `coder` | "定位 bug → 修复 → 补测试" |
+| 运行命令 | `shell`+fast | "cargo test -p vn-runtime" |
+
+## 反模式
+
+| ❌ 错误做法 | ✅ 正确做法 | 原因 |
+|---|---|---|
+| 用 `investigator` 搜索符号位置 | 用 `worker` | investigator 继承强模型，纯搜索浪费 |
+| 用 `coder` 做批量替换 | 用 `worker` | 不涉及代码逻辑理解 |
+| 用 `worker` 做跨模块重构 | 用 `coder` | 需要深度代码理解 |
+| `shell` 未传 `model: fast` | `shell` 始终传 `model: fast` | 避免回退到昂贵默认模型 |
+| 能用 `worker` 时用 `explore` | 优先 `worker` | explore 固定 composer-1.5 不可覆盖，worker 用 composer-2-fast 更快更强 |
+
+## 决策流程
+
+1. **是否需要深度推理？** 是 → 只读用 `investigator`，需写入用 `coder`
+2. **否 → 是否需要运行命令？** 是 → `shell`+fast
+3. **否 → `worker`**

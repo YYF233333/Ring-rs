@@ -33,19 +33,19 @@ description: Breaks large, mostly independent work into parallel subagent batche
    - Keep one chunk per subagent; do not mix unrelated work.
 5. Choose the subagent role and model per chunk. Pre-defined subagent files live in `.cursor/agents/`. Pick from the table below or use the Task tool with an inline model choice.
 
-   | Role | Subagent file | Model | Cost tier | When to use |
-   |------|--------------|-------|-----------|-------------|
-   | Bulk/mechanical | `/bulk-worker` | Auto | ~0$ | Renames, grep, file inventory, fixture gen |
-   | Code changes | `/coder` | `gpt-5.3-codex` | ~$1.05/200K ctx | Test writing, scoped implementations, refactors |
-   | General-purpose | `/generalPurpose` | `gpt-5.4` | ~$1.25/200K ctx | Multi-step mixed tasks, research + changes, cross-cutting work |
-   | Review/audit | `/reviewer` | `gpt-5.4` (readonly) | ~$1.25/200K ctx | Code review, test audit, quality checks |
-   | Doc updates | `/doc-updater` | Auto | ~0$ | Summary refresh, doc-code sync |
-   | Investigation | `/investigator` | inherit (readonly) | parent rate | Debugging, hypothesis testing, root cause analysis |
+   | Role | Subagent | Model | When to use |
+   |------|----------|-------|-------------|
+   | Simple/mechanical | `worker` | composer-2-fast | Renames, grep-replace, file inventory, simple code changes, doc fixes, style checks, test additions |
+   | Complex implementation | `coder` | inherit | Non-trivial features, design decisions, cross-module refactors, semantic doc rewrites |
+   | Deep analysis (readonly) | `investigator` | inherit | Cross-module debugging, root cause analysis, correctness/safety audits |
+   | Search/locate | `explore` | composer-1.5（固定，不可覆盖） | 仅当需要 Cursor 内置语义搜索时使用；其余场景优先 `worker` |
+   | Run commands | `shell`+fast | composer-2 | Command execution only |
 
    Selection guidelines:
-   - Default to the cheapest role that can handle the chunk. Bulk > Coder > GeneralPurpose > Reviewer > Investigator.
-   - Use `readonly: true` roles (reviewer, investigator) for any chunk that should not modify files.
-   - When using the Task tool directly (without a subagent file), `model: "fast"` and omitting model (inherit parent) are the only options. Use subagent files for mid-tier models.
+   - **See `.cursor/rules/subagent-routing.mdc` for the full routing decision guide.**
+   - Two tiers only: **fast** (worker) for tasks completable by pattern matching, **strong** (coder/investigator with inherit) for tasks requiring reasoning.
+   - Use `readonly: true` for investigator and explore. Worker and coder can write files.
+   - Prefer `worker` over `explore` when possible — `explore` 固定使用 composer-1.5（不可覆盖），`worker` 使用 composer-2-fast 更快更强。
 6. Launch subagents in parallel.
    - Use one message with multiple Task tool calls to get true parallelism.
    - Give each subagent only the context it needs: relevant file paths, constraints, and expected output format. Do not dump the full repo map.
@@ -173,7 +173,7 @@ Concrete benefits:
 
 | Risk | Mitigation |
 |------|------------|
-| **Weak-model hallucination.** Subagents on a fast/cheap model may fabricate APIs, files, or test results. | For risky or reasoning-heavy chunks, inherit the parent model instead of using `fast`. Parent should spot-check high-severity findings. |
+| **Weak-model hallucination.** Subagents on a fast model may fabricate APIs, files, or test results. | Match model to cognitive complexity (see `.cursor/rules/subagent-routing.mdc`). For reasoning-heavy chunks, use `coder` or `investigator` (inherit). Parent should spot-check high-severity findings. |
 | **Hidden cross-chunk coupling.** Partition looks independent but chunks share an invariant. | Parent reviews wave results for conflicts before launching the next wave. If coupling is discovered, merge the affected chunks into one subagent. |
 | **Silent subagent failure.** A subagent reports "no findings" because it failed to understand the task, not because the chunk is clean. | Require every subagent to report the files it actually inspected and the behaviors it checked. A suspiciously thin report triggers parent re-inspection. |
 | **Accumulated drift across waves.** Later waves operate on stale assumptions if earlier waves changed shared code. | Between waves, parent checks compilation and test status, then propagates new constraints into the next wave's prompts. |
@@ -182,5 +182,6 @@ Concrete benefits:
 ## Additional Resources
 
 - See [examples.md](examples.md) for concrete partitioning patterns.
-- Pre-defined subagent files: `.cursor/agents/` (`bulk-worker`, `coder`, `generalPurpose`, `reviewer`, `doc-updater`, `investigator`).
-- Model pricing reference: https://cursor.com/docs/models-and-pricing
+- **Subagent routing guide:** `.cursor/rules/subagent-routing.mdc` — lookup table, `model:fast` criteria, anti-patterns.
+- Pre-defined subagent files: `.cursor/agents/` (`worker`, `coder`, `investigator`).
+- System agents (no config needed): `explore` (search/locate, 固定 composer-1.5 不可覆盖，优先用 `worker` 替代), `shell` (command execution, must pass `model: fast`), `browser-use` (browser testing).

@@ -22,9 +22,9 @@ Run as 2 waves (4 + 3).
 
 Subagent roles:
 
-- Subagents 1–6: `/reviewer` (gpt-5.4, readonly) for standard review slices. Each prompt starts with `Read .cursor/rules/domain-{id}.mdc for invariants.`
-- Subagent 7: `/bulk-worker` (Auto) for CI/workflow file review — mostly config, low reasoning needed.
-- Upgrade any chunk to `/investigator` (inherit parent, readonly) if it involves cross-module invariants or subtle behavior.
+- Subagents 1–6: `/investigator` (inherit, readonly) for standard review slices. Each prompt starts with `Read .cursor/rules/domain-{id}.mdc for invariants.`
+- Subagent 7: `/worker` (composer-2-fast) for CI/workflow file review — mostly config, low reasoning needed.
+- Upgrade any chunk to `/investigator` (inherit, readonly) if it involves cross-module invariants or subtle behavior.
 
 Expected parent-agent synthesis:
 
@@ -50,9 +50,8 @@ Good partition (aligned with domain partitions):
 
 Subagent roles:
 
-- Subagents 1–5: `/coder` (gpt-5.3-codex) for test writing and code changes.
-- Subagent 6: `/doc-updater` (gpt-5.4) for docs and test inventory.
-- Upgrade any chunk to inherit-parent if it requires reasoning about state machines, cross-module contracts, or flaky test diagnosis.
+- Subagents 1–5: `/worker` (composer-2-fast) for simple test additions; upgrade to `/coder` (inherit) if the chunk requires reasoning about state machines or cross-module contracts.
+- Subagent 6: `/worker` (composer-2-fast) for docs and test inventory.
 
 Expected parent-agent synthesis:
 
@@ -91,7 +90,8 @@ Good partition (aligned with domain partitions):
 
 Subagent roles:
 
-- All chunks: `/doc-updater` (Auto). Each subagent reads the current summary and the corresponding source, then rewrites the summary. Auto is sufficient for this mechanical diffing work and draws from the cheapest usage pool.
+- Simple summary updates: `/worker` (composer-2-fast). Mechanical diffing and text alignment.
+- Semantic rewrites after architecture changes: `/coder` (inherit). Needs to understand code intent to produce accurate summaries.
 
 Expected parent-agent synthesis:
 
@@ -149,9 +149,9 @@ Good partition (aligned with domain partitions):
 
 Subagent roles:
 
-- Most chunks: `/coder` (gpt-5.3-codex). Mechanical find-and-replace with compilation check.
-- The chunk owning the type definition (usually `script-lang`): `/coder` or inherit-parent if the rename involves structural changes beyond simple renaming.
-- The docs/CI chunk: `/bulk-worker` (Auto). Pure text replacement.
+- Most chunks: `/worker` (composer-2-fast). Mechanical find-and-replace with compilation check.
+- The chunk owning the type definition (usually `script-lang`): `/coder` (inherit) if the rename involves structural changes beyond simple renaming.
+- The docs/CI chunk: `/worker` (composer-2-fast). Pure text replacement.
 
 Expected parent-agent synthesis:
 
