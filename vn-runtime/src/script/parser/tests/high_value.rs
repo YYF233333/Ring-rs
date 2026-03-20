@@ -707,3 +707,580 @@ fn test_parse_wait() {
         err3
     );
 }
+
+#[test]
+fn test_extract_img_src() {
+    assert_eq!(
+        extract_img_src(r#"<img src="path/to/image.png" />"#),
+        Some("path/to/image.png")
+    );
+    assert_eq!(
+        extract_img_src(r#"<img   src='another.jpg' alt="test">"#),
+        Some("another.jpg")
+    );
+    assert_eq!(
+        extract_img_src(r#"show <img src="char.png" /> as test"#),
+        Some("char.png")
+    );
+    assert_eq!(extract_img_src("no image here"), None);
+}
+
+#[test]
+fn test_extract_img_src_requires_quoted_value() {
+    // 覆盖：quote_char 不是 ' 或 " 时返回 None
+    assert_eq!(extract_img_src(r#"<img src=path/to/image.png />"#), None);
+    assert_eq!(extract_img_src(r#"<img src= path/to/image.png />"#), None);
+}
+
+#[test]
+fn test_extract_audio_src_and_requires_quoted_value() {
+    assert_eq!(
+        extract_audio_src(r#"<audio src="bgm.mp3"></audio>"#),
+        Some("bgm.mp3")
+    );
+    // 覆盖：quote_char 校验失败分支
+    assert_eq!(extract_audio_src(r#"<audio src=bgm.mp3></audio>"#), None);
+}
+
+#[test]
+fn test_extract_audio_src_supports_single_quoted_value() {
+    assert_eq!(
+        extract_audio_src(r#"<audio src='voice.ogg'></audio>"#),
+        Some("voice.ogg")
+    );
+}
+
+#[test]
+fn test_extract_keyword_value() {
+    let line = "show <img src=\"char.png\" /> as royu at center with dissolve";
+    assert_eq!(extract_keyword_value(line, "as"), Some("royu"));
+    assert_eq!(extract_keyword_value(line, "at"), Some("center"));
+
+    let line2 = "show <img src=\"char.png\" /> as test_char at nearleft";
+    assert_eq!(extract_keyword_value(line2, "as"), Some("test_char"));
+    assert_eq!(extract_keyword_value(line2, "at"), Some("nearleft"));
+}
+
+#[test]
+fn test_extract_keyword_value_edge_cases() {
+    // 覆盖：value_start 越界 / value 为空
+    assert_eq!(
+        extract_keyword_value("show <img src=\"x\" /> as", "as"),
+        None
+    );
+
+    // 覆盖：">as " 模式（无空格紧跟 img 标签结束）
+    let line = "show <img src=\"char.png\" />as royu at center";
+    assert_eq!(extract_keyword_value(line, "as"), Some("royu"));
+}
+
+#[test]
+fn test_parse_transition() {
+    let t = parse_transition("dissolve").unwrap();
+    assert_eq!(t.name, "dissolve");
+    assert!(t.args.is_empty());
+
+    // 位置参数
+    let t = parse_transition("Dissolve(1.5)").unwrap();
+    assert_eq!(t.name, "Dissolve");
+    assert_eq!(t.args.len(), 1);
+    assert!(matches!(&t.args[0], (None, TransitionArg::Number(n)) if (*n - 1.5).abs() < 0.001));
+
+    let t = parse_transition("fade").unwrap();
+    assert_eq!(t.name, "fade");
+}
+
+#[test]
+fn test_parse_transition_invalid_format_returns_none() {
+    // 缺失右括号
+    assert_eq!(parse_transition("Dissolve(1.0"), None);
+    // 参数解析失败（混用位置/命名）-> parse_transition 内部吞掉 Err，返回 None
+    assert_eq!(parse_transition("Dissolve(1.0, duration: 2.0)"), None);
+}
+
+#[test]
+fn test_parse_transition_named_args() {
+    // 命名参数
+    let t = parse_transition("Dissolve(duration: 1.5)").unwrap();
+    assert_eq!(t.name, "Dissolve");
+    assert_eq!(t.args.len(), 1);
+    assert!(
+        matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 1.5).abs() < 0.001)
+    );
+    assert!(t.is_all_named());
+
+    // 多个命名参数
+    let t = parse_transition("Fade(duration: 2.0, reversed: true)").unwrap();
+    assert_eq!(t.name, "Fade");
+    assert_eq!(t.args.len(), 2);
+    assert!(
+        matches!(&t.args[0], (Some(key), TransitionArg::Number(n)) if key == "duration" && (*n - 2.0).abs() < 0.001)
+    );
+    assert!(matches!(&t.args[1], (Some(key), TransitionArg::Bool(true)) if key == "reversed"));
+
+    // 辅助方法测试
+    assert_eq!(t.get_duration(), Some(2.0));
+    assert_eq!(t.get_reversed(), Some(true));
+}
+
+#[test]
+fn test_parse_transition_positional_args() {
+    // 多个位置参数
+    let t = parse_transition("Effect(1.0, 0.5, true, \"test\")").unwrap();
+    assert_eq!(t.name, "Effect");
+    assert_eq!(t.args.len(), 4);
+    assert!(t.is_all_positional());
+    assert!(matches!(&t.args[0], (None, TransitionArg::Number(n)) if (*n - 1.0).abs() < 0.001));
+    assert!(matches!(&t.args[1], (None, TransitionArg::Number(n)) if (*n - 0.5).abs() < 0.001));
+    assert!(matches!(&t.args[2], (None, TransitionArg::Bool(true))));
+    assert!(matches!(&t.args[3], (None, TransitionArg::String(s)) if s == "test"));
+
+    // 辅助方法测试（位置参数回退）
+    assert_eq!(t.get_positional(0), Some(&TransitionArg::Number(1.0)));
+}
+
+#[test]
+fn test_parse_arg_value_unterminated_quotes_are_plain_strings() {
+    assert_eq!(
+        parse_arg_value("\"unterminated"),
+        TransitionArg::String("\"unterminated".to_string())
+    );
+    assert_eq!(parse_arg_value("'"), TransitionArg::String("'".to_string()));
+}
+
+#[test]
+fn test_is_table_separator() {
+    assert!(is_table_separator("| --- | --- |"));
+    assert!(is_table_separator("|---|---|"));
+    assert!(is_table_separator("| :---: | ---: |"));
+    assert!(!is_table_separator("| text | text |"));
+    assert!(!is_table_separator("not a table"));
+}
+
+#[test]
+fn test_is_table_separator_requires_both_edge_pipes() {
+    assert!(!is_table_separator("| --- | --- "));
+    assert!(!is_table_separator(" --- | --- |"));
+}
+
+#[test]
+fn test_extract_img_src_with_attributes() {
+    // 带 style 属性
+    assert_eq!(
+        extract_img_src(r#"<img src="bg1.png" style="zoom: 10%;" />"#),
+        Some("bg1.png")
+    );
+
+    // 带 alt 和 style 属性
+    assert_eq!(
+        extract_img_src(r#"<img src="assets/chara.png" alt="chara" style="zoom:25%;" />"#),
+        Some("assets/chara.png")
+    );
+}
+
+#[test]
+fn test_parse_simple_commands_case_insensitive() {
+    let cases = [
+        ("STOPBGM", ScriptNode::StopBgm),
+        ("StopBGM", ScriptNode::StopBgm),
+        ("RETURNFROMSCRIPT", ScriptNode::ReturnFromScript),
+        ("ReturnFromScript", ScriptNode::ReturnFromScript),
+        ("PAUSE", ScriptNode::Pause),
+    ];
+    for (input, expected) in cases {
+        let node = parse_single_node(input);
+        assert_eq!(node, expected, "input={input}");
+    }
+}
+
+// -------------------------------------------------------------------------
+// 从 mod.rs 迁出的高价值集成测试
+// -------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------
+// 辅助函数测试
+// -------------------------------------------------------------------------
+
+#[test]
+fn test_parse_dialogue_function() {
+    // 中文冒号和引号
+    let chinese_dialogue = "羽艾：\u{201C}你好\u{201D}";
+    let result = parse_dialogue(chinese_dialogue);
+    assert!(result.is_some());
+    let (speaker, content) = result.unwrap();
+    assert_eq!(speaker, Some("羽艾".to_string()));
+    assert_eq!(content, "你好");
+
+    // 英文冒号和引号
+    let result = parse_dialogue(r#"Test: "Hello""#);
+    assert!(result.is_some());
+    let (speaker, content) = result.unwrap();
+    assert_eq!(speaker, Some("Test".to_string()));
+    assert_eq!(content, "Hello");
+
+    // 旁白
+    let narration = "：\u{201C}这是旁白\u{201D}";
+    let result = parse_dialogue(narration);
+    assert!(result.is_some());
+    let (speaker, content) = result.unwrap();
+    assert_eq!(speaker, None);
+    assert_eq!(content, "这是旁白");
+}
+
+#[test]
+fn test_parse_dialogue() {
+    let mut parser = Parser::new();
+
+    // 中文冒号和引号
+    let chinese_dialogue = "羽艾：\u{201C}你好\u{201D}";
+    let script = parser.parse("test", chinese_dialogue).unwrap();
+    assert!(matches!(
+        &script.nodes[0],
+        ScriptNode::Dialogue { speaker: Some(s), content, .. } if s == "羽艾" && content == "你好"
+    ));
+
+    // 英文冒号和引号
+    let script = parser.parse("test", r#"Test: "Hello""#).unwrap();
+    assert!(matches!(
+        &script.nodes[0],
+        ScriptNode::Dialogue { speaker: Some(s), content, .. } if s == "Test" && content == "Hello"
+    ));
+
+    // 旁白
+    let narration = "：\u{201C}这是旁白\u{201D}";
+    let script = parser.parse("test", narration).unwrap();
+    assert!(matches!(
+        &script.nodes[0],
+        ScriptNode::Dialogue { speaker: None, content, .. } if content == "这是旁白"
+    ));
+}
+
+/// 测试 show 指令：
+/// - 完整格式（含 path/alias/position/transition）
+/// - 简化格式（无 path）
+/// - 空格容错（标准/无空格/多空格）
+/// - 无过渡效果
+/// - 行内代码 effect
+/// - 相对路径
+#[test]
+fn test_parse_show_character() {
+    let node = parse_single_node(
+        r#"show <img src="assets/char.png" /> as royu at center with Dissolve(1.5)"#,
+    );
+    assert!(matches!(
+        node,
+        ScriptNode::ShowCharacter { path: Some(path), alias, position: Position::Center, transition: Some(t) }
+        if path.as_str() == "assets/char.png" && alias == "royu" && t.name == "Dissolve"
+    ));
+
+    let node = parse_single_node(r#"show beifeng at left"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ShowCharacter { path: None, alias, position: Position::Left, transition: None }
+        if alias == "beifeng"
+    ));
+
+    let whitespace_cases = [
+        r#"show <img src="assets/bg2.jpg" /> as 红叶 at left"#,
+        r#"show<img src="assets/bg2.jpg" />as 红叶 at left"#,
+        r#"show   <img src="assets/bg2.jpg" />   as 红叶 at left"#,
+    ];
+    for input in whitespace_cases {
+        let node = parse_single_node(input);
+        assert!(
+            matches!(
+                node,
+                ScriptNode::ShowCharacter { alias, position: Position::Left, .. } if alias == "红叶"
+            ),
+            "input={input}"
+        );
+    }
+
+    let node = parse_single_node(r#"show <img src="assets/bg2.jpg" /> as 红叶 at left"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ShowCharacter { alias, path: Some(path), position: Position::Left, transition: None }
+        if alias == "红叶" && path.as_str() == "assets/bg2.jpg"
+    ));
+
+    let node = parse_single_node(
+        r#"show <img src="assets/bg2.jpg" /> as 红叶 at left with `Dissolve(2.0, 0.5)`"#,
+    );
+    if let ScriptNode::ShowCharacter {
+        transition: Some(t),
+        ..
+    } = node
+    {
+        assert!(t.name.contains("Dissolve") || t.name == "`Dissolve(2.0, 0.5)`");
+    } else {
+        panic!("Expected ShowCharacter with transition");
+    }
+
+    let node =
+        parse_single_node(r#"show <img src="../characters/北风.png" /> as beifeng at center"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ShowCharacter { path: Some(path), alias, .. }
+        if path.as_str() == "../characters/北风.png" && alias == "beifeng"
+    ));
+}
+
+/// 测试 hide 指令：
+/// - 带过渡效果（with fade）
+/// - 不带过渡效果
+#[test]
+fn test_parse_hide_character() {
+    let node = parse_single_node("hide royu with fade");
+    assert!(matches!(
+        node,
+        ScriptNode::HideCharacter { alias, transition: Some(t) }
+        if alias == "royu" && t.name == "fade"
+    ));
+
+    let node = parse_single_node("hide 红叶");
+    assert!(matches!(
+        node,
+        ScriptNode::HideCharacter { alias, transition: None } if alias == "红叶"
+    ));
+}
+
+/// 测试 changeBG 指令：
+/// - 标准解析（with dissolve）
+/// - 不带过渡效果
+/// - 空格容错（无空格/多空格）
+/// - 行内代码 effect
+/// - 相对路径
+#[test]
+fn test_parse_change_bg() {
+    let node = parse_single_node(r#"changeBG <img src="assets/bg.png" /> with dissolve"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ChangeBG { path, transition: Some(t) }
+        if path == "assets/bg.png" && t.name == "dissolve"
+    ));
+
+    let node = parse_single_node(r#"changeBG <img src="assets/bg2.jpg" />"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ChangeBG { path, transition: None } if path == "assets/bg2.jpg"
+    ));
+
+    let whitespace_cases = [
+        r#"changeBG<img src="assets/bg2.jpg" />with dissolve"#,
+        r#"changeBG   <img src="assets/bg2.jpg" />   with dissolve"#,
+    ];
+    for input in whitespace_cases {
+        let node = parse_single_node(input);
+        assert!(
+            matches!(
+                node,
+                ScriptNode::ChangeBG { path, transition: Some(t) }
+                if path == "assets/bg2.jpg" && t.name == "dissolve"
+            ),
+            "input={input}"
+        );
+    }
+
+    let node =
+        parse_single_node(r#"changeBG <img src="assets/bg2.jpg" /> with `Dissolve(2.0, 0.5)`"#);
+    if let ScriptNode::ChangeBG {
+        transition: Some(t),
+        ..
+    } = node
+    {
+        assert!(!t.name.is_empty());
+    } else {
+        panic!("Expected ChangeBG with transition");
+    }
+
+    let node = parse_single_node(r#"changeBG <img src="../backgrounds/bg.jpg" /> with `dissolve`"#);
+    assert!(matches!(
+        node,
+        ScriptNode::ChangeBG { path, .. } if path == "../backgrounds/bg.jpg"
+    ));
+}
+
+#[test]
+fn test_parse_full_script() {
+    let mut parser = Parser::new();
+    let text = r#"
+# Chapter 1
+
+changeBG <img src="assets/bg.png" /> with dissolve
+
+羽艾："你好"
+
+："这是旁白"
+
+show <img src="assets/char.png" /> as protagonist at center with dissolve
+
+**choice_point**
+
+| 选择 |        |
+| ---- | ------ |
+| 继续 | cont |
+| 结束 | end |
+
+**cont**
+
+羽艾："继续"
+
+**end**
+
+hide protagonist with fade
+"#;
+
+    let script = parser.parse("test", text).unwrap();
+
+    // 验证节点数量
+    assert!(script.len() >= 8);
+
+    // 验证标签索引
+    assert!(script.find_label("choice_point").is_some());
+    assert!(script.find_label("cont").is_some());
+    assert!(script.find_label("end").is_some());
+}
+
+//=========================================================================
+// audio 语法测试
+//=========================================================================
+
+/// 测试 audio/stopBGM 指令：
+/// - audio SFX（无 loop）
+/// - audio BGM（含 loop）
+/// - audio 相对路径
+/// - stopBGM
+#[test]
+fn test_parse_audio_commands() {
+    let play_audio_cases = [
+        (
+            r#"<audio src="sfx/ding.mp3"></audio>"#,
+            "sfx/ding.mp3",
+            false,
+        ),
+        (
+            r#"<audio src="bgm/Signal.mp3"></audio> loop"#,
+            "bgm/Signal.mp3",
+            true,
+        ),
+        (
+            r#"<audio src="../bgm/music.mp3"></audio> loop"#,
+            "../bgm/music.mp3",
+            true,
+        ),
+    ];
+
+    for (input, expected_path, expected_is_bgm) in play_audio_cases {
+        let node = parse_single_node(input);
+        assert!(
+            matches!(
+                node,
+                ScriptNode::PlayAudio { path, is_bgm }
+                    if path == expected_path && is_bgm == expected_is_bgm
+            ),
+            "input={input}"
+        );
+    }
+
+    let stop_node = parse_single_node("stopBGM");
+    assert!(matches!(stop_node, ScriptNode::StopBgm));
+}
+
+//=========================================================================
+// set 指令测试
+//=========================================================================
+
+// 测试 set 指令：
+// - 正常分支：String/Bool(true)/Bool(false)/Int
+// - 错误分支：缺少 `$`、缺少 `=`
+//=========================================================================
+// 条件分支测试
+//=========================================================================
+
+// 测试条件分支解析：
+// - `if ... endif`（单分支）
+// - `if/else`
+// - `if/elseif/else`
+// - 复合逻辑条件（And）
+// - 缺失 `endif` 报错
+//=========================================================================
+// 表达式解析测试
+//=========================================================================
+
+// 测试表达式解析：
+// - 比较：`==` / `!=`
+// - 字面量：`true` / `false`
+// - 逻辑：`not` / `and` / `or`
+// - 括号表达式
+// - 错误：空表达式、右括号缺失
+// =========================================================================
+// 阶段 24：TextBox / ClearCharacters 指令解析测试
+// =========================================================================
+
+///   测试 TextBox/ClearCharacters 指令：
+/// - 单行命令：textBoxHide/textBoxShow/textBoxClear/clearCharacters
+/// - 大小写不敏感：TEXTBOXHIDE/TextBoxShow/textboxclear/CLEARCHARACTERS
+#[test]
+fn test_parse_textbox_commands() {
+    let single_line_cases = [
+        ("textBoxHide", ScriptNode::TextBoxHide),
+        ("textBoxShow", ScriptNode::TextBoxShow),
+        ("textBoxClear", ScriptNode::TextBoxClear),
+        ("clearCharacters", ScriptNode::ClearCharacters),
+    ];
+
+    for (input, expected) in single_line_cases {
+        let node = parse_single_node(input);
+        assert_eq!(node, expected, "input={input}");
+    }
+
+    let script = parse_ok("TEXTBOXHIDE\nTextBoxShow\ntextboxclear\nCLEARCHARACTERS");
+    assert_eq!(script.nodes.len(), 4);
+    let expected = [
+        ScriptNode::TextBoxHide,
+        ScriptNode::TextBoxShow,
+        ScriptNode::TextBoxClear,
+        ScriptNode::ClearCharacters,
+    ];
+    for (index, expected_node) in expected.into_iter().enumerate() {
+        assert_eq!(script.nodes[index], expected_node);
+    }
+}
+
+// =========================================================================
+// phase1: nested conditional blocks
+// =========================================================================
+
+#[test]
+fn test_parse_nested_conditionals() {
+    let input = r#"
+if $outer == true
+  if $inner == true
+    ："内层"
+  endif
+  ："外层"
+endif
+"#;
+    let node = parse_single_node(input);
+    if let ScriptNode::Conditional { branches } = node {
+        assert_eq!(branches.len(), 1);
+        assert!(!branches[0].body.is_empty());
+    } else {
+        panic!("Expected Conditional node");
+    }
+}
+
+// =========================================================================
+// cutscene 测试
+// =========================================================================
+
+#[test]
+fn test_parse_cutscene() {
+    let node = parse_single_node(r#"cutscene "audio/ending_HVC_bgm.webm""#);
+    match node {
+        ScriptNode::Cutscene { path } => {
+            assert_eq!(path, "audio/ending_HVC_bgm.webm");
+        }
+        other => panic!("Expected Cutscene, got: {:?}", other),
+    }
+}

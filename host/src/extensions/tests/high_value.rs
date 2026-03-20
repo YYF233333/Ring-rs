@@ -665,3 +665,9 @@ fn builtin_scene_shake_source_is_registered() {
         Some("builtin.effect.scene")
     );
 }
+
+#[test]
+fn registry_source_of_returns_none_for_unknown() {
+    let registry = ExtensionRegistry::new("1.0.0");
+    assert_eq!(registry.source_of("effect.unknown"), None);
+}

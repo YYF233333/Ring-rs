@@ -261,21 +261,29 @@ mod tests {
 
     #[test]
     fn ease_out_elastic_overshoots() {
-        let v = EasingFunction::EaseOutElastic.apply(0.3);
-        assert!(v > 0.0);
+        let e = EasingFunction::EaseOutElastic;
+        let has_overshoot = (1..=9).map(|i| i as f32 * 0.1).any(|t| e.apply(t) > 1.0);
+        assert!(
+            has_overshoot,
+            "EaseOutElastic should overshoot 1.0 for some t in (0,1)"
+        );
     }
 
     #[test]
     fn ease_out_bounce_segments() {
         let e = EasingFunction::EaseOutBounce;
-        let v1 = e.apply(0.2);
-        let v2 = e.apply(0.5);
-        let v3 = e.apply(0.8);
-        let v4 = e.apply(0.95);
-        assert!(v1 > 0.0);
-        assert!(v2 > 0.0);
-        assert!(v3 > 0.0);
-        assert!(v4 > 0.0);
+        assert!(
+            (e.apply(1.0) - 1.0).abs() < 0.001,
+            "bounce(1.0) should be 1.0"
+        );
+
+        let samples: Vec<f32> = (1..=19).map(|i| i as f32 * 0.05).collect();
+        let values: Vec<f32> = samples.iter().map(|&t| e.apply(t)).collect();
+        let has_non_monotone = values.windows(2).any(|w| w[0] > w[1]);
+        assert!(
+            has_non_monotone,
+            "EaseOutBounce should be non-monotonic (bouncing)"
+        );
     }
 
     #[test]

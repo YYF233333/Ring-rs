@@ -353,8 +353,21 @@ mod tests {
 
     #[test]
     fn test_history_event_constructors_use_current_timestamp() {
-        assert!(HistoryEvent::dialogue(None, "内容".to_string()).timestamp() > 1);
-        assert!(HistoryEvent::chapter_mark("第一章".to_string()).timestamp() > 1);
+        let before = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let ts_dialogue = HistoryEvent::dialogue(None, "内容".to_string()).timestamp();
+        let ts_chapter = HistoryEvent::chapter_mark("第一章".to_string()).timestamp();
+
+        let after = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        assert!(before <= ts_dialogue && ts_dialogue <= after);
+        assert!(before <= ts_chapter && ts_chapter <= after);
     }
 
     #[test]

@@ -278,3 +278,14 @@ fn test_materialize_to_fs_zip_source() {
     assert_eq!(std::fs::read(&out_path).unwrap(), b"fake-ogg");
     assert!(cleanup.is_some());
 }
+
+#[test]
+fn test_logical_path_as_cache_key() {
+    let manager = ResourceManager::new("assets", 256);
+
+    let p = LogicalPath::new("bg.png");
+    assert!(!manager.has_texture(&p));
+
+    let p2 = LogicalPath::new("assets/bg.png");
+    assert_eq!(p, p2);
+}

@@ -304,3 +304,27 @@ fn test_choice_hover_rejects_points_past_right_and_bottom_edges() {
     assert!(!manager.handle_choice_hover(&rects));
     assert!(manager.choice.hovered_index.is_none());
 }
+
+#[test]
+fn test_suppress_mouse_click() {
+    let mut manager = InputManager::new();
+    manager.state.mouse_just_pressed = true;
+    assert!(manager.is_mouse_just_pressed());
+    manager.suppress_mouse_click();
+    assert!(!manager.is_mouse_just_pressed());
+}
+
+#[test]
+fn test_is_clicking_with_mouse() {
+    let mut manager = InputManager::new();
+    assert!(!manager.is_clicking());
+    manager.state.mouse_just_pressed = true;
+    assert!(manager.is_clicking());
+}
+
+#[test]
+fn test_is_clicking_with_space() {
+    let mut manager = InputManager::new();
+    manager.state.just_pressed_keys.insert(KeyCode::Space);
+    assert!(manager.is_clicking());
+}

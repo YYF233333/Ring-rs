@@ -52,4 +52,3 @@ impl ResourceSource for InMemorySource {
     }
 }
 mod high_value;
-mod low_value;

@@ -84,3 +84,30 @@ fn test_transition_get_duration_and_reversed() {
     assert_eq!(t.get_duration(), Some(1.0));
     assert_eq!(t.get_reversed(), Some(false));
 }
+
+#[test]
+fn test_command_serialization() {
+    let cmd = Command::ShowText {
+        speaker: Some("羽艾".to_string()),
+        content: "你好".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
+    };
+
+    let json = serde_json::to_string(&cmd).unwrap();
+    let deserialized: Command = serde_json::from_str(&json).unwrap();
+    assert_eq!(cmd, deserialized);
+}
+
+#[test]
+fn test_transition_serialization_with_named_args() {
+    let t = Transition::with_named_args(
+        "Dissolve",
+        vec![(Some("duration".to_string()), TransitionArg::Number(1.5))],
+    );
+
+    let json = serde_json::to_string(&t).unwrap();
+    let deserialized: Transition = serde_json::from_str(&json).unwrap();
+    assert_eq!(t, deserialized);
+    assert_eq!(deserialized.get_duration(), Some(1.5));
+}

@@ -248,3 +248,35 @@ goto **end**
     assert!(targets.contains("target_a"));
     assert_eq!(targets.len(), 2);
 }
+
+#[test]
+fn test_diagnostic_result_filter() {
+    let mut result = DiagnosticResult::new();
+    result.push(Diagnostic::error("test", "错误1"));
+    result.push(Diagnostic::warn("test", "警告1"));
+    result.push(Diagnostic::info("test", "信息1"));
+
+    let errors = result.filter_by_level(DiagnosticLevel::Error);
+    assert_eq!(errors.len(), 1);
+
+    let warns_and_errors = result.filter_by_level(DiagnosticLevel::Warn);
+    assert_eq!(warns_and_errors.len(), 2);
+
+    let all = result.filter_by_level(DiagnosticLevel::Info);
+    assert_eq!(all.len(), 3);
+}
+
+#[test]
+fn test_diagnostic_result_merge() {
+    let mut result1 = DiagnosticResult::new();
+    result1.push(Diagnostic::error("a.md", "err1"));
+
+    let mut result2 = DiagnosticResult::new();
+    result2.push(Diagnostic::warn("b.md", "warn1"));
+    result2.push(Diagnostic::info("b.md", "info1"));
+
+    result1.merge(result2);
+    assert_eq!(result1.diagnostics.len(), 3);
+    assert_eq!(result1.error_count(), 1);
+    assert_eq!(result1.warn_count(), 1);
+}

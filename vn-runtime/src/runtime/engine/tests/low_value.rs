@@ -1,107 +1,76 @@
 use super::*;
 
 #[test]
-fn test_runtime_creation() {
-    let script = create_test_script();
-    let runtime = VNRuntime::new(script);
-
-    assert_eq!(runtime.state().position.node_index, 0);
-    assert!(!runtime.state().waiting.is_waiting());
-}
-
-#[test]
-fn test_tick_accepts_input_when_not_waiting_and_waiting_getter() {
-    let script = create_test_script();
-    let mut runtime = VNRuntime::new(script);
-
-    // 不在等待状态时传入 Click，应被忽略并正常推进（覆盖 handle_input 的 (None, _) 分支）
-    let (commands, waiting) = runtime.tick(Some(RuntimeInput::Click)).unwrap();
-    assert_eq!(commands.len(), 1);
-    assert!(matches!(waiting, WaitingReason::WaitForClick));
-
-    // waiting() getter 覆盖
-    assert!(matches!(runtime.waiting(), WaitingReason::WaitForClick));
-}
-
-#[test]
-fn test_runtime_restore_ctor() {
-    let script = create_test_script();
-    let mut runtime = VNRuntime::new(script.clone());
-
-    // 执行一步，产生等待
-    runtime.tick(None).unwrap();
-
-    let saved_state = runtime.state().clone();
-    let saved_history = runtime.history().clone();
-
-    let restored = VNRuntime::restore(script, saved_state.clone(), saved_history.clone());
-    assert_eq!(
-        restored.state().position.node_index,
-        saved_state.position.node_index
-    );
-    assert_eq!(restored.history().len(), saved_history.len());
-}
-
-#[test]
-fn test_runtime_find_label_delegates_to_current_script() {
+fn test_record_history_for_background_and_bgm() {
     let script = Script::new(
         "test",
         vec![
-            ScriptNode::Label {
-                name: "first".to_string(),
+            ScriptNode::ChangeBG {
+                path: "bg.png".to_string(),
+                transition: None,
             },
-            ScriptNode::Label {
-                name: "second".to_string(),
+            ScriptNode::PlayAudio {
+                path: "bgm.mp3".to_string(),
+                is_bgm: true,
             },
-            ScriptNode::Dialogue {
-                speaker: None,
-                content: "tail".to_string(),
-                inline_effects: vec![],
-                no_wait: false,
-            },
+            ScriptNode::StopBgm,
         ],
         "",
     );
-    let runtime = VNRuntime::new(script);
+    let mut runtime = VNRuntime::new(script);
 
-    assert_eq!(runtime.find_label("first"), Some(0));
-    assert_eq!(runtime.find_label("second"), Some(1));
-    assert_eq!(runtime.find_label("missing"), None);
+    let (_commands, waiting) = runtime.tick(None).unwrap();
+    assert!(matches!(waiting, WaitingReason::None));
+
+    // BackgroundChange + BgmChange(Some) + BgmChange(None)
+    assert_eq!(runtime.history().len(), 3);
+    assert!(matches!(
+        runtime.history().events()[0],
+        HistoryEvent::BackgroundChange { .. }
+    ));
+    assert!(matches!(
+        runtime.history().events()[1],
+        HistoryEvent::BgmChange { path: Some(_), .. }
+    ));
+    assert!(matches!(
+        runtime.history().events()[2],
+        HistoryEvent::BgmChange { path: None, .. }
+    ));
 }
 
 #[test]
-fn test_runtime_is_finished() {
+fn test_record_history_for_chapter_mark() {
     let script = Script::new(
         "test",
-        vec![ScriptNode::Dialogue {
-            speaker: None,
-            content: "only line".to_string(),
-            inline_effects: vec![],
-            no_wait: false,
+        vec![ScriptNode::Chapter {
+            title: "Chapter 1".to_string(),
+            level: 1,
         }],
         "",
     );
     let mut runtime = VNRuntime::new(script);
-    assert!(!runtime.is_finished());
+    runtime.tick(None).unwrap();
 
-    let (_cmds, _waiting) = runtime.tick(None).unwrap();
-    assert!(!runtime.is_finished());
-
-    runtime.tick(Some(RuntimeInput::Click)).unwrap();
-    assert!(runtime.is_finished());
+    assert!(
+        runtime
+            .history()
+            .events()
+            .iter()
+            .any(|e| matches!(e, HistoryEvent::ChapterMark { .. }))
+    );
 }
 
 #[test]
-fn test_runtime_restore_history() {
-    let script = create_test_script();
+fn test_record_history_for_stop_bgm() {
+    let script = Script::new("test", vec![ScriptNode::StopBgm], "");
     let mut runtime = VNRuntime::new(script);
+    runtime.tick(None).unwrap();
 
-    let mut history = History::new();
-    history.push(HistoryEvent::dialogue(
-        Some("A".to_string()),
-        "hi".to_string(),
-    ));
-
-    runtime.restore_history(history);
-    assert_eq!(runtime.history().events().len(), 1);
+    assert!(
+        runtime
+            .history()
+            .events()
+            .iter()
+            .any(|e| matches!(e, HistoryEvent::BgmChange { path: None, .. }))
+    );
 }

@@ -1,5 +1,6 @@
 use super::*;
 use std::fs;
+use std::path::PathBuf;
 
 #[test]
 fn test_config_validation_invalid_master_volume() {
@@ -195,4 +196,32 @@ fn test_validate_zip_ok() {
         ..Default::default()
     };
     assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_manifest_full_path() {
+    let config = AppConfig {
+        asset_source: AssetSourceType::Fs,
+        assets_root: PathBuf::from("a"),
+        manifest_path: "b/manifest.json".to_string(),
+        ..Default::default()
+    };
+    assert_eq!(
+        config.manifest_full_path(),
+        PathBuf::from("a").join("b/manifest.json")
+    );
+}
+
+#[test]
+fn test_start_script_full_path() {
+    let config = AppConfig {
+        asset_source: AssetSourceType::Fs,
+        assets_root: PathBuf::from("assets_root"),
+        start_script_path: "scripts/main.md".to_string(),
+        ..Default::default()
+    };
+    assert_eq!(
+        config.start_script_full_path(),
+        PathBuf::from("assets_root").join("scripts/main.md")
+    );
 }

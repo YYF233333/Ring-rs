@@ -343,3 +343,264 @@ fn test_execute_cutscene_resolves_path() {
         Command::Cutscene { path } if path == "scripts/winter/video/ending.webm"
     ));
 }
+
+#[test]
+fn test_execute_label_no_command() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    let node = ScriptNode::Label {
+        name: "test".to_string(),
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+
+    assert!(result.commands.is_empty());
+    assert!(result.waiting.is_none());
+}
+
+#[test]
+fn test_execute_stop_bgm() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    let node = ScriptNode::StopBgm;
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::StopBgm { fade_out: Some(_) }
+    ));
+}
+
+#[test]
+fn test_execute_full_restart_emits_command() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::FullRestart;
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands, vec![Command::FullRestart]);
+    assert!(result.waiting.is_none());
+    assert!(result.jump_to.is_none());
+    assert!(result.script_control.is_none());
+}
+
+#[test]
+fn test_execute_dialogue() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    let node = ScriptNode::Dialogue {
+        speaker: Some("Test".to_string()),
+        content: "Hello".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::ShowText { speaker: Some(s), content, .. }
+        if s == "Test" && content == "Hello"
+    ));
+    assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
+}
+
+#[test]
+fn test_execute_show_character() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    let node = ScriptNode::ShowCharacter {
+        path: Some("char.png".to_string()),
+        alias: "test_char".to_string(),
+        position: Position::Center,
+        transition: None,
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+
+    assert_eq!(result.commands.len(), 1);
+    assert!(result.waiting.is_none());
+
+    // 验证状态更新
+    assert!(state.visible_characters.contains_key("test_char"));
+}
+
+#[test]
+fn test_execute_hide_character_updates_state() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    state.visible_characters.insert(
+        "alice".to_string(),
+        ("alice.png".to_string(), Position::Center),
+    );
+
+    let node = ScriptNode::HideCharacter {
+        alias: "alice".to_string(),
+        transition: None,
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert!(matches!(
+        &result.commands[0],
+        Command::HideCharacter { alias, .. } if alias == "alice"
+    ));
+    assert!(!state.visible_characters.contains_key("alice"));
+}
+
+#[test]
+fn test_execute_choice() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    let node = ScriptNode::Choice {
+        style: Some("横排".to_string()),
+        options: vec![
+            ChoiceOption {
+                text: "选项A".to_string(),
+                target_label: "label_a".to_string(),
+            },
+            ChoiceOption {
+                text: "选项B".to_string(),
+                target_label: "label_b".to_string(),
+            },
+        ],
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::PresentChoices { choices, .. } if choices.len() == 2
+    ));
+    assert!(matches!(
+        result.waiting,
+        Some(WaitingReason::WaitForChoice { choice_count: 2 })
+    ));
+}
+
+#[test]
+fn test_execute_goto() {
+    let (mut executor, mut state) = test_env();
+    let script = Script::new(
+        "test",
+        vec![
+            ScriptNode::Label {
+                name: "start".to_string(),
+            },
+            ScriptNode::Dialogue {
+                speaker: None,
+                content: "Hello".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
+            },
+            ScriptNode::Label {
+                name: "end".to_string(),
+            },
+        ],
+        "",
+    );
+
+    let node = ScriptNode::Goto {
+        target_label: "end".to_string(),
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+
+    assert!(result.commands.is_empty());
+    assert!(result.waiting.is_none());
+    assert_eq!(result.jump_to, Some(2)); // 跳转到 "end" 标签
+}
+
+#[test]
+fn test_execute_goto_label_not_found() {
+    let (mut executor, mut state, script) = test_ctx("");
+
+    let node = ScriptNode::Goto {
+        target_label: "missing".to_string(),
+    };
+
+    let result = executor.execute(&node, &mut state, &script);
+    assert!(matches!(
+        result,
+        Err(RuntimeError::LabelNotFound { label }) if label == "missing"
+    ));
+}
+
+#[test]
+fn test_execute_conditional_true_branch() {
+    use crate::script::Expr;
+    use crate::script::ast::ConditionalBranch;
+    use crate::state::VarValue;
+
+    let (mut executor, mut state) = test_env();
+    state.set_var("flag", VarValue::Bool(true));
+
+    let script = Script::new("test", vec![], "");
+
+    let node = ScriptNode::Conditional {
+        branches: vec![ConditionalBranch {
+            condition: Some(Expr::var("flag")),
+            body: vec![ScriptNode::Dialogue {
+                speaker: None,
+                content: "条件为真".to_string(),
+                inline_effects: vec![],
+                no_wait: false,
+            }],
+        }],
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+
+    // 应该执行条件为真的分支体
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::ShowText { content, .. } if content == "条件为真"
+    ));
+    assert!(matches!(result.waiting, Some(WaitingReason::WaitForClick)));
+}
+
+#[test]
+fn test_execute_conditional_else_branch() {
+    use crate::script::Expr;
+    use crate::script::ast::ConditionalBranch;
+    use crate::state::VarValue;
+
+    let (mut executor, mut state) = test_env();
+    state.set_var("flag", VarValue::Bool(false));
+
+    let script = Script::new("test", vec![], "");
+
+    let node = ScriptNode::Conditional {
+        branches: vec![
+            ConditionalBranch {
+                condition: Some(Expr::var("flag")),
+                body: vec![ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "条件为真".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
+                }],
+            },
+            ConditionalBranch {
+                condition: None, // else 分支
+                body: vec![ScriptNode::Dialogue {
+                    speaker: None,
+                    content: "条件为假".to_string(),
+                    inline_effects: vec![],
+                    no_wait: false,
+                }],
+            },
+        ],
+    };
+
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+
+    // 应该执行 else 分支
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::ShowText { content, .. } if content == "条件为假"
+    ));
+}

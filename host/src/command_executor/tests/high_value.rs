@@ -71,6 +71,33 @@ fn test_execute_show_character_reposition_with_move_triggers_animation() {
     assert_eq!(char_sprite.position, Position::Right);
 }
 
+// ============ 背景无过渡 / FullRestart（自 low_value 迁入）===========
+
+#[test]
+fn test_show_background_no_transition_no_effect() {
+    let mut ctx = TestCtx::new();
+    let cmd = Command::ShowBackground {
+        path: "bg.png".to_string(),
+        transition: None,
+    };
+
+    ctx.execute(&cmd);
+    assert!(ctx.executor.last_output.effect_requests.is_empty());
+    assert_eq!(
+        ctx.render_state.current_background,
+        Some("bg.png".to_string())
+    );
+}
+
+#[test]
+fn test_full_restart_is_noop() {
+    let mut ctx = TestCtx::new();
+    let result = ctx.execute(&Command::FullRestart);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert!(ctx.executor.last_output.effect_requests.is_empty());
+    assert!(ctx.executor.last_output.audio_command.is_none());
+}
+
 #[test]
 fn test_execute_show_character_diff_and_move_uses_diff_then_move() {
     let mut ctx = TestCtx::new();
@@ -244,7 +271,7 @@ fn test_scene_effect_dim_produces_effect_request() {
 }
 
 #[test]
-fn test_batch_error_stops_execution() {
+fn test_batch_execution_last_wait_wins() {
     let mut ctx = TestCtx::new();
 
     let commands = vec![
@@ -308,5 +335,117 @@ fn test_show_character_same_position_with_partial_alpha_rebuilds_and_emits_show_
     assert_eq!(
         req.effect.kind,
         crate::renderer::effects::EffectKind::Dissolve
+    );
+}
+
+#[test]
+fn test_execute_show_text() {
+    let mut ctx = TestCtx::new();
+
+    let cmd = Command::ShowText {
+        speaker: Some("北风".to_string()),
+        content: "你好".to_string(),
+        inline_effects: vec![],
+        no_wait: false,
+    };
+
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::WaitForClick);
+    assert!(ctx.render_state.dialogue.is_some());
+
+    let dialogue = ctx.render_state.dialogue.as_ref().unwrap();
+    assert_eq!(dialogue.speaker, Some("北风".to_string()));
+    assert_eq!(dialogue.content, "你好");
+}
+
+#[test]
+fn test_execute_present_choices() {
+    let mut ctx = TestCtx::new();
+
+    let cmd = Command::PresentChoices {
+        style: None,
+        choices: vec![
+            Choice {
+                text: "选项1".to_string(),
+                target_label: "label1".to_string(),
+            },
+            Choice {
+                text: "选项2".to_string(),
+                target_label: "label2".to_string(),
+            },
+        ],
+    };
+
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::WaitForChoice { choice_count: 2 });
+    assert!(ctx.render_state.choices.is_some());
+
+    let choices = ctx.render_state.choices.as_ref().unwrap();
+    assert_eq!(choices.choices.len(), 2);
+    assert_eq!(choices.choices[0].text, "选项1");
+    assert_eq!(choices.choices[1].target_label, "label2");
+}
+
+#[test]
+fn test_execute_show_background() {
+    let mut ctx = TestCtx::new();
+
+    let cmd = Command::ShowBackground {
+        path: "backgrounds/bg1.png".to_string(),
+        transition: None,
+    };
+
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert_eq!(
+        ctx.render_state.current_background,
+        Some("backgrounds/bg1.png".to_string())
+    );
+}
+
+#[test]
+fn test_execute_show_character() {
+    let mut ctx = TestCtx::new();
+
+    let cmd = Command::ShowCharacter {
+        path: "characters/char1.png".to_string(),
+        alias: "char1".to_string(),
+        position: Position::Center,
+        transition: None,
+    };
+
+    let result = ctx.execute(&cmd);
+    assert_eq!(result, ExecuteResult::Ok);
+    assert!(ctx.render_state.visible_characters.contains_key("char1"));
+
+    let char_sprite = ctx.render_state.visible_characters.get("char1").unwrap();
+    assert_eq!(char_sprite.texture_path, "characters/char1.png");
+    assert_eq!(char_sprite.position, Position::Center);
+}
+
+#[test]
+fn test_execute_batch() {
+    let mut ctx = TestCtx::new();
+
+    let commands = vec![
+        Command::ShowBackground {
+            path: "bg.png".to_string(),
+            transition: None,
+        },
+        Command::ShowText {
+            speaker: Some("角色".to_string()),
+            content: "对话".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
+        },
+    ];
+
+    let result = ctx.execute_batch(&commands);
+    // 最后一个需要等待的结果
+    assert_eq!(result, ExecuteResult::WaitForClick);
+    assert!(ctx.render_state.dialogue.is_some());
+    assert_eq!(
+        ctx.render_state.current_background,
+        Some("bg.png".to_string())
     );
 }
