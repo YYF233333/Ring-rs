@@ -11,7 +11,7 @@
 use crate::command::{Choice, Command, SIGNAL_CUTSCENE, SIGNAL_SCENE_EFFECT, SIGNAL_TITLE_CARD};
 use crate::error::RuntimeError;
 use crate::input::SignalId;
-use crate::script::{EvalError, Script, ScriptNode, evaluate, evaluate_to_bool};
+use crate::script::{Script, ScriptNode, evaluate, evaluate_to_bool};
 use crate::state::{RuntimeState, WaitingReason};
 
 /// 脚本控制流动作（不经过 Host 命令层）
@@ -359,7 +359,7 @@ impl Executor {
             )),
 
             ScriptNode::SetVar { name, value } => {
-                let val = evaluate(value, state).map_err(eval_error_to_runtime)?;
+                let val = evaluate(value, state)?;
                 if let Some(bare) = name.strip_prefix("persistent.") {
                     state.set_persistent_var(bare, val);
                 } else {
@@ -445,9 +445,7 @@ impl Executor {
         // 找到第一个条件为真的分支
         for branch in branches {
             let should_execute = match &branch.condition {
-                Some(condition) => {
-                    evaluate_to_bool(condition, state).map_err(eval_error_to_runtime)?
-                }
+                Some(condition) => evaluate_to_bool(condition, state)?,
                 None => true, // else 分支，无条件执行
             };
 
@@ -505,13 +503,6 @@ impl Executor {
         }
 
         Ok(ExecuteResult::with_commands(all_commands))
-    }
-}
-
-/// 将 EvalError 转换为 RuntimeError
-fn eval_error_to_runtime(e: EvalError) -> RuntimeError {
-    RuntimeError::EvalError {
-        message: e.to_string(),
     }
 }
 

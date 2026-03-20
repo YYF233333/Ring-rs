@@ -17,11 +17,11 @@ use super::traits::{AnimPropertyKey, Animatable, ObjectId};
 use super::{Animation, AnimationEvent, AnimationId, AnimationState, EasingFunction};
 
 /// 已注册的可动画对象
-struct RegisteredObject {
+pub(crate) struct RegisteredObject {
     /// 对象的 trait object
-    object: Rc<dyn Animatable>,
+    pub(crate) object: Rc<dyn Animatable>,
     /// 对象的类型 ID
-    type_id: TypeId,
+    pub(crate) type_id: TypeId,
 }
 
 /// 动画系统
@@ -36,15 +36,15 @@ struct RegisteredObject {
 /// 3. 不假设对象类型：对象自己决定如何使用这些值
 pub struct AnimationSystem {
     /// 已注册的对象（ObjectId -> 对象）
-    objects: HashMap<ObjectId, RegisteredObject>,
+    pub(crate) objects: HashMap<ObjectId, RegisteredObject>,
     /// 动画（AnimPropertyKey -> Animation）
-    animations: HashMap<AnimPropertyKey, Animation>,
+    pub(crate) animations: HashMap<AnimPropertyKey, Animation>,
     /// 下一个动画 ID
-    next_anim_id: u64,
+    pub(crate) next_anim_id: u64,
     /// 下一个对象 ID
-    next_object_id: u64,
+    pub(crate) next_object_id: u64,
     /// 待处理的事件队列
-    events: Vec<AnimationEvent>,
+    pub(crate) events: Vec<AnimationEvent>,
 }
 
 impl std::fmt::Debug for AnimationSystem {
@@ -109,25 +109,6 @@ impl AnimationSystem {
         };
         self.objects.insert(id, registered);
         id
-    }
-
-    /// 注销对象
-    ///
-    /// 移除对象及其所有相关动画。
-    pub fn unregister(&mut self, object_id: ObjectId) {
-        self.objects.remove(&object_id);
-        // 移除该对象的所有动画
-        self.animations.retain(|key, _| key.object_id != object_id);
-    }
-
-    /// 检查对象是否已注册
-    pub fn is_registered(&self, object_id: ObjectId) -> bool {
-        self.objects.contains_key(&object_id)
-    }
-
-    /// 获取已注册对象数量
-    pub fn registered_count(&self) -> usize {
-        self.objects.len()
     }
 
     // ========== 动画控制 ==========
@@ -295,78 +276,6 @@ impl AnimationSystem {
         std::mem::take(&mut self.events)
     }
 
-    /// 跳过所有动画
-    pub fn skip_all(&mut self) {
-        for (key, animation) in &mut self.animations {
-            if animation.is_active() {
-                animation.skip();
-                // 应用最终值
-                if let Some(registered) = self.objects.get(&key.object_id) {
-                    registered
-                        .object
-                        .set_property(key.property_id, animation.final_value());
-                }
-            }
-        }
-    }
-
-    /// 跳过对象的所有动画
-    pub fn skip_object_animations(&mut self, object_id: ObjectId) {
-        for (key, animation) in self.animations.iter_mut() {
-            if key.object_id == object_id && animation.is_active() {
-                animation.skip();
-                // 应用最终值
-                if let Some(registered) = self.objects.get(&object_id) {
-                    registered
-                        .object
-                        .set_property(key.property_id, animation.final_value());
-                }
-            }
-        }
-    }
-
-    // ========== 查询方法 ==========
-
-    /// 检查是否有活跃的动画
-    pub fn has_active_animations(&self) -> bool {
-        self.animations.values().any(|a| a.is_active())
-    }
-
-    /// 检查对象是否有活跃的动画
-    pub fn has_object_animations(&self, object_id: ObjectId) -> bool {
-        self.animations
-            .iter()
-            .any(|(key, anim)| key.object_id == object_id && anim.is_active())
-    }
-
-    /// 获取活跃动画数量
-    pub fn active_count(&self) -> usize {
-        self.animations.values().filter(|a| a.is_active()).count()
-    }
-
-    /// 获取动画的当前进度（0.0 - 1.0）
-    pub fn get_progress(&self, id: AnimationId) -> Option<f32> {
-        self.animations
-            .values()
-            .find(|a| a.id == id)
-            .map(|a| a.progress)
-    }
-
-    /// 获取对象属性的当前值
-    pub fn get_object_property<T: 'static>(
-        &self,
-        object_id: ObjectId,
-        property_id: &str,
-    ) -> Option<f32> {
-        let registered = self.objects.get(&object_id)?;
-
-        if registered.type_id != TypeId::of::<T>() {
-            return None;
-        }
-
-        registered.object.get_property(property_id)
-    }
-
     /// 直接设置对象属性值（不经过动画）
     pub fn set_object_property<T: 'static>(
         &mut self,
@@ -380,13 +289,6 @@ impl AnimationSystem {
             return registered.object.set_property(property_id, value);
         }
         false
-    }
-
-    /// 清空所有动画和状态
-    pub fn clear(&mut self) {
-        self.animations.clear();
-        self.events.clear();
-        // 注意：不清除已注册的对象，它们仍然有效
     }
 }
 

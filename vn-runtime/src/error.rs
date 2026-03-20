@@ -2,6 +2,7 @@
 //!
 //! 定义 vn-runtime 中使用的错误类型。
 
+use crate::script::EvalError;
 use thiserror::Error;
 
 /// 解析错误
@@ -64,8 +65,8 @@ pub enum RuntimeError {
     ScriptNotLoaded { path: String },
 
     /// 表达式求值错误
-    #[error("表达式求值错误: {message}")]
-    EvalError { message: String },
+    #[error("表达式求值错误: {0}")]
+    EvalError(#[from] EvalError),
 }
 
 /// vn-runtime 统一错误类型

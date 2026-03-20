@@ -201,8 +201,8 @@ impl ApplicationHandler for HostApp {
                 }
 
                 // 视频播放时：上传帧数据到 GPU 纹理，生成全屏视频精灵
-                let sprite_cmds = if app_state.video_player.is_playing() {
-                    if let Some(frame) = app_state.video_player.current_frame() {
+                let sprite_cmds = if app_state.core.video_player.is_playing() {
+                    if let Some(frame) = app_state.core.video_player.current_frame() {
                         backend.upload_video_frame(&frame.data, frame.width, frame.height);
                     }
                     backend.video_draw_command().into_iter().collect::<Vec<_>>()
@@ -265,7 +265,7 @@ impl ApplicationHandler for HostApp {
                 let mut confirm_resolved = false;
                 backend.render_frame(
                     |ctx| {
-                        ui_action = if app_state.video_player.is_playing() {
+                        ui_action = if app_state.core.video_player.is_playing() {
                             EguiAction::None
                         } else {
                             match current_mode {

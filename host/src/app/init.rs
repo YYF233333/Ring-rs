@@ -116,101 +116,110 @@ pub fn load_user_settings(settings_path: &str) -> UserSettings {
     settings
 }
 
-/// 运行脚本检查（Dev Mode 自动诊断）
-///
-/// 在 `debug.script_check = true` 时运行（debug build 默认开启），检查所有脚本的：
-/// - 语法错误
-/// - 未定义的跳转目标
-/// - 资源文件是否存在
-///
-/// 只输出警告，不阻塞启动。
-pub fn run_script_check(
-    config: &AppConfig,
-    scripts: &[PathBuf],
+/// 单脚本的检查统计（读失败 / 解析失败 / 完整跑通各记一次结果）。
+struct SingleScriptResult {
+    /// 是否完成读取、解析、诊断与资源引用检查（与汇总里的「已检查脚本数」一致）。
+    fully_checked: bool,
+    error_count: u32,
+    warning_count: u32,
+}
+
+/// 检查单个脚本：解析、诊断、资源引用存在性；并输出逐条日志。
+fn check_single_script(
+    script_path: &std::path::Path,
     resource_manager: &ResourceManager,
-) {
-    // 检查是否需要运行
-    if !config.debug.script_check {
-        return;
+) -> SingleScriptResult {
+    let logical_path = normalize_logical_path(&script_path.to_string_lossy());
+    let script_id = extract_script_id(&logical_path);
+    let content = match resource_manager.read_text(&LogicalPath::new(&logical_path)) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(script_id = %script_id, error = %e, "脚本无法读取");
+            return SingleScriptResult {
+                fully_checked: false,
+                error_count: 0,
+                warning_count: 1,
+            };
+        }
+    };
+
+    let base_path = extract_base_dir(&logical_path);
+
+    let mut parser = Parser::new();
+    let script = match parser.parse_with_base_path(&script_id, &content, &base_path) {
+        Ok(s) => s,
+        Err(e) => {
+            error!(script_id = %script_id, error = %e, "脚本解析失败");
+            return SingleScriptResult {
+                fully_checked: false,
+                error_count: 1,
+                warning_count: 0,
+            };
+        }
+    };
+
+    let mut error_count = 0u32;
+    let mut warning_count = 0u32;
+
+    for warning in parser.warnings() {
+        warn!(script_id = %script_id, warning = %warning, "解析警告");
+        warning_count += 1;
     }
 
-    info!("Dev Mode: 运行脚本检查...");
-
-    let mut total_errors = 0;
-    let mut total_warnings = 0;
-    let mut scripts_checked = 0;
-
-    for script_path in scripts {
-        // 读取脚本内容
-        let logical_path = normalize_logical_path(&script_path.to_string_lossy());
-        let script_id = extract_script_id(&logical_path);
-        let content = match resource_manager.read_text(&LogicalPath::new(&logical_path)) {
-            Ok(c) => c,
-            Err(e) => {
-                warn!(script_id = %script_id, error = %e, "脚本无法读取");
-                total_warnings += 1;
-                continue;
-            }
-        };
-
-        // 计算 base_path
-        let base_path = extract_base_dir(&logical_path);
-
-        // 解析脚本
-        let mut parser = Parser::new();
-        let script = match parser.parse_with_base_path(&script_id, &content, &base_path) {
-            Ok(s) => s,
-            Err(e) => {
-                error!(script_id = %script_id, error = %e, "脚本解析失败");
-                total_errors += 1;
-                continue;
-            }
-        };
-
-        // 输出解析警告
-        for warning in parser.warnings() {
-            warn!(script_id = %script_id, warning = %warning, "解析警告");
-            total_warnings += 1;
-        }
-
-        // 运行诊断分析
-        let diag = analyze_script(&script);
-        for d in &diag.diagnostics {
-            if d.level == vn_runtime::DiagnosticLevel::Error {
-                total_errors += 1;
-                if let Some(line) = d.line {
-                    error!(script_id = %script_id, line = line, message = %d.message, "诊断错误");
-                } else {
-                    error!(script_id = %script_id, message = %d.message, "诊断错误");
-                }
+    let diag = analyze_script(&script);
+    for d in &diag.diagnostics {
+        if d.level == vn_runtime::DiagnosticLevel::Error {
+            error_count += 1;
+            if let Some(line) = d.line {
+                error!(script_id = %script_id, line = line, message = %d.message, "诊断错误");
             } else {
-                total_warnings += 1;
-                if let Some(line) = d.line {
-                    warn!(script_id = %script_id, line = line, message = %d.message, "诊断警告");
-                } else {
-                    warn!(script_id = %script_id, message = %d.message, "诊断警告");
-                }
+                error!(script_id = %script_id, message = %d.message, "诊断错误");
+            }
+        } else {
+            warning_count += 1;
+            if let Some(line) = d.line {
+                warn!(script_id = %script_id, line = line, message = %d.message, "诊断警告");
+            } else {
+                warn!(script_id = %script_id, message = %d.message, "诊断警告");
             }
         }
-
-        let refs = extract_resource_references(&script);
-        for r in refs {
-            let lp = LogicalPath::new(&r.resolved_path);
-            if !resource_manager.resource_exists(&lp) {
-                warn!(
-                    script_id = %script_id,
-                    resource_type = %r.resource_type,
-                    path = %r.resolved_path,
-                    "Resource not found"
-                );
-                total_warnings += 1;
-            }
-        }
-
-        scripts_checked += 1;
     }
 
-    // 输出汇总
+    let refs = extract_resource_references(&script);
+    for r in refs {
+        let lp = LogicalPath::new(&r.resolved_path);
+        if !resource_manager.resource_exists(&lp) {
+            warn!(
+                script_id = %script_id,
+                resource_type = %r.resource_type,
+                path = %r.resolved_path,
+                "Resource not found"
+            );
+            warning_count += 1;
+        }
+    }
+
+    SingleScriptResult {
+        fully_checked: true,
+        error_count,
+        warning_count,
+    }
+}
+
+/// 汇总脚本检查结果并打日志；若有任意错误返回 `true`。
+fn report_script_check_results(results: &[SingleScriptResult]) -> bool {
+    let mut total_errors = 0u32;
+    let mut total_warnings = 0u32;
+    let mut scripts_checked = 0u32;
+
+    for r in results {
+        total_errors += r.error_count;
+        total_warnings += r.warning_count;
+        if r.fully_checked {
+            scripts_checked += 1;
+        }
+    }
+
     if total_errors > 0 || total_warnings > 0 {
         warn!(
             scripts = scripts_checked,
@@ -224,4 +233,33 @@ pub fn run_script_check(
     } else {
         info!(scripts = scripts_checked, "脚本检查通过");
     }
+
+    total_errors > 0
+}
+
+/// 运行脚本检查（Dev Mode 自动诊断）
+///
+/// 在 `debug.script_check = true` 时运行（debug build 默认开启），检查所有脚本的：
+/// - 语法错误
+/// - 未定义的跳转目标
+/// - 资源文件是否存在
+///
+/// 只输出警告，不阻塞启动。
+pub fn run_script_check(
+    config: &AppConfig,
+    scripts: &[PathBuf],
+    resource_manager: &ResourceManager,
+) {
+    if !config.debug.script_check {
+        return;
+    }
+
+    info!("Dev Mode: 运行脚本检查...");
+
+    let results: Vec<SingleScriptResult> = scripts
+        .iter()
+        .map(|path| check_single_script(path, resource_manager))
+        .collect();
+
+    let _ = report_script_check_results(&results);
 }

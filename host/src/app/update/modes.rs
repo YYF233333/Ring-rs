@@ -36,7 +36,7 @@ pub(super) fn update_history(_app_state: &mut AppState) {}
 /// 更新游戏进行中
 pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
     // 视频播放中：拦截所有正常输入，仅响应跳过操作
-    if app_state.video_player.is_playing() {
+    if app_state.core.video_player.is_playing() {
         let skip_requested = app_state.input_manager.is_key_just_pressed(KeyCode::Escape)
             || app_state.input_manager.is_key_just_pressed(KeyCode::Enter)
             || app_state.input_manager.is_key_just_pressed(KeyCode::Space)
@@ -47,7 +47,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
 
         if skip_requested {
             debug!("用户请求跳过 cutscene");
-            app_state.video_player.skip();
+            app_state.core.video_player.skip();
             finish_cutscene(app_state);
         }
         return;
@@ -108,7 +108,7 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
 /// InGame 下通用的打字机/选择框/no_wait 更新逻辑
 ///
 /// 从 `update_ingame` 提取，供 GUI 和 headless 共用。
-pub(crate) fn update_ingame_common(app_state: &mut AppState, dt: f32) {
+fn update_ingame_common(app_state: &mut AppState, dt: f32) {
     // 同步选择索引到 RenderState
     if let Some(ref mut choices) = app_state.core.render_state.choices {
         let choice_rects = app_state
@@ -116,8 +116,8 @@ pub(crate) fn update_ingame_common(app_state: &mut AppState, dt: f32) {
             .renderer
             .get_choice_rects(choices.choices.len());
         app_state.input_manager.set_choice_rects(choice_rects);
-        choices.selected_index = app_state.input_manager.selected_index;
-        choices.hovered_index = app_state.input_manager.hovered_index;
+        choices.selected_index = app_state.input_manager.choice.selected_index;
+        choices.hovered_index = app_state.input_manager.choice.hovered_index;
     }
 
     // 更新打字机效果
@@ -232,7 +232,7 @@ fn update_ingame_normal(app_state: &mut AppState, dt: f32) {
 ///
 /// 由 `update::update()` 在模式分发后、当 `current_mode.is_in_game()` 时调用。
 /// 不包含输入与推进模式分支，仅负责与时间推进相关的状态更新。
-pub(crate) fn tick_ingame_shared(app_state: &mut AppState, dt: f32) {
+pub(super) fn tick_ingame_shared(app_state: &mut AppState, dt: f32) {
     let had_transition = app_state.core.renderer.transition.is_active();
 
     // 更新过渡效果
@@ -241,11 +241,7 @@ pub(crate) fn tick_ingame_shared(app_state: &mut AppState, dt: f32) {
     if had_transition && !app_state.core.renderer.transition.is_active() {
         app_state
             .event_stream
-            .emit(crate::event_stream::EngineEvent::TransitionUpdate {
-                transition_type: "dissolve".into(),
-                phase: "completed".into(),
-                progress: 1.0,
-            });
+            .on_transition_update("dissolve", "completed", 1.0);
     }
 
     // 更新场景过渡状态（基于动画系统）
@@ -312,10 +308,10 @@ pub(crate) fn tick_ingame_shared(app_state: &mut AppState, dt: f32) {
     if let WaitingReason::WaitForSignal(ref id) = app_state.session.waiting_reason
         && id.as_str() == SIGNAL_CUTSCENE
     {
-        if app_state.video_player.is_playing() {
-            app_state.video_player.update(dt);
+        if app_state.core.video_player.is_playing() {
+            app_state.core.video_player.update(dt);
             try_start_video_audio(app_state);
-            if app_state.video_player.is_done() {
+            if app_state.core.video_player.is_done() {
                 finish_cutscene(app_state);
             }
         } else {
@@ -335,7 +331,7 @@ pub(crate) fn tick_ingame_shared(app_state: &mut AppState, dt: f32) {
 
 /// 检查视频音频提取是否完成，如完成则通过 AudioManager 播放。
 fn try_start_video_audio(app_state: &mut AppState) {
-    let Some(audio_mod) = app_state.video_player.audio_mut() else {
+    let Some(audio_mod) = app_state.core.video_player.audio_mut() else {
         return;
     };
     audio_mod.try_start_playback();

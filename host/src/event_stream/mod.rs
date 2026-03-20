@@ -132,6 +132,70 @@ impl EventStream {
         Self::write_event(writer, ts_ms, &event);
     }
 
+    /// 脚本 tick 完成
+    pub fn on_script_tick(
+        &mut self,
+        node_index: usize,
+        commands_count: usize,
+        waiting_reason: &str,
+    ) {
+        self.emit(EngineEvent::ScriptTick {
+            node_index,
+            commands_count,
+            waiting_reason: waiting_reason.to_string(),
+        });
+    }
+
+    /// Runtime 产出 Command
+    pub fn on_command_produced(&mut self, variant: &str, summary: &str) {
+        self.emit(EngineEvent::CommandProduced {
+            variant: variant.to_string(),
+            summary: serde_json::json!(summary),
+        });
+    }
+
+    /// CommandExecutor 执行 Command 完成
+    pub fn on_command_executed(&mut self, variant: &str, result: &str) {
+        self.emit(EngineEvent::CommandExecuted {
+            variant: variant.to_string(),
+            result: result.to_string(),
+        });
+    }
+
+    /// 关键状态变更
+    pub fn on_state_changed(&mut self, field: &str, from: &str, to: &str) {
+        self.emit(EngineEvent::StateChanged {
+            field: field.to_string(),
+            from: from.to_string(),
+            to: to.to_string(),
+        });
+    }
+
+    /// 用户输入到达脚本模式处理入口
+    pub fn on_input_received(&mut self, variant: &str) {
+        self.emit(EngineEvent::InputReceived {
+            variant: variant.to_string(),
+        });
+    }
+
+    /// 过渡更新
+    pub fn on_transition_update(&mut self, transition_type: &str, phase: &str, progress: f32) {
+        self.emit(EngineEvent::TransitionUpdate {
+            transition_type: transition_type.to_string(),
+            phase: phase.to_string(),
+            progress,
+        });
+    }
+
+    /// 音频动作
+    pub fn on_audio_event(&mut self, action: &str, path: Option<&str>, volume: Option<f32>) {
+        self.emit(EngineEvent::AudioEvent {
+            action: action.to_string(),
+            path: path.map(|p| p.to_string()),
+            volume,
+        });
+    }
+
     /// 发出事件（指定逻辑时间戳，headless 模式用）
     pub fn emit_with_ts(&mut self, ts_ms: u64, event: EngineEvent) {
         let Some(ref mut writer) = self.writer else {

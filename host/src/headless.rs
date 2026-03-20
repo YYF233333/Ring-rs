@@ -9,8 +9,8 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::AppConfig;
+use crate::AppMode;
 use crate::app::{self, AppInit, AppState};
-use crate::event_stream::EngineEvent;
 use crate::input::recording::InputReplayer;
 use crate::rendering_types::{NullTextureFactory, TextureContext};
 
@@ -97,6 +97,8 @@ pub fn run(config: AppConfig, cli: &crate::headless::HeadlessCli) -> Result<(), 
         app::run_script_tick(&mut app_state, None);
     }
 
+    app_state.ui.navigation.switch_to(AppMode::InGame);
+
     headless_loop(&mut app_state, &mut replayer, cli)?;
 
     app_state.event_stream.flush();
@@ -121,30 +123,7 @@ fn headless_loop(
         app_state.input_manager.inject_replay_events(&events);
 
         app_state.input_manager.begin_frame(fixed_dt);
-
-        app::update_ingame_common(app_state, fixed_dt);
-
-        let input = app_state
-            .input_manager
-            .update(&app_state.session.waiting_reason, fixed_dt);
-        if input.is_some() {
-            if let Some(ref input_val) = input {
-                app_state.event_stream.emit_with_ts(
-                    elapsed_ms,
-                    EngineEvent::InputReceived {
-                        variant: format!("{input_val:?}"),
-                    },
-                );
-            }
-            app::run_script_tick(app_state, input);
-        }
-
-        app::tick_ingame_shared(app_state, fixed_dt);
-
-        if let Some(ref mut am) = app_state.core.audio_manager {
-            am.update(fixed_dt);
-        }
-
+        app::update(app_state, fixed_dt);
         app_state.input_manager.end_frame();
 
         elapsed_ms += dt_ms;

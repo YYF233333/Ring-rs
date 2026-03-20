@@ -37,6 +37,8 @@
 
 mod core;
 mod easing;
+mod lifecycle;
+mod queries;
 mod system;
 mod traits;
 mod transform;

@@ -8,12 +8,12 @@
 
 - 入口：`vn-runtime/src/script/parser/mod.rs`
 - 核心接口：`Parser::parse`、`Parser::parse_with_base_path`、`Parser::warnings`
-- 子模块：`phase1`、`phase2`、`helpers`、`expr_parser`；`inline_tags` 为 crate 内（`pub(crate)`）
+- 子模块：`phase1`、`phase2/`（目录：`mod.rs` 分发 + `display` / `control` / `dialogue` / `misc` 按域拆分）、`helpers`、`expr_parser`；`inline_tags` 为 crate 内（`pub(crate)`）
 
 ## KeyFlow
 
 1. `phase1` 将原始文本识别为块结构（`Vec<Block>`）。
-2. `phase2` 将块解析为 `ScriptNode`。
+2. `phase2` 子目录将块解析为 `ScriptNode`：`mod.rs` 聚合入口，具体语法按域落在 `display` / `control` / `dialogue` / `misc`。
 3. 解析过程中同步构建 source map（节点索引 -> 源文件行号）。
 4. 使用 `Script::with_source_map` 产出最终脚本对象。
 5. 阶段 0 新增 `callScript` / `returnFromScript` 单行语法解析。
@@ -56,7 +56,7 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-20
 
 ## Owner
 

@@ -44,6 +44,7 @@
 - **执行器（AST → Command）**：`vn-runtime/src/runtime/executor/mod.rs`
 - **脚本 AST**：`vn-runtime/src/script/ast/mod.rs`
 - **脚本解析器**：`vn-runtime/src/script/parser/mod.rs`
+- **阶段 2 解析（块 → ScriptNode）**：`vn-runtime/src/script/parser/phase2/`（`mod.rs` 分发；`display.rs` / `control.rs` / `dialogue.rs` / `misc.rs` 按域拆分）
 - **内联标签解析（节奏标签）**：`vn-runtime/src/script/parser/inline_tags.rs`
 - **脚本诊断（静态分析）**：`vn-runtime/src/diagnostic/mod.rs`
 - **存档模型**：`vn-runtime/src/save.rs`
@@ -94,7 +95,7 @@
 - **HostApp（ApplicationHandler）**：`host/src/host_app.rs`（窗口生命周期、事件分发）
 - **EguiAction（UI 动作枚举）**：`host/src/egui_actions.rs`
 - **egui 页面构建**：`host/src/egui_screens/`（title/ingame/settings/save_load/history/toast/helpers）
-- **AppState 与组装**：`host/src/app/mod.rs`
+- **AppState 与组装**：`host/src/app/mod.rs`（`CoreSystems` 含渲染/资源/**`video_player`**（过场视频）等媒体管线；`video_player` 已从 AppState 顶层迁入 `core`）
 - **启动引导（资源预加载/按需加载扫描）**：`host/src/app/bootstrap.rs`
 - **初始化拆分（资源/音频/manifest/脚本/设置等）**：`host/src/app/init.rs`
 - **每帧更新（已模块化）**：`host/src/app/update/`
@@ -148,9 +149,9 @@
   - **VideoAudio**：`host/src/video/audio.rs`（FFmpeg 子进程 PCM 音频提取，rodio 播放）
 - **音频系统**：`host/src/audio/`（mod.rs: 结构/音量/duck; playback.rs: BGM/SFX 播放与淡入淡出）
 - **UI 基础设施**：`host/src/ui/`（layout/asset_cache/nine_patch/image_slider/toast）。定制指南见 `docs/ui_customization.md`
-- **输入（winit 事件驱动）**：`host/src/input/`
-- **事件流（结构化调试输出）**：`host/src/event_stream/`（EngineEvent + EventStream）
-- **Headless 测试模式**：`host/src/headless.rs`（无窗口回放循环）
+- **输入（winit 事件驱动）**：`host/src/input/`（`mod.rs`：`InputManager` 编排；`state.rs`：键鼠状态、防抖、长按；`choice_navigator.rs`：选择分支导航；`recording.rs`：录制/回放不变）
+- **事件流（结构化调试输出）**：`host/src/event_stream/`（`EngineEvent` + `EventStream`；便捷方法如 `on_script_tick`、`on_command_produced`、`on_command_executed`、`on_state_changed`、`on_input_received`、`on_transition_update`、`on_audio_event`）
+- **Headless 测试模式**：`host/src/headless.rs`（无窗口回放循环；主循环调用 `app::update()`，与 GUI 共用每帧更新路径）
 - **配置/manifest/save manager**：`host/src/config/`、`host/src/manifest/`、`host/src/save_manager/`
 
 ### 常见改动：节奏标签 / 打字机行为

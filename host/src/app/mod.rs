@@ -5,7 +5,7 @@
 //! ## 子系统划分
 //!
 //! `AppState` 按职责拆分为三个子系统容器：
-//! - [`CoreSystems`]：渲染管线、媒体资源、效果系统
+//! - [`CoreSystems`]：渲染管线、媒体资源、效果系统、过场视频播放
 //! - [`UiSystems`]：导航、界面状态、UI 上下文
 //! - [`GameSession`]：运行时游戏会话状态
 //!
@@ -61,9 +61,9 @@ pub struct AppInit {
 
 // ─── 子系统容器 ──────────────────────────────────────────────────────────────────
 
-/// 核心子系统：渲染管线 + 媒体资源 + 效果系统
+/// 核心子系统：渲染管线 + 媒体资源 + 效果系统 + 过场视频
 ///
-/// 包含渲染、动画、音频、资源加载和命令执行的所有状态。
+/// 包含渲染、动画、音频、资源加载、命令执行与 cutscene 视频播放的所有状态。
 /// `command_handlers` 层的函数签名依赖此类型而非 `AppState`。
 pub struct CoreSystems {
     /// 资源管理器（纹理缓存、文件读取）
@@ -80,6 +80,8 @@ pub struct CoreSystems {
     pub command_executor: CommandExecutor,
     /// 音频管理器
     pub audio_manager: Option<AudioManager>,
+    /// 视频播放器（cutscene）
+    pub video_player: VideoPlayer,
 }
 
 /// UI 子系统：导航 + 界面状态 + UI 上下文
@@ -172,9 +174,10 @@ pub struct AppState {
     pub play_start_time: std::time::Instant,
     /// 资源加载是否完成
     pub loading_complete: bool,
-    /// 视频播放器（cutscene）
-    pub video_player: VideoPlayer,
     /// 结构化事件流（AI 调试用）
+    ///
+    /// 保留在顶层：与 `CoreSystems` 的游戏渲染/媒体管线正交，属于跨会话的调试基础设施，
+    /// 初始化路径与 `EventStream::new` / `new_logical` 也与 core 构造无关。
     pub event_stream: EventStream,
 }
 
@@ -228,6 +231,7 @@ impl AppState {
                 character_object_ids: HashMap::new(),
                 command_executor: CommandExecutor::new(),
                 audio_manager,
+                video_player: VideoPlayer::new(),
             },
             ui: UiSystems {
                 navigation: NavigationStack::new(),
@@ -258,7 +262,6 @@ impl AppState {
             scripts,
             play_start_time: std::time::Instant::now(),
             loading_complete: false,
-            video_player: VideoPlayer::new(),
             event_stream,
         }
     }

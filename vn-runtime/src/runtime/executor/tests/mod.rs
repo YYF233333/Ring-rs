@@ -314,7 +314,7 @@ fn test_execute_set_var_undefined_variable_error() {
     let result = executor.execute(&node, &mut state, &script);
     assert!(matches!(
         result,
-        Err(crate::error::RuntimeError::EvalError { .. })
+        Err(crate::error::RuntimeError::EvalError(_))
     ));
 }
 
