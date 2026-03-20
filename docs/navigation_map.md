@@ -37,12 +37,12 @@
 
 ### 入口与核心文件
 
-- **Command 定义（Runtime → Host）**：`vn-runtime/src/command.rs`
+- **Command 定义（Runtime → Host）**：`vn-runtime/src/command/mod.rs`
 - **输入模型（Host → Runtime）**：`vn-runtime/src/input.rs`
 - **显式状态/等待模型**：`vn-runtime/src/state.rs`
-- **引擎循环（tick/handle_input/restore）**：`vn-runtime/src/runtime/engine.rs`
-- **执行器（AST → Command）**：`vn-runtime/src/runtime/executor.rs`
-- **脚本 AST**：`vn-runtime/src/script/ast.rs`
+- **引擎循环（tick/handle_input/restore）**：`vn-runtime/src/runtime/engine/mod.rs`
+- **执行器（AST → Command）**：`vn-runtime/src/runtime/executor/mod.rs`
+- **脚本 AST**：`vn-runtime/src/script/ast/mod.rs`
 - **脚本解析器**：`vn-runtime/src/script/parser/mod.rs`
 - **内联标签解析（节奏标签）**：`vn-runtime/src/script/parser/inline_tags.rs`
 - **脚本诊断（静态分析）**：`vn-runtime/src/diagnostic/mod.rs`
@@ -51,11 +51,11 @@
 
 ### 常见改动：我应该改哪里？
 
-- **新增脚本语法（解析层）**：`vn-runtime/src/script/parser/mod.rs` → `vn-runtime/src/script/ast.rs`
+- **新增脚本语法（解析层）**：`vn-runtime/src/script/parser/mod.rs` → `vn-runtime/src/script/ast/mod.rs`
 - **新增/修改内联标签（节奏标签）**：`vn-runtime/src/script/parser/inline_tags.rs`
-- **把 AST 变成命令（语义层）**：`runtime/executor.rs`
-- **新增/修改命令类型（通信契约）**：`command.rs`（同时要改 `host/` 的执行端）
-- **调整运行时状态/等待机制**：`state.rs`、`runtime/engine.rs`
+- **把 AST 变成命令（语义层）**：`runtime/executor/mod.rs`
+- **新增/修改命令类型（通信契约）**：`command/mod.rs`（同时要改 `host/` 的执行端）
+- **调整运行时状态/等待机制**：`state.rs`、`runtime/engine/mod.rs`
 - **存档兼容**：`save.rs` + [save_format.md](save_format.md)
 
 ## `host/`：把 `Command` 变成“画面/音频/UI”
@@ -121,7 +121,7 @@
 ### 渲染抽象层 / 后端 / 资源 / 音频 / UI
 
 - **渲染抽象层（RFC-008）**：`host/src/rendering_types.rs`
-  - **Texture trait**：纹理抽象接口（`width/height/size_bytes/as_any`）
+  - **Texture trait**：纹理抽象接口（`width`/`height`/`width_u32`/`height_u32`/`size_bytes`/`as_any`）
   - **TextureFactory trait**：纹理创建工厂接口
   - **TextureContext**：持有 `Arc<dyn TextureFactory>`，注入到 ResourceManager
   - **DrawCommand**：绘制命令（Sprite/Rect/Dissolve），使用 `Arc<dyn Texture>`
@@ -162,12 +162,12 @@
 
 ### 常见改动：推进模式 / Skip / Auto（阶段 26）
 
-- **推进模式状态**：`host/src/app/app_mode.rs`（`PlaybackMode::{Normal,Auto,Skip}`；UserSettings 的 `auto_delay`；Auto 开关不持久化）
+- **推进模式状态**：`host/src/app/app_mode/mod.rs`（`PlaybackMode::{Normal,Auto,Skip}`；UserSettings 的 `auto_delay`；Auto 开关不持久化）
 - **推进控制主循环**：`host/src/app/update/modes.rs`（Ctrl 按住临时 Skip；Auto 的节拍与推进条件）
 - **统一跳过入口（收敛语义）**：`host/src/app/update/script.rs::skip_all_active_effects()`（动画/changeBG/changeScene/打字机）
 - **changeScene 完整跳过（不丢背景）**：
-  - `host/src/renderer/scene_transition.rs::SceneTransitionManager::skip_to_end()`
-  - `host/src/renderer/mod.rs::Renderer::skip_scene_transition_to_end()`
+  - `host/src/renderer/scene_transition/mod.rs::SceneTransitionManager::skip_to_end()`
+  - `host/src/renderer/scene_effects.rs::Renderer::skip_scene_transition_to_end()`（委托到 `scene_transition`）
 
 ## 开发工作流（质量门禁/覆盖率）
 
@@ -185,7 +185,7 @@
 ## 当你想做 X（快速索引）
 
 - **想加/改脚本语法** → [script_syntax_spec.md](script_syntax_spec.md) + `vn-runtime/src/script/*`
-- **想加一个新 Command** → `vn-runtime/src/command.rs` + `host/src/command_executor/*`
+- **想加一个新 Command** → `vn-runtime/src/command/mod.rs` + `host/src/command_executor/*`
 - **想改 UI 页面** → `host/src/egui_screens/`（各页面 UI 构建）+ `host/src/ui/*`（主题/Toast）
 - **想改资源路径解析/打包/缓存** → `host/src/resources/*` + [resource_management.md](resource_management.md)
 - **想改存档/兼容** → `vn-runtime/src/save.rs` + `host/src/app/save.rs` + [save_format.md](save_format.md)

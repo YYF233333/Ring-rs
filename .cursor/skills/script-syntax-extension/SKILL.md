@@ -91,7 +91,7 @@ Description of semantics and parameters.
 
 ### Step 2 — AST node
 
-File: `vn-runtime/src/script/ast.rs`
+File: `vn-runtime/src/script/ast/mod.rs`
 
 Add a `ScriptNode` variant. Rules:
 
@@ -137,7 +137,7 @@ fn parse_instruction_name_basic() {
 
 ### Step 6 — Connect to executor
 
-File: `vn-runtime/src/runtime/executor.rs`
+File: `vn-runtime/src/runtime/executor/mod.rs`
 
 Add a match arm: `ScriptNode::InstructionName { .. } => { ... }`.
 

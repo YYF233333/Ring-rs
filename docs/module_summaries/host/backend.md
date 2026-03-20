@@ -33,6 +33,16 @@ GPU 渲染后端：封装 winit 窗口管理、wgpu GPU 初始化与帧渲染循
 - `SpriteRenderer` 和 `DissolveRenderer` 共享 `texture_bind_group_layout` 和 `QuadVertex` 顶点布局。
 - egui 事件优先处理；未被 egui 消费的事件才转发给 `InputManager`。
 
+## RelatedDocs
+
+- [host 总览](../host.md)
+- [rendering_types 摘要](rendering_types.md)
+- [仓库导航地图](../../navigation_map.md)
+
 ## LastVerified
 
-2026-03-18
+2026-03-20
+
+## Owner
+
+Composer

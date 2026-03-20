@@ -1,6 +1,6 @@
 ---
 name: doc-updater
-model: default
+model: composer-2-fast
 description: Documentation specialist for updating module summaries, navigation maps, and other docs to match current source code. Use for periodic summary refresh and doc-code consistency audits.
 ---
 

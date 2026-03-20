@@ -12,35 +12,35 @@
 
 | crate / 文件 | 测试数 | 结论 |
 | --- | ---: | --- |
-| `vn-runtime/src/script/parser/tests.rs` | 100 | 高价值密度最高，但夹杂 helper 级低价值与灰区样本 |
-| `vn-runtime/src/runtime/executor/tests.rs` | 53 | 以高价值语义/契约测试为主 |
-| `vn-runtime/src/runtime/engine/tests.rs` | 28 | 以高价值状态机/恢复测试为主 |
+| `vn-runtime/src/script/parser/tests/mod.rs` | 100 | 高价值密度最高，但夹杂 helper 级低价值与灰区样本 |
+| `vn-runtime/src/runtime/executor/tests/mod.rs` | 53 | 以高价值语义/契约测试为主 |
+| `vn-runtime/src/runtime/engine/tests/mod.rs` | 28 | 以高价值状态机/恢复测试为主 |
 | `vn-runtime/src/diagnostic/tests/` | 20 | 高低价值混杂，适合分层 |
-| `vn-runtime/src/script/expr/tests.rs` | 14 | 高价值为主，少量 Display 低价值 |
-| `vn-runtime/src/command/tests.rs` | 13 | 灰区与低价值为主，少量契约测试可上调 |
-| `vn-runtime/src/script/ast/tests.rs` | 8 | 以灰区 helper/容器语义为主 |
+| `vn-runtime/src/script/expr/tests/mod.rs` | 14 | 高价值为主，少量 Display 低价值 |
+| `vn-runtime/src/command/tests/mod.rs` | 13 | 灰区与低价值为主，少量契约测试可上调 |
+| `vn-runtime/src/script/ast/tests/mod.rs` | 8 | 以灰区 helper/容器语义为主 |
 | `vn-runtime/src/history.rs` 内联测试 | 8 | 混合，容量/顺序较高价值，时间戳/清空偏低 |
 | `vn-runtime/src/save.rs` 内联测试 | 7 | 兼容性高价值，Display/字符串偏低 |
 | `vn-runtime/src/state.rs` 内联测试 | 6 | `persistent` 隔离高价值，其余多为低/灰 |
 | `vn-runtime/src/input.rs` 内联测试 | 2 | 低价值 |
-| `host/src/command_executor/tests.rs` | 46 | 高价值密度高，Runtime -> Host 契约核心 |
-| `host/src/renderer/render_state/tests.rs` | 34 | 高低混杂，状态机和 inline effect 很值钱 |
-| `host/src/input/tests.rs` | 28 | 输入契约与防抖高价值，getter/default 偏低 |
-| `host/src/manifest/tests.rs` | 29 | 高低混杂，schema/默认值比例较高 |
-| `host/src/save_manager/tests.rs` | 22 | 错误恢复和多文件副作用高价值，格式化偏低 |
-| `host/src/resources/tests.rs` | 21 | 资源抽象/错误恢复高价值，创建类测试偏低 |
-| `host/src/config/tests.rs` | 20 | 配置 schema 与严格校验高价值，默认值偏低 |
+| `host/src/command_executor/tests/mod.rs` | 46 | 高价值密度高，Runtime -> Host 契约核心 |
+| `host/src/renderer/render_state/tests/mod.rs` | 34 | 高低混杂，状态机和 inline effect 很值钱 |
+| `host/src/input/tests/mod.rs` | 28 | 输入契约与防抖高价值，getter/default 偏低 |
+| `host/src/manifest/tests/mod.rs` | 29 | 高低混杂，schema/默认值比例较高 |
+| `host/src/save_manager/tests/mod.rs` | 22 | 错误恢复和多文件副作用高价值，格式化偏低 |
+| `host/src/resources/tests/mod.rs` | 21 | 资源抽象/错误恢复高价值，创建类测试偏低 |
+| `host/src/config/tests/mod.rs` | 20 | 配置 schema 与严格校验高价值，默认值偏低 |
 | `host/src/renderer/headless_tests/` | 18 | 组合绘制链路→high_value，几何/枚举/getter→low_value；已分层为 `headless_tests/mod.rs` + `high_value.rs` + `low_value.rs` |
 | `host/src/renderer/effects/resolver.rs` 内联测试 | 18 | 契约与回退逻辑高价值 |
 | `host/src/renderer/transition.rs` 内联测试 | 14 | 状态机与 skip 行为高价值，debug/默认值偏低 |
-| `host/src/renderer/scene_transition/tests.rs` | 13 | 高价值状态机测试 |
-| `host/src/app/app_mode/tests.rs` | 13 | 导航栈高价值，辅助函数与页码枚举偏低/灰 |
+| `host/src/renderer/scene_transition/tests/mod.rs` | 13 | 高价值状态机测试 |
+| `host/src/app/app_mode/tests/mod.rs` | 13 | 导航栈高价值，辅助函数与页码枚举偏低/灰 |
 | `host/src/resources/source.rs` 内联测试 | 13 | 资源来源抽象高价值 |
 | `host/src/resources/path.rs` 内联测试 | 12 | 路径规范化与解析高价值 |
-| `host/src/ui/layout/tests.rs` | 10 | 整体偏低/灰 |
+| `host/src/ui/layout/tests/mod.rs` | 10 | 整体偏低/灰 |
 | `host/src/resources/cache.rs` 内联测试 | 10 | 缓存淘汰/统计偏灰到高 |
-| `host/src/extensions/tests.rs` | 10+ | 兼容性/能力校验高价值 |
-| `host/src/ui/screen_defs/tests.rs` | 10+ | 条件求值与资源回退高价值，schema/serde 偏灰 |
+| `host/src/extensions/tests/mod.rs` | 10+ | 兼容性/能力校验高价值 |
+| `host/src/ui/screen_defs/tests/mod.rs` | 10+ | 条件求值与资源回退高价值，schema/serde 偏灰 |
 | `host/src/renderer/character_animation.rs` 内联测试 | 8 | 偏灰 |
 | `host/src/renderer/animation/transform.rs` 内联测试 | 13 | 低/灰为主 |
 | `host/src/renderer/animation/system.rs` 内联测试 | 13 | 状态机与注册/回收高价值 |
@@ -62,7 +62,7 @@
 
 ## 热点文件的函数级样本
 
-### `vn-runtime/src/runtime/engine/tests.rs`
+### `vn-runtime/src/runtime/engine/tests/mod.rs`
 
 `high_value`
 - `test_call_script_and_return_flow`
@@ -89,7 +89,7 @@
 - `test_runtime_restore_ctor`
 - `test_runtime_restore_history`
 
-### `vn-runtime/src/runtime/executor/tests.rs`
+### `vn-runtime/src/runtime/executor/tests/mod.rs`
 
 `high_value`
 - `test_execute_show_character_without_path_uses_existing_binding`
@@ -132,7 +132,7 @@
 - `test_execute_bgm_unduck`
 - `test_execute_stop_bgm`
 
-### `vn-runtime/src/diagnostic/tests.rs`
+### `vn-runtime/src/diagnostic/tests/mod.rs`
 
 `high_value`
 - `test_analyze_script_undefined_label`
@@ -160,7 +160,7 @@
 - `test_resource_type_display`
 - `test_extract_resource_references_show_without_path`
 
-### `vn-runtime/src/command/tests.rs`
+### `vn-runtime/src/command/tests/mod.rs`
 
 `high_value`
 - `test_transition_get_arg_fallback`
@@ -181,7 +181,7 @@
 - `test_command_serialization`
 - `test_transition_serialization_with_named_args`
 
-### `host/src/command_executor/tests.rs`
+### `host/src/command_executor/tests/mod.rs`
 
 `high_value`
 - `test_execute_show_character_diff_and_move_uses_diff_then_move`
@@ -204,7 +204,7 @@
 - `test_executor_creation`
 - `test_full_restart_is_noop`
 
-### `host/src/resources/tests.rs`
+### `host/src/resources/tests/mod.rs`
 
 `high_value`
 - `test_failed_texture_cache_can_suppress_retries`

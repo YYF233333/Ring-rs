@@ -60,3 +60,4 @@
 - 发现摘要过期时，先在对应文档标记 `stale`，再补充修订。
 - 新增或修改 `vn-runtime` / `host` 行为后，必须同步更新对应子模块摘要。
 - 周期性验收可使用：[摘要抽样验收清单](summary_sampling_checklist.md)。
+- 更新摘要时须同步维护 `LastVerified` 与 `## Owner`：`Owner` 为校验者所使用的底层模型名称，如无法获知则填写**自认的模型名称**。无法确定时写 `未记录`（见 [摘要维护协议](summary_maintenance.md)）。

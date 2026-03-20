@@ -35,7 +35,7 @@
 - [audio](host/audio.md)：BGM/SFX 播放与淡入淡出
 - [video](host/video.md)：Cutscene 视频播放（RFC-009）
 - [input](host/input.md)：winit 事件驱动的输入采集与 RuntimeInput 转换
-- [ui](host/ui.md)：主题、Toast、UI 上下文（界面由 egui 在 main.rs 构建）
+- [ui](host/ui.md)：主题、Toast、UI 上下文（布局/素材；页面构建见 `egui_screens/`，由 `host_app`/`main` 驱动渲染）
 - [backend](host/backend.md)：winit + wgpu + egui 渲染后端（SpriteRenderer / DissolveRenderer / GpuTexture）
 - [config](host/config.md)：运行配置加载、默认值与校验
 - [manifest](host/manifest.md)：立绘元数据与站位配置
@@ -73,8 +73,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-20
 
 ## Owner
 
-Ring-rs 维护者
+Composer

@@ -6,7 +6,7 @@
 - 状态：Proposed
 - 作者：Ring-rs 开发组
 - 日期：2026-03-10
-- 相关范围：`docs/script_syntax_spec.md`、`vn-runtime/src/script/parser/`、`vn-runtime/src/command.rs`、`host/src/command_executor/`
+- 相关范围：`docs/script_syntax_spec.md`、`vn-runtime/src/script/parser/`、`vn-runtime/src/command/mod.rs`、`host/src/command_executor/`
 
 ---
 

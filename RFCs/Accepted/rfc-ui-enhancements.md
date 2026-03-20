@@ -50,7 +50,7 @@ RFC-010 构建了数据驱动的可定制 UI 系统，完成了核心架构（`U
 - 标题画面与游戏菜单按标志切换冬/夏背景
 - 两套季节背景路径在 layout 中配置，由 asset cache 加载
 
-**涉及文件**：`host/src/egui_screens/title.rs`、`host/src/egui_screens/game_menu.rs`、`host/src/ui/layout.rs`、`host/src/host_app.rs`（传入 is_winter）
+**涉及文件**：`host/src/egui_screens/title.rs`、`host/src/egui_screens/game_menu.rs`、`host/src/ui/layout/mod.rs`、`host/src/host_app.rs`（传入 is_winter）
 
 #### 3.1.2 冬篇入口按钮
 
@@ -66,14 +66,14 @@ RFC-010 构建了数据驱动的可定制 UI 系统，完成了核心架构（`U
 
 #### 3.2.1 存读档分页导航
 
-**现状**：✅ **已实现**。`SaveLoadPage` 枚举（A / Q / 1–9）在 `app_mode.rs` 定义，`save_load.rs` 底部分页栏实现 `<` / `A` `Q` `1`–`9` / `>`，每页 6 槽（`slot_range()`），当前页高亮。
+**现状**：✅ **已实现**。`SaveLoadPage` 枚举（A / Q / 1–9）在 `app/app_mode/mod.rs` 定义，`save_load.rs` 底部分页栏实现 `<` / `A` `Q` `1`–`9` / `>`，每页 6 槽（`slot_range()`），当前页高亮。
 
 **目标**（已达成）：
 - 底部分页按钮栏：`<` `A` `Q` `1`–`9` `>`
 - `A` = Auto，`Q` = Quick，`1`–`9` = 手动存档页，每页 6 槽，共 66 槽
 - 当前页按钮高亮
 
-**涉及文件**：`host/src/egui_screens/save_load.rs`、`host/src/app/app_mode.rs`
+**涉及文件**：`host/src/egui_screens/save_load.rs`、`host/src/app/app_mode/mod.rs`
 
 #### 3.2.2 NotoSansSC 字体加载
 
@@ -106,7 +106,7 @@ RFC-010 构建了数据驱动的可定制 UI 系统，完成了核心架构（`U
 - Toast 使用 `gui/notify.png` 作为 NinePatch 背景
 - Y 偏移与边框由 layout 配置
 
-**涉及文件**：`host/src/egui_screens/toast.rs`、`host/src/ui/layout.rs`
+**涉及文件**：`host/src/egui_screens/toast.rs`、`host/src/ui/layout/mod.rs`
 
 #### 3.3.3 自定义滑块样式
 
@@ -116,7 +116,7 @@ RFC-010 构建了数据驱动的可定制 UI 系统，完成了核心架构（`U
 - 使用 `gui/slider/` 素材渲染轨道与手柄
 - 支持 idle/hover 状态
 
-**涉及文件**：`host/src/egui_screens/settings.rs`、`host/src/ui/image_slider.rs`、`host/src/ui/layout.rs`
+**涉及文件**：`host/src/egui_screens/settings.rs`、`host/src/ui/image_slider.rs`、`host/src/ui/layout/mod.rs`
 
 #### 3.3.4 UI 定制文档
 

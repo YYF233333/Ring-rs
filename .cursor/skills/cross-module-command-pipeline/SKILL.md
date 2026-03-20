@@ -61,7 +61,7 @@ Then `rg` for a recent similar Command (e.g. `SceneEffect`, `TitleCard`, `Extend
 
 ### Step 2 — AST node
 
-File: `vn-runtime/src/script/ast.rs`
+File: `vn-runtime/src/script/ast/mod.rs`
 
 Add or extend a `ScriptNode` variant. Carry only semantic data, never host-specific details.
 
@@ -88,7 +88,7 @@ File: `vn-runtime/src/command/mod.rs`
 
 ### Step 5 — Executor
 
-File: `vn-runtime/src/runtime/executor.rs`
+File: `vn-runtime/src/runtime/executor/mod.rs`
 
 1. Add a match arm for the new `ScriptNode` → produce the `Command`.
 2. If the command should block script progression, set `ExecuteResult::waiting`.
@@ -137,7 +137,7 @@ Copy this and track progress:
 ```
 New Command: [name]
 - [ ] Syntax drafted in script_syntax_spec.md
-- [ ] ScriptNode variant added in ast.rs
+- [ ] ScriptNode variant added in script/ast/mod.rs
 - [ ] phase1 block recognition
 - [ ] phase2 parsing + tests
 - [ ] Command variant added in command/mod.rs
@@ -163,7 +163,7 @@ When adding fields to an existing variant (e.g. adding `inline_effects` to `Show
 ## Common Pitfalls
 
 - **Forgetting the host side**: Adding a Command variant without a `CommandExecutor` match arm → runtime panic on `unreachable!`.
-- **Signal mismatch**: `SIGNAL_*` constant string must match between `executor.rs` (wait setup) and `command_executor` (signal emission).
+- **Signal mismatch**: `SIGNAL_*` constant string must match between `runtime/executor/mod.rs` (wait setup) and `command_executor` (signal emission).
 - **Transition args**: Use structured `Transition`/`TransitionArg` types, not raw strings.
 - **Source map drift**: If phase1/phase2 change line grouping, source map can misalign — verify with diagnostic tests.
 
@@ -173,7 +173,7 @@ Search the codebase for these patterns to see complete examples:
 
 | Command | RFC/Feature | Key files |
 |---------|-------------|-----------|
-| `SceneEffect` | Effects system | `ast.rs`, `executor.rs`, `command.rs`, `command_executor/effects.rs` |
+| `SceneEffect` | Effects system | `ast/mod.rs`, `executor/mod.rs`, `command/mod.rs`, `command_executor/effects.rs` |
 | `TitleCard` | Title card display | Same pipeline |
-| `ExtendText` | RFC-006 rhythm tags | `inline_tags.rs`, `ast.rs`, `executor.rs`, `command.rs`, `command_executor/ui.rs` |
-| `BgmDuck/Unduck` | Audio ducking | `executor.rs`, `command.rs`, `command_executor/audio.rs` |
+| `ExtendText` | RFC-006 rhythm tags | `inline_tags.rs`, `ast/mod.rs`, `executor/mod.rs`, `command/mod.rs`, `command_executor/ui.rs` |
+| `BgmDuck/Unduck` | Audio ducking | `executor/mod.rs`, `command/mod.rs`, `command_executor/audio.rs` |

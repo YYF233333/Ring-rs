@@ -1,7 +1,5 @@
 # host/src/rendering_types.rs
 
-> LastVerified: 2026-03-18
-
 ## Purpose
 
 渲染抽象层（RFC-008）。定义 `Texture` trait、`TextureFactory` trait、`DrawCommand` 枚举以及 `TextureContext`，
@@ -11,7 +9,7 @@
 
 | 类型 | 用途 |
 |------|------|
-| `trait Texture` | 纹理抽象接口（`width/height/size_bytes/as_any`） |
+| `trait Texture` | 纹理抽象接口（`width`/`height`/`width_u32`/`height_u32`/`size_bytes`/`as_any`） |
 | `trait TextureFactory` | 纹理创建工厂接口（`create_texture`） |
 | `TextureContext` | 持有 `Arc<dyn TextureFactory>`，注入到 `ResourceManager` |
 | `DrawCommand` | 绘制命令枚举（`Sprite`/`Rect`/`Dissolve`），使用 `Arc<dyn Texture>` |
@@ -42,3 +40,17 @@ WgpuBackend --render_frame()--> SpriteRenderer/DissolveRenderer (downcast to Gpu
 ## FailureModes
 
 - Backend downcast 失败（传入非 `GpuTexture` 的纹理到 wgpu backend）：panic with expect message
+
+## RelatedDocs
+
+- [backend 摘要](backend.md)
+- [renderer 摘要](renderer.md)
+- [仓库导航地图](../../navigation_map.md)
+
+## LastVerified
+
+2026-03-20
+
+## Owner
+
+Composer

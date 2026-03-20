@@ -1,6 +1,6 @@
 ---
 name: bulk-worker
-model: default
+model: composer-2-fast
 description: Ultra-cheap mechanical worker for high-volume, low-reasoning tasks. Use for file inventories, simple renames, grep-and-replace, fixture generation, and similar bulk operations where correctness is easy to verify.
 ---
 

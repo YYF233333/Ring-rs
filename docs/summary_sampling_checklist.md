@@ -25,7 +25,7 @@
 5. `command`：新增渲染行为时为何通常要扩展 `Command`？
 6. `diagnostic`：未定义 label 如何被检查并定位行号？
 7. `diagnostic`：资源引用提取覆盖哪些资源类型？
-8. `state`：等待状态有哪些，Host 如何配合推进？
+8. `runtime`：等待状态有哪些，Host 如何配合推进？
 9. `runtime+history`：哪些命令会被记录到历史事件？
 10. `cross-module`：一次脚本执行从解析到命令输出的最短链路是什么？
 

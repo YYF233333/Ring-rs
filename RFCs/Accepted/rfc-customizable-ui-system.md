@@ -538,7 +538,7 @@ ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAss
 
 ### Phase 1：基础设施（UiLayoutConfig + ScaleContext + 素材加载） ✓
 
-- [x] 定义 `UiLayoutConfig` 类型体系 + JSON 反序列化 → `host/src/ui/layout.rs`（17 个子结构，~1000 行）
+- [x] 定义 `UiLayoutConfig` 类型体系 + JSON 反序列化 → `host/src/ui/layout/mod.rs`（17 个子结构，~1000 行）
 - [x] 实现 `ScaleContext`（基准→实际分辨率缩放）→ 含 `x()`/`y()`/`uniform()`/`rect()`/`vec2()`
 - [x] 实现 `UiAssetCache`（通过 ResourceSource 加载 GUI 图片 → egui TextureHandle）→ `host/src/ui/asset_cache.rs`
 - [x] 实现 `NinePatch` 九宫格渲染 → `host/src/ui/nine_patch.rs`（`Borders` + 9 块 UV 切分）
@@ -608,7 +608,7 @@ ref-project 的 `gui/` 目录素材直接复制到 `assets/gui/`，通过 `UiAss
 
 | 文件 | 行数 | 说明 |
 |------|------|------|
-| `host/src/ui/layout.rs` | ~1000 | `UiLayoutConfig` 完整类型体系 + `ScaleContext` + `HexColor` + 手写 `Default` |
+| `host/src/ui/layout/mod.rs` | ~1000 | `UiLayoutConfig` 完整类型体系 + `ScaleContext` + `HexColor` + 手写 `Default` |
 | `host/src/ui/asset_cache.rs` | ~90 | `UiAssetCache`：ResourceSource → image 解码 → egui TextureHandle |
 | `host/src/ui/nine_patch.rs` | ~151 | `NinePatch` + `Borders`：9 块 UV 切分 + 独立绘制 |
 | `host/src/egui_screens/confirm.rs` | ~157 | `ConfirmDialog` + 模态覆盖层渲染 |
