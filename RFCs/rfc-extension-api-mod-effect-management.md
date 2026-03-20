@@ -6,7 +6,7 @@
 - 状态：Active
 - 作者：Ring-rs 开发组
 - 日期：2026-03-07
-- 影响范围：`vn-runtime`、`host`、`docs/script_syntax_spec.md`、`assets/scripts/remake/README.md`
+- 影响范围：`vn-runtime`、`host`、`docs/authoring/script-syntax.md`、`assets/scripts/remake/README.md`
 - 相关 RFC：
   - `RFCs/rfc-show-unification-ergonomics.md`
   - `RFCs/rfc-remake-experience-equivalence.md`

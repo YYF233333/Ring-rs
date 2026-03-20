@@ -2,14 +2,9 @@
 
 一个使用 Rust 构建的视觉小说引擎。
 
-如果你是来 **做内容（脚本/素材/配置）** 的：你不需要改仓库代码。
+如果你是来写脚本、准备素材、调整配置的，优先看内容作者文档；如果你是来改引擎实现的，优先看引擎开发文档。
 
-## Getting Started（内容作者）
-
-- **从零开始做内容**：[docs/getting_started.md](docs/getting_started.md)
-- **脚本语法规范**：[docs/script_syntax_spec.md](docs/script_syntax_spec.md)
-- **资源/打包（fs/zip）**：[docs/resource_management.md](docs/resource_management.md)
-- **立绘布局（manifest）**：[docs/manifest_guide.md](docs/manifest_guide.md)
+## 快速开始
 
 ### 环境要求
 
@@ -24,19 +19,15 @@
 cargo run
 ```
 
-首次做内容/配置/打包发行建议按完整流程走：[docs/getting_started.md](docs/getting_started.md)（包含 `config.json` 配置、脚本检查、打包发布与自检）。
-
-运行配置字段说明见：[docs/config_guide.md](docs/config_guide.md)。
-
 ## 文档入口
 
-- **内容制作入门**：[docs/getting_started.md](docs/getting_started.md)
-- **运行配置（config.json）**：[docs/config_guide.md](docs/config_guide.md)
-- **脚本规范**：[docs/script_syntax_spec.md](docs/script_syntax_spec.md)
-- **资源系统与打包**：[docs/resource_management.md](docs/resource_management.md)
-- **存档格式**：[docs/save_format.md](docs/save_format.md)
-- **仓库导航地图（改引擎时看）**：[docs/navigation_map.md](docs/navigation_map.md)
-- **RFC 计划索引**：[RFCs/README.md](RFCs/README.md)
+- [文档中心](docs/README.md)
+- [内容作者文档](docs/authoring/README.md)
+- [引擎开发文档](docs/engine/README.md)
+- [测试与调试](docs/testing/README.md)
+- [维护文档](docs/maintenance/README.md)
+- [架构约束](ARCH.md)
+- [RFC 索引](RFCs/README.md)
 
 ## 仓库结构（Workspace）
 

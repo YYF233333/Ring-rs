@@ -8,11 +8,11 @@ alwaysApply: false
 
 ## 摘要导航
 
-- [script](docs/module_summaries/vn-runtime/script.md)
-- [command](docs/module_summaries/vn-runtime/command.md)
-- [diagnostic](docs/module_summaries/vn-runtime/diagnostic.md)
-- [parser](docs/module_summaries/vn-runtime/parser.md)
-- 语法规范：[script_syntax_spec.md](docs/script_syntax_spec.md)
+- [script](docs/engine/architecture/module-summaries/vn-runtime/script.md)
+- [command](docs/engine/architecture/module-summaries/vn-runtime/command.md)
+- [diagnostic](docs/engine/architecture/module-summaries/vn-runtime/diagnostic.md)
+- [parser](docs/engine/architecture/module-summaries/vn-runtime/parser.md)
+- 语法规范：[script_syntax_spec.md](docs/authoring/script-syntax.md)
 
 ## 关键不变量
 

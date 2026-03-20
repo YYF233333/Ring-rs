@@ -240,7 +240,7 @@ if app_state.config.debug.enable_overlay && debug_overlay.visible {
 4. **阶段 4**：打磨
    - 调整布局、透明度、折叠默认状态。
    - 补充文档注释，更新 `config_guide.md` 中 `debug.enable_overlay` 说明。
-   - 若需要，在 `docs/navigation_map.md` 中补充 `debug_overlay` 入口。
+   - 若需要，在 `docs/engine/architecture/navigation-map.md` 中补充 `debug_overlay` 入口。
 
 ---
 

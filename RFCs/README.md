@@ -3,6 +3,12 @@
 本仓库使用 RFC 流程制定中长期计划与跨模块方案。  
 提案入口为 `RFCs/`，不再使用 `ROADMAP.md`。
 
+相关文档入口：
+
+- 文档总首页：[`docs/README.md`](../docs/README.md)
+- 架构约束：[`ARCH.md`](../ARCH.md)
+- 贡献指南：[`CONTRIBUTING.md`](../CONTRIBUTING.md)
+
 ## 使用约定
 
 - 新提案：新增 `rfc-<topic>.md`，状态为 `Proposed`

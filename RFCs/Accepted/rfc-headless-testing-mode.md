@@ -15,7 +15,7 @@
 - `host/src/headless.rs`：run() 入口；AppState::new(config, AppInit { headless: true, event_stream_path })；NullTextureFactory、虚拟屏幕尺寸；InputReplayer::load + drain_until 注入；headless_loop 固定 dt、update_ingame_common、tick_ingame_shared、run_script_tick；退出条件 replay-end/script-finished/max-frames/timeout-sec。
 - main.rs：--headless、--replay-input（必填）、--event-stream、--exit-on、--max-frames、--timeout-sec；headless 分支调用 headless::run。
 - AppInit 结构体统一构造参数；AudioManager::new_headless()、device_sink 为 Option；update_ingame_common、tick_ingame_shared 提取为 pub(crate) 供 headless 复用。
-- 使用说明见 `docs/headless_guide.md`。
+- 使用说明见 `docs/testing/headless-guide.md`。
 
 ---
 

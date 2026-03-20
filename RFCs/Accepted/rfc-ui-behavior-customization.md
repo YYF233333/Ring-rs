@@ -58,7 +58,7 @@ JSON 结构定义四个界面区域：`title`、`ingame_menu`、`quick_menu`、`
 3. 实现条件求值器（`ConditionDef::evaluate`）与 `ActionDef` → `EguiAction` 转换
 4. 改造 title、ingame_menu、ingame（quick_menu）、game_menu 消费 `ScreenDefinitions` + `UiRenderContext`；settings、save_load、history、confirm、skip_indicator、toast 改为接收 `UiRenderContext`
 5. `history::build_history_content` 改为接收 `&[HistoryEvent]` 而非 `&AppState`
-6. 编写 `docs/screens_customization.md` 与示例
+6. 编写 `docs/engine/ui/screens-customization.md` 与示例
 
 ## 验收标准（已达成）
 

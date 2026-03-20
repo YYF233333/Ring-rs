@@ -8,12 +8,12 @@ alwaysApply: false
 
 ## 摘要导航
 
-- [resources](docs/module_summaries/host/resources.md)
-- [manifest](docs/module_summaries/host/manifest.md)
-- [config](docs/module_summaries/host/config.md)
-- [save_manager](docs/module_summaries/host/save_manager.md)
-- 资源系统：[resource_management.md](docs/resource_management.md)
-- 配置指南：[config_guide.md](docs/config_guide.md)
+- [resources](docs/engine/architecture/module-summaries/host/resources.md)
+- [manifest](docs/engine/architecture/module-summaries/host/manifest.md)
+- [config](docs/engine/architecture/module-summaries/host/config.md)
+- [save_manager](docs/engine/architecture/module-summaries/host/save-manager.md)
+- 资源系统：[resource_management.md](docs/authoring/resources.md)
+- 配置指南：[config_guide.md](docs/authoring/config.md)
 
 ## 关键不变量
 

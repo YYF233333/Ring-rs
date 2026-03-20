@@ -111,7 +111,7 @@ src/foo/tests/low_value.rs
 
 ## 执行情况（已完成的迁移）
 
-- **审计与文档**：已建立 `docs/test_audit_inventory.md`（按测试函数粒度的分类样本与口径），本 RFC 作为分层与维护策略的正式说明。
+- **审计与文档**：已建立 `docs/maintenance/test-audit-inventory.md`（按测试函数粒度的分类样本与口径），本 RFC 作为分层与维护策略的正式说明。
 - **结构迁移**：全仓库原 companion `tests.rs` 已统一迁入 `tests/mod.rs`，共 19 个入口。
 - **分层完成范围**：以下 19 个 `tests/mod.rs` 均已增加 `mod high_value; mod low_value;` 并完成分类迁移，`undecided` 仅在有争议时保留在根模块。
 

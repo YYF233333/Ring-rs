@@ -184,9 +184,9 @@ Check every item in the RFC's 验收标准 section. Each criterion should be dem
 
 Update all affected docs:
 
-- Module summaries in `docs/module_summaries/`.
-- `docs/navigation_map.md` if new patterns or modules were introduced.
-- `docs/script_syntax_spec.md` if syntax changed.
+- Module summaries in `docs/engine/architecture/module-summaries/`.
+- `docs/engine/architecture/navigation-map.md` if new patterns or modules were introduced.
+- `docs/authoring/script-syntax.md` if syntax changed.
 - Any other relevant docs in `docs/`.
 
 ## Quality Checklist

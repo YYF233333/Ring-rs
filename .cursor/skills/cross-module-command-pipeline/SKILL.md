@@ -44,17 +44,17 @@ Read summaries before touching source:
 
 | What | Summary |
 |------|---------|
-| Command contract | `docs/module_summaries/vn-runtime/command.md` |
-| Parser | `docs/module_summaries/vn-runtime/parser.md` |
-| Executor | `docs/module_summaries/vn-runtime/runtime.md` |
-| CommandExecutor | `docs/module_summaries/host/command_executor.md` |
-| Command handlers | `docs/module_summaries/host/app_command_handlers.md` |
+| Command contract | `docs/engine/architecture/module-summaries/vn-runtime/command.md` |
+| Parser | `docs/engine/architecture/module-summaries/vn-runtime/parser.md` |
+| Executor | `docs/engine/architecture/module-summaries/vn-runtime/runtime.md` |
+| CommandExecutor | `docs/engine/architecture/module-summaries/host/command-executor.md` |
+| Command handlers | `docs/engine/architecture/module-summaries/host/app-command-handlers.md` |
 
 Then `rg` for a recent similar Command (e.g. `SceneEffect`, `TitleCard`, `ExtendText`) to see the pattern.
 
 ### Step 1 — Define the syntax (if new instruction)
 
-1. Draft the syntax in `docs/script_syntax_spec.md`.
+1. Draft the syntax in `docs/authoring/script-syntax.md`.
 2. Decide: block-level instruction or inline tag?
    - Block-level → phase1 needs a new `Block` variant, phase2 parses it.
    - Inline tag → `parser/inline_tags.rs`, `InlineEffectKind` in `command/mod.rs`.
@@ -126,9 +126,9 @@ cargo test -p vn-runtime --lib
 
 ### Step 10 — Update docs
 
-1. `docs/script_syntax_spec.md` — add syntax documentation.
+1. `docs/authoring/script-syntax.md` — add syntax documentation.
 2. Module summaries — update affected summaries (command, parser, command_executor, etc.).
-3. `docs/navigation_map.md` — add to "常见改动" if it establishes a new pattern.
+3. `docs/engine/architecture/navigation-map.md` — add to "常见改动" if it establishes a new pattern.
 
 ## Checklist Template
 

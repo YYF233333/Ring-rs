@@ -6,7 +6,7 @@
 - 状态：Proposed
 - 作者：Ring-rs 开发组
 - 日期：2026-03-07
-- 相关范围：`docs/script_syntax_spec.md`、`vn-runtime`、`host`、`tools/xtask`
+- 相关范围：`docs/authoring/script-syntax.md`、`vn-runtime`、`host`、`tools/xtask`
 
 ---
 

@@ -6,7 +6,7 @@
 - 状态：Active
 - 作者：Ring-rs 开发组
 - 日期：2026-03-07（最后更新：2026-03-15）
-- 相关范围：`assets/scripts/remake/`、`vn-runtime`、`host`、`docs/script_syntax_spec.md`
+- 相关范围：`assets/scripts/remake/`、`vn-runtime`、`host`、`docs/authoring/script-syntax.md`
 
 ---
 
@@ -92,7 +92,7 @@
 
 - 核心页面：主菜单、设置、历史、存档/读档、游内菜单
 - Skip/Auto/Normal 三模式 + `skip_all_active_effects()` 收敛跳过
-- **UI 重构（RFC-011）已落地**：季节切换（标题/游内菜单）、存读档分页与缩略图、notify/滑块样式、UI 定制文档（`docs/ui_customization.md`）
+- **UI 重构（RFC-011）已落地**：季节切换（标题/游内菜单）、存读档分页与缩略图、notify/滑块样式、UI 定制文档（`docs/engine/ui/ui-customization.md`）
 
 #### 视频播放
 

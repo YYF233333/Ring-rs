@@ -6,7 +6,7 @@
 - **状态**：Accepted
 - **作者**：Ring-rs 开发组
 - **日期**：2026-03-16
-- **相关范围**：`host/src/config/`、`host/src/ui/layout/`、`host/src/ui/screen_defs/`、`tools/asset-packer/`、`config.json`、`assets/ui/layout.json`、`assets/ui/screens.json`、`docs/config_guide.md`、`docs/ui_customization.md`、`docs/screens_customization.md`
+- **相关范围**：`host/src/config/`、`host/src/ui/layout/`、`host/src/ui/screen_defs/`、`tools/asset-packer/`、`config.json`、`assets/ui/layout.json`、`assets/ui/screens.json`、`docs/authoring/config.md`、`docs/engine/ui/ui-customization.md`、`docs/engine/ui/screens-customization.md`
 
 ---
 

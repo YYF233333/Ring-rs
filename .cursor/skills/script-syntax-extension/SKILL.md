@@ -70,7 +70,7 @@ Returns pure text (tags stripped) plus a list of effects with character-position
 
 ### Step 1 — Design the syntax
 
-Draft in `docs/script_syntax_spec.md` first. Follow design principles:
+Draft in `docs/authoring/script-syntax.md` first. Follow design principles:
 
 - **Human-friendly**: script authors use Typora/Markdown editors.
 - **Tolerant**: ignore trailing spaces, support both `:` and `：`.
@@ -161,15 +161,15 @@ cargo check-all
 
 Update:
 
-1. `docs/script_syntax_spec.md` — formal syntax entry.
-2. `docs/module_summaries/vn-runtime/parser.md` — add to KeyFlow list.
-3. `docs/module_summaries/vn-runtime/script.md` — mention new node.
+1. `docs/authoring/script-syntax.md` — formal syntax entry.
+2. `docs/engine/architecture/module-summaries/vn-runtime/parser.md` — add to KeyFlow list.
+3. `docs/engine/architecture/module-summaries/vn-runtime/script.md` — mention new node.
 
 ## Step-by-Step: New Inline Tag
 
 ### Step 1 — Design in spec
 
-Add to the inline tags section of `docs/script_syntax_spec.md`.
+Add to the inline tags section of `docs/authoring/script-syntax.md`.
 
 ### Step 2 — InlineEffectKind
 

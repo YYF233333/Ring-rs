@@ -16,7 +16,7 @@
 - `InputManager`：recording_buffer、elapsed_ms；process_input_event、inject_replay_events、recording_snapshot、enable_recording。
 - `config.json` / DebugConfig：recording_buffer_size_mb、recording_output_dir。
 - F8 热键导出在 app 层（export_recording），录制文件为 JSON Lines，首行 Meta，后续 Event。
-- 使用说明见 `docs/headless_guide.md`。
+- 使用说明见 `docs/testing/headless-guide.md`。
 
 ---
 

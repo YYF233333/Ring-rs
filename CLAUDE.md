@@ -61,9 +61,9 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 | 内容 | 路径 |
 |------|------|
-| 导航地图 | `docs/navigation_map.md` |
-| 摘要入口 | `docs/summary_index.md` |
-| 脚本语法规范 | `docs/script_syntax_spec.md` |
+| 导航地图 | `docs/engine/architecture/navigation-map.md` |
+| 摘要入口 | `docs/maintenance/summary-index.md` |
+| 脚本语法规范 | `docs/authoring/script-syntax.md` |
 
 ## 常用命令
 
@@ -106,7 +106,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 ### 摘要优先
 
-所有任务默认"摘要优先、源码兜底"：先按 `docs/summary_index.md` 阅读摘要与导航，再决定源码最小读取范围。维护要求见 `docs/summary_maintenance.md`。
+所有任务默认"摘要优先、源码兜底"：先按 `docs/maintenance/summary-index.md` 阅读摘要与导航，再决定源码最小读取范围。维护要求见 `docs/maintenance/summary-maintenance.md`。
 
 ### 源码读取约束（Token 护栏）
 

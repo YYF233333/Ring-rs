@@ -120,10 +120,10 @@ RFC-010 构建了数据驱动的可定制 UI 系统，完成了核心架构（`U
 
 #### 3.3.4 UI 定制文档
 
-**现状**：✅ **已实现**。`docs/ui_customization.md` 已存在，包含配置文件位置（`assets/ui/layout.json`）、完整结构示例、字体/颜色/布局字段说明、素材路径与 NinePatch 边框等，面向游戏开发者。
+**现状**：✅ **已实现**。`docs/engine/ui/ui-customization.md` 已存在，包含配置文件位置（`assets/ui/layout.json`）、完整结构示例、字体/颜色/布局字段说明、素材路径与 NinePatch 边框等，面向游戏开发者。
 
 **目标**（已达成）：
-- `docs/ui_customization.md` 描述 layout 字段、素材替换与路径映射
+- `docs/engine/ui/ui-customization.md` 描述 layout 字段、素材替换与路径映射
 - 面向游戏开发者
 
 ---
@@ -159,7 +159,7 @@ RFC-010 构建了数据驱动的可定制 UI 系统，完成了核心架构（`U
 - [x] 存档截图功能（GPU 帧回读 + 缩略图编码）
 - [x] Toast 使用 `notify.png` NinePatch 背景
 - [x] 自定义滑块样式
-- [x] 撰写 `docs/ui_customization.md`
+- [x] 撰写 `docs/engine/ui/ui-customization.md`
 
 ---
 
@@ -200,6 +200,6 @@ RFC-010 构建了数据驱动的可定制 UI 系统，完成了核心架构（`U
 | 3.3.1 存档截图缩略图 | ✅ 已实现 | 帧回读 + save_manager 缩略图读写 + save_load 显示 |
 | 3.3.2 notify.png 背景 | ✅ 已实现 | toast.rs 使用 notify 纹理 + NinePatch |
 | 3.3.3 自定义滑块样式 | ✅ 已实现 | image_slider.rs + settings 使用 slider 素材 |
-| 3.3.4 UI 定制文档 | ✅ 已实现 | docs/ui_customization.md 已存在且完整 |
+| 3.3.4 UI 定制文档 | ✅ 已实现 | docs/engine/ui/ui-customization.md 已存在且完整 |
 
 **待办**：仅 3.2.2 NotoSansSC 作为默认或专用字体尚未实现；若需与 ref-project 一致，可在 config 或资源中默认使用 NotoSansSC。

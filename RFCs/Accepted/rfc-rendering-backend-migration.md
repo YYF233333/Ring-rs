@@ -383,7 +383,7 @@ Host 层 ARCH.md 中"macroquad 宿主"的表述需在迁移完成后更新为"wi
 - [ ] 所有菜单页面（Title / Settings / SaveLoad / History / InGameMenu）可交互
 - [ ] 存档 / 读档 / Continue 功能正常
 - [ ] 音频播放不受影响
-- [ ] `ARCH.md`、`docs/navigation_map.md`、相关模块摘要已更新
+- [ ] `ARCH.md`、`docs/engine/architecture/navigation-map.md`、相关模块摘要已更新
 
 ---
 

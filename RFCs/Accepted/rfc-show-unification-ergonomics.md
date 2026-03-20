@@ -6,7 +6,7 @@
 - 状态：Accepted
 - 作者：Ring-rs 开发组
 - 日期：2026-03-07
-- 影响范围：`docs/script_syntax_spec.md`、`assets/scripts/remake/ring/**/*.md`、`vn-runtime`、`host`
+- 影响范围：`docs/authoring/script-syntax.md`、`assets/scripts/remake/ring/**/*.md`、`vn-runtime`、`host`
 
 ---
 
@@ -104,7 +104,7 @@
 
 ### Phase A：规范冻结（已完成）
 
-- 在 `docs/script_syntax_spec.md` 明确 `show` 单入口语义。
+- 在 `docs/authoring/script-syntax.md` 明确 `show` 单入口语义。
 - 标注 `showStyle`、`stageActor` 为 deprecated（仅兼容解析，不建议新增）。
 
 ### Phase B：运行时实现（已完成）

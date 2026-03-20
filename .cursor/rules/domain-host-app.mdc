@@ -8,12 +8,12 @@ alwaysApply: false
 
 ## 摘要导航
 
-- [app](docs/module_summaries/host/app.md)
-- [app_update](docs/module_summaries/host/app_update.md)
-- [app_command_handlers](docs/module_summaries/host/app_command_handlers.md)
-- [command_executor](docs/module_summaries/host/command_executor.md)
-- [host_app](docs/module_summaries/host/host_app.md)
-- [egui_actions](docs/module_summaries/host/egui_actions.md)
+- [app](docs/engine/architecture/module-summaries/host/app.md)
+- [app_update](docs/engine/architecture/module-summaries/host/app-update.md)
+- [app_command_handlers](docs/engine/architecture/module-summaries/host/app-command-handlers.md)
+- [command_executor](docs/engine/architecture/module-summaries/host/command-executor.md)
+- [host_app](docs/engine/architecture/module-summaries/host/host-app.md)
+- [egui_actions](docs/engine/architecture/module-summaries/host/egui-actions.md)
 
 ## 关键不变量
 

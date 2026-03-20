@@ -8,13 +8,13 @@ alwaysApply: false
 
 ## 摘要导航
 
-- [audio](docs/module_summaries/host/audio.md)
-- [video](docs/module_summaries/host/video.md)
-- [input](docs/module_summaries/host/input.md)
-- [ui](docs/module_summaries/host/ui.md)
-- [egui_screens](docs/module_summaries/host/egui_screens.md)
-- [extensions](docs/module_summaries/host/extensions.md)
-- UI 定制：[ui_customization.md](docs/ui_customization.md)
+- [audio](docs/engine/architecture/module-summaries/host/audio.md)
+- [video](docs/engine/architecture/module-summaries/host/video.md)
+- [input](docs/engine/architecture/module-summaries/host/input.md)
+- [ui](docs/engine/architecture/module-summaries/host/ui.md)
+- [egui_screens](docs/engine/architecture/module-summaries/host/egui-screens.md)
+- [extensions](docs/engine/architecture/module-summaries/host/extensions.md)
+- UI 定制：[ui_customization.md](docs/engine/ui/ui-customization.md)
 
 ## 关键不变量
 
