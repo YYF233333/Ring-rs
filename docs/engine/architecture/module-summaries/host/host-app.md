@@ -2,11 +2,12 @@
 
 ## Purpose
 
-`host_app` 实现 winit `ApplicationHandler` trait，是窗口生命周期和帧循环的入口。负责窗口创建、事件分发、egui UI 编排和每帧渲染驱动。
+`host_app` 实现 winit `ApplicationHandler` trait，是窗口模式下的生命周期和帧循环入口。负责窗口创建、事件分发、egui UI 编排和每帧渲染驱动；无窗口回放路径则由 `host/src/headless.rs` 负责镜像执行同一套 `app::update` 与 UI 编排。
 
 ## PublicSurface
 
 - 文件：`host/src/host_app.rs`
+- 相关入口：`host/src/headless.rs`
 - 关键类型：`HostApp`
 - `HostApp::new(config, event_stream_path)` 构造应用实例（字体在 `resumed` 中按 `config.default_font` 加载）
 - `ApplicationHandler::resumed` 创建窗口，初始化 `AppState`，再创建 GPU 后端并回填 `TextureContext`
@@ -14,8 +15,9 @@
 
 ## KeyFlow
 
-1. `resumed`：创建 winit 窗口 -> 创建 `AppState` -> 读取默认字体 -> 初始化 `WgpuBackend` -> 设置 GPU 资源上下文
-2. `window_event(RedrawRequested)`：首帧加载资源/脚本 -> 每帧 `update` -> 构建 sprite draw commands -> egui UI 渲染 -> 处理 `EguiAction` -> 提交帧
+1. 窗口模式：`resumed` 创建 winit 窗口 -> 创建 `AppState` -> 读取默认字体 -> 初始化 `WgpuBackend` -> 设置 GPU 资源上下文
+2. 窗口模式：`window_event(RedrawRequested)` 首帧加载资源/脚本 -> 每帧 `update` -> 构建 sprite draw commands -> egui UI 渲染 -> 处理 `EguiAction` -> 提交帧
+3. Headless 模式：`headless::run` 加载 replay -> 以固定步长执行 `app::update` -> 运行 CPU-only egui -> 处理 `EguiAction`
 
 ## Dependencies
 
@@ -25,7 +27,7 @@
 
 ## Invariants
 
-- `HostApp` 是 `main.rs` 与 `AppState` 之间的唯一桥梁
+- `HostApp` 只负责窗口模式；headless 路径不经过该类型
 - `backend` 和 `app_state` 在 `resumed` 后才初始化（均为 `Option`）
 
 ## WhenToReadSource
@@ -34,7 +36,7 @@
 
 ## LastVerified
 
-2026-03-21
+2026-03-22
 
 ## Owner
 

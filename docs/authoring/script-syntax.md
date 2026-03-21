@@ -1031,6 +1031,8 @@ callGame "game_id" as $result (difficulty: 3, time_limit: 60)
 
 `callGame` 为语法糖，等价于 `requestUI "call_game" as $result (game_id: "game_id", ...)`。
 
+命名参数在语法层已支持；当前 Host 版本尚未把这些参数注入小游戏运行时，请先不要依赖该能力。
+
 Headless 模式下由录制文件（replay）中的 `UIResult` 事件提供游戏结果。
 
 ---

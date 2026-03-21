@@ -19,6 +19,14 @@
 cargo run
 ```
 
+无窗口回放/自动化调试可使用：
+
+```bash
+cargo run -- --headless --replay-input recordings/example.jsonl
+```
+
+`--headless` 必须搭配 `--replay-input`；可选参数见 `host/src/main.rs` 中的 CLI 定义。
+
 ## 文档入口
 
 - [文档中心](docs/README.md)

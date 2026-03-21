@@ -63,10 +63,7 @@ window.ipc.postMessage(JSON.stringify({
 
 // 游戏结束时通知引擎
 function gameOver(score) {
-    window.ipc.postMessage(JSON.stringify({
-        type: "onComplete",
-        result: score > 100 ? "win" : "lose"
-    }));
+    window.engine.onComplete(score > 100 ? "win" : "lose");
 }
 ```
 
@@ -81,7 +78,7 @@ callGame "game_id" as $result_var (param1: value1, param2: "str")
 
 - `game_id`：对应 `assets/games/{game_id}/` 目录
 - `$result_var`：存储游戏结果的变量名
-- 参数列表可选，传递给小游戏的初始化参数
+- 参数列表语法上可选；当前 Host 版本尚未把这些参数注入到 WebView 运行时，请先不要依赖
 
 ### showMap
 
@@ -152,7 +149,7 @@ showMap "world_map" as $destination
 **Headless 模式（无窗口测试）**：
 - WebView 不可用，`callGame` 跳过启动
 - 游戏结果由录制文件（replay）中的 `UIResult` 事件提供，确保分支路径与录制时一致
-- 录制系统自动捕获所有 `UIResult` 事件（callGame / showMap 等），无需额外配置
+- `callGame` 结果会写入录制中的 `UIResult` 事件；`showMap` 等普通 egui 交互依赖原始鼠标/键盘事件回放，无需额外配置
 
 ## 文本模式
 

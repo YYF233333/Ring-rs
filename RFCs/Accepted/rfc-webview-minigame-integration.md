@@ -65,7 +65,7 @@ VN 脚本                    Host                         WebView (wry)
 
 ```
 host/src/game_mode/
-├── mod.rs          -- 模块入口，feature gate
+├── mod.rs          -- 模块入口
 ├── lifecycle.rs    -- GameMode 状态机（Idle/Running）
 └── bridge.rs       -- JS Bridge 协议（BridgeRequest/BridgeResponse）
 ```
@@ -130,7 +130,7 @@ window.engine = {
 
 **GUI 模式 WebView 创建失败**：立即回传空字符串 `UIResult`，脚本可通过结果变量判断。
 
-**Headless 模式**：跳过 WebView 启动，由录制文件中的 `UIResult` 事件提供真实游戏结果，保证分支路径与录制时一致。录制系统通过 `InputEvent::UIResult` 变体自动捕获所有 UI 交互结果。
+**Headless 模式**：跳过 WebView 启动，由录制文件中的 `UIResult` 事件提供真实游戏结果，保证分支路径与录制时一致。这里的 `UIResult` 主要指 `callGame` 结果；普通 egui 交互仍依赖物理输入事件回放。
 
 > **历史变更**：wry 依赖最初通过 `mini-games` feature gate 条件编译。经测试 feature 开关仅影响约 400KB 二进制体积，feature gate 已移除，wry 常开编译。
 
@@ -140,8 +140,8 @@ window.engine = {
 
 | 模块 | 改动 | 风险 |
 |------|------|------|
-| `host/src/game_mode/` | 新增模块（已在 spike 中创建骨架） | 低：feature gate 隔离 |
-| `host/Cargo.toml` | 新增 wry 可选依赖（已完成） | 低：不影响默认编译 |
+| `host/src/game_mode/` | 新增模块（小游戏生命周期与协议骨架） | 中：Bridge 仍有预留未接线能力 |
+| `host/Cargo.toml` | 新增 wry 依赖（当前常开编译） | 中：引入平台 WebView 构建成本 |
 | `vn-runtime/parser` | 新增 `callGame` 语法糖 | 低：复用 RequestUI 节点 |
 | `host/src/app/update/script.rs` | 处理 RequestUI mode="call_game" | 中：需要与 wgpu 渲染循环协调 |
 
@@ -159,5 +159,5 @@ window.engine = {
 - [ ] wry 正常编译（常开依赖）
 - [ ] GameMode 状态机正确管理 Idle/Running 转换
 - [ ] JS Bridge 协议类型定义完整（BridgeRequest / BridgeResponse）
-- [ ] Headless 模式下 callGame 正确降级（立即返回空结果）
+- [ ] Headless 模式下 callGame 正确降级（由 replay 提供 `UIResult`）
 - [ ] `cargo check-all` 通过

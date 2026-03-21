@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`host` 是视觉小说引擎的宿主层（winit + wgpu + egui）：负责窗口与渲染、输入采集、音频播放、资源加载，以及把 `vn-runtime` 输出的 `Command` 落地为实际画面与交互效果。
+`host` 是视觉小说引擎的宿主层（winit + wgpu + egui）：负责窗口与渲染、输入采集、音频播放、资源加载，以及把 `vn-runtime` 输出的 `Command` 落地为实际画面与交互效果。除窗口模式外，也提供 `headless` 回放入口用于无窗口自动化调试。
 
 ## PublicSurface
 
@@ -16,7 +16,7 @@
 2. 每帧 `app::update` 拉取输入、推进 `vn-runtime`、消费命令并驱动动画/过渡。
 3. `command_executor` 将 `Command` 转换为 `RenderState` 变更与外部副作用请求。
 4. `app/command_handlers` 消费副作用请求，驱动音频与效果应用器。
-5. `main.rs` 通过 `backend::WgpuBackend` 渲染 sprite 命令 + egui UI 到屏幕。
+5. 窗口模式由 `main.rs` + `host_app` 通过 `backend::WgpuBackend` 渲染 sprite 命令 + egui UI 到屏幕；headless 模式由 `headless.rs` 复用同一套 update/UI 逻辑但跳过 GPU。
 
 ## Submodules
 
@@ -73,8 +73,8 @@
 
 ## LastVerified
 
-2026-03-20
+2026-03-22
 
 ## Owner
 
-Composer
+GPT-5.4
