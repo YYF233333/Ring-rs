@@ -142,12 +142,14 @@ characters/北风-日常服.png  → group ID: "北风"
 
 ## 校验规则
 
-系统会自动校验配置：
+`Manifest` 提供显式校验能力，但当前默认启动路径只做读取与解析，不会自动调用校验逻辑。若你希望在工具链或启动前检查配置，需要显式调用 `validate()` 或 `load_and_validate()`。
+
+可校验项包括：
 
 - ⚠️ 预缩放 ≤ 0
 - ⚠️ sprite 引用不存在的 group
 
-校验失败时会打印警告，但不会阻止运行。
+显式校验返回 warning 集合；默认启动流程在 parse/read 失败时会回退到默认 manifest，而不是自动打印这些 warning。
 
 ## 最佳实践
 

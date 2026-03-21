@@ -59,33 +59,28 @@ assets/ui/layout.json
     "selected": "#ffffff",
     "insensitive": "#7878787f",
     "text": "#000000",
-    "interface_text": "#ffffff",
-    "choice_idle": "#cccccc",
-    "choice_hover": "#ffffff"
+    "interface_text": "#ffffff"
   },
 
   "dialogue": {
     "textbox_height": 278.0,
-    "textbox_yalign": 1.0,
     "name_xpos": 360.0,
     "name_ypos": 0.0,
+    "namebox_borders": [5.0, 5.0, 5.0, 5.0],
     "dialogue_xpos": 402.0,
     "dialogue_ypos": 75.0,
-    "dialogue_width": 1116.0,
-    "namebox_borders": [30.0, 20.0, 30.0, 20.0]
+    "dialogue_width": 1116.0
   },
 
   "choice": {
     "button_width": 1185.0,
-    "ypos": 405.0,
     "spacing": 33.0,
-    "button_borders": [25.0, 15.0, 25.0, 15.0]
+    "button_borders": [150.0, 8.0, 150.0, 8.0]
   },
 
   "quick_menu": {
     "text_size": 21.0,
-    "spacing": 6.0,
-    "button_borders": [8.0, 6.0, 8.0, 6.0]
+    "button_borders": [15.0, 6.0, 15.0, 0.0]
   },
 
   "title": {
@@ -100,11 +95,13 @@ assets/ui/layout.json
 
   "save_load": {
     "cols": 3,
+    "rows": 2,
     "slot_width": 414.0,
     "slot_height": 309.0,
-    "slot_spacing": 15.0,
     "thumbnail_width": 384.0,
-    "thumbnail_height": 216.0
+    "thumbnail_height": 216.0,
+    "slot_spacing": 15.0,
+    "page_spacing": 0.0
   },
 
   "history": {
@@ -116,22 +113,22 @@ assets/ui/layout.json
   },
 
   "settings": {
-    "pref_spacing": 12.0
+    "pref_spacing": 15.0,
+    "pref_button_spacing": 0.0
   },
 
   "confirm": {
-    "button_spacing": 150.0,
-    "frame_borders": [30.0, 30.0, 30.0, 30.0]
+    "frame_borders": [60.0, 60.0, 60.0, 60.0]
   },
 
   "skip_indicator": {
     "ypos": 15.0,
-    "borders": [15.0, 10.0, 15.0, 10.0]
+    "frame_borders": [24.0, 8.0, 75.0, 8.0]
   },
 
   "notify": {
     "ypos": 68.0,
-    "frame_borders": [15.0, 10.0, 15.0, 10.0]
+    "frame_borders": [24.0, 8.0, 60.0, 8.0]
   },
 
   "assets": {
@@ -260,5 +257,5 @@ assets/gui/
 
 - 素材文件不存在 → 对应控件使用纯色 fallback 渲染
 - `layout.json` 不存在 → 启动报错（须存在且字段完整，与概述一致）
-- `layout.json` 字段缺失 → 仅缺失字段使用默认值
+- `layout.json` 字段缺失或包含未知字段 → 反序列化失败并启动报错（当前使用 `deny_unknown_fields`，不做字段级默认回退）
 - 字体文件不存在 → 使用 egui 内置 fallback 字体（CJK 字符可能显示为豆腐块）

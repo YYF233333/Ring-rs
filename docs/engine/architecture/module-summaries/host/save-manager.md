@@ -11,13 +11,6 @@
 - 常量：`MAX_SAVE_SLOTS`
 - 关键接口：`save/load/delete/list_saves`、`save_continue/load_continue`、`get_save_info/get_continue_info`、`thumbnail_path/save_thumbnail/load_thumbnail_bytes`、`next_available_slot`、`ensure_dir`
 
-**持久化变量（`PersistentStore`）**：
-
-- 模块入口：`host/src/app/persistent.rs`
-- 核心类型：`PersistentStore { variables: HashMap<String, VarValue> }`
-- 关键接口：`load(saves_dir)`、`save()`、`merge_from(vars)`、`save_or_log()`
-- 文件：`saves/persistent.json`（key 为 bare key，不含 `persistent.` 前缀）
-
 ## KeyFlow
 
 1. 启动或保存前通过 `ensure_dir` 确保存档目录存在。
@@ -30,6 +23,7 @@
 
 - 依赖 `vn_runtime::{SaveData, SaveError}`
 - 被 `app/save` 与相关页面（存档/读档）消费
+- 持久化变量的磁盘读写由 `host/src/app/persistent.rs` 中的 `PersistentStore` 负责，属于应用层配套子系统，而非 `save_manager` 自身 API
 
 ## Invariants
 
@@ -54,8 +48,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-21
 
 ## Owner
 
-Composer
+GPT-5.4

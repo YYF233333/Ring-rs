@@ -94,12 +94,12 @@
 - **入口（尽量薄）**：`host/src/main.rs`（仅 `main()` + 配置 + EventLoop 启动）
 - **HostApp（ApplicationHandler）**：`host/src/host_app.rs`（窗口生命周期、事件分发）
 - **EguiAction（UI 动作枚举）**：`host/src/egui_actions.rs`
-- **egui 页面构建**：`host/src/egui_screens/`（title/ingame/settings/save_load/history/toast/helpers）
+- **egui 页面构建**：`host/src/egui_screens/`（title/ingame/settings/save_load/history/toast/confirm/game_menu/ingame_menu/skip_indicator）
 - **AppState 与组装**：`host/src/app/mod.rs`（`CoreSystems` 含渲染/资源/**`video_player`**（过场视频）等媒体管线；`video_player` 已从 AppState 顶层迁入 `core`）
 - **启动引导（资源预加载/按需加载扫描）**：`host/src/app/bootstrap.rs`
 - **初始化拆分（资源/音频/manifest/脚本/设置等）**：`host/src/app/init.rs`
 - **每帧更新（已模块化）**：`host/src/app/update/`
-  - `host/src/app/update/mod.rs`：聚合入口 `update(app_state)`
+  - `host/src/app/update/mod.rs`：聚合入口 `update(app_state, dt)`
   - `host/src/app/update/modes.rs`：按 `AppMode` 分发（Title/Menu/Settings/History…）
   - `host/src/app/update/script.rs`：脚本输入 + runtime tick + 命令执行链路；阶段26新增 `skip_all_active_effects()`（Skip 模式收敛入口）
   - `host/src/app/update/scene_transition.rs`：场景过渡驱动
@@ -146,12 +146,12 @@
 - **视频系统（RFC-009 cutscene）**：`host/src/video/`
   - **VideoPlayer 状态机与编排**：`host/src/video/mod.rs`（FFmpeg 检测、帧调度、跳过）
   - **VideoDecoder**：`host/src/video/decoder.rs`（ffmpeg-sidecar 后台解码线程，RGB24→RGBA）
-  - **VideoAudio**：`host/src/video/audio.rs`（FFmpeg 子进程 PCM 音频提取，rodio 播放）
+  - **VideoAudio**：`host/src/video/audio.rs`（FFmpeg 子进程音频提取与样本缓冲；实际播放由 `app/update/modes.rs` 调用 `AudioManager::play_video_audio()`）
 - **音频系统**：`host/src/audio/`（mod.rs: 结构/音量/duck; playback.rs: BGM/SFX 播放与淡入淡出）
-- **UI 基础设施**：`host/src/ui/`（layout/asset_cache/nine_patch/image_slider/toast）。定制指南见 `docs/engine/ui/ui-customization.md`
+- **UI 基础设施**：`host/src/ui/`（layout/asset_cache/nine_patch/image_slider/toast/render_context/screen_defs）。定制指南见 `docs/engine/ui/ui-customization.md`
 - **输入（winit 事件驱动）**：`host/src/input/`（`mod.rs`：`InputManager` 编排；`state.rs`：键鼠状态、防抖、长按；`choice_navigator.rs`：选择分支导航；`recording.rs`：录制/回放不变）
 - **事件流（结构化调试输出）**：`host/src/event_stream/`（`EngineEvent` + `EventStream`；便捷方法如 `on_script_tick`、`on_command_produced`、`on_command_executed`、`on_state_changed`、`on_input_received`、`on_transition_update`、`on_audio_event`）
-- **Headless 测试模式**：`host/src/headless.rs`（无窗口回放循环；主循环调用 `app::update()`，与 GUI 共用每帧更新路径）
+- **Headless 测试模式**：`host/src/headless.rs`（无窗口回放循环；主循环调用 `app::update(app_state, dt)`，与 GUI 共用每帧更新路径）
 - **配置/manifest/save manager**：`host/src/config/`、`host/src/manifest/`、`host/src/save_manager/`
 
 ### 常见改动：节奏标签 / 打字机行为

@@ -30,7 +30,7 @@
 
 - `tick` 是唯一推进入口。
 - 等待状态由 `WaitingReason` 显式建模。
-- 输入与等待状态不匹配时返回 `RuntimeError::StateMismatch`。
+- 输入与等待状态的处理是“按等待类型细分”的：`WaitForChoice` 索引越界返回 `InvalidChoiceIndex`；`WaitForSignal` 收到其他 signal 会忽略；`WaitForTime` 仅 `Click` 可打断，其余输入忽略；只有特定非法组合才返回 `RuntimeError::StateMismatch`。
 - `WaitForTime` 可被 `Click` 打断（用于 `wait` 指令的交互打断）。
 - 跨文件调用通过 `RuntimeState.call_stack` 显式建模，可序列化恢复。
 - `RuntimeState` 包含两个变量域：
@@ -58,8 +58,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-21
 
 ## Owner
 
-Composer
+GPT-5.4

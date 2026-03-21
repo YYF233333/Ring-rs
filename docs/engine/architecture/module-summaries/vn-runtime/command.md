@@ -16,7 +16,7 @@
 2. `VNRuntime::tick` 按执行顺序返回 `Vec<Command>`。
 3. Host 侧执行器将命令映射到渲染/音频/UI 系统。
 4. `Command` 包含 `SceneEffect { name, args }`、`TitleCard { text, duration }` 等 variants。
-5. 信号常量 `SIGNAL_SCENE_EFFECT`、`SIGNAL_TITLE_CARD` 用于场景效果与标题卡等待。
+5. 信号常量 `SIGNAL_SCENE_TRANSITION`、`SIGNAL_SCENE_EFFECT`、`SIGNAL_TITLE_CARD`、`SIGNAL_CUTSCENE` 共同覆盖场景切换、场景效果、标题卡与视频过场的等待恢复链路。
 6. `InlineEffect` / `InlineEffectKind` 定义内联节奏标签数据模型（字符位置 + 效果类型：Wait/SetCpsAbsolute/SetCpsRelative/ResetCps）。
 7. `Command::ShowText` 扩展 `inline_effects` 和 `no_wait` 字段；新增 `Command::ExtendText` variant。
 8. `Command::BgmDuck` / `Command::BgmUnduck`：BGM 音量临时压低与恢复（即时指令，不产生等待态）。
@@ -52,8 +52,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-21
 
 ## Owner
 
-Composer
+GPT-5.4

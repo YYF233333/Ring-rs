@@ -17,7 +17,7 @@
 2. 执行函数更新 `RenderState`，并将副作用写入 `last_output`。
 3. `execute_batch` 顺序执行命令，汇总等待态或提前返回错误。
 4. 上层 `app`/`command_handlers` 根据输出继续驱动音频与效果系统。
-5. `effects` 子模块处理 `SceneEffect`、`TitleCard` 命令，产出效果请求与等待信号。
+5. `effects` 子模块处理 `SceneEffect`、`TitleCard` 等命令，产出效果请求或渲染状态变更；等待恢复由 `app/update` 根据 runtime 返回的 `waiting_reason` 统一推进。
 6. `ui` 子模块处理 `ShowText`（含 `inline_effects`/`no_wait`）和新增的 `ExtendText`（台词续接）命令。
 
 ## Dependencies
@@ -50,8 +50,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-21
 
 ## Owner
 
-Composer
+GPT-5.4

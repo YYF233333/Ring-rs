@@ -8,13 +8,13 @@
 
 - 文件：`host/src/host_app.rs`
 - 关键类型：`HostApp`
-- `HostApp::new(config)` 构造应用实例（字体在 `resumed` 中按 `config.default_font` 加载）
-- `ApplicationHandler::resumed` 创建窗口与 GPU 后端，初始化 `AppState`
+- `HostApp::new(config, event_stream_path)` 构造应用实例（字体在 `resumed` 中按 `config.default_font` 加载）
+- `ApplicationHandler::resumed` 创建窗口，初始化 `AppState`，再创建 GPU 后端并回填 `TextureContext`
 - `ApplicationHandler::window_event` 分发输入/调用 `app::update`/驱动 egui UI/提交渲染帧
 
 ## KeyFlow
 
-1. `resumed`：创建 winit 窗口 -> 初始化 `WgpuBackend` -> 创建 `AppState` -> 设置 GPU 资源上下文
+1. `resumed`：创建 winit 窗口 -> 创建 `AppState` -> 读取默认字体 -> 初始化 `WgpuBackend` -> 设置 GPU 资源上下文
 2. `window_event(RedrawRequested)`：首帧加载资源/脚本 -> 每帧 `update` -> 构建 sprite draw commands -> egui UI 渲染 -> 处理 `EguiAction` -> 提交帧
 
 ## Dependencies
@@ -34,8 +34,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-21
 
 ## Owner
 
-Composer
+GPT-5.4

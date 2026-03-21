@@ -122,7 +122,7 @@ changeBG <img src="path/to/image.jpg" /> with Dissolve(duration: 1.5)
 
 ### 5.2 场景切换 (changeScene)
 
-> **职责**：复合场景切换，涉及 UI 隐藏/恢复、遮罩过渡、清除立绘等完整演出流程。
+> **职责**：带过渡效果的背景切换；UI/立绘控制需要由脚本显式组合。
 
 ```markdown
 changeScene <img src="bg.jpg" /> with Dissolve(duration: 1)
@@ -133,33 +133,39 @@ changeScene <img src="bg.jpg" /> with <img src="rule.png" /> (duration: 1, rever
 
 #### 5.2.1 设计意图
 
-`changeScene` 是一个**复合场景切换**指令，用一行脚本表达完整的演出流程。与 `changeBG` 的区别：
+`changeScene` 表示“带过渡效果的场景背景切换”。它的职责是切换背景并触发场景级过渡；对话框、章节 UI、立绘是否需要隐藏/清空，必须由脚本显式表达。
+
+与 `changeBG` 的区别：
 
 | 特性 | changeBG | changeScene |
 |------|----------|-------------|
-| UI 隐藏/恢复 | ❌ | ✅ |
-| 清除立绘 | ❌ | ✅ |
-| 支持遮罩 | ❌ | ✅ |
-| 复合流程 | ❌ | ✅ |
+| 允许不带过渡直接换背景 | ✅ | ❌ |
+| 绑定场景级过渡效果 | ❌ | ✅ |
+| 会让 Runtime 等待 Host 完成过渡 | ❌ | ✅ |
+| 隐式隐藏/恢复 UI | ❌ | ❌ |
+| 隐式清除立绘 | ❌ | ❌ |
 
-#### 5.2.2 目标语义（推荐实现）
+#### 5.2.2 运行时语义
 
-1. 使用 `dissolve` 隐藏 UI（对话框/选择分支/章节标题等 UI 层）
-2. 使用 `with` 指定的效果叠加遮罩（黑色/白色/rule 图片）
-3. 清除所有立绘，替换背景为新指定背景
-4. 使用同一效果隐去遮罩
-5. 使用 `dissolve` 恢复 UI
+1. Runtime 产出 `ChangeScene` 命令。
+2. Host 根据 `with` 子句解析并播放场景过渡。
+3. Runtime 进入等待态，直到 Host 发送场景切换完成信号后再继续执行后续脚本。
 
-> 说明：以上是**推荐的可观察语义**。为了保持 Runtime/Host 分离，这些步骤可以全部在 Host 内部完成。
+如果你希望切场前隐藏 UI 或清空立绘，请显式组合：
+
+- `textBoxHide`
+- `textBoxClear`
+- `clearCharacters`
+- `hide alias with transition`
 
 #### 5.2.3 支持的效果
 
 | 效果类型 | 语法 | 遮罩 | 说明 |
 |---------|------|------|------|
-| **Dissolve** | `with Dissolve(duration: N)` | 无遮罩 | UI隐藏 → 背景交叉溶解+清立绘 → UI恢复 |
-| **Fade** | `with Fade(duration: N)` | 纯黑色 | UI隐藏 → 黑屏 → 换背景+清立绘 → 显现 → UI恢复 |
-| **FadeWhite** | `with FadeWhite(duration: N)` | 纯白色 | UI隐藏 → 白屏 → 换背景+清立绘 → 显现 → UI恢复 |
-| **Rule** | `with <img src="rule.png"/> (duration: N, reversed: bool)` | 图片遮罩 | UI隐藏 → rule过渡遮罩 → 换背景+清立绘 → rule反向 → UI恢复 |
+| **Dissolve** | `with Dissolve(duration: N)` | 无遮罩 | 背景交叉溶解 |
+| **Fade** | `with Fade(duration: N)` | 纯黑色 | 黑屏遮罩场景切换 |
+| **FadeWhite** | `with FadeWhite(duration: N)` | 纯白色 | 白屏遮罩场景切换 |
+| **Rule** | `with <img src="rule.png"/> (duration: N, reversed: bool)` | 图片遮罩 | 基于遮罩图的场景切换 |
 
 #### 5.2.4 语法约束
 
@@ -331,6 +337,35 @@ stopBGM
 
 > 备注：音量/静音属于**玩家设置选项**，脚本层不提供音量/静音控制能力；制作时应尽量保证不同 BGM 的响度一致。
 
+### BGM 压低与恢复
+
+```markdown
+bgmDuck
+bgmUnduck
+```
+
+| 指令 | 说明 |
+|------|------|
+| `bgmDuck` | 临时压低当前 BGM 音量，常用于语音/演出盖住背景乐的场景 |
+| `bgmUnduck` | 恢复此前被压低的 BGM 音量 |
+
+语义约定：
+
+- 两条指令都是即时命令，不引入新的等待态。
+- 若当前没有 BGM，Host 可安全忽略。
+
+### 视频过场 (cutscene)
+
+```markdown
+cutscene "videos/op.mp4"
+```
+
+语义约定：
+
+- 全屏播放指定视频资源。
+- Runtime 在播放期间进入等待态；播放结束或被跳过后继续执行。
+- 路径按“相对于当前脚本文件”的规则解析。
+
 ## UI 与立绘显式控制（阶段 24 新增）
 
 ### 对话框控制
@@ -386,6 +421,18 @@ wait 0.5
 - 等待期间可被**点击打断**，打断后立即执行下一条
 - **Skip 模式**下直接跳过（不实际等待），避免拖慢快进节奏
 - **Auto 模式**下正常等待，到期自动推进
+
+### 纯点击暂停 (pause)
+
+```markdown
+pause
+```
+
+语义约定：
+
+- 不显示文本，也不启动定时器。
+- Runtime 进入 `WaitForClick`，等待玩家点击继续。
+- **Skip 模式**下自动跳过。
 
 ### 内联等待 ({wait})
 
@@ -829,6 +876,7 @@ hide protagonist with fade
 │                                                         │
 │  规则：                                                  │
 │  - 以 `|` 开头的连续行 → Table 块                        │
+│  - `if/elseif/else/endif` 成组 → Conditional 块         │
 │  - 其他非空行 → SingleLine 块                            │
 │  - 空行 → 块分隔符（不产生块）                            │
 └─────────────────────────────────────────────────────────┘
@@ -845,6 +893,9 @@ hide protagonist with fade
 │                                                         │
 │  Table Parser:                                          │
 │    - 选择分支表格                                        │
+│                                                         │
+│  Conditional Parser:                                    │
+│    - if/elseif/else/endif 条件块                        │
 └─────────────────────────────────────────────────────────┘
                            │
                            ▼
@@ -865,6 +916,9 @@ enum Block {
     
     /// 表格块（选择分支）
     Table { lines: Vec<String>, start_line: usize },
+
+    /// 条件块（if/elseif/else/endif）
+    Conditional { lines: Vec<(String, usize)>, start_line: usize },
 }
 ```
 
@@ -874,10 +928,11 @@ enum Block {
 输入文本逐行处理：
 
 1. 空行 → 不产生块，仅作为块分隔
-2. 以 `|` 开头 → 
+2. 以 `if` 开头 → 开始 `Conditional` 块，并持续聚合到匹配的 `endif`
+3. 以 `|` 开头 → 
    - 如果前一个块也是 Table，合并到该块
    - 否则，开始新的 Table 块
-3. 其他行 → SingleLine 块
+4. 其他行 → SingleLine 块
 ```
 
 **示例**：
@@ -911,7 +966,7 @@ enum Block {
 1. `#` 开头 → 章节标记
 2. `**...**` 格式 → 标签定义
 3. 指令关键字开头（大小写不敏感）→ 演出指令
-   - `changeBG`, `changeScene`, `show`, `hide`, `goto`, `callScript`, `returnFromScript`, `wait`
+   - `changeBG`, `changeScene`, `show`, `hide`, `goto`, `callScript`, `returnFromScript`, `wait`, `pause`, `clearCharacters`, `textBoxHide`, `textBoxShow`, `textBoxClear`, `bgmDuck`, `bgmUnduck`, `cutscene`
 4. 包含 `：` 或 `:` → 对话/旁白
 5. 其他 → 未知行，记录警告但不中断解析
 

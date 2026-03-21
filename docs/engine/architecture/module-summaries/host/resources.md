@@ -14,7 +14,7 @@
 ## KeyFlow
 
 1. 资源路径通过 `LogicalPath::new()` 构造（自动规范化，去除 `assets/` 前缀、统一 `/` 分隔符）。
-2. 纹理加载先查 LRU 缓存（键为 `LogicalPath.as_str()`），未命中则从 `ResourceSource` 读取并解码缓存。
+2. 纹理加载先查 FIFO 缓存（键为 `LogicalPath.as_str()`），未命中则从 `ResourceSource` 读取、解码并通过 `TextureContext` 创建 `Arc<dyn Texture>` 后写回缓存。
 3. 音频/文本/字节资源通过 `ResourceManager` 统一接口读取。
 4. 需要真实文件系统路径的场景（如 FFmpeg）使用 `materialize_to_fs()`。
 5. 可选资源使用 `read_text_optional()` 避免 NotFound 错误。
@@ -59,8 +59,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-21
 
 ## Owner
 
-Composer
+GPT-5.4

@@ -54,9 +54,11 @@ saves/
   "runtime_state": {
     "position": {
       "script_id": "test_comprehensive",
+      "script_path": "scripts/remake/main.md",
       "node_index": 15
     },
     "variables": {},
+    "persistent_variables": {},
     "call_stack": [],
     "waiting": "WaitForClick",
     "visible_characters": {},
@@ -112,12 +114,29 @@ Runtime 的核心状态。
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `position.script_id` | string | 当前脚本 ID |
+| `position.script_path` | string | 当前脚本逻辑路径；新存档会写入，旧存档缺失时按空串处理 |
 | `position.node_index` | number | 当前节点索引 |
 | `variables` | object | 脚本变量 |
-| `call_stack` | array | 跨文件调用栈（`callScript` 返回点） |
-| `waiting` | string | 等待状态 |
+| `persistent_variables` | object | 持久化变量快照（bare key，不含 `persistent.` 前缀；读档时仍以 `persistent.json` 为权威） |
+| `call_stack` | array | 跨文件调用栈（`callScript` 返回点）；每项都是与 `position` 同结构的 `ScriptPosition`，也包含 `script_path` |
+| `waiting` | string \| object | 等待状态；unit variant 可为字符串，带参数 variant 为对象 |
 | `visible_characters` | object | 当前显示的角色 |
 | `current_background` | string? | 当前背景路径 |
+
+`waiting` 的实际序列化形态取决于变体：
+
+```json
+"waiting": "None"
+"waiting": "WaitForClick"
+"waiting": { "WaitForChoice": { "choice_count": 3 } }
+"waiting": { "WaitForTime": { "secs": 1, "nanos": 0 } }
+"waiting": { "WaitForSignal": "cutscene" }
+```
+
+说明：
+
+- `WaitForChoice` / `WaitForTime` / `WaitForSignal` 不是纯字符串，而是带 payload 的对象。
+- `script_path` 与 `persistent_variables` 为向后兼容新增字段；旧存档缺失时会回落到默认值。
 
 ### audio
 
@@ -175,6 +194,14 @@ Runtime 的核心状态。
   }
 }
 
+// 跳转事件
+{
+  "Jump": {
+    "label": "next_scene",
+    "timestamp": 1738400000
+  }
+}
+
 // 背景切换
 {
   "BackgroundChange": {
@@ -191,6 +218,15 @@ Runtime 的核心状态。
   }
 }
 ```
+
+当前实现中的 `history.events` 可能出现以下事件类型：
+
+- `Dialogue`
+- `ChapterMark`
+- `ChoiceMade`
+- `Jump`
+- `BackgroundChange`
+- `BgmChange`
 
 ## 版本迁移
 

@@ -7,7 +7,7 @@
 ## PublicSurface
 
 - 模块入口：`host/src/app/update/mod.rs`
-- 对外接口：`update(app_state)`、`handle_script_mode_input`、`run_script_tick`、`skip_all_active_effects`
+- 对外接口：`update(app_state, dt: f32)`、`handle_script_mode_input`、`run_script_tick`、`skip_all_active_effects`
 - InGame 共享逻辑：`update_ingame_common` 为 `modes` 内私有；`tick_ingame_shared` 为 `pub(super)`，仅由本模块 `update()` 调用；**headless 不再直接调用二者**，统一走 `update(app_state, dt)`。
 - 子模块：`modes`、`script`、`scene_transition`
 
@@ -48,8 +48,8 @@
 
 ## LastVerified
 
-2026-03-20
+2026-03-21
 
 ## Owner
 
-Composer
+GPT-5.4
