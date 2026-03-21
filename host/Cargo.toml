@@ -40,12 +40,8 @@ chrono = { version = "0.4", default-features = false, features = ["alloc", "cloc
 # CLI 参数解析（headless 模式）
 clap = { version = "4", features = ["derive"] }
 
-# WebView 嵌入（小游戏集成，可选）
-wry = { version = "0.49", optional = true }
-
-[features]
-default = ["mini-games"]
-mini-games = ["wry"]
+# WebView 嵌入（小游戏集成）
+wry = "0.49"
 
 [dev-dependencies]
 tempfile = "3"

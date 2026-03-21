@@ -21,8 +21,11 @@
 pub mod app;
 pub mod audio;
 pub mod backend;
+pub mod build_ui;
 pub mod command_executor;
 pub mod config;
+pub mod egui_actions;
+pub mod egui_screens;
 pub mod event_stream;
 pub mod extensions;
 pub mod game_mode;

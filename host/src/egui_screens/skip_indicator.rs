@@ -2,8 +2,8 @@
 //!
 //! 在游戏画面左上角显示"正在快进"提示，仅在 Skip 模式下可见。
 
-use host::ui::UiRenderContext;
-use host::ui::nine_patch::{Borders, NinePatch};
+use crate::ui::UiRenderContext;
+use crate::ui::nine_patch::{Borders, NinePatch};
 
 pub fn build_skip_indicator(ctx: &egui::Context, ui_ctx: &UiRenderContext<'_>) {
     let layout = ui_ctx.layout;

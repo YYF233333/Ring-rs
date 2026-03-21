@@ -1,9 +1,9 @@
 //! Toast 覆盖层 UI
 
-use host::ui::ToastManager;
-use host::ui::UiRenderContext;
-use host::ui::nine_patch::{Borders, NinePatch};
-use host::ui::toast::ToastType;
+use crate::ui::ToastManager;
+use crate::ui::UiRenderContext;
+use crate::ui::nine_patch::{Borders, NinePatch};
+use crate::ui::toast::ToastType;
 
 pub fn build_toast_overlay(
     ctx: &egui::Context,

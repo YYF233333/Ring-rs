@@ -181,7 +181,6 @@ pub struct AppState {
     pub event_stream: EventStream,
 
     /// 待启动的小游戏请求（script.rs 设置，host_app.rs 消费）
-    #[cfg(feature = "mini-games")]
     pub pending_game_launch: Option<crate::game_mode::PendingGameLaunch>,
 }
 
@@ -257,7 +256,7 @@ impl AppState {
             },
             extension_registry,
             config,
-            host_state: HostState::new(),
+            host_state: HostState::new(init_params.headless),
             input_manager,
             user_settings,
             save_manager,
@@ -267,7 +266,6 @@ impl AppState {
             play_start_time: std::time::Instant::now(),
             loading_complete: false,
             event_stream,
-            #[cfg(feature = "mini-games")]
             pending_game_launch: None,
         }
     }
@@ -306,6 +304,7 @@ pub fn export_recording(app_state: &AppState) {
         recorded_at: now.to_rfc3339(),
         duration_ms,
         entry_script: app_state.config.start_script_path.clone(),
+        scale_factor: app_state.host_state.scale_factor,
     };
 
     match RecordingExporter::export(&meta, snapshot, &path) {

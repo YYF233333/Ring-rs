@@ -1,9 +1,9 @@
 //! Settings 页面 UI
 
-use host::UserSettings;
-use host::ui::UiRenderContext;
-use host::ui::asset_cache::UiAssetCache;
-use host::ui::image_slider::{self, SliderTextures};
+use crate::UserSettings;
+use crate::ui::UiRenderContext;
+use crate::ui::asset_cache::UiAssetCache;
+use crate::ui::image_slider::{self, SliderTextures};
 
 use crate::egui_actions::EguiAction;
 

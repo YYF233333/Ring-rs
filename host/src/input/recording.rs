@@ -8,6 +8,7 @@ use std::io::{self, BufRead, BufWriter, Write};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use vn_runtime::state::VarValue;
 use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -69,6 +70,13 @@ pub enum InputEvent {
         delta_x: f32,
         delta_y: f32,
     },
+    /// UI 交互结果（callGame / showMap 等通过 RequestUI 机制回传的值）
+    ///
+    /// 录制时自动记录，回放时转换为 `RuntimeInput::UIResult` 注入。
+    UIResult {
+        key: String,
+        value: VarValue,
+    },
 }
 
 // ─── 录制文件格式 ───────────────────────────────────────────────────
@@ -83,6 +91,8 @@ pub struct RecordingMeta {
     pub recorded_at: String,
     pub duration_ms: u64,
     pub entry_script: String,
+    /// 窗口缩放因子（物理像素 / 逻辑像素），用于 headless 回放坐标转换
+    pub scale_factor: f64,
 }
 
 /// 录制文件行条目
@@ -442,6 +452,7 @@ mod tests {
             recorded_at: "2026-01-01T00:00:00Z".into(),
             duration_ms: 5000,
             entry_script: "scripts/main.md".into(),
+            scale_factor: 2.0,
         };
         let json = serde_json::to_string(&meta).unwrap();
         let back: RecordingMeta = serde_json::from_str(&json).unwrap();
@@ -462,6 +473,7 @@ mod tests {
             recorded_at: "2026-01-01T00:00:00Z".into(),
             duration_ms: 1000,
             entry_script: "scripts/main.md".into(),
+            scale_factor: 1.0,
         };
 
         let mut buf = VecDeque::new();

@@ -8,7 +8,7 @@ pub mod recording;
 pub use choice_navigator::ChoiceNavigator;
 
 use vn_runtime::input::RuntimeInput;
-use vn_runtime::state::WaitingReason;
+use vn_runtime::state::{VarValue, WaitingReason};
 use winit::event::{ElementState, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -79,9 +79,16 @@ impl InputManager {
     }
 
     /// 注入回放事件（headless 用）
+    ///
+    /// UIResult 事件转换为 `RuntimeInput::UIResult` 注入 pending_input，
+    /// 其余物理事件走 `apply_input_event` 更新按键/鼠标状态。
     pub fn inject_replay_events(&mut self, events: &[InputEvent]) {
         for event in events {
-            self.process_input_event(event);
+            if let InputEvent::UIResult { key, value } = event {
+                self.inject_input(RuntimeInput::ui_result(key.clone(), value.clone()));
+            } else {
+                self.process_input_event(event);
+            }
         }
     }
 
@@ -186,6 +193,23 @@ impl InputManager {
     /// 设置待处理的输入（用于外部系统注入，如信号）
     pub fn inject_input(&mut self, input: RuntimeInput) {
         self.pending_input = Some(input);
+    }
+
+    /// 注入 UI 交互结果并同步录制到缓冲区
+    ///
+    /// 用于 WebView 等脱离引擎输入管线的交互结果回传。
+    /// 普通 egui UI 交互（地图选择等）通过物理输入录制即可重现，使用 `inject_input` 即可。
+    pub fn inject_ui_result(&mut self, key: String, value: VarValue) {
+        if let Some(ref mut buffer) = self.recording_buffer {
+            buffer.push(
+                self.state.elapsed_ms,
+                InputEvent::UIResult {
+                    key: key.clone(),
+                    value: value.clone(),
+                },
+            );
+        }
+        self.inject_input(RuntimeInput::ui_result(key, value));
     }
 
     /// 获取当前选中的索引

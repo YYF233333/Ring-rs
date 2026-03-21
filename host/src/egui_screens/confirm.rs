@@ -2,8 +2,8 @@
 //!
 //! 模态覆盖层，在需要用户确认的操作前显示（退出/覆盖存档/返回标题等）。
 
-use host::ui::UiRenderContext;
-use host::ui::nine_patch::{Borders, NinePatch};
+use crate::ui::UiRenderContext;
+use crate::ui::nine_patch::{Borders, NinePatch};
 
 use crate::egui_actions::EguiAction;
 

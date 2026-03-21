@@ -17,7 +17,7 @@ pub mod gpu_texture;
 pub mod math;
 pub mod sprite_renderer;
 
-pub use egui_integration::EguiIntegration;
+pub use egui_integration::{EguiIntegration, configure_egui_fonts};
 pub use gpu_context::GpuContext;
 pub use gpu_texture::GpuTexture;
 pub use sprite_renderer::SpriteRenderer;

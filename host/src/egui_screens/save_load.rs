@@ -2,10 +2,10 @@
 
 use std::collections::HashMap;
 
-use host::save_manager::SaveInfo;
-use host::ui::UiRenderContext;
-use host::ui::nine_patch::{Borders, NinePatch};
-use host::{SaveLoadPage, SaveLoadTab};
+use crate::save_manager::SaveInfo;
+use crate::ui::UiRenderContext;
+use crate::ui::nine_patch::{Borders, NinePatch};
+use crate::{SaveLoadPage, SaveLoadTab};
 
 use crate::egui_actions::EguiAction;
 

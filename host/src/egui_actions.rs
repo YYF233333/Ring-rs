@@ -2,9 +2,9 @@
 //!
 //! 将 egui UI 层产生的动作与 AppState 的状态变更解耦。
 
-use host::app::{self, AppState, USER_SETTINGS_PATH};
-use host::ui::screen_defs::{ActionDef, ButtonDef};
-use host::{AppMode, SaveLoadTab, UserSettings};
+use crate::app::{self, AppState, USER_SETTINGS_PATH};
+use crate::ui::screen_defs::{ActionDef, ButtonDef};
+use crate::{AppMode, SaveLoadTab, UserSettings};
 use winit::event_loop::ActiveEventLoop;
 
 /// egui UI 层产生的动作
@@ -48,12 +48,11 @@ pub fn handle_egui_action(
     app_state: &mut AppState,
     action: EguiAction,
     save_load_tab: &mut SaveLoadTab,
-    el: &ActiveEventLoop,
+    el: Option<&ActiveEventLoop>,
 ) {
     match action {
         EguiAction::None => {}
         EguiAction::StartGame => {
-            // 开始新游戏时删除 continue 存档（best-effort；即使失败也继续）
             let _ = app_state.save_manager.delete_continue();
             app::start_new_game(app_state);
         }
@@ -80,7 +79,11 @@ pub fn handle_egui_action(
             app::return_to_title_from_game(app_state, true);
         }
         EguiAction::Exit => {
-            el.exit();
+            if let Some(el) = el {
+                el.exit();
+            } else {
+                app_state.host_state.exit_requested = true;
+            }
         }
         EguiAction::ApplySettings(new_settings) => {
             app_state.user_settings = new_settings;
@@ -154,7 +157,7 @@ pub fn handle_egui_action(
             app_state.ui.toast_manager.success("Quick loaded");
         }
         EguiAction::ToggleSkip => {
-            use host::PlaybackMode;
+            use crate::PlaybackMode;
             app_state.session.playback_mode =
                 if app_state.session.playback_mode == PlaybackMode::Skip {
                     PlaybackMode::Normal
@@ -163,7 +166,7 @@ pub fn handle_egui_action(
                 };
         }
         EguiAction::ToggleAuto => {
-            use host::PlaybackMode;
+            use crate::PlaybackMode;
             app_state.session.playback_mode =
                 if app_state.session.playback_mode == PlaybackMode::Auto {
                     PlaybackMode::Normal

@@ -1031,7 +1031,7 @@ callGame "game_id" as $result (difficulty: 3, time_limit: 60)
 
 `callGame` 为语法糖，等价于 `requestUI "call_game" as $result (game_id: "game_id", ...)`。
 
-需要启用 `mini-games` feature。未启用时立即返回空字符串。
+Headless 模式下由录制文件（replay）中的 `UIResult` 事件提供游戏结果。
 
 ---
 

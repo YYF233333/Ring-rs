@@ -4,8 +4,6 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod egui_actions;
-mod egui_screens;
 mod host_app;
 
 use std::path::PathBuf;

@@ -3,8 +3,8 @@
 //! 提供统一的「左侧导航 + 右侧内容」布局，
 //! 供 SaveLoad、Settings、History 等页面复用。
 
-use host::ui::UiRenderContext;
-use host::ui::screen_defs::ConditionalAsset;
+use crate::ui::UiRenderContext;
+use crate::ui::screen_defs::ConditionalAsset;
 
 use crate::egui_actions::{self, EguiAction};
 

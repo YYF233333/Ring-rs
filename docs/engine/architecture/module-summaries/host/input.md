@@ -11,7 +11,7 @@
 - `host/src/input/choice_navigator.rs`：`ChoiceNavigator`（选项索引/悬停/确认导航）
 - 子模块：`recording`（`host/src/input/recording.rs`）— 录制/回放：`InputEvent`、`RecordingBuffer`、`RecordingExporter`、`InputReplayer`（职责与路径不变）
 - 核心类型：`InputManager`
-- 关键接口：`process_event`、`process_input_event`、`inject_replay_events`、`begin_frame`、`end_frame`、`update`、`set_choice_rects`、`inject_input`、`suppress_mouse_click`、`recording_snapshot`、`enable_recording`
+- 关键接口：`process_event`、`process_input_event`、`inject_replay_events`、`begin_frame`、`end_frame`、`update`、`set_choice_rects`、`inject_input`、`inject_ui_result`、`suppress_mouse_click`、`recording_snapshot`、`enable_recording`
 - 公开查询：`is_key_just_pressed`、`is_key_down`、`mouse_position`、`is_mouse_pressed`、`is_mouse_just_pressed`
 
 ## KeyFlow
@@ -23,7 +23,8 @@
 5. `end_frame()` 清除 per-frame 的 "just pressed" 状态（`InputState`）。
 6. egui 事件优先处理；当 egui 交互元素处于指针下方时可调用 `suppress_mouse_click()` 抑制本帧点击，未被 egui 消费的事件才转发给 InputManager。
 7. 录制：`enable_recording(size_mb)` 启用环形缓冲区；`recording_snapshot()` 供导出。回放：`inject_replay_events(events)` 注入事件（headless 用）。导出见 `RecordingExporter`；加载见 `InputReplayer`。
-8. `WaitForUIResult` 与 `WaitForSignal` 相同处理：不采集 winit 输入，结果由上层通过 `inject_input` 程序化注入。
+8. `WaitForUIResult` 与 `WaitForSignal` 相同处理：不采集 winit 输入，结果由上层程序化注入。普通 egui UI 交互（地图选择等）用 `inject_input`；WebView 等脱离引擎输入管线的交互用 `inject_ui_result`。
+9. `inject_ui_result(key, value)` 同时将 `UIResult` 事件写入录制缓冲区并注入 `pending_input`，仅用于 WebView 小游戏等无法通过物理输入录制重现的场景。回放时 `inject_replay_events` 遇到 `InputEvent::UIResult` 会转换为 `RuntimeInput::UIResult` 注入。
 
 ## Dependencies
 
@@ -54,8 +55,8 @@
 
 ## LastVerified
 
-2026-03-21
+2026-03-22
 
 ## Owner
 
-Composer
+claude-4.6-opus

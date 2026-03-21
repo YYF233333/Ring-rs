@@ -6,8 +6,9 @@ use std::sync::Arc;
 
 use host::app::{self, AppState};
 use host::backend::WgpuBackend;
+use host::build_ui::{UiFrameState, build_frame_ui};
 use host::ui::{ConditionContext, UiAssetCache, UiRenderContext};
-use host::{AppConfig, AppMode, LogicalPath, SaveLoadPage, SaveLoadTab, UserSettings};
+use host::{AppConfig, AppMode, LogicalPath};
 use tracing::info;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -16,22 +17,18 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::{Window, WindowId};
 
-use crate::egui_actions::{self, EguiAction};
-use crate::egui_screens;
-use crate::egui_screens::confirm::ConfirmDialog;
+use host::egui_actions::{self, EguiAction};
+use host::egui_screens;
 
-#[cfg(feature = "mini-games")]
 use host::game_mode::{GameCompletion, GameMode};
 
 /// WebView 小游戏运行时状态
-#[cfg(feature = "mini-games")]
 struct MiniGameRuntime {
     game_mode: GameMode,
     webview: Option<wry::WebView>,
     result_rx: Option<std::sync::mpsc::Receiver<GameCompletion>>,
 }
 
-#[cfg(feature = "mini-games")]
 impl MiniGameRuntime {
     fn new() -> Self {
         Self {
@@ -47,15 +44,11 @@ pub struct HostApp {
     app_state: Option<AppState>,
     pub config: AppConfig,
     initialized: bool,
-    settings_draft: Option<UserSettings>,
-    save_load_tab: SaveLoadTab,
-    save_load_page: SaveLoadPage,
-    pending_confirm: Option<ConfirmDialog>,
+    ui_frame_state: UiFrameState,
     /// 待保存缩略图的存档槽位（截图已请求，等待下一帧捕获）
     pending_thumbnail_slot: Option<u32>,
     /// 事件流输出路径（CLI 传入）
     event_stream_path: Option<std::path::PathBuf>,
-    #[cfg(feature = "mini-games")]
     mini_game: MiniGameRuntime,
 }
 
@@ -66,13 +59,9 @@ impl HostApp {
             app_state: None,
             config,
             initialized: false,
-            settings_draft: None,
-            save_load_tab: SaveLoadTab::Load,
-            save_load_page: SaveLoadPage::default(),
-            pending_confirm: None,
+            ui_frame_state: UiFrameState::default(),
             pending_thumbnail_slot: None,
             event_stream_path,
-            #[cfg(feature = "mini-games")]
             mini_game: MiniGameRuntime::new(),
         }
     }
@@ -134,12 +123,8 @@ impl ApplicationHandler for HostApp {
             backend,
             app_state,
             initialized,
-            settings_draft,
-            save_load_tab,
-            save_load_page,
-            pending_confirm,
+            ui_frame_state,
             pending_thumbnail_slot,
-            #[cfg(feature = "mini-games")]
             mini_game,
             ..
         } = self;
@@ -161,6 +146,7 @@ impl ApplicationHandler for HostApp {
                     .set_screen_size(s.width as f32, s.height as f32);
                 // egui 使用逻辑像素坐标，ScaleContext 需要逻辑尺寸而非物理尺寸
                 let sf = backend.scale_factor();
+                app_state.host_state.scale_factor = sf as f64;
                 app_state.ui.ui_context.set_screen_size(
                     s.width as f32 / sf,
                     s.height as f32 / sf,
@@ -206,37 +192,30 @@ impl ApplicationHandler for HostApp {
                 app::update(app_state, dt);
 
                 // ── 小游戏 WebView 生命周期 ──
-                #[cfg(feature = "mini-games")]
-                {
-                    // 1. 检查待启动的小游戏请求
-                    if let Some(launch) = app_state.pending_game_launch.take() {
-                        let (w, h) = backend.size();
-                        match mini_game.game_mode.start(
-                            backend.window(),
-                            (w, h),
-                            &launch,
-                            &app_state.config.assets_root,
-                        ) {
-                            Ok((webview, rx)) => {
-                                mini_game.webview = Some(webview);
-                                mini_game.result_rx = Some(rx);
-                            }
-                            Err(e) => {
-                                tracing::warn!(error = %e, "WebView 创建失败，降级处理");
-                                app::run_script_tick(
-                                    app_state,
-                                    Some(vn_runtime::input::RuntimeInput::ui_result(
-                                        launch.request_key,
-                                        vn_runtime::state::VarValue::String(String::new()),
-                                    )),
-                                );
-                            }
+                // 1. 检查待启动的小游戏请求
+                if let Some(launch) = app_state.pending_game_launch.take() {
+                    let (w, h) = backend.size();
+                    match mini_game.game_mode.start(
+                        backend.window(),
+                        (w, h),
+                        &launch,
+                        &app_state.config.assets_root,
+                    ) {
+                        Ok((webview, rx)) => {
+                            mini_game.webview = Some(webview);
+                            mini_game.result_rx = Some(rx);
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "WebView 创建失败，降级处理");
+                            app_state.input_manager.inject_ui_result(
+                                launch.request_key,
+                                vn_runtime::state::VarValue::String(String::new()),
+                            );
                         }
                     }
-
-                    // 小游戏完成轮询在 about_to_wait 中执行，
-                    // 避免 WebView 遮挡父窗口导致 RedrawRequested 不触发。
                 }
+                // 小游戏完成轮询在 about_to_wait 中执行，
+                // 避免 WebView 遮挡父窗口导致 RedrawRequested 不触发。
 
                 // 在 update 之后、渲染之前加载缺失纹理，
                 // 确保 update 中新增的资源引用（如差分切换）在本帧即可渲染
@@ -250,15 +229,15 @@ impl ApplicationHandler for HostApp {
                 ) && app_state.input_manager.is_key_just_pressed(KeyCode::Escape)
                 {
                     app_state.ui.navigation.go_back();
-                    *settings_draft = None;
+                    ui_frame_state.settings_draft = None;
                 }
 
                 let current_mode = app_state.ui.navigation.current();
 
-                if current_mode == AppMode::Settings && settings_draft.is_none() {
-                    *settings_draft = Some(app_state.user_settings.clone());
+                if current_mode == AppMode::Settings && ui_frame_state.settings_draft.is_none() {
+                    ui_frame_state.settings_draft = Some(app_state.user_settings.clone());
                 } else if current_mode != AppMode::Settings {
-                    *settings_draft = None;
+                    ui_frame_state.settings_draft = None;
                 }
 
                 // 视频播放时：上传帧数据到 GPU 纹理，生成全屏视频精灵
@@ -276,19 +255,9 @@ impl ApplicationHandler for HostApp {
                     }
                 };
 
-                let save_infos: Vec<Option<host::save_manager::SaveInfo>> =
-                    if current_mode == AppMode::SaveLoad {
-                        save_load_page
-                            .slot_range()
-                            .map(|s| app_state.save_manager.get_save_info(s))
-                            .collect()
-                    } else {
-                        Vec::new()
-                    };
-
                 let mut slot_thumbnails = std::collections::HashMap::new();
                 if current_mode == AppMode::SaveLoad {
-                    for slot in save_load_page.slot_range() {
+                    for slot in ui_frame_state.save_load_page.slot_range() {
                         if let Some(png_bytes) = app_state.save_manager.load_thumbnail_bytes(slot)
                             && let Ok(img) = image::load_from_memory(&png_bytes)
                         {
@@ -307,9 +276,6 @@ impl ApplicationHandler for HostApp {
                     }
                 }
 
-                let can_save = app_state.session.vn_runtime.is_some();
-                let sl_tab = *save_load_tab;
-
                 let ui_ctx = UiRenderContext {
                     layout: &app_state.ui.layout,
                     assets: app_state.ui.asset_cache.as_ref(),
@@ -320,102 +286,26 @@ impl ApplicationHandler for HostApp {
                         persistent: &app_state.persistent_store,
                     },
                 };
-                let history_events = app_state.session.history_events();
 
                 let mut ui_action = EguiAction::None;
                 let mut confirm_resolved = false;
                 backend.render_frame(
                     |ctx| {
-                        ui_action = if app_state.core.video_player.is_playing() {
-                            EguiAction::None
-                        } else {
-                            match current_mode {
-                                AppMode::Title => egui_screens::title::build_title_ui(ctx, &ui_ctx),
-                                AppMode::InGame => egui_screens::ingame::build_ingame_ui(
-                                    ctx,
-                                    &app_state.core.render_state,
-                                    &ui_ctx,
-                                ),
-                                AppMode::InGameMenu => {
-                                    egui_screens::ingame_menu::build_ingame_menu_ui(ctx, &ui_ctx)
-                                }
-                                AppMode::Settings => {
-                                    egui_screens::game_menu::build_game_menu_frame(
-                                        ctx,
-                                        "设置",
-                                        &ui_ctx,
-                                        |ui| {
-                                            egui_screens::settings::build_settings_content(
-                                                ui,
-                                                settings_draft,
-                                                &ui_ctx,
-                                            )
-                                        },
-                                    )
-                                }
-                                AppMode::SaveLoad => {
-                                    egui_screens::game_menu::build_game_menu_frame(
-                                        ctx,
-                                        if sl_tab == SaveLoadTab::Save {
-                                            "保存"
-                                        } else {
-                                            "读取"
-                                        },
-                                        &ui_ctx,
-                                        |ui| {
-                                            egui_screens::save_load::build_save_load_content(
-                                                ui,
-                                                sl_tab,
-                                                save_load_page,
-                                                &save_infos,
-                                                can_save,
-                                                &ui_ctx,
-                                                &slot_thumbnails,
-                                            )
-                                        },
-                                    )
-                                }
-                                AppMode::History => egui_screens::game_menu::build_game_menu_frame(
-                                    ctx,
-                                    "历史",
-                                    &ui_ctx,
-                                    |ui| {
-                                        egui_screens::history::build_history_content(
-                                            ui,
-                                            history_events,
-                                            &ui_ctx,
-                                        )
-                                    },
-                                ),
-                            }
-                        };
-                        // Skip indicator (InGame + Skip mode)
-                        if current_mode == AppMode::InGame
-                            && app_state.session.playback_mode == host::PlaybackMode::Skip
-                        {
-                            egui_screens::skip_indicator::build_skip_indicator(ctx, &ui_ctx);
-                        }
-
-                        // Confirm dialog overlay (drawn on top of everything)
-                        if let Some(dialog) = pending_confirm.as_ref()
-                            && let Some(confirm_action) =
-                                egui_screens::confirm::build_confirm_overlay(ctx, dialog, &ui_ctx)
-                        {
-                            ui_action = confirm_action;
-                            confirm_resolved = true;
-                        }
-
-                        egui_screens::toast::build_toast_overlay(
+                        let (action, resolved) = build_frame_ui(
                             ctx,
-                            &app_state.ui.toast_manager,
+                            app_state,
                             &ui_ctx,
+                            ui_frame_state,
+                            &slot_thumbnails,
                         );
+                        ui_action = action;
+                        confirm_resolved = resolved;
                     },
                     &sprite_cmds,
                 );
 
                 if confirm_resolved {
-                    *pending_confirm = None;
+                    ui_frame_state.pending_confirm = None;
                 }
 
                 // Process pending thumbnail save (from previous frame's screenshot request)
@@ -445,23 +335,28 @@ impl ApplicationHandler for HostApp {
                         message,
                         on_confirm,
                     } => {
-                        // If the confirmed action is SaveToSlot, track it for screenshot
                         if let EguiAction::SaveToSlot(s) = *on_confirm {
                             *pending_thumbnail_slot = Some(s);
                             backend.request_screenshot();
                         }
-                        *pending_confirm = Some(ConfirmDialog {
-                            message,
-                            on_confirm: *on_confirm,
-                            on_cancel: EguiAction::None,
-                        });
+                        ui_frame_state.pending_confirm =
+                            Some(egui_screens::confirm::ConfirmDialog {
+                                message,
+                                on_confirm: *on_confirm,
+                                on_cancel: EguiAction::None,
+                            });
                     }
                     _ => {
                         if let Some(slot) = save_slot {
                             *pending_thumbnail_slot = Some(slot);
                             backend.request_screenshot();
                         }
-                        egui_actions::handle_egui_action(app_state, ui_action, save_load_tab, el);
+                        egui_actions::handle_egui_action(
+                            app_state,
+                            ui_action,
+                            &mut ui_frame_state.save_load_tab,
+                            Some(el),
+                        );
                     }
                 }
 
@@ -473,37 +368,30 @@ impl ApplicationHandler for HostApp {
     }
 
     fn about_to_wait(&mut self, _el: &ActiveEventLoop) {
-        #[cfg(feature = "mini-games")]
+        let completion = self
+            .mini_game
+            .result_rx
+            .as_ref()
+            .and_then(|rx| rx.try_recv().ok());
+
+        if let Some(completion) = completion
+            && let Some(request_key) = self.mini_game.game_mode.complete()
         {
-            let completion = self
-                .mini_game
-                .result_rx
-                .as_ref()
-                .and_then(|rx| rx.try_recv().ok());
+            if let Some(ref webview) = self.mini_game.webview {
+                let _ = webview.set_visible(false);
+            }
+            self.mini_game.webview = None;
+            self.mini_game.result_rx = None;
 
-            if let Some(completion) = completion
-                && let Some(request_key) = self.mini_game.game_mode.complete()
-            {
-                if let Some(ref webview) = self.mini_game.webview {
-                    let _ = webview.set_visible(false);
-                }
-                self.mini_game.webview = None;
-                self.mini_game.result_rx = None;
+            if let Some(app_state) = self.app_state.as_mut() {
+                info!(key = %request_key, "小游戏完成，回传结果");
+                app_state
+                    .input_manager
+                    .inject_ui_result(request_key, completion.result);
+            }
 
-                if let Some(app_state) = self.app_state.as_mut() {
-                    info!(key = %request_key, "小游戏完成，回传结果");
-                    app::run_script_tick(
-                        app_state,
-                        Some(vn_runtime::input::RuntimeInput::ui_result(
-                            request_key,
-                            completion.result,
-                        )),
-                    );
-                }
-
-                if let Some(backend) = self.backend.as_ref() {
-                    backend.request_redraw();
-                }
+            if let Some(backend) = self.backend.as_ref() {
+                backend.request_redraw();
             }
         }
     }

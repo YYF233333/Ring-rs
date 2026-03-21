@@ -1,6 +1,6 @@
 //! InGameMenu 页面 UI
 
-use host::ui::UiRenderContext;
+use crate::ui::UiRenderContext;
 
 use crate::egui_actions::{self, EguiAction};
 

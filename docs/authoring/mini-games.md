@@ -1,7 +1,6 @@
 # 小游戏集成指南
 
 > 本文档说明如何在 VN 脚本中集成 HTML5 小游戏。
-> 需要启用 `mini-games` feature：`cargo build --features mini-games`
 
 ## 快速开始
 
@@ -148,10 +147,12 @@ showMap "world_map" as $destination
 
 ## 降级策略
 
-未启用 `mini-games` feature 时：
-- `callGame` 命令立即返回空字符串结果
-- 脚本可通过检查 `$result == ""` 判断是否降级
-- 不影响 VN 主线运行
+**GUI 模式 WebView 创建失败时**：立即返回空字符串结果，脚本可通过 `$result == ""` 判断。
+
+**Headless 模式（无窗口测试）**：
+- WebView 不可用，`callGame` 跳过启动
+- 游戏结果由录制文件（replay）中的 `UIResult` 事件提供，确保分支路径与录制时一致
+- 录制系统自动捕获所有 `UIResult` 事件（callGame / showMap 等），无需额外配置
 
 ## 文本模式
 

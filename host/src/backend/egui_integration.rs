@@ -2,6 +2,30 @@ use tracing::warn;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
+/// 为 egui Context 配置 CJK 字体（windowed / headless 共用）
+pub fn configure_egui_fonts(ctx: &egui::Context, font_data: Option<Vec<u8>>) {
+    let Some(data) = font_data else {
+        warn!("No CJK font data provided; Chinese text will render as tofu");
+        return;
+    };
+
+    let mut fonts = egui::FontDefinitions::default();
+    fonts
+        .font_data
+        .insert("cjk".to_owned(), egui::FontData::from_owned(data).into());
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Proportional)
+        .expect("egui builtin font family must exist")
+        .insert(0, "cjk".to_owned());
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Monospace)
+        .expect("egui builtin font family must exist")
+        .insert(0, "cjk".to_owned());
+    ctx.set_fonts(fonts);
+}
+
 /// egui 集成层（输入桥接 + UI 渲染）
 pub struct EguiIntegration {
     pub ctx: egui::Context,
@@ -17,7 +41,7 @@ impl EguiIntegration {
         font_data: Option<Vec<u8>>,
     ) -> Self {
         let ctx = egui::Context::default();
-        Self::configure_fonts(&ctx, font_data);
+        configure_egui_fonts(&ctx, font_data);
 
         let state =
             egui_winit::State::new(ctx.clone(), ctx.viewport_id(), window, None, None, None);
@@ -28,29 +52,6 @@ impl EguiIntegration {
             state,
             renderer,
         }
-    }
-
-    fn configure_fonts(ctx: &egui::Context, font_data: Option<Vec<u8>>) {
-        let Some(data) = font_data else {
-            warn!("No CJK font data provided; Chinese text will render as tofu");
-            return;
-        };
-
-        let mut fonts = egui::FontDefinitions::default();
-        fonts
-            .font_data
-            .insert("cjk".to_owned(), egui::FontData::from_owned(data).into());
-        fonts
-            .families
-            .get_mut(&egui::FontFamily::Proportional)
-            .expect("egui builtin font family must exist")
-            .insert(0, "cjk".to_owned());
-        fonts
-            .families
-            .get_mut(&egui::FontFamily::Monospace)
-            .expect("egui builtin font family must exist")
-            .insert(0, "cjk".to_owned());
-        ctx.set_fonts(fonts);
     }
 
     /// 将 winit 窗口事件传递给 egui，返回是否已消费

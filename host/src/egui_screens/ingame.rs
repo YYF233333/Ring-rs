@@ -1,10 +1,10 @@
 //! InGame 页面 UI（对话框 + 快捷菜单 + 选项 + 章节标记 + 标题字卡 + NVL 模式）
 
-use host::RenderState;
-use host::ui::UiRenderContext;
-use host::ui::layout::{ScaleContext, UiLayoutConfig};
-use host::ui::map::MapDisplayState;
-use host::ui::nine_patch::{Borders, NinePatch};
+use crate::RenderState;
+use crate::ui::UiRenderContext;
+use crate::ui::layout::{ScaleContext, UiLayoutConfig};
+use crate::ui::map::MapDisplayState;
+use crate::ui::nine_patch::{Borders, NinePatch};
 use vn_runtime::command::TextMode;
 
 use crate::egui_actions::{self, EguiAction};
@@ -201,7 +201,7 @@ fn build_quick_menu(
 
 fn build_choices_ui(
     ctx: &egui::Context,
-    choices: &host::renderer::render_state::ChoicesState,
+    choices: &crate::renderer::render_state::ChoicesState,
     ui_ctx: &UiRenderContext<'_>,
 ) -> EguiAction {
     let layout = ui_ctx.layout;
@@ -272,7 +272,7 @@ fn build_choices_ui(
 
 fn build_title_card(
     ctx: &egui::Context,
-    tc: &host::renderer::render_state::TitleCardState,
+    tc: &crate::renderer::render_state::TitleCardState,
     layout: &UiLayoutConfig,
     scale: &ScaleContext,
 ) {
@@ -317,7 +317,7 @@ fn build_title_card(
 
 fn build_chapter_mark(
     ctx: &egui::Context,
-    cm: &host::renderer::render_state::ChapterMarkState,
+    cm: &crate::renderer::render_state::ChapterMarkState,
     layout: &UiLayoutConfig,
     scale: &ScaleContext,
 ) {
