@@ -430,6 +430,36 @@ impl Executor {
                     WaitingReason::WaitForSignal(SignalId::new(SIGNAL_CUTSCENE)),
                 ))
             }
+
+            ScriptNode::SetTextMode(mode) => {
+                Ok(ExecuteResult::with_commands(vec![Command::SetTextMode(
+                    *mode,
+                )]))
+            }
+
+            ScriptNode::RequestUI {
+                mode,
+                result_var,
+                params,
+            } => {
+                let mut evaluated_params = std::collections::HashMap::new();
+                for (key, expr) in params {
+                    let value = evaluate(expr, state)?;
+                    evaluated_params.insert(key.clone(), value);
+                }
+                let key = mode.clone();
+                Ok(ExecuteResult::with_wait(
+                    vec![Command::RequestUI {
+                        key: key.clone(),
+                        mode: mode.clone(),
+                        params: evaluated_params,
+                    }],
+                    WaitingReason::WaitForUIResult {
+                        key,
+                        result_var: result_var.clone(),
+                    },
+                ))
+            }
         }
     }
 

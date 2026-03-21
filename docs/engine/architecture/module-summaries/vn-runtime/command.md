@@ -20,6 +20,9 @@
 6. `InlineEffect` / `InlineEffectKind` 定义内联节奏标签数据模型（字符位置 + 效果类型：Wait/SetCpsAbsolute/SetCpsRelative/ResetCps）。
 7. `Command::ShowText` 扩展 `inline_effects` 和 `no_wait` 字段；新增 `Command::ExtendText` variant。
 8. `Command::BgmDuck` / `Command::BgmUnduck`：BGM 音量临时压低与恢复（即时指令，不产生等待态）。
+9. `Command::SetTextMode(TextMode)`：在 ADV/NVL 显示模式间切换。
+10. `Command::RequestUI { key, mode, params }`：通用 UI 交互请求（RFC-020）；`key` 与响应匹配，`mode` 标识 UI 类型，`params` 为模式相关参数。
+11. `TextMode` 枚举（`ADV` / `NVL`）控制对话渲染风格。
 
 ## Dependencies
 

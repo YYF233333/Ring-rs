@@ -179,6 +179,10 @@ pub struct AppState {
     /// 保留在顶层：与 `CoreSystems` 的游戏渲染/媒体管线正交，属于跨会话的调试基础设施，
     /// 初始化路径与 `EventStream::new` / `new_logical` 也与 core 构造无关。
     pub event_stream: EventStream,
+
+    /// 待启动的小游戏请求（script.rs 设置，host_app.rs 消费）
+    #[cfg(feature = "mini-games")]
+    pub pending_game_launch: Option<crate::game_mode::PendingGameLaunch>,
 }
 
 impl AppState {
@@ -263,6 +267,8 @@ impl AppState {
             play_start_time: std::time::Instant::now(),
             loading_complete: false,
             event_stream,
+            #[cfg(feature = "mini-games")]
+            pending_game_launch: None,
         }
     }
 }
@@ -312,6 +318,15 @@ pub fn export_recording(app_state: &AppState) {
         }
         Err(e) => {
             tracing::warn!(error = %e, "录制导出失败");
+        }
+    }
+}
+
+impl Drop for AppState {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            tracing::warn!("Panic unwinding: 尝试自动导出录制缓冲区");
+            export_recording(self);
         }
     }
 }

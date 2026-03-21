@@ -846,3 +846,187 @@ fn test_parse_cutscene_empty_path() {
     let err = parse_err(r#"cutscene """#);
     assert!(format!("{:?}", err).contains("InvalidParameter"));
 }
+
+// =========================================================================
+// requestUI 测试
+// =========================================================================
+
+#[test]
+fn test_parse_request_ui_basic() {
+    let node = parse_single_node(r#"requestUI "show_map" as $destination"#);
+    assert!(matches!(
+        node,
+        ScriptNode::RequestUI { mode, result_var, params }
+            if mode == "show_map" && result_var == "destination" && params.is_empty()
+    ));
+}
+
+#[test]
+fn test_parse_request_ui_with_params() {
+    let script = parse_ok(r#"requestUI "show_map" as $choice (map_id: "world", zoom: 2)"#);
+    assert_eq!(script.nodes.len(), 1);
+    match &script.nodes[0] {
+        ScriptNode::RequestUI {
+            mode,
+            result_var,
+            params,
+        } => {
+            assert_eq!(mode, "show_map");
+            assert_eq!(result_var, "choice");
+            assert_eq!(params.len(), 2);
+            assert_eq!(params[0].0, "map_id");
+            assert_eq!(params[1].0, "zoom");
+        }
+        other => panic!("expected RequestUI, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_request_ui_case_insensitive() {
+    let node = parse_single_node(r#"requestui "test" as $result"#);
+    assert!(matches!(
+        node,
+        ScriptNode::RequestUI { mode, .. } if mode == "test"
+    ));
+}
+
+#[test]
+fn test_parse_request_ui_missing_mode() {
+    let _err = parse_err("requestUI");
+}
+
+#[test]
+fn test_parse_request_ui_missing_as_clause() {
+    let _err = parse_err(r#"requestUI "mode""#);
+}
+
+#[test]
+fn test_parse_request_ui_missing_dollar_sign() {
+    let _err = parse_err(r#"requestUI "mode" as result"#);
+}
+
+// =========================================================================
+// textMode 测试
+// =========================================================================
+
+#[test]
+fn test_parse_text_mode_nvl() {
+    let script = parse_ok("textMode nvl");
+    assert_eq!(script.len(), 1);
+    assert!(matches!(
+        script.nodes[0],
+        ScriptNode::SetTextMode(TextMode::NVL)
+    ));
+}
+
+#[test]
+fn test_parse_text_mode_adv() {
+    let script = parse_ok("textMode adv");
+    assert_eq!(script.len(), 1);
+    assert!(matches!(
+        script.nodes[0],
+        ScriptNode::SetTextMode(TextMode::ADV)
+    ));
+}
+
+#[test]
+fn test_parse_text_mode_case_insensitive() {
+    let script = parse_ok("textmode NVL");
+    assert_eq!(script.len(), 1);
+    assert!(matches!(
+        script.nodes[0],
+        ScriptNode::SetTextMode(TextMode::NVL)
+    ));
+}
+
+#[test]
+fn test_parse_text_mode_missing_mode() {
+    parse_err("textMode");
+}
+
+#[test]
+fn test_parse_text_mode_invalid_mode() {
+    parse_err("textMode foo");
+}
+
+#[test]
+fn test_parse_show_map_basic() {
+    let script = parse_ok("showMap \"world\" as $destination");
+    assert_eq!(script.nodes.len(), 1);
+    match &script.nodes[0] {
+        ScriptNode::RequestUI {
+            mode,
+            result_var,
+            params,
+        } => {
+            assert_eq!(mode, "show_map");
+            assert_eq!(result_var, "destination");
+            assert_eq!(params.len(), 1);
+            assert_eq!(params[0].0, "map_id");
+        }
+        other => panic!("expected RequestUI, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_show_map_case_insensitive() {
+    let script = parse_ok("showmap \"city\" as $choice");
+    assert_eq!(script.nodes.len(), 1);
+    assert!(matches!(&script.nodes[0], ScriptNode::RequestUI { mode, .. } if mode == "show_map"));
+}
+
+#[test]
+fn test_parse_show_map_missing_map_id() {
+    parse_err("showMap");
+}
+
+#[test]
+fn test_parse_show_map_missing_as_clause() {
+    parse_err("showMap \"world\"");
+}
+
+#[test]
+fn test_parse_call_game_basic() {
+    let script = parse_ok("callGame \"pong\" as $score");
+    assert_eq!(script.nodes.len(), 1);
+    match &script.nodes[0] {
+        ScriptNode::RequestUI {
+            mode,
+            result_var,
+            params,
+        } => {
+            assert_eq!(mode, "call_game");
+            assert_eq!(result_var, "score");
+            assert!(params.iter().any(|(k, _)| k == "game_id"));
+        }
+        other => panic!("expected RequestUI, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_call_game_with_params() {
+    let script = parse_ok("callGame \"cards\" as $result (difficulty: 3)");
+    assert_eq!(script.nodes.len(), 1);
+    match &script.nodes[0] {
+        ScriptNode::RequestUI {
+            mode,
+            result_var,
+            params,
+        } => {
+            assert_eq!(mode, "call_game");
+            assert_eq!(result_var, "result");
+            assert!(params.len() >= 2);
+        }
+        other => panic!("expected RequestUI, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_call_game_missing_id() {
+    parse_err("callGame");
+}
+
+#[test]
+fn test_parse_call_game_missing_as() {
+    parse_err("callGame \"pong\"");
+}

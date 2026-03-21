@@ -49,6 +49,18 @@ pub enum WaitingReason {
 
     /// 等待外部信号
     WaitForSignal(SignalId),
+
+    /// 等待 UI 交互结果
+    ///
+    /// Runtime 发出 `Command::RequestUI` 后进入此状态。
+    /// 收到匹配的 `RuntimeInput::UIResult` 后，将 `value` 存入
+    /// `result_var` 指定的脚本变量，然后清除等待。
+    WaitForUIResult {
+        /// 请求标识符（与 UIResult.key 配对）
+        key: String,
+        /// 结果存储的目标变量名
+        result_var: String,
+    },
 }
 
 impl WaitingReason {
@@ -77,6 +89,14 @@ impl WaitingReason {
     /// 创建等待信号状态
     pub fn signal(id: impl Into<SignalId>) -> Self {
         Self::WaitForSignal(id.into())
+    }
+
+    /// 创建等待 UI 结果状态
+    pub fn ui_result(key: impl Into<String>, result_var: impl Into<String>) -> Self {
+        Self::WaitForUIResult {
+            key: key.into(),
+            result_var: result_var.into(),
+        }
     }
 }
 

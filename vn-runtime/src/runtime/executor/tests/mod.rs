@@ -1,6 +1,7 @@
 use super::*;
-use crate::command::{Position, Transition, TransitionArg};
-use crate::script::ChoiceOption;
+use crate::command::{Position, TextMode, Transition, TransitionArg};
+use crate::script::{ChoiceOption, Expr};
+use crate::state::VarValue;
 
 mod high_value;
 mod low_value;

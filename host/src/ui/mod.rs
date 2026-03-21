@@ -5,6 +5,7 @@
 pub mod asset_cache;
 pub mod image_slider;
 pub mod layout;
+pub mod map;
 pub mod nine_patch;
 pub mod render_context;
 pub mod screen_defs;

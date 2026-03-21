@@ -7,7 +7,7 @@
 
 - **`vn-runtime/`**：纯逻辑 Runtime（脚本解析/执行/状态/存档），**不依赖引擎与 IO**。
 - **`host/`**：winit + wgpu + egui 宿主（渲染/音频/输入/资源），把 Runtime 的 `Command` 转换为实际效果。
-- **`tools/xtask/`**：本地质量门禁与开发辅助命令（跨平台串行执行）。
+- **`tools/xtask/`**：本地自检与 CI 共用的质量门禁、覆盖率和开发辅助命令入口。
 - **`tools/asset-packer/`**：资源打包工具（可选工作流）。
 - **`assets/`**：游戏资源（背景/立绘/脚本/音频/字体/manifest）。
 - **`docs/`**：规范与设计文档（脚本语法、资源管理、存档格式等）。
@@ -172,7 +172,7 @@
 
 ## 开发工作流（质量门禁/覆盖率）
 
-- **一键门禁**：`cargo check-all`（由 `tools/xtask` 串行执行 fmt --all → clippy --fix → test）
+- **一键门禁**：`cargo check-all`（本地自检与 CI 共用；由 `tools/xtask` 串行执行 fmt --all → clippy --fix → test）
 - **脚本检查**：`cargo script-check`（检查脚本语法/label/资源引用）
 - **Dev Mode 自动脚本检查**：Host 启动时基于 `config.json` 的 `debug.script_check` 自动运行（debug build 默认开启）
 - **覆盖率**：`cargo cov`，报告：`target/llvm-cov/html/index.html`

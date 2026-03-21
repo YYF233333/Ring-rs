@@ -10,7 +10,10 @@
 //! - **引擎无关**：不包含任何 Bevy 或其他引擎的类型
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::str::FromStr;
+
+use crate::state::VarValue;
 
 /// changeScene 过渡完成的信号 ID
 ///
@@ -232,6 +235,20 @@ pub struct Choice {
     pub target_label: String,
 }
 
+/// 文本显示模式
+///
+/// 控制对话文本的显示方式。
+/// - `ADV`（默认）：底部对话框，一次显示一句
+/// - `NVL`：全屏半透明背景，文本逐行累积
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum TextMode {
+    /// ADV 模式：底部对话框，一次一句
+    #[default]
+    ADV,
+    /// NVL 模式：全屏文本累积
+    NVL,
+}
+
 /// Runtime 向 Host 发出的指令
 ///
 /// 这是 Runtime 与 Host 之间的**唯一通信方式**。
@@ -387,6 +404,26 @@ pub enum Command {
     Cutscene {
         /// 视频文件路径
         path: String,
+    },
+
+    /// 切换文本显示模式
+    ///
+    /// Host 收到后切换对话渲染方式。
+    /// 切换到 NVL 时开始累积对话文本。
+    /// 切换到 ADV 时清空累积的 NVL 文本。
+    SetTextMode(TextMode),
+
+    /// 请求 Host 展示自定义 UI 并等待用户交互
+    ///
+    /// Host 收到后应根据 `mode` 展示对应 UI，用户完成交互后
+    /// 通过 `RuntimeInput::UIResult { key, value }` 回传结果。
+    RequestUI {
+        /// 请求标识符（用于匹配响应）
+        key: String,
+        /// UI 模式标识（Host 据此选择展示哪种 UI）
+        mode: String,
+        /// 模式特定参数
+        params: HashMap<String, VarValue>,
     },
 }
 

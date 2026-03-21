@@ -2,7 +2,7 @@
 
 use super::*;
 #[allow(unused_imports)]
-use crate::command::{Position, TransitionArg};
+use crate::command::{Position, TextMode, TransitionArg};
 use crate::script::ast::ScriptNode;
 
 mod high_value;

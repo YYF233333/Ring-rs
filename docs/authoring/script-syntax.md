@@ -1,13 +1,15 @@
 # VN Script 语法规范
 
-> 版本: 1.2.0  
+> 版本: 1.3.0  
 > 本文档定义了 Visual Novel Engine 脚本语言的正式语法规范。
 >
-> **实现状态**: ✅ 解析器已完成（手写递归下降，176 个测试用例）
+> **实现状态**: ✅ 解析器已完成（手写递归下降，318 个测试用例）
 >
 > **1.1.0 新增**: 变量系统（set）、条件分支（if/elseif/else/endif）、表达式求值
 >
 > **1.2.0 新增**: 节奏标签（{wait}/{speed}）、自动推进修饰符（-->）、台词续接（extend）
+>
+> **1.3.0 新增**: requestUI、textMode、showMap、callGame（双向 UI-Script 通信）
 
 ---
 
@@ -987,6 +989,49 @@ enum Block {
 - 支持 Windows (CRLF) 和 Unix (LF) 换行符
 - 表格分隔符 `|` 两侧的空格自动 trim
 - 解析错误时记录行号，便于调试
+
+---
+
+## 十一、UI 交互与小游戏 (1.3.0)
+
+> **1.3.0 新增**: requestUI、textMode、showMap、callGame
+
+### 11.1 requestUI — 通用 UI 请求
+
+```markdown
+requestUI "mode_name" as $result_var
+requestUI "mode_name" as $result_var (param1: value1, param2: "str")
+```
+
+向 Host 请求展示自定义 UI 模式，等待用户交互后将结果存入变量。
+
+### 11.2 textMode — 文本显示模式切换
+
+```markdown
+textMode nvl    # 切换到 NVL 模式（全屏文本累积）
+textMode adv    # 切换回 ADV 模式（底部对话框，默认）
+```
+
+### 11.3 showMap — 地图选择
+
+```markdown
+showMap "world_map" as $destination
+```
+
+`showMap` 为语法糖，等价于 `requestUI "show_map" as $destination (map_id: "world_map")`。
+
+显示地图界面，用户选择位置后结果存入变量。地图定义文件：`assets/maps/{map_id}.json`。
+
+### 11.4 callGame — 小游戏调用
+
+```markdown
+callGame "game_id" as $result
+callGame "game_id" as $result (difficulty: 3, time_limit: 60)
+```
+
+`callGame` 为语法糖，等价于 `requestUI "call_game" as $result (game_id: "game_id", ...)`。
+
+需要启用 `mini-games` feature。未启用时立即返回空字符串。
 
 ---
 

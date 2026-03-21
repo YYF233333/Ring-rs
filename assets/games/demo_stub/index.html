@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ring-rs Demo Stub</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f3a 100%);
+      color: #e8ecf8;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      user-select: none;
+    }
+
+    .game-panel {
+      width: 480px;
+      padding: 40px;
+      border: 1px solid rgba(100, 140, 255, 0.3);
+      border-radius: 16px;
+      background: rgba(20, 28, 50, 0.95);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+      text-align: center;
+    }
+
+    h1 { font-size: 24px; margin-bottom: 8px; color: #8eaaff; }
+    .subtitle { font-size: 14px; color: #7788aa; margin-bottom: 32px; }
+
+    .score-display {
+      font-size: 64px;
+      font-weight: bold;
+      color: #6d8ff0;
+      margin: 24px 0;
+      transition: transform 0.1s;
+    }
+    .score-display.bump { transform: scale(1.15); }
+
+    .target { font-size: 16px; color: #99aabb; margin-bottom: 24px; }
+    .target span { color: #ffcc44; font-weight: bold; }
+
+    .click-area {
+      width: 200px;
+      height: 200px;
+      margin: 0 auto 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4466cc 0%, #6d8ff0 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+      box-shadow: 0 4px 20px rgba(100, 140, 255, 0.3);
+    }
+    .click-area:hover { transform: scale(1.05); box-shadow: 0 6px 28px rgba(100, 140, 255, 0.5); }
+    .click-area:active { transform: scale(0.95); }
+
+    .timer-bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .timer-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6d8ff0, #44ccff);
+      border-radius: 3px;
+      transition: width 0.1s linear;
+    }
+
+    .result-panel { display: none; }
+    .result-panel.show { display: block; }
+
+    .result-score { font-size: 48px; color: #ffcc44; font-weight: bold; margin: 16px 0; }
+    .result-msg { font-size: 16px; color: #99aabb; margin-bottom: 24px; }
+
+    button.return-btn {
+      padding: 12px 32px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #4466cc, #6d8ff0);
+      color: white;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+      transition: transform 0.1s;
+    }
+    button.return-btn:hover { transform: scale(1.05); }
+  </style>
+</head>
+<body>
+  <div class="game-panel">
+    <h1>点击挑战</h1>
+    <p class="subtitle">在限定时间内尽可能多地点击！</p>
+
+    <div id="game-area">
+      <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
+      <div class="target">目标: <span id="target-score">10</span> 次</div>
+      <div class="score-display" id="score">0</div>
+      <div class="click-area" id="click-btn">点击！</div>
+    </div>
+
+    <div class="result-panel" id="result-area">
+      <p>最终得分</p>
+      <div class="result-score" id="final-score">0</div>
+      <div class="result-msg" id="result-msg"></div>
+      <button class="return-btn" id="return-btn">返回游戏</button>
+    </div>
+  </div>
+
+  <script src="./game.js"></script>
+</body>
+</html>

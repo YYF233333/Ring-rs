@@ -36,7 +36,7 @@ mod transition;
 
 pub use animation::{AnimationSystem, ObjectId};
 pub use character_animation::AnimatableCharacter;
-pub use render_state::{ChoiceItem, RenderState, SceneEffectState, TitleCardState};
+pub use render_state::{ChoiceItem, NvlEntry, RenderState, SceneEffectState, TitleCardState};
 pub use scene_transition::SceneTransitionType;
 
 use scene_transition::SceneTransitionManager;

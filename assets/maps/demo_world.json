@@ -1,0 +1,27 @@
+{
+  "title": "示例世界地图",
+  "background": null,
+  "locations": [
+    {
+      "id": "beach",
+      "label": "海边",
+      "x": 360.0,
+      "y": 700.0,
+      "enabled": true
+    },
+    {
+      "id": "town",
+      "label": "小镇",
+      "x": 960.0,
+      "y": 500.0,
+      "enabled": true
+    },
+    {
+      "id": "forest",
+      "label": "森林",
+      "x": 1450.0,
+      "y": 320.0,
+      "enabled": true
+    }
+  ]
+}

@@ -11,6 +11,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::state::VarValue;
+
 /// 信号标识符（newtype）
 ///
 /// 用于 `WaitForSignal` 等待模式，允许外部系统触发 Runtime 继续执行。
@@ -71,6 +73,17 @@ pub enum RuntimeInput {
 
     /// 外部信号（解除 `WaitForSignal`）
     Signal { id: SignalId },
+
+    /// UI 交互结果（解除 `WaitForUIResult`）
+    ///
+    /// Host 完成 UI 交互后，将结果回传 Runtime。
+    /// `key` 必须与对应的 `WaitForUIResult.key` 匹配。
+    UIResult {
+        /// 请求标识符（与 WaitForUIResult 配对）
+        key: String,
+        /// 交互结果值
+        value: VarValue,
+    },
 }
 
 impl RuntimeInput {
@@ -87,6 +100,14 @@ impl RuntimeInput {
     /// 创建信号输入
     pub fn signal(id: impl Into<SignalId>) -> Self {
         Self::Signal { id: id.into() }
+    }
+
+    /// 创建 UI 交互结果输入
+    pub fn ui_result(key: impl Into<String>, value: VarValue) -> Self {
+        Self::UIResult {
+            key: key.into(),
+            value,
+        }
     }
 }
 

@@ -1,9 +1,9 @@
 //! # UI 相关命令执行
 //!
-//! 处理 ShowText、PresentChoices、ChapterMark 命令。
+//! 处理 ShowText、PresentChoices、ChapterMark、SetTextMode 命令。
 
-use crate::renderer::{ChoiceItem, RenderState};
-use vn_runtime::command::{Choice, InlineEffect};
+use crate::renderer::{ChoiceItem, NvlEntry, RenderState};
+use vn_runtime::command::{Choice, InlineEffect, TextMode};
 
 use super::CommandExecutor;
 use super::types::ExecuteResult;
@@ -18,6 +18,18 @@ impl CommandExecutor {
         no_wait: bool,
         render_state: &mut RenderState,
     ) -> ExecuteResult {
+        if render_state.text_mode == TextMode::NVL {
+            for entry in render_state.nvl_entries.iter_mut() {
+                entry.is_complete = true;
+                entry.visible_chars = entry.content.chars().count();
+            }
+            render_state.nvl_entries.push(NvlEntry {
+                speaker: speaker.clone(),
+                content: content.to_string(),
+                visible_chars: 0,
+                is_complete: false,
+            });
+        }
         render_state.start_typewriter(speaker, content.to_string(), inline_effects, no_wait);
         ExecuteResult::WaitForClick
     }
@@ -106,6 +118,7 @@ impl CommandExecutor {
     ) -> ExecuteResult {
         render_state.clear_dialogue();
         render_state.clear_choices();
+        render_state.nvl_entries.clear();
         ExecuteResult::Ok
     }
 
@@ -115,6 +128,21 @@ impl CommandExecutor {
         render_state: &mut RenderState,
     ) -> ExecuteResult {
         render_state.hide_all_characters();
+        ExecuteResult::Ok
+    }
+
+    /// 执行 SetTextMode（切换文本模式）
+    pub(super) fn execute_set_text_mode(
+        &mut self,
+        mode: TextMode,
+        render_state: &mut RenderState,
+    ) -> ExecuteResult {
+        if render_state.text_mode != mode {
+            render_state.text_mode = mode;
+            if mode == TextMode::ADV {
+                render_state.nvl_entries.clear();
+            }
+        }
         ExecuteResult::Ok
     }
 }

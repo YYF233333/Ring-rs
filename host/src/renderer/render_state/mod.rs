@@ -10,7 +10,8 @@ use std::collections::HashMap;
 pub use dialogue::{DialogueState, EffectiveCps, InlineWait};
 
 use super::character_animation::AnimatableCharacter;
-use vn_runtime::command::Position;
+use crate::ui::map::MapDisplayState;
+use vn_runtime::command::{Position, TextMode};
 
 /// 渲染状态
 ///
@@ -40,6 +41,28 @@ pub struct RenderState {
 
     /// 当前场景效果状态（shake/blur/dim 等）
     pub scene_effect: SceneEffectState,
+
+    /// 当前文本显示模式
+    pub text_mode: TextMode,
+
+    /// NVL 模式下的累积对话条目
+    pub nvl_entries: Vec<NvlEntry>,
+
+    /// 地图显示状态（showMap 激活时非 None）
+    pub map_display: Option<MapDisplayState>,
+}
+
+/// NVL 模式下的单条对话
+#[derive(Debug, Clone)]
+pub struct NvlEntry {
+    /// 说话者名称
+    pub speaker: Option<String>,
+    /// 对话文本
+    pub content: String,
+    /// 当前可见字符数
+    pub visible_chars: usize,
+    /// 是否显示完成
+    pub is_complete: bool,
 }
 
 /// 标题字卡状态
@@ -77,6 +100,9 @@ impl Default for RenderState {
             ui_visible: true,
             title_card: None,
             scene_effect: SceneEffectState::default(),
+            text_mode: TextMode::default(),
+            nvl_entries: Vec::new(),
+            map_display: None,
         }
     }
 }

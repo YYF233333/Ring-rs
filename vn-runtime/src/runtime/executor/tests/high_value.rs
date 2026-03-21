@@ -604,3 +604,46 @@ fn test_execute_conditional_else_branch() {
         Command::ShowText { content, .. } if content == "条件为假"
     ));
 }
+
+#[test]
+fn test_execute_request_ui_produces_command_and_wait() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::RequestUI {
+        mode: "show_map".to_string(),
+        result_var: "choice".to_string(),
+        params: vec![(
+            "map_id".to_string(),
+            Expr::Literal(VarValue::String("world".to_string())),
+        )],
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::RequestUI { key, mode, params }
+            if key == "show_map" && mode == "show_map"
+            && params.get("map_id") == Some(&VarValue::String("world".to_string()))
+    ));
+    assert!(matches!(
+        result.waiting,
+        Some(WaitingReason::WaitForUIResult { ref key, ref result_var })
+            if key == "show_map" && result_var == "choice"
+    ));
+}
+
+#[test]
+fn test_execute_request_ui_no_params() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::RequestUI {
+        mode: "confirm_dialog".to_string(),
+        result_var: "confirmed".to_string(),
+        params: vec![],
+    };
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::RequestUI { key, mode, params }
+            if key == "confirm_dialog" && mode == "confirm_dialog" && params.is_empty()
+    ));
+}

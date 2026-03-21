@@ -744,3 +744,45 @@ fn test_record_history_for_extend_text() {
         panic!("Expected Dialogue event");
     }
 }
+
+#[test]
+fn test_ui_result_clears_wait_and_stores_variable() {
+    let script = create_test_script();
+    let mut runtime = VNRuntime::new(script);
+
+    runtime.state_mut().position.node_index = 99;
+    runtime
+        .state_mut()
+        .wait(WaitingReason::ui_result("show_map", "destination"));
+
+    let (_commands, waiting) = runtime
+        .tick(Some(RuntimeInput::ui_result(
+            "show_map",
+            VarValue::String("beach".to_string()),
+        )))
+        .unwrap();
+    assert!(!waiting.is_waiting());
+    assert_eq!(
+        runtime.state().get_var("destination"),
+        Some(&VarValue::String("beach".to_string()))
+    );
+}
+
+#[test]
+fn test_ui_result_ignores_mismatched_key() {
+    let script = create_test_script();
+    let mut runtime = VNRuntime::new(script);
+
+    runtime
+        .state_mut()
+        .wait(WaitingReason::ui_result("show_map", "destination"));
+
+    let (_commands, waiting) = runtime
+        .tick(Some(RuntimeInput::ui_result(
+            "wrong_key",
+            VarValue::String("beach".to_string()),
+        )))
+        .unwrap();
+    assert!(waiting.is_waiting());
+    assert_eq!(runtime.state().get_var("destination"), None);
+}

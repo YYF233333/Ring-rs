@@ -17,6 +17,8 @@ target
 .vscode/
 
 assets/*
+!assets/games/
+!assets/maps/
 !assets/scripts/
 !assets/ui/
 !assets/manifest.json

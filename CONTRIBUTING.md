@@ -1,29 +1,32 @@
-# 贡献与开发指南（单人模式）
+# 贡献与开发指南
 
-本仓库目前以**单人开发、本地运行**为主：暂不强制 CI，但要求每次提交前通过本地质量门禁。
+本仓库当前采用“**本地自检 + CI 兜底**”的质量门禁模式：开发者本地建议先跑一遍 `cargo check-all`，远端由 CI 统一执行并阻止不符合门禁的提交合入。
 
 ## 必备环境
 
 - Rust：建议使用较新的 Rust（本仓库使用 `edition = "2024"`，因此需要较新的 toolchain；不强制锁定版本）
 - Windows：PowerShell（用于 `cargo` alias 的一键门禁）
 
-## Pre-commit Hook（自动门禁）
+## CI 门禁
 
-仓库自带 pre-commit hook，提交时自动运行格式检查 + clippy。首次克隆后需要激活：
+本仓库不再使用 pre-commit hook。质量门禁统一交给 CI 执行：
 
-```bash
-git config core.hooksPath .githooks
-```
+- CI 运行 `cargo check-all`
+- 随后执行 `git diff --exit-code`
 
-Hook 仅运行快速检查（fmt + clippy），不跑测试以保持提交流畅。完整门禁请用 `cargo check-all`。
+这样可以同时覆盖：
 
-如需临时跳过（不推荐）：`git commit --no-verify`。
+- `cargo fmt --all` 产生的格式化改动
+- `cargo clippy --fix` 产生的自动修复改动
+- `cargo test --workspace` 的回归验证
+
+本地开发时仍强烈建议在提交前手动运行 `cargo check-all`，这样可以在推送前尽早看到格式化、clippy 和测试问题。
 
 ## 常用命令（推荐记住这几个）
 
-### 一键质量门禁（提交前必跑）
+### 一键质量门禁（本地自检）
 
-- **全量**（fmt + clippy + workspace tests）：
+- **全量**（fmt + clippy + workspace tests，与 CI 共用同一门禁命令）：
   - `cargo check-all`
   - 说明：该命令通过 `tools/xtask` 串行执行 `fmt --all`（直接应用）→ `clippy --fix` → `test`
 

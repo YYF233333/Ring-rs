@@ -520,3 +520,16 @@ fn test_execute_dialogue_no_wait() {
         Command::ShowText { no_wait: true, .. }
     ));
 }
+
+#[test]
+fn test_execute_set_text_mode() {
+    let (mut executor, mut state, script) = test_ctx("");
+    let node = ScriptNode::SetTextMode(TextMode::NVL);
+    let result = executor.execute(&node, &mut state, &script).unwrap();
+    assert_eq!(result.commands.len(), 1);
+    assert!(matches!(
+        &result.commands[0],
+        Command::SetTextMode(TextMode::NVL)
+    ));
+    assert!(result.waiting.is_none());
+}

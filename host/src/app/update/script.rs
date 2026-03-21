@@ -194,6 +194,88 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                     return;
                 }
 
+                // RequestUI：按 mode 分发处理
+                if let Command::RequestUI {
+                    key, mode, params, ..
+                } = command
+                {
+                    if mode == "call_game" {
+                        #[cfg(feature = "mini-games")]
+                        {
+                            if let Some(game_id) = params.get("game_id").and_then(|v| {
+                                if let vn_runtime::state::VarValue::String(s) = v {
+                                    Some(s.clone())
+                                } else {
+                                    None
+                                }
+                            }) {
+                                info!(
+                                    game_id = %game_id,
+                                    "callGame: 设置待启动小游戏请求"
+                                );
+                                app_state.pending_game_launch =
+                                    Some(crate::game_mode::PendingGameLaunch {
+                                        game_id,
+                                        request_key: key.clone(),
+                                        params: params.clone(),
+                                    });
+                            }
+                        }
+                        #[cfg(not(feature = "mini-games"))]
+                        {
+                            warn!("callGame 需要 mini-games feature，当前未启用");
+                            app_state
+                                .input_manager
+                                .inject_input(RuntimeInput::ui_result(
+                                    key.clone(),
+                                    vn_runtime::state::VarValue::String(String::new()),
+                                ));
+                        }
+                    } else if mode == "show_map"
+                        && let Some(map_id) = params.get("map_id").and_then(|v| {
+                            if let vn_runtime::state::VarValue::String(s) = v {
+                                Some(s.as_str())
+                            } else {
+                                None
+                            }
+                        })
+                    {
+                        let map_path = format!("maps/{}.json", map_id);
+                        let logical = LogicalPath::new(&map_path);
+                        match app_state.core.resource_manager.read_text(&logical) {
+                            Ok(json_text) => {
+                                match serde_json::from_str::<crate::ui::map::MapDefinition>(
+                                    &json_text,
+                                ) {
+                                    Ok(definition) => {
+                                        let map_state = crate::ui::map::MapDisplayState::new(
+                                            definition,
+                                            key.clone(),
+                                        );
+                                        app_state.core.render_state.map_display = Some(map_state);
+                                        debug!(map_id, "地图加载成功");
+                                    }
+                                    Err(e) => {
+                                        warn!(
+                                            map_id,
+                                            error = %e,
+                                            "地图 JSON 解析失败"
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    map_id,
+                                    error = %e,
+                                    "地图文件加载失败"
+                                );
+                            }
+                        }
+                    }
+                    continue;
+                }
+
                 // Cutscene：启动视频播放器，duck BGM
                 if let Command::Cutscene { path } = command {
                     info!(path = %path, "收到 Cutscene 命令，启动视频播放");

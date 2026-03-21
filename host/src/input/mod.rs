@@ -169,6 +169,10 @@ impl InputManager {
                 self.state.reset_hold_timers();
                 None
             }
+            WaitingReason::WaitForUIResult { .. } => {
+                self.state.reset_hold_timers();
+                None
+            }
         }
     }
 

@@ -49,9 +49,7 @@ pub struct Cli {
 fn main() {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        eprintln!(
-            "[Ring VN] Panic detected. If recording was enabled, check the recordings/ directory."
-        );
+        eprintln!("[Ring VN] Panic detected. AppState Drop 将尝试自动导出录制缓冲区。");
         default_hook(info);
     }));
 

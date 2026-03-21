@@ -40,3 +40,5 @@
 | RFC-017 | 调试覆盖层 | `rfc-debug-overlay.md` | Proposed |
 | RFC-018 | 结构化事件流调试基础设施 | `rfc-structured-event-stream.md` | Accepted |
 | RFC-019 | Headless 测试模式 | `rfc-headless-testing-mode.md` | Accepted |
+| RFC-020 | 双向 UI-Script 通信协议 | `Accepted/rfc-bidirectional-ui-script-communication.md` | Accepted |
+| RFC-021 | WebView 小游戏集成 | `Accepted/rfc-webview-minigame-integration.md` | Accepted |

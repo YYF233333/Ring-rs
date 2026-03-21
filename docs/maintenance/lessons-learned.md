@@ -106,11 +106,35 @@ result.assert_waiting_click();
 
 ## 工具链与环境
 
+### 会修改工作区的门禁不适合放 pre-commit
+
+- **现象**：把 `cargo fmt` / `cargo clippy --fix` 这类会直接改文件的命令塞进 pre-commit 后，总会碰到 staged/unstaged 语义错位、partial commit 冲突，或者“检查通过但提交内容不一致”的问题。
+- **原因**：Git 提交基于暂存区（index），而 Rust 工具链命令默认作用于工作区和整个 workspace，无法天然只约束“本次将提交的那一份快照”。
+- **正确做法**：移除这类 pre-commit 自动门禁，把 `cargo check-all` 放到 CI 执行，并在后面追加 `git diff --exit-code`。本地开发者按需手动运行 `cargo check-all` 即可。
+
 ### PowerShell 中 `&&` 语法错误
 
 - **现象**：在 PowerShell 中用 `&&` 连接命令报语法错误。
 - **原因**：PowerShell（非 pwsh 7+）不支持 `&&` 作为命令连接符。
 - **正确做法**：使用 `;` 分隔命令：`cd F:\Code\Ring-rs; cargo test`。
+
+### wry WebView 不能使用 `file://` URL 加载本地页面
+
+- **现象**：WebView2 的 IPC handler 收到消息时 panic：`http::Error(InvalidUri(InvalidFormat))`。panic 发生在 wry 内部（`webview2/mod.rs`），在用户 handler 被调用之前。
+- **原因**：wry 用页面来源 URL 构造 `http::Request`，Windows `file://` 路径含盘符冒号（如 `F:`），`http::Uri` 无法解析。且 panic 发生在 COM 回调（`extern "system"`）中，无法 unwind，直接 abort。
+- **正确做法**：使用 `with_custom_protocol()` 注册自定义协议（如 `game://`），通过闭包从文件系统读取资源。Windows 上 WebView2 会将其映射为 `http://game.localhost/...`，是合法的 HTTP URI。
+
+### WebView 子窗口遮挡父窗口导致 RedrawRequested 不触发
+
+- **现象**：WebView 小游戏完成后点击返回无响应，引擎卡死在小游戏界面。
+- **原因**：`build_as_child` 创建的 WebView 子窗口覆盖了整个父窗口。Windows 认为父窗口被完全遮挡，优化掉 `WM_PAINT`，导致 winit 的 `RedrawRequested` 不再触发。放在 `RedrawRequested` 中的 channel 轮询代码永远不执行。
+- **正确做法**：将小游戏完成轮询移到 `ApplicationHandler::about_to_wait()` 回调中。此回调在每次事件循环迭代都会执行，不依赖窗口重绘。同时在销毁 WebView 前先调用 `set_visible(false)`，然后 `request_redraw()` 恢复父窗口渲染。
+
+### panic 时录制缓冲区不会自动导出
+
+- **现象**：程序 panic 后，`recordings/` 目录下没有录制文件，尽管 panic hook 提示"检查 recordings 目录"。
+- **原因**：录制导出仅在 F8 手动触发。panic hook 只打印信息，不实际导出。FFI abort 场景下析构函数也无法运行。
+- **正确做法**：`AppState` 实现 `Drop`，在 `std::thread::panicking()` 时自动调用 `export_recording`。可覆盖正常 unwind 的 panic；FFI abort 无法覆盖，需从根源避免 FFI 边界 panic。
 
 ---
 

@@ -25,6 +25,7 @@ pub mod command_executor;
 pub mod config;
 pub mod event_stream;
 pub mod extensions;
+pub mod game_mode;
 pub mod headless;
 pub mod input;
 pub mod manifest;

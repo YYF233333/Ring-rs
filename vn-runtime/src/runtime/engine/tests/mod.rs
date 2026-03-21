@@ -1,5 +1,6 @@
 use super::*;
 use crate::script::ScriptNode;
+use crate::state::VarValue;
 
 mod high_value;
 mod low_value;

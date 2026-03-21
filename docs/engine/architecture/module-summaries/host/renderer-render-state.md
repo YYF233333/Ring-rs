@@ -28,6 +28,9 @@
 - `DialogueState` 扩展字段：`inline_effects`（位置索引内联效果）、`no_wait`（自动推进）、`inline_wait`（当前内联等待状态）、`effective_cps`（当前字速覆盖）。
 - `advance_typewriter` 在推进字符时自动检测并激活对应位置的 `InlineEffect`。
 - `extend_dialogue` 追加文本时自动偏移新增内联效果的位置索引。
+- `text_mode: TextMode` 字段控制 ADV/NVL 渲染模式。
+- `nvl_entries: Vec<NvlEntry>` 累积 NVL 对话行。
+- `map_display: Option<MapDisplayState>` 持有当前地图叠层状态。
 
 ## FailureModes
 
@@ -46,7 +49,7 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-21
 
 ## Owner
 

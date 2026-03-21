@@ -20,6 +20,28 @@ use crate::egui_actions::{self, EguiAction};
 use crate::egui_screens;
 use crate::egui_screens::confirm::ConfirmDialog;
 
+#[cfg(feature = "mini-games")]
+use host::game_mode::{GameCompletion, GameMode};
+
+/// WebView 小游戏运行时状态
+#[cfg(feature = "mini-games")]
+struct MiniGameRuntime {
+    game_mode: GameMode,
+    webview: Option<wry::WebView>,
+    result_rx: Option<std::sync::mpsc::Receiver<GameCompletion>>,
+}
+
+#[cfg(feature = "mini-games")]
+impl MiniGameRuntime {
+    fn new() -> Self {
+        Self {
+            game_mode: GameMode::new(),
+            webview: None,
+            result_rx: None,
+        }
+    }
+}
+
 pub struct HostApp {
     backend: Option<WgpuBackend>,
     app_state: Option<AppState>,
@@ -33,6 +55,8 @@ pub struct HostApp {
     pending_thumbnail_slot: Option<u32>,
     /// 事件流输出路径（CLI 传入）
     event_stream_path: Option<std::path::PathBuf>,
+    #[cfg(feature = "mini-games")]
+    mini_game: MiniGameRuntime,
 }
 
 impl HostApp {
@@ -48,6 +72,8 @@ impl HostApp {
             pending_confirm: None,
             pending_thumbnail_slot: None,
             event_stream_path,
+            #[cfg(feature = "mini-games")]
+            mini_game: MiniGameRuntime::new(),
         }
     }
 }
@@ -113,6 +139,8 @@ impl ApplicationHandler for HostApp {
             save_load_page,
             pending_confirm,
             pending_thumbnail_slot,
+            #[cfg(feature = "mini-games")]
+            mini_game,
             ..
         } = self;
         let (Some(backend), Some(app_state)) = (backend.as_mut(), app_state.as_mut()) else {
@@ -176,6 +204,39 @@ impl ApplicationHandler for HostApp {
                 app_state.core.renderer.set_screen_size(w as f32, h as f32);
                 let mode_before_update = app_state.ui.navigation.current();
                 app::update(app_state, dt);
+
+                // ── 小游戏 WebView 生命周期 ──
+                #[cfg(feature = "mini-games")]
+                {
+                    // 1. 检查待启动的小游戏请求
+                    if let Some(launch) = app_state.pending_game_launch.take() {
+                        let (w, h) = backend.size();
+                        match mini_game.game_mode.start(
+                            backend.window(),
+                            (w, h),
+                            &launch,
+                            &app_state.config.assets_root,
+                        ) {
+                            Ok((webview, rx)) => {
+                                mini_game.webview = Some(webview);
+                                mini_game.result_rx = Some(rx);
+                            }
+                            Err(e) => {
+                                tracing::warn!(error = %e, "WebView 创建失败，降级处理");
+                                app::run_script_tick(
+                                    app_state,
+                                    Some(vn_runtime::input::RuntimeInput::ui_result(
+                                        launch.request_key,
+                                        vn_runtime::state::VarValue::String(String::new()),
+                                    )),
+                                );
+                            }
+                        }
+                    }
+
+                    // 小游戏完成轮询在 about_to_wait 中执行，
+                    // 避免 WebView 遮挡父窗口导致 RedrawRequested 不触发。
+                }
 
                 // 在 update 之后、渲染之前加载缺失纹理，
                 // 确保 update 中新增的资源引用（如差分切换）在本帧即可渲染
@@ -408,6 +469,42 @@ impl ApplicationHandler for HostApp {
                 backend.request_redraw();
             }
             _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, _el: &ActiveEventLoop) {
+        #[cfg(feature = "mini-games")]
+        {
+            let completion = self
+                .mini_game
+                .result_rx
+                .as_ref()
+                .and_then(|rx| rx.try_recv().ok());
+
+            if let Some(completion) = completion
+                && let Some(request_key) = self.mini_game.game_mode.complete()
+            {
+                if let Some(ref webview) = self.mini_game.webview {
+                    let _ = webview.set_visible(false);
+                }
+                self.mini_game.webview = None;
+                self.mini_game.result_rx = None;
+
+                if let Some(app_state) = self.app_state.as_mut() {
+                    info!(key = %request_key, "小游戏完成，回传结果");
+                    app::run_script_tick(
+                        app_state,
+                        Some(vn_runtime::input::RuntimeInput::ui_result(
+                            request_key,
+                            completion.result,
+                        )),
+                    );
+                }
+
+                if let Some(backend) = self.backend.as_ref() {
+                    backend.request_redraw();
+                }
+            }
         }
     }
 }

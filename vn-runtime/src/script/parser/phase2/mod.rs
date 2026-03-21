@@ -153,6 +153,18 @@ impl Phase2Parser {
         if starts_with_ignore_case(line, "cutscene") {
             return self.parse_cutscene(line, line_number);
         }
+        if starts_with_ignore_case(line, "requestui") {
+            return self.parse_request_ui(line, line_number);
+        }
+        if starts_with_ignore_case(line, "textmode") {
+            return self.parse_text_mode(line, line_number);
+        }
+        if starts_with_ignore_case(line, "showmap") {
+            return self.parse_show_map(line, line_number);
+        }
+        if starts_with_ignore_case(line, "callgame") {
+            return self.parse_call_game(line, line_number);
+        }
         if starts_with_command(line, "extend") {
             return self.parse_extend(line, line_number, no_wait);
         }

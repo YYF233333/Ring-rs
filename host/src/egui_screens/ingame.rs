@@ -1,9 +1,11 @@
-//! InGame 页面 UI（对话框 + 快捷菜单 + 选项 + 章节标记 + 标题字卡）
+//! InGame 页面 UI（对话框 + 快捷菜单 + 选项 + 章节标记 + 标题字卡 + NVL 模式）
 
 use host::RenderState;
 use host::ui::UiRenderContext;
 use host::ui::layout::{ScaleContext, UiLayoutConfig};
+use host::ui::map::MapDisplayState;
 use host::ui::nine_patch::{Borders, NinePatch};
+use vn_runtime::command::TextMode;
 
 use crate::egui_actions::{self, EguiAction};
 
@@ -24,7 +26,11 @@ pub fn build_ingame_ui(
         build_chapter_mark(ctx, cm, layout, scale);
     }
 
-    if let Some(ref dialogue) = render_state.dialogue {
+    if render_state.text_mode == TextMode::NVL {
+        if !render_state.nvl_entries.is_empty() || render_state.dialogue.is_some() {
+            build_nvl_ui(ctx, render_state, ui_ctx);
+        }
+    } else if let Some(ref dialogue) = render_state.dialogue {
         let tb_height = scale.y(layout.dialogue.textbox_height);
         let screen_w = scale.actual_w;
         let area_rect = egui::Rect::from_min_size(
@@ -118,6 +124,13 @@ pub fn build_ingame_ui(
         let choice_action = build_choices_ui(ctx, choices, ui_ctx);
         if !matches!(choice_action, EguiAction::None) {
             action = choice_action;
+        }
+    }
+
+    if let Some(ref map_state) = render_state.map_display {
+        let map_action = build_map_ui(ctx, map_state, ui_ctx);
+        if !matches!(map_action, EguiAction::None) {
+            action = map_action;
         }
     }
 
@@ -348,4 +361,214 @@ fn build_chapter_mark(
                 egui::Color32::from_rgba_unmultiplied(255, 255, 255, a),
             );
         });
+}
+
+/// NVL 全屏文本渲染
+fn build_nvl_ui(ctx: &egui::Context, render_state: &RenderState, ui_ctx: &UiRenderContext<'_>) {
+    let scale = ui_ctx.scale;
+    let layout = ui_ctx.layout;
+    let text_size = scale.uniform(layout.fonts.text_size);
+    let name_size = scale.uniform(layout.fonts.name_text_size);
+    let line_spacing = text_size * 0.5;
+
+    let margin_x = scale.x(120.0);
+    let margin_top = scale.y(80.0);
+    let content_w = scale.actual_w - margin_x * 2.0;
+
+    let nvl_rect = egui::Rect::from_min_size(
+        egui::pos2(0.0, 0.0),
+        egui::vec2(scale.actual_w, scale.actual_h),
+    );
+
+    egui::Area::new(egui::Id::new("nvl_area"))
+        .fixed_pos(egui::pos2(0.0, 0.0))
+        .order(egui::Order::Middle)
+        .interactable(false)
+        .show(ctx, |ui| {
+            ui.set_min_size(nvl_rect.size());
+            let painter = ui.painter();
+
+            painter.rect_filled(
+                nvl_rect,
+                0.0,
+                egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180),
+            );
+
+            let mut y_cursor = margin_top;
+            let accent_color = layout.colors.accent.to_egui();
+            let text_color = layout.colors.text.to_egui();
+
+            for entry in &render_state.nvl_entries {
+                if entry.is_complete || entry.content.is_empty() {
+                    let mut line_text = String::new();
+                    if let Some(ref speaker) = entry.speaker {
+                        line_text.push_str(speaker);
+                        line_text.push('：');
+                    }
+                    line_text.push_str(&entry.content);
+
+                    let galley = painter.layout(
+                        line_text,
+                        egui::FontId::proportional(text_size),
+                        text_color,
+                        content_w,
+                    );
+                    let h = galley.rect.height();
+                    painter.galley(egui::pos2(margin_x, y_cursor), galley, egui::Color32::WHITE);
+                    y_cursor += h + line_spacing;
+                }
+            }
+
+            if let Some(ref dialogue) = render_state.dialogue {
+                let visible_text: String = dialogue
+                    .content
+                    .chars()
+                    .take(dialogue.visible_chars)
+                    .collect();
+
+                if let Some(ref speaker) = dialogue.speaker {
+                    let speaker_galley = painter.layout_no_wrap(
+                        format!("{}：", speaker),
+                        egui::FontId::proportional(name_size),
+                        accent_color,
+                    );
+                    let speaker_w = speaker_galley.rect.width();
+                    painter.galley(
+                        egui::pos2(margin_x, y_cursor),
+                        speaker_galley,
+                        egui::Color32::WHITE,
+                    );
+
+                    let content_galley = painter.layout(
+                        visible_text,
+                        egui::FontId::proportional(text_size),
+                        text_color,
+                        content_w - speaker_w,
+                    );
+                    painter.galley(
+                        egui::pos2(margin_x + speaker_w, y_cursor),
+                        content_galley,
+                        egui::Color32::WHITE,
+                    );
+                } else {
+                    let galley = painter.layout(
+                        visible_text,
+                        egui::FontId::proportional(text_size),
+                        text_color,
+                        content_w,
+                    );
+                    painter.galley(egui::pos2(margin_x, y_cursor), galley, egui::Color32::WHITE);
+                }
+            }
+        });
+}
+
+/// 地图选择覆盖层
+fn build_map_ui(
+    ctx: &egui::Context,
+    map_state: &MapDisplayState,
+    ui_ctx: &UiRenderContext<'_>,
+) -> EguiAction {
+    let mut action = EguiAction::None;
+    let scale = ui_ctx.scale;
+    let layout = ui_ctx.layout;
+
+    let screen_rect = egui::Rect::from_min_size(
+        egui::pos2(0.0, 0.0),
+        egui::vec2(scale.actual_w, scale.actual_h),
+    );
+
+    let button_w = scale.x(200.0);
+    let button_h = scale.y(50.0);
+    let text_size = scale.uniform(layout.fonts.text_size);
+    let accent = layout.colors.accent.to_egui();
+    let idle = layout.colors.idle.to_egui();
+    let hover = layout.colors.hover.to_egui();
+
+    egui::Area::new(egui::Id::new("map_overlay"))
+        .fixed_pos(egui::pos2(0.0, 0.0))
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen_rect.size());
+
+            let mut responses: Vec<(usize, egui::Response, egui::Rect)> = Vec::new();
+            for (i, loc) in map_state.definition.locations.iter().enumerate() {
+                let cx = scale.x(loc.x);
+                let cy = scale.y(loc.y);
+                let btn_rect = egui::Rect::from_center_size(
+                    egui::pos2(cx, cy),
+                    egui::vec2(button_w, button_h),
+                );
+                let response = ui.allocate_rect(btn_rect, egui::Sense::click());
+                responses.push((i, response, btn_rect));
+            }
+
+            let painter = ui.painter();
+
+            painter.rect_filled(
+                screen_rect,
+                0.0,
+                egui::Color32::from_rgba_unmultiplied(0, 0, 0, 200),
+            );
+
+            let title_size = scale.uniform(layout.fonts.name_text_size * 1.5);
+            painter.text(
+                egui::pos2(scale.actual_w / 2.0, scale.y(40.0)),
+                egui::Align2::CENTER_TOP,
+                &map_state.definition.title,
+                egui::FontId::proportional(title_size),
+                egui::Color32::WHITE,
+            );
+
+            for (i, response, btn_rect) in &responses {
+                let loc = &map_state.definition.locations[*i];
+                let enabled = map_state.availability.get(*i).copied().unwrap_or(true);
+
+                let (bg_color, text_color) = if !enabled {
+                    (
+                        egui::Color32::from_rgba_unmultiplied(60, 60, 60, 180),
+                        egui::Color32::from_gray(100),
+                    )
+                } else if response.hovered() {
+                    (
+                        egui::Color32::from_rgba_unmultiplied(80, 80, 120, 220),
+                        hover,
+                    )
+                } else {
+                    (egui::Color32::from_rgba_unmultiplied(40, 40, 60, 200), idle)
+                };
+
+                painter.rect_filled(*btn_rect, 8.0, bg_color);
+                painter.rect_stroke(
+                    *btn_rect,
+                    8.0,
+                    egui::Stroke::new(
+                        1.5,
+                        if enabled {
+                            accent
+                        } else {
+                            egui::Color32::from_gray(80)
+                        },
+                    ),
+                    egui::StrokeKind::Inside,
+                );
+                painter.text(
+                    btn_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    &loc.label,
+                    egui::FontId::proportional(text_size),
+                    text_color,
+                );
+
+                if enabled && response.clicked() {
+                    action = EguiAction::MapLocationSelected {
+                        request_key: map_state.request_key.clone(),
+                        location_id: loc.id.clone(),
+                    };
+                }
+            }
+        });
+
+    action
 }

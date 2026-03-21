@@ -286,6 +286,21 @@ impl VNRuntime {
                 Ok(())
             }
 
+            // UI 交互结果解除 WaitForUIResult
+            (
+                WaitingReason::WaitForUIResult {
+                    key: expected_key,
+                    result_var,
+                },
+                RuntimeInput::UIResult { key, value },
+            ) => {
+                if key == *expected_key {
+                    self.state.set_var(result_var.clone(), value);
+                    self.state.clear_wait();
+                }
+                Ok(())
+            }
+
             // WaitForTime: Click 可以打断等待（用于 wait 指令的交互打断）
             (WaitingReason::WaitForTime(_), RuntimeInput::Click) => {
                 self.state.clear_wait();

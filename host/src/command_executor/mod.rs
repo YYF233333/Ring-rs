@@ -122,6 +122,10 @@ impl CommandExecutor {
             // Cutscene 由 host 上层（run_script_tick）在命令循环中拦截处理，
             // 启动 VideoPlayer 并进入视频播放模式。
             Command::Cutscene { .. } => ExecuteResult::Ok,
+            Command::SetTextMode(mode) => self.execute_set_text_mode(*mode, render_state),
+            // RequestUI 由 host 上层根据 mode 展示对应 UI，
+            // 用户交互后通过 RuntimeInput::UIResult 回传结果。
+            Command::RequestUI { .. } => ExecuteResult::Ok,
         };
 
         self.last_output.result = result.clone();

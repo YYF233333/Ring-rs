@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::command::{InlineEffect, Position, Transition};
+use crate::command::{InlineEffect, Position, TextMode, Transition};
 use crate::script::Expr;
 
 /// 选择项（AST 级别）
@@ -276,6 +276,25 @@ pub enum ScriptNode {
         /// 视频文件路径（相对于脚本目录）
         path: String,
     },
+
+    /// 切换文本显示模式
+    ///
+    /// 对应 `textMode nvl` / `textMode adv` 语法。
+    SetTextMode(TextMode),
+
+    /// 请求 UI 交互
+    ///
+    /// 对应 `requestUI "mode" as $var` 或 `requestUI "mode" as $var (params)` 语法。
+    /// Runtime 发出 `Command::RequestUI` 并进入 `WaitForUIResult` 等待，
+    /// Host 完成交互后回传结果，存入 `result_var` 指定的脚本变量。
+    RequestUI {
+        /// UI 模式标识
+        mode: String,
+        /// 结果存储变量名（不含 $ 前缀）
+        result_var: String,
+        /// 模式特定参数（表达式形式，执行时求值）
+        params: Vec<(String, Expr)>,
+    },
 }
 
 impl ScriptNode {
@@ -292,6 +311,7 @@ impl ScriptNode {
                 | Self::Pause
                 | Self::TitleCard { .. }
                 | Self::Cutscene { .. }
+                | Self::RequestUI { .. }
         )
     }
 

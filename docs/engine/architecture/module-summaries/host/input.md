@@ -23,6 +23,7 @@
 5. `end_frame()` 清除 per-frame 的 "just pressed" 状态（`InputState`）。
 6. egui 事件优先处理；当 egui 交互元素处于指针下方时可调用 `suppress_mouse_click()` 抑制本帧点击，未被 egui 消费的事件才转发给 InputManager。
 7. 录制：`enable_recording(size_mb)` 启用环形缓冲区；`recording_snapshot()` 供导出。回放：`inject_replay_events(events)` 注入事件（headless 用）。导出见 `RecordingExporter`；加载见 `InputReplayer`。
+8. `WaitForUIResult` 与 `WaitForSignal` 相同处理：不采集 winit 输入，结果由上层通过 `inject_input` 程序化注入。
 
 ## Dependencies
 
@@ -53,7 +54,7 @@
 
 ## LastVerified
 
-2026-03-20
+2026-03-21
 
 ## Owner
 

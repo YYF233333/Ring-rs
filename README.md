@@ -35,7 +35,7 @@ cargo run
 Ring-rs/
 ├── vn-runtime/          # 纯逻辑 Runtime：脚本解析/执行/状态/等待/存档（不依赖引擎与 IO）
 ├── host/                # 宿主：渲染/音频/输入/资源（执行 Runtime 产出的 Command）
-├── tools/xtask/         # 本地门禁/覆盖率/脚本检查（cargo alias：check-all/script-check/...）
+├── tools/xtask/         # 本地自检与 CI 共用的门禁/覆盖率/脚本检查（cargo alias：check-all/script-check/...）
 ├── tools/asset-packer/  # 资源打包/发行版生成（cargo alias：pack）
 ├── assets/              # 游戏资源（scripts/backgrounds/characters/bgm/fonts/manifest.json...）
 ├── config.json          # 运行配置（入口脚本、资源来源、窗口等）
@@ -44,4 +44,4 @@ Ring-rs/
 
 ## 贡献与开发
 
-提交前建议跑：`cargo check-all`（fmt → clippy → tests）。更多见：[CONTRIBUTING.md](CONTRIBUTING.md)。
+本地提交前建议跑：`cargo check-all`（fmt → clippy → tests）；CI 也会执行同一门禁并在仓库变脏时失败。更多见：[CONTRIBUTING.md](CONTRIBUTING.md)。
