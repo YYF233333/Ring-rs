@@ -7,6 +7,7 @@ use crate::script::ast::ScriptNode;
 
 mod high_value;
 mod low_value;
+mod snapshots;
 
 fn parse_ok(input: &str) -> crate::script::ast::Script {
     let mut parser = Parser::new();

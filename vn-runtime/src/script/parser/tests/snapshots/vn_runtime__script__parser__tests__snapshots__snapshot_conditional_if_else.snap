@@ -1,0 +1,29 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Conditional:
+    branches:
+      - condition:
+          Eq:
+            - Variable: has_key
+            - Literal:
+                Bool: true
+        body:
+          - Dialogue:
+              speaker: ~
+              content: 你用钥匙打开了门。
+              inline_effects: []
+              no_wait: false
+          - SetVar:
+              name: door_unlocked
+              value:
+                Literal:
+                  Bool: true
+      - condition: ~
+        body:
+          - Dialogue:
+              speaker: ~
+              content: 门锁着。
+              inline_effects: []
+              no_wait: false

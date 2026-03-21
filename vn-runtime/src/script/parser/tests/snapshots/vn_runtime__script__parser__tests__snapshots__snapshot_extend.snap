@@ -1,0 +1,13 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Dialogue:
+    speaker: 路汐
+    content: 这是第一段话。
+    inline_effects: []
+    no_wait: false
+- Extend:
+    content: 然后她继续说道。
+    inline_effects: []
+    no_wait: false

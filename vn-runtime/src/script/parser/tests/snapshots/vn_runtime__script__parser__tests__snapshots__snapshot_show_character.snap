@@ -1,0 +1,11 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- ShowCharacter:
+    path: char/royu.png
+    alias: royu
+    position: NearMiddle
+    transition:
+      name: dissolve
+      args: []

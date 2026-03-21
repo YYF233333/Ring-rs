@@ -1,0 +1,14 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Chapter:
+    title: Chapter 1
+    level: 1
+- Label:
+    name: intro
+- Dialogue:
+    speaker: ~
+    content: 开始。
+    inline_effects: []
+    no_wait: false

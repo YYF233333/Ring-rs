@@ -1,0 +1,9 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Dialogue:
+    speaker: 羽艾
+    content: 为什么会变成这样呢？
+    inline_effects: []
+    no_wait: false

@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_harness;
 use vn_runtime::command::{Choice, Position, Transition};
 
 struct TestCtx {
@@ -12,7 +13,7 @@ impl TestCtx {
         Self {
             executor: CommandExecutor::new(),
             render_state: RenderState::new(),
-            resource_manager: ResourceManager::new("assets", 256),
+            resource_manager: test_harness::null_resource_manager(),
         }
     }
 

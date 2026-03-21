@@ -1,0 +1,15 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- ChangeScene:
+    path: bg/new.jpg
+    transition:
+      name: rule
+      args:
+        - - mask
+          - String: rule_10.png
+        - - duration
+          - Number: 1
+        - - reversed
+          - Bool: true

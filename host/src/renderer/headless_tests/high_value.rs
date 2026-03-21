@@ -7,7 +7,7 @@ use std::sync::Arc;
 fn test_build_draw_commands_empty_state() {
     let renderer = Renderer::new(1920.0, 1080.0);
     let state = RenderState::default();
-    let resource_manager = make_test_resource_manager();
+    let resource_manager = test_harness::null_resource_manager();
     let manifest = Manifest::with_defaults();
 
     let cmds = renderer.build_draw_commands(&state, &resource_manager, &manifest);
@@ -22,7 +22,7 @@ fn test_build_draw_commands_with_background() {
         ..Default::default()
     };
 
-    let mut resource_manager = make_test_resource_manager();
+    let mut resource_manager = test_harness::null_resource_manager();
     let tex: Arc<dyn crate::rendering_types::Texture> = Arc::new(NullTexture::new(1920, 1080));
     resource_manager
         .texture_cache_mut()
@@ -45,7 +45,7 @@ fn test_build_draw_commands_with_character() {
         vn_runtime::command::Position::Center,
     );
 
-    let mut resource_manager = make_test_resource_manager();
+    let mut resource_manager = test_harness::null_resource_manager();
     let tex: Arc<dyn crate::rendering_types::Texture> = Arc::new(NullTexture::new(512, 1024));
     resource_manager
         .texture_cache_mut()

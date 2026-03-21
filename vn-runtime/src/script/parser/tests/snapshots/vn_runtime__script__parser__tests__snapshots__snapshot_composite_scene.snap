@@ -1,0 +1,76 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Chapter:
+    title: 序章
+    level: 1
+- Label:
+    name: start
+- ChangeBG:
+    path: bg/school.jpg
+    transition:
+      name: dissolve
+      args: []
+- Dialogue:
+    speaker: 羽艾
+    content: 早上好。
+    inline_effects: []
+    no_wait: false
+- Dialogue:
+    speaker: ~
+    content: 阳光洒进教室。
+    inline_effects: []
+    no_wait: true
+- Extend:
+    content: 温暖而明亮。
+    inline_effects: []
+    no_wait: false
+- Wait:
+    duration: 0.5
+- ShowCharacter:
+    path: char/royu.png
+    alias: royu
+    position: Center
+    transition:
+      name: dissolve
+      args: []
+- Dialogue:
+    speaker: 路汐
+    content: 你来啦。我等你很久了。
+    inline_effects:
+      - position: 4
+        kind:
+          Wait: ~
+    no_wait: false
+- Choice:
+    style: 横排
+    options:
+      - text: 打招呼
+        target_label: greet
+      - text: 无视
+        target_label: ignore
+- Label:
+    name: greet
+- Dialogue:
+    speaker: ~
+    content: 你挥了挥手。
+    inline_effects: []
+    no_wait: false
+- Goto:
+    target_label: ending
+- Label:
+    name: ignore
+- Dialogue:
+    speaker: ~
+    content: 你假装没看见。
+    inline_effects: []
+    no_wait: false
+- Label:
+    name: ending
+- HideCharacter:
+    alias: royu
+    transition:
+      name: fade
+      args: []
+- StopBgm

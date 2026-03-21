@@ -1,0 +1,11 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Choice:
+    style: 横排
+    options:
+      - text: 选项1
+        target_label: label1
+      - text: 选项2
+        target_label: label2

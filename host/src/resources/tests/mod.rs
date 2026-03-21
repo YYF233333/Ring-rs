@@ -1,5 +1,5 @@
 use super::*;
-use crate::rendering_types::{NullTextureFactory, TextureContext};
+use crate::test_harness;
 
 fn make_png_bytes(width: u32, height: u32) -> Vec<u8> {
     use image::{ImageBuffer, Rgba};

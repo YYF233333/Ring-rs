@@ -1,0 +1,11 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- ChangeBG:
+    path: bg/sky.jpg
+    transition:
+      name: Dissolve
+      args:
+        - - duration
+          - Number: 1.5

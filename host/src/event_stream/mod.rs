@@ -15,7 +15,7 @@ use serde::Serialize;
 // ─── EngineEvent ────────────────────────────────────────────────────
 
 /// 引擎结构化事件（对应事件流的一行）
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "event", content = "data")]
 pub enum EngineEvent {
     ScriptTick {
@@ -61,6 +61,42 @@ pub enum TimeSource {
     Logical,
 }
 
+// ─── TestEventCollector（测试专用） ─────────────────────────────────
+
+/// 内存事件收集器，用于测试中断言事件序列。
+#[cfg(test)]
+pub(crate) struct TestEventCollector {
+    events: Vec<(u64, EngineEvent)>,
+}
+
+#[cfg(test)]
+impl TestEventCollector {
+    pub fn new() -> Self {
+        Self { events: Vec::new() }
+    }
+
+    pub fn events(&self) -> &[(u64, EngineEvent)] {
+        &self.events
+    }
+
+    pub fn drain(&mut self) -> Vec<(u64, EngineEvent)> {
+        std::mem::take(&mut self.events)
+    }
+
+    #[allow(dead_code)]
+    pub fn clear(&mut self) {
+        self.events.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.events.len()
+    }
+
+    fn push(&mut self, ts_ms: u64, event: EngineEvent) {
+        self.events.push((ts_ms, event));
+    }
+}
+
 // ─── EventStream ────────────────────────────────────────────────────
 
 /// 结构化事件流写入器
@@ -72,6 +108,9 @@ pub struct EventStream {
     time_source: TimeSource,
     /// Logical 模式下使用的当前逻辑时间（ms），每帧由 headless 设置
     logical_ms: u64,
+    /// 测试专用：内存事件收集器
+    #[cfg(test)]
+    collector: Option<TestEventCollector>,
 }
 
 impl EventStream {
@@ -85,6 +124,8 @@ impl EventStream {
             writer: Some(BufWriter::new(file)),
             time_source: TimeSource::Wall(Instant::now()),
             logical_ms: 0,
+            #[cfg(test)]
+            collector: None,
         })
     }
 
@@ -98,6 +139,8 @@ impl EventStream {
             writer: Some(BufWriter::new(file)),
             time_source: TimeSource::Logical,
             logical_ms: 0,
+            #[cfg(test)]
+            collector: None,
         })
     }
 
@@ -107,7 +150,32 @@ impl EventStream {
             writer: None,
             time_source: TimeSource::Logical,
             logical_ms: 0,
+            #[cfg(test)]
+            collector: None,
         }
+    }
+
+    /// 创建内存模式的事件流（测试专用），事件收集到内存中供断言。
+    #[cfg(test)]
+    pub(crate) fn in_memory() -> Self {
+        Self {
+            writer: None,
+            time_source: TimeSource::Logical,
+            logical_ms: 0,
+            collector: Some(TestEventCollector::new()),
+        }
+    }
+
+    /// 获取内存收集器的引用（测试专用）。
+    #[cfg(test)]
+    pub(crate) fn collector(&self) -> Option<&TestEventCollector> {
+        self.collector.as_ref()
+    }
+
+    /// 获取内存收集器的可变引用（测试专用）。
+    #[cfg(test)]
+    pub(crate) fn collector_mut(&mut self) -> Option<&mut TestEventCollector> {
+        self.collector.as_mut()
     }
 
     /// 设置当前逻辑时间（仅 Logical 模式有效）。Headless 应在每帧开始时调用。
@@ -122,12 +190,18 @@ impl EventStream {
 
     /// 发出事件（Wall clock 模式：自动计算 ts_ms）
     pub fn emit(&mut self, event: EngineEvent) {
-        let Some(ref mut writer) = self.writer else {
-            return;
-        };
         let ts_ms = match &self.time_source {
             TimeSource::Wall(start) => start.elapsed().as_millis() as u64,
             TimeSource::Logical => self.logical_ms,
+        };
+
+        #[cfg(test)]
+        if let Some(ref mut collector) = self.collector {
+            collector.push(ts_ms, event.clone());
+        }
+
+        let Some(ref mut writer) = self.writer else {
+            return;
         };
         Self::write_event(writer, ts_ms, &event);
     }
@@ -198,6 +272,11 @@ impl EventStream {
 
     /// 发出事件（指定逻辑时间戳，headless 模式用）
     pub fn emit_with_ts(&mut self, ts_ms: u64, event: EngineEvent) {
+        #[cfg(test)]
+        if let Some(ref mut collector) = self.collector {
+            collector.push(ts_ms, event.clone());
+        }
+
         let Some(ref mut writer) = self.writer else {
             return;
         };
@@ -303,5 +382,45 @@ mod tests {
         };
         let name = command_variant_name(&cmd);
         assert!(name.starts_with("ShowBackground"));
+    }
+
+    #[test]
+    fn in_memory_collects_events() {
+        let mut es = EventStream::in_memory();
+        assert!(!es.is_enabled());
+
+        es.on_script_tick(0, 1, "WaitForClick");
+        es.on_command_executed("ShowDialogue", "ok");
+
+        let collector = es.collector().unwrap();
+        assert_eq!(collector.len(), 2);
+
+        let events = &collector.events();
+        assert_eq!(
+            events[0].1,
+            EngineEvent::ScriptTick {
+                node_index: 0,
+                commands_count: 1,
+                waiting_reason: "WaitForClick".into(),
+            }
+        );
+        assert_eq!(
+            events[1].1,
+            EngineEvent::CommandExecuted {
+                variant: "ShowDialogue".into(),
+                result: "ok".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn in_memory_drain_clears() {
+        let mut es = EventStream::in_memory();
+        es.on_input_received("Click");
+        es.on_input_received("Click");
+
+        let drained = es.collector_mut().unwrap().drain();
+        assert_eq!(drained.len(), 2);
+        assert_eq!(es.collector().unwrap().len(), 0);
     }
 }

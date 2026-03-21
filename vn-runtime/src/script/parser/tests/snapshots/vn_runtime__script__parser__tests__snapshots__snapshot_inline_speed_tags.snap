@@ -1,0 +1,14 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Dialogue:
+    speaker: ~
+    content: 正常文本。这段是两倍速。
+    inline_effects:
+      - position: 5
+        kind:
+          SetCpsRelative: 2
+      - position: 12
+        kind: ResetCps
+    no_wait: false

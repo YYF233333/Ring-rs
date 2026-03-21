@@ -1,0 +1,15 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Dialogue:
+    speaker: ~
+    content: 倒计时：三、二、一！
+    inline_effects:
+      - position: 6
+        kind:
+          Wait: 1
+      - position: 8
+        kind:
+          Wait: 1
+    no_wait: false

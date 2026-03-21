@@ -1,0 +1,11 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- ChangeScene:
+    path: bg/night.jpg
+    transition:
+      name: Fade
+      args:
+        - - duration
+          - Number: 1

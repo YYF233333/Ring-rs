@@ -1,0 +1,9 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- SetVar:
+    name: player_name
+    value:
+      Literal:
+        String: Alice

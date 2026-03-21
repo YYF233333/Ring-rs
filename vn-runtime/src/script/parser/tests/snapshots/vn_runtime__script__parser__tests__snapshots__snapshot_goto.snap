@@ -1,0 +1,6 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Goto:
+    target_label: ending

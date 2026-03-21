@@ -1,0 +1,9 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- Dialogue:
+    speaker: ~
+    content: 这是旁白文本。
+    inline_effects: []
+    no_wait: false

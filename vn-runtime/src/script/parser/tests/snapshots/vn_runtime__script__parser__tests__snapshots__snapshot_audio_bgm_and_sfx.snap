@@ -1,0 +1,10 @@
+---
+source: vn-runtime/src/script/parser/tests/snapshots.rs
+expression: script.nodes
+---
+- PlayAudio:
+    path: bgm/Signal.mp3
+    is_bgm: true
+- PlayAudio:
+    path: sfx/click.wav
+    is_bgm: false

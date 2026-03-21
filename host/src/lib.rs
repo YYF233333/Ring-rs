@@ -35,6 +35,9 @@ pub mod save_manager;
 pub mod ui;
 pub mod video;
 
+#[cfg(test)]
+pub(crate) mod test_harness;
+
 pub use app::app_mode::{
     AppMode, InputCapture, NavigationStack, PlaybackMode, SaveLoadPage, SaveLoadTab, UserSettings,
 };

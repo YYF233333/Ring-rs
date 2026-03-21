@@ -215,10 +215,7 @@ mod tests {
         );
     }
 
-    fn null_texture(w: u32, h: u32) -> Arc<dyn Texture> {
-        use crate::rendering_types::NullTexture;
-        Arc::new(NullTexture::new(w, h))
-    }
+    use crate::test_harness::null_texture;
 
     #[test]
     fn test_insert_and_get() {

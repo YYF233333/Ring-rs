@@ -48,7 +48,7 @@ fn test_headless_load_texture_full_flow() {
     source.add("bg/sky.png", make_png_bytes(1920, 1080));
 
     let mut manager = ResourceManager::with_source(Arc::new(source), 256);
-    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+    manager.set_texture_context(test_harness::null_texture_context());
 
     let p = LogicalPath::new("bg/sky.png");
     let tex = manager.load_texture(&p).expect("should load");
@@ -69,7 +69,7 @@ fn test_headless_load_texture_cache_hit() {
     source.add("char/a.png", make_png_bytes(512, 1024));
 
     let mut manager = ResourceManager::with_source(Arc::new(source), 256);
-    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+    manager.set_texture_context(test_harness::null_texture_context());
 
     let p = LogicalPath::new("char/a.png");
     let t1 = manager.load_texture(&p).unwrap();
@@ -83,7 +83,7 @@ fn test_headless_load_texture_cache_hit() {
 fn test_headless_load_texture_missing_returns_error() {
     let source = InMemorySource::new();
     let mut manager = ResourceManager::with_source(Arc::new(source), 256);
-    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+    manager.set_texture_context(test_harness::null_texture_context());
 
     let p = LogicalPath::new("nonexistent.png");
     let result = manager.load_texture(&p);
@@ -198,7 +198,7 @@ fn test_preload_textures_success() {
     source.add("bg/b.png", make_png_bytes(32, 32));
 
     let mut manager = ResourceManager::with_source(Arc::new(source), 256);
-    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+    manager.set_texture_context(test_harness::null_texture_context());
 
     let a = LogicalPath::new("bg/a.png");
     let b = LogicalPath::new("bg/b.png");
@@ -212,7 +212,7 @@ fn test_preload_textures_stops_on_first_error() {
     source.add("ok.png", make_png_bytes(32, 32));
 
     let mut manager = ResourceManager::with_source(Arc::new(source), 256);
-    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+    manager.set_texture_context(test_harness::null_texture_context());
 
     let ok = LogicalPath::new("ok.png");
     let bad = LogicalPath::new("bad.png");
@@ -224,7 +224,7 @@ fn test_preload_textures_stops_on_first_error() {
 fn test_load_failed_texture_suppresses_retry() {
     let source = InMemorySource::new();
     let mut manager = ResourceManager::with_source(Arc::new(source), 256);
-    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+    manager.set_texture_context(test_harness::null_texture_context());
 
     let p = LogicalPath::new("missing.png");
 
@@ -241,7 +241,7 @@ fn test_texture_cache_stats_after_load() {
     source.add("bg.png", make_png_bytes(256, 256));
 
     let mut manager = ResourceManager::with_source(Arc::new(source), 256);
-    manager.set_texture_context(TextureContext::new(Arc::new(NullTextureFactory)));
+    manager.set_texture_context(test_harness::null_texture_context());
 
     let p = LogicalPath::new("bg.png");
     manager.load_texture(&p).unwrap();
