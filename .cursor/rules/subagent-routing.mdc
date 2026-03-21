@@ -18,7 +18,7 @@ alwaysApply: true
 
 | Agent | 模型 | 职责 | 示例 |
 |-------|------|------|------|
-| `worker` | composer-2-fast | 所有简单任务：代码变更、批量替换、文档修正、风格检查、补测试、盘点 | "为 parse_label 补边界测试"、"将所有 old_name 改为 new_name"、"更新文档中的链接" |
+| `worker` | composer-2-fast | 所有简单任务：代码变更、批量替换、文档修正、风格检查、盘点 | "将所有 old_name 改为 new_name"、"更新文档中的链接" |
 | `coder` | inherit | 非简单实现：新特性、涉及设计决策、跨模块协调 | "实现 @voice 指令的 executor"、"定位 bug → 修复 → 补测试" |
 | `investigator` | inherit | 深度只读分析：根因定位、跨模块推理、正确性/安全性审查 | "为什么切换场景后音频未停止"、"审查新增的 parser 分支" |
 

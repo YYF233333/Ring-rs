@@ -7,6 +7,18 @@
 - Rust：建议使用较新的 Rust（本仓库使用 `edition = "2024"`，因此需要较新的 toolchain；不强制锁定版本）
 - Windows：PowerShell（用于 `cargo` alias 的一键门禁）
 
+## Pre-commit Hook（自动门禁）
+
+仓库自带 pre-commit hook，提交时自动运行格式检查 + clippy。首次克隆后需要激活：
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Hook 仅运行快速检查（fmt + clippy），不跑测试以保持提交流畅。完整门禁请用 `cargo check-all`。
+
+如需临时跳过（不推荐）：`git commit --no-verify`。
+
 ## 常用命令（推荐记住这几个）
 
 ### 一键质量门禁（提交前必跑）

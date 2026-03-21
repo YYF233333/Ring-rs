@@ -226,7 +226,5 @@ New Syntax: [instruction/tag name]
 ## Common Pitfalls
 
 - **Breaking Markdown preview**: New syntax that looks like Markdown formatting (e.g. using `*` or `_`) will confuse Typora. Test in a Markdown editor.
-- **Phase 1/2 mismatch**: If phase1 doesn't recognize the line, phase2 never sees it. Unrecognized lines are silently skipped or treated as narration.
-- **Source map drift**: Multiline constructs (like `choice` blocks) need careful line tracking. Verify with `diagnostic` tests.
-- **base_path sensitivity**: Resource paths in new syntax are relative to the script file. Use `parse_with_base_path` in tests, or verify `extract_resource_references` handles the new node.
-- **Tolerance gaps**: Forgetting to handle `：` (Chinese colon), leading/trailing spaces, or missing optional parameters.
+- Repository-wide parser pitfalls (phase1/phase2 mismatch, source map drift, `base_path` sensitivity, punctuation tolerance gaps) are tracked in `docs/maintenance/lessons-learned.md`.
+- **Tolerance gaps beyond punctuation**: Also verify leading/trailing spaces and missing optional parameters; don't stop at `：` / `:` compatibility.

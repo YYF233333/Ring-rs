@@ -64,6 +64,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | 导航地图 | `docs/engine/architecture/navigation-map.md` |
 | 摘要入口 | `docs/maintenance/summary-index.md` |
 | 脚本语法规范 | `docs/authoring/script-syntax.md` |
+| 经验沉淀 | `docs/maintenance/lessons-learned.md` |
 
 ## 常用命令
 
@@ -121,9 +122,13 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 确认时提供：已读文件清单与目的、当前卡点、下一步最小读取计划。
 
-### 工作信息同步
+### 经验沉淀（Session 学习）
 
-如果要连续执行一个大的多阶段任务，每完成一个阶段里程碑，在对话框中向用户简单描述该阶段成果再执行下一阶段，确保用户可以跟上任务进度。
+开发中遇到非显而易见的问题（编译/运行时陷阱、跨模块隐含约束、环境相关的坑）时：
+
+1. **查阅**：先查 `docs/maintenance/lessons-learned.md`，确认是否是已知问题。
+2. **沉淀**：如果是新发现的陷阱，在完成修复后追加条目到该文档（现象/原因/正确做法三段式）。
+3. **引用**：如果陷阱与特定领域相关，在对应 `domain-*.mdc` 的 Don't 列表中也添加简短引用。
 
 ### RFC 流程
 

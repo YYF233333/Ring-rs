@@ -162,10 +162,8 @@ When adding fields to an existing variant (e.g. adding `inline_effects` to `Show
 
 ## Common Pitfalls
 
-- **Forgetting the host side**: Adding a Command variant without a `CommandExecutor` match arm → runtime panic on `unreachable!`.
-- **Signal mismatch**: `SIGNAL_*` constant string must match between `runtime/executor/mod.rs` (wait setup) and `command_executor` (signal emission).
+- Repository-wide recurring pitfalls (host-side match omissions, `SIGNAL_*` mismatches, source map drift) are tracked in `docs/maintenance/lessons-learned.md`.
 - **Transition args**: Use structured `Transition`/`TransitionArg` types, not raw strings.
-- **Source map drift**: If phase1/phase2 change line grouping, source map can misalign — verify with diagnostic tests.
 
 ## Reference: Recent Command Additions
 

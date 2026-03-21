@@ -1,62 +1,58 @@
 //! 端到端集成测试：脚本文本 → Parser → VNRuntime → Command 输出验证。
 
-use vn_runtime::{Command, Parser, RuntimeInput, VNRuntime, WaitingReason};
+mod common;
 
-fn parse_and_run(script_text: &str) -> (Vec<Command>, WaitingReason) {
-    let mut parser = Parser::new();
-    let script = parser.parse("test", script_text).unwrap();
-    let mut runtime = VNRuntime::new(script);
-    runtime.tick(None).unwrap()
-}
+use common::ScriptTestHarness;
+use vn_runtime::Command;
 
 #[test]
 fn dialogue_produces_show_text() {
-    let (commands, waiting) = parse_and_run(r#"羽艾："为什么会变成这样呢？""#);
+    let mut h = ScriptTestHarness::new(r#"羽艾："为什么会变成这样呢？""#);
+    let result = h.tick();
 
     assert!(
-        commands.iter().any(|c| matches!(c, Command::ShowText {
-            speaker: Some(s), ..
-        } if s == "羽艾")),
-        "expected ShowText with speaker 羽艾, got: {commands:?}"
+        result.has_text_from("羽艾", "为什么会变成这样呢？"),
+        "expected ShowText with speaker 羽艾, got: {:?}",
+        result.commands
     );
-    assert_eq!(waiting, WaitingReason::WaitForClick);
+    result.assert_waiting_click();
 }
 
 #[test]
 fn narration_produces_show_text_no_speaker() {
-    let (commands, _) = parse_and_run(r#"："这是旁白。""#);
+    let mut h = ScriptTestHarness::new(r#"："这是旁白。""#);
+    let result = h.tick();
 
     assert!(
-        commands
-            .iter()
-            .any(|c| matches!(c, Command::ShowText { speaker: None, .. })),
-        "expected ShowText with no speaker, got: {commands:?}"
+        result.has_narration("这是旁白。"),
+        "expected narration, got: {:?}",
+        result.commands
     );
 }
 
 #[test]
 fn change_bg_produces_show_background() {
-    let (commands, waiting) = parse_and_run(r#"changeBG <img src="bg/sky.jpg" />"#);
+    let mut h = ScriptTestHarness::new(r#"changeBG <img src="bg/sky.jpg" />"#);
+    let result = h.tick();
 
     assert!(
-        commands
-            .iter()
-            .any(|c| matches!(c, Command::ShowBackground { path, .. } if path == "bg/sky.jpg")),
-        "expected ShowBackground, got: {commands:?}"
+        result.has_background("bg/sky.jpg"),
+        "expected ShowBackground, got: {:?}",
+        result.commands
     );
-    assert_eq!(waiting, WaitingReason::None);
+    result.assert_not_waiting();
 }
 
 #[test]
 fn show_character_produces_command() {
-    let (commands, _) =
-        parse_and_run(r#"show <img src="char/a.png" /> as alice at center with dissolve"#);
+    let mut h =
+        ScriptTestHarness::new(r#"show <img src="char/a.png" /> as alice at center with dissolve"#);
+    let result = h.tick();
 
     assert!(
-        commands
-            .iter()
-            .any(|c| matches!(c, Command::ShowCharacter { alias, .. } if alias == "alice")),
-        "expected ShowCharacter with alias alice, got: {commands:?}"
+        result.has_character("alice"),
+        "expected ShowCharacter with alias alice, got: {:?}",
+        result.commands
     );
 }
 
@@ -69,39 +65,33 @@ changeBG <img src=\"bg/school.jpg\" />
 
 路汐：\"早上好。\"";
 
-    let mut parser = Parser::new();
-    let script = parser.parse("test", input).unwrap();
-    let mut runtime = VNRuntime::new(script);
+    let mut h = ScriptTestHarness::new(input);
 
-    // tick 1: changeBG（非等待指令）+ 对话
-    let (cmds1, w1) = runtime.tick(None).unwrap();
+    let r1 = h.tick();
     assert!(
-        cmds1
-            .iter()
-            .any(|c| matches!(c, Command::ShowBackground { .. })),
+        r1.has_background("bg/school.jpg"),
         "tick 1 should contain ShowBackground"
     );
     assert!(
-        cmds1.iter().any(|c| matches!(c, Command::ShowText { .. })),
+        r1.commands
+            .iter()
+            .any(|c| matches!(c, Command::ShowText { .. })),
         "tick 1 should contain ShowText"
     );
-    assert_eq!(w1, WaitingReason::WaitForClick);
+    r1.assert_waiting_click();
 
-    // tick 2: 用户点击 → 下一行对话
-    let (cmds2, w2) = runtime.tick(Some(RuntimeInput::Click)).unwrap();
+    let r2 = h.click();
     assert!(
-        cmds2.iter().any(|c| matches!(c, Command::ShowText {
-            speaker: Some(s), ..
-        } if s == "路汐")),
+        r2.has_text_from("路汐", "早上好。"),
         "tick 2 should show 路汐's dialogue"
     );
-    assert_eq!(w2, WaitingReason::WaitForClick);
+    r2.assert_waiting_click();
 }
 
 #[test]
 fn script_finished_after_last_node() {
-    let (_, waiting) = parse_and_run(r#"changeBG <img src="bg.jpg" />"#);
-    assert_eq!(waiting, WaitingReason::None);
+    let mut h = ScriptTestHarness::new(r#"changeBG <img src="bg.jpg" />"#);
+    h.tick().assert_not_waiting();
 }
 
 #[test]
@@ -114,16 +104,13 @@ goto **target**
 **target**
 ：\"跳转成功\"";
 
-    let mut parser = Parser::new();
-    let script = parser.parse("test", input).unwrap();
-    let mut runtime = VNRuntime::new(script);
-    let (cmds, _) = runtime.tick(None).unwrap();
+    let mut h = ScriptTestHarness::new(input);
+    let result = h.tick();
 
     assert!(
-        cmds.iter().any(|c| matches!(c, Command::ShowText {
-            content, ..
-        } if content == "跳转成功")),
-        "should jump to target label, got: {cmds:?}"
+        result.has_text("跳转成功"),
+        "should jump to target label, got: {:?}",
+        result.commands
     );
 }
 
@@ -137,25 +124,18 @@ else
   ：\"条件不成立\"
 endif";
 
-    let mut parser = Parser::new();
-    let script = parser.parse("test", input).unwrap();
-    let mut runtime = VNRuntime::new(script);
-    let (cmds, _) = runtime.tick(None).unwrap();
+    let mut h = ScriptTestHarness::new(input);
+    let result = h.tick();
 
     assert!(
-        cmds.iter().any(|c| matches!(c, Command::ShowText {
-            content, ..
-        } if content == "条件成立")),
-        "should take true branch, got: {cmds:?}"
+        result.has_text("条件成立"),
+        "should take true branch, got: {:?}",
+        result.commands
     );
 }
 
 #[test]
 fn wait_instruction_produces_wait_reason() {
-    let (_, waiting) = parse_and_run("wait 1.5");
-
-    assert!(
-        matches!(waiting, WaitingReason::WaitForTime(d) if (d.as_secs_f64() - 1.5).abs() < 0.01),
-        "expected WaitForTime(1.5s), got: {waiting:?}"
-    );
+    let mut h = ScriptTestHarness::new("wait 1.5");
+    h.tick().assert_waiting_time(1.5);
 }
