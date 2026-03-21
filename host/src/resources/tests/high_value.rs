@@ -16,7 +16,7 @@ fn test_image_crate_can_decode_webp() {
     {
         let encoder = WebPEncoder::new_lossless(&mut webp_bytes);
         encoder
-            .write_image(&rgba, width, height, ColorType::Rgba8)
+            .write_image(&rgba, width, height, ColorType::Rgba8.into())
             .expect("encode webp");
     }
 

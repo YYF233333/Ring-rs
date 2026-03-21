@@ -16,6 +16,9 @@ opt-level = 1
 [profile.release]
 debug = true
 
+[profile.test]
+debug = "none"
+
 [profile.mutants]
 inherits = "test"
 debug = "none"

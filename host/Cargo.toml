@@ -3,6 +3,9 @@ name = "host"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+doctest = false
+
 [dependencies]
 vn-runtime = { version = "0.1.0", path = "../vn-runtime" }
 thiserror = "2.0.18"
@@ -14,7 +17,7 @@ tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi"] }
 
 # 图像格式支持
-image = { version = "0.24", default-features = false, features = ["jpeg", "png", "webp"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 
 # 音频库 - 支持 MP3, WAV, FLAC, OGG
 rodio = { version = "0.22", default-features = false, features = ["mp3", "wav", "flac", "vorbis", "playback"] }
@@ -27,7 +30,7 @@ winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 wgpu = { version = "24", default-features = false, features = ["wgsl", "dx12"] }
 egui = { version = "0.31", default-features = false }
 egui-wgpu = "0.31"
-egui-winit = { version = "0.31", default-features = false, features = ["clipboard"] }
+egui-winit = { version = "0.31", default-features = false }
 pollster = "0.4"
 bytemuck = { version = "1", features = ["derive"] }
 

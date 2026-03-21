@@ -15,11 +15,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # GitHub Actions 自带 Rust toolchain，节约时间不安装新的
-      # - name: Install Rust toolchain
-      #   uses: dtolnay/rust-toolchain@stable
-      #   with:
-      #     components: rustfmt, clippy
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2

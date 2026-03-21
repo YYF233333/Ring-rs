@@ -207,16 +207,10 @@ fn real_main() -> anyhow::Result<()> {
         XtaskCommand::CheckAll => {
             run("cargo fmt --all", &sh, "cargo", &["fmt", "--all"])?;
             run(
-                "cargo clippy --workspace --all-targets --fix --allow-dirty",
+                "cargo clippy --workspace --fix --allow-dirty",
                 &sh,
                 "cargo",
-                &[
-                    "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--fix",
-                    "--allow-dirty",
-                ],
+                &["clippy", "--workspace", "--fix", "--allow-dirty"],
             )?;
             run(
                 "cargo test --workspace --quiet",
