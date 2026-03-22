@@ -50,6 +50,12 @@ Ring-rs/
 └── docs/                # 规范与指南
 ```
 
+## 指标仪表盘
+
+每次推送到 `main` 时，CI 自动采集覆盖率、构建耗时、二进制大小等指标并生成趋势图：
+
+**[查看仪表盘](https://yyf233333.github.io/Ring-rs/)**（GitHub Pages，数据在 `gh-pages` 分支）
+
 ## 贡献与开发
 
 本地提交前建议跑：`cargo check-all`（fmt → clippy → tests）；CI 也会执行同一门禁并在仓库变脏时失败。更多见：[CONTRIBUTING.md](CONTRIBUTING.md)。

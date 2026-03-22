@@ -157,21 +157,18 @@ fn run_status(step: &str, program: &str, args: &[&str]) -> anyhow::Result<ExitSt
 /// - `app/command_handlers/audio.rs`：音频命令处理，依赖硬件
 /// - `ui/(asset_cache|image_slider|mod|nine_patch).rs`：egui UI 组件
 /// - `extensions/manifest.rs`：极小 serde struct
-const COV_IGNORE: &str = concat!(
-    r"src[/\\]lib\.rs$|",
-    r"vn-runtime[/\\]src[/\\]error\.rs$|",
-    r"host[/\\]src[/\\](main|host_app|egui_actions)\.rs$|",
-    r"host[/\\]src[/\\]egui_screens[/\\]|",
-    r"host[/\\]src[/\\]backend[/\\](mod|egui_integration|gpu_context|sprite_renderer|gpu_texture|dissolve_renderer)\.rs$|",
-    r"host[/\\]src[/\\]audio[/\\]|",
-    r"host[/\\]src[/\\]video[/\\]|",
-    r"host[/\\]src[/\\]app[/\\]draw\.rs$|",
-    r"host[/\\]src[/\\]app[/\\](bootstrap|init|mod|state|save|script_loader|engine_services)\.rs$|",
-    r"host[/\\]src[/\\]app[/\\]update[/\\]|",
-    r"host[/\\]src[/\\]app[/\\]command_handlers[/\\]audio\.rs$|",
-    r"host[/\\]src[/\\]ui[/\\](asset_cache|image_slider|mod|nine_patch)\.rs$|",
-    r"host[/\\]src[/\\]extensions[/\\]manifest\.rs$",
-);
+/// Builds the coverage ignore regex from `cov-ignore-regex.txt`.
+///
+/// The file contains one pattern per line; comments (`#`) and blank lines are skipped.
+/// Patterns are joined with `|` at runtime.
+fn cov_ignore_regex() -> String {
+    include_str!("../cov-ignore-regex.txt")
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("|")
+}
 
 fn ensure_cargo_llvm_cov_available(sh: &Shell) -> anyhow::Result<()> {
     if sh
@@ -222,6 +219,7 @@ fn real_main() -> anyhow::Result<()> {
         XtaskCommand::Cov => {
             ensure_cargo_llvm_cov_available(&sh)?;
 
+            let cov_ignore = cov_ignore_regex();
             run(
                 "cargo llvm-cov --workspace (with exclusions)",
                 &sh,
@@ -237,7 +235,7 @@ fn real_main() -> anyhow::Result<()> {
                     "--all-features",
                     "--html",
                     "--ignore-filename-regex",
-                    COV_IGNORE,
+                    &cov_ignore,
                 ],
             )?;
 

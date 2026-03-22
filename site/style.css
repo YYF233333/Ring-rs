@@ -1,0 +1,159 @@
+:root {
+  --bg-body: #0f0f1a;
+  --bg-card: #1a1a2e;
+  --bg-section: #16213e;
+  --border: #2a2a4a;
+  --text-primary: #e0e0e0;
+  --text-secondary: #8888aa;
+  --accent: #4fc3f7;
+  --accent-green: #66bb6a;
+  --accent-orange: #ffa726;
+  --accent-red: #ef5350;
+  --accent-purple: #ab47bc;
+  --radius: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--bg-body);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+header {
+  text-align: center;
+  padding: 3rem 1rem 1.5rem;
+}
+
+header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+header .subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-top: 0.4rem;
+}
+
+/* ── Summary cards ── */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  max-width: 1200px;
+  margin: 0 auto 2rem;
+  padding: 0 1.5rem;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.2rem;
+  text-align: center;
+}
+
+.card .label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 0.3rem;
+}
+
+.card .value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.card .delta {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.card .delta.up { color: var(--accent-green); }
+.card .delta.down { color: var(--accent-red); }
+.card .delta.neutral { color: var(--text-secondary); }
+
+/* ── Chart sections ── */
+
+.chart-section {
+  max-width: 1200px;
+  margin: 0 auto 2rem;
+  padding: 0 1.5rem;
+}
+
+.chart-section h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  padding-left: 0.25rem;
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+}
+
+.chart {
+  background: var(--bg-section);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  height: 340px;
+  width: 100%;
+}
+
+/* ── Footer ── */
+
+footer {
+  text-align: center;
+  padding: 2rem 1rem 3rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+footer strong {
+  color: var(--text-primary);
+}
+
+footer code {
+  background: var(--bg-card);
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
+footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
+}
+
+footer p + p {
+  margin-top: 0.3rem;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 600px) {
+  header { padding: 2rem 1rem 1rem; }
+  header h1 { font-size: 1.5rem; }
+  .cards { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; padding: 0 0.75rem; }
+  .card .value { font-size: 1.2rem; }
+  .chart-section { padding: 0 0.75rem; }
+  .chart { height: 280px; }
+}

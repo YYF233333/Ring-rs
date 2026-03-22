@@ -1,0 +1,17 @@
+# Coverage exclusion patterns (one per line, joined with | at runtime)
+# Shared by xtask `cov` command and .github/workflows/metrics.yml
+# Lines starting with # are comments; blank lines are ignored.
+
+src[/\\]lib\.rs$
+vn-runtime[/\\]src[/\\]error\.rs$
+host[/\\]src[/\\](main|host_app|egui_actions)\.rs$
+host[/\\]src[/\\]egui_screens[/\\]
+host[/\\]src[/\\]backend[/\\](mod|egui_integration|gpu_context|sprite_renderer|gpu_texture|dissolve_renderer)\.rs$
+host[/\\]src[/\\]audio[/\\]
+host[/\\]src[/\\]video[/\\]
+host[/\\]src[/\\]app[/\\]draw\.rs$
+host[/\\]src[/\\]app[/\\](bootstrap|init|mod|state|save|script_loader|engine_services)\.rs$
+host[/\\]src[/\\]app[/\\]update[/\\]
+host[/\\]src[/\\]app[/\\]command_handlers[/\\]audio\.rs$
+host[/\\]src[/\\]ui[/\\](asset_cache|image_slider|mod|nine_patch)\.rs$
+host[/\\]src[/\\]extensions[/\\]manifest\.rs$

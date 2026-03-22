@@ -1,0 +1,322 @@
+name: metrics
+
+on:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: metrics
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install tokei
+        run: cargo binstall tokei --no-confirm
+
+      - name: Cache llvm-cov target
+        uses: actions/cache@v4
+        with:
+          path: target-cov
+          key: llvm-cov-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            llvm-cov-${{ runner.os }}-
+
+      # ── Phase 1: metrics that don't need compilation ──
+
+      - name: "Metric: tokei (Rust LOC)"
+        shell: pwsh
+        run: |
+          $raw = tokei --types rust --output json .
+          $raw | Out-File -Encoding utf8 tokei_output.json
+
+      - name: "Metric: effective LOC (count_rust_loc.py)"
+        shell: pwsh
+        run: |
+          $output = python tools/count_rust_loc.py --root .
+          if ($output -match 'Total non-test Rust LOC:\s+(\d+)') {
+            $loc = $Matches[1]
+          } else {
+            $loc = "0"
+          }
+          echo "EFFECTIVE_LOC=$loc" >> $env:GITHUB_ENV
+
+      - name: "Metric: dependency count"
+        shell: pwsh
+        run: |
+          $meta = cargo metadata --format-version 1 --no-deps 2>$null | ConvertFrom-Json
+          $workspaceNames = $meta.packages | ForEach-Object { $_.name }
+
+          $full = cargo metadata --format-version 1 2>$null | ConvertFrom-Json
+          $allPkgs = $full.packages | Where-Object { $workspaceNames -notcontains $_.name }
+
+          $directIds = @()
+          foreach ($pkg in $meta.packages) {
+            foreach ($dep in $pkg.dependencies) {
+              $directIds += $dep.name
+            }
+          }
+          $directCount = ($directIds | Sort-Object -Unique).Count
+          $transitiveCount = $allPkgs.Count
+
+          echo "DEP_DIRECT=$directCount" >> $env:GITHUB_ENV
+          echo "DEP_TRANSITIVE=$transitiveCount" >> $env:GITHUB_ENV
+
+      # ── Phase 2: debug build time (clean) ──
+
+      - name: "Metric: debug build time"
+        shell: pwsh
+        run: |
+          cargo clean
+          $t = Measure-Command { cargo build --workspace 2>&1 }
+          $secs = [math]::Round($t.TotalSeconds, 1)
+          echo "BUILD_DEBUG_SECS=$secs" >> $env:GITHUB_ENV
+
+      # ── Phase 3: release build time + binary size (clean) ──
+
+      - name: "Metric: release build time"
+        shell: pwsh
+        run: |
+          cargo clean
+          $t = Measure-Command { cargo build --release 2>&1 }
+          $secs = [math]::Round($t.TotalSeconds, 1)
+          echo "BUILD_RELEASE_SECS=$secs" >> $env:GITHUB_ENV
+
+      - name: "Metric: binary size"
+        shell: pwsh
+        run: |
+          $exe = "target/release/host.exe"
+          $size = (Get-Item $exe).Length
+          echo "BIN_RELEASE=$size" >> $env:GITHUB_ENV
+
+      # ── Phase 4: coverage + test count ──
+
+      - name: "Metric: coverage (llvm-cov JSON)"
+        shell: pwsh
+        env:
+          CARGO_TARGET_DIR: target-cov
+        run: |
+          $lines = Get-Content tools/xtask/cov-ignore-regex.txt |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -ne '' -and -not $_.StartsWith('#') }
+          $covIgnore = $lines -join '|'
+
+          cargo llvm-cov --workspace --exclude xtask --exclude asset-packer `
+            --ignore-filename-regex $covIgnore `
+            --json --output-path coverage.json 2>&1 | Tee-Object -Variable testOutput
+
+          $testOutputStr = $testOutput -join "`n"
+          $testOutputStr | Out-File -Encoding utf8 test_output.txt
+
+      - name: "Parse: coverage percentages"
+        shell: pwsh
+        run: |
+          $cov = Get-Content coverage.json | ConvertFrom-Json
+          $covData = $cov.data[0]
+          $wsPct = if ($covData.totals.lines.count -gt 0) {
+            [math]::Round($covData.totals.lines.covered / $covData.totals.lines.count * 100, 1)
+          } else { 0 }
+
+          $runtimeLines = 0; $runtimeCovered = 0
+          $hostLines = 0; $hostCovered = 0
+
+          foreach ($f in $covData.files) {
+            if ($f.filename -match 'vn-runtime') {
+              $runtimeLines += $f.summary.lines.count
+              $runtimeCovered += $f.summary.lines.covered
+            } elseif ($f.filename -match 'host') {
+              $hostLines += $f.summary.lines.count
+              $hostCovered += $f.summary.lines.covered
+            }
+          }
+
+          $rtPct = if ($runtimeLines -gt 0) { [math]::Round($runtimeCovered / $runtimeLines * 100, 1) } else { 0 }
+          $hostPct = if ($hostLines -gt 0) { [math]::Round($hostCovered / $hostLines * 100, 1) } else { 0 }
+
+          echo "COV_WORKSPACE=$wsPct" >> $env:GITHUB_ENV
+          echo "COV_RUNTIME=$rtPct" >> $env:GITHUB_ENV
+          echo "COV_HOST=$hostPct" >> $env:GITHUB_ENV
+
+      - name: "Parse: test counts"
+        shell: pwsh
+        run: |
+          $raw = Get-Content test_output.txt -Raw
+          $passed = 0; $failed = 0; $ignored = 0
+
+          $regex = [regex]'(\d+)\s+passed[;,]\s+(\d+)\s+failed[;,]\s+(\d+)\s+ignored'
+          $matches = $regex.Matches($raw)
+          foreach ($m in $matches) {
+            $passed += [int]$m.Groups[1].Value
+            $failed += [int]$m.Groups[2].Value
+            $ignored += [int]$m.Groups[3].Value
+          }
+
+          echo "TEST_PASSED=$passed" >> $env:GITHUB_ENV
+          echo "TEST_FAILED=$failed" >> $env:GITHUB_ENV
+          echo "TEST_IGNORED=$ignored" >> $env:GITHUB_ENV
+
+      # ── Phase 5: assemble + parse tokei ──
+
+      - name: "Parse: tokei output"
+        shell: pwsh
+        run: |
+          $tokei = Get-Content tokei_output.json | ConvertFrom-Json
+          $rust = $tokei.Rust
+
+          $tokeiData = @{}
+          foreach ($prop in $rust.reports.PSObject.Properties) {
+            # Not used directly — we parse by directory
+          }
+
+          $crates = @{
+            "vn_runtime" = @{ code = 0; comments = 0; blanks = 0 }
+            "host" = @{ code = 0; comments = 0; blanks = 0 }
+            "xtask" = @{ code = 0; comments = 0; blanks = 0 }
+            "asset_packer" = @{ code = 0; comments = 0; blanks = 0 }
+          }
+
+          foreach ($report in $rust.reports) {
+            $name = $report.name.Replace('\', '/')
+            $stats = $report.stats
+
+            if ($name -match '^\.?/?vn-runtime/') {
+              $crates["vn_runtime"].code += $stats.code
+              $crates["vn_runtime"].comments += $stats.comments
+              $crates["vn_runtime"].blanks += $stats.blanks
+            } elseif ($name -match '^\.?/?host/') {
+              $crates["host"].code += $stats.code
+              $crates["host"].comments += $stats.comments
+              $crates["host"].blanks += $stats.blanks
+            } elseif ($name -match '^\.?/?tools/xtask/') {
+              $crates["xtask"].code += $stats.code
+              $crates["xtask"].comments += $stats.comments
+              $crates["xtask"].blanks += $stats.blanks
+            } elseif ($name -match '^\.?/?tools/asset-packer/') {
+              $crates["asset_packer"].code += $stats.code
+              $crates["asset_packer"].comments += $stats.comments
+              $crates["asset_packer"].blanks += $stats.blanks
+            }
+          }
+
+          $tokeiJson = $crates | ConvertTo-Json -Compress
+          echo "TOKEI_DATA=$tokeiJson" >> $env:GITHUB_ENV
+
+      # ── Phase 6: assemble data point + deploy ──
+
+      - name: Assemble metrics JSON
+        shell: pwsh
+        run: |
+          $commit = git rev-parse HEAD
+          $commitShort = git rev-parse --short HEAD
+          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+          $tokeiParsed = $env:TOKEI_DATA | ConvertFrom-Json
+
+          $dataPoint = @{
+            date = $date
+            commit = $commit
+            commit_short = $commitShort
+            metrics = @{
+              coverage = @{
+                workspace = [double]$env:COV_WORKSPACE
+                vn_runtime = [double]$env:COV_RUNTIME
+                host = [double]$env:COV_HOST
+              }
+              binary_size_bytes = @{
+                host_release = [long]$env:BIN_RELEASE
+              }
+              build_time_secs = @{
+                release_clean = [double]$env:BUILD_RELEASE_SECS
+                debug_clean = [double]$env:BUILD_DEBUG_SECS
+              }
+              tokei_rust = $tokeiParsed
+              effective_loc = [int]$env:EFFECTIVE_LOC
+              dependencies = @{
+                direct = [int]$env:DEP_DIRECT
+                transitive = [int]$env:DEP_TRANSITIVE
+              }
+              tests = @{
+                passed = [int]$env:TEST_PASSED
+                failed = [int]$env:TEST_FAILED
+                ignored = [int]$env:TEST_IGNORED
+              }
+            }
+          }
+
+          $dataPointJson = $dataPoint | ConvertTo-Json -Depth 10
+          [IO.File]::WriteAllText("new_data_point.json", $dataPointJson, [Text.UTF8Encoding]::new($false))
+
+      - name: Fetch gh-pages and append data
+        shell: pwsh
+        run: |
+          git fetch origin gh-pages
+
+          $psi = [Diagnostics.ProcessStartInfo]::new("git", "show origin/gh-pages:data.json")
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $proc = [Diagnostics.Process]::Start($psi)
+          $stdout = $proc.StandardOutput.ReadToEnd()
+          $proc.WaitForExit()
+
+          if ($proc.ExitCode -ne 0 -or -not $stdout.Trim()) {
+            $existing = @()
+          } else {
+            $existing = $stdout.Trim() | ConvertFrom-Json
+            if ($existing -isnot [System.Array]) {
+              $existing = @($existing)
+            }
+          }
+
+          $valid = @()
+          foreach ($entry in $existing) {
+            $null = git cat-file -t $entry.commit 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              $valid += $entry
+            }
+          }
+
+          $newPoint = Get-Content new_data_point.json -Raw | ConvertFrom-Json
+          $all = @($valid) + @($newPoint)
+          $mergedJson = ConvertTo-Json -InputObject @($all) -Depth 10
+          [IO.File]::WriteAllText("merged_data.json", $mergedJson, [Text.UTF8Encoding]::new($false))
+
+      - name: Deploy to GitHub Pages
+        shell: pwsh
+        run: |
+          $deployDir = "gh-pages-deploy"
+          New-Item -ItemType Directory -Path $deployDir -Force | Out-Null
+
+          Copy-Item "merged_data.json" "$deployDir/data.json"
+          Copy-Item "site/index.html" "$deployDir/index.html"
+          Copy-Item "site/style.css" "$deployDir/style.css"
+          Copy-Item "site/app.js" "$deployDir/app.js"
+
+          Set-Location $deployDir
+          git init
+          git checkout -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" commit -m "update metrics $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push --force origin gh-pages
