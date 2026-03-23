@@ -50,10 +50,12 @@ show <img src="../../../../characters/立绘红叶/夏装/角色夏收手4.webp"
 子文："那你要不也降低一点标准嘛，至少能省一点精力……"
 
 show <img src="../../../../characters/立绘红叶/夏装/角色夏收手5.webp" style="zoom:10%;" /> as 红叶 at center
+
 红叶："啊，我好想让你去替我挨配音导演的骂啊。能这样轻松的也只有你了吧，子文君，毕竟你从小学到初中再到现在都这样。"
 子文："所以说我十八年来就给您留下了这样的印象？"
 红叶："差不多吧。{wait 1s}" -->
 show <img src="../../../../characters/立绘红叶/夏装/角色夏收手4.webp" style="zoom:10%;" /> as 红叶 at center
+
 extend "哦我突然想起来，{wait 0.7s}" -->
 show <img src="../../../../characters/立绘红叶/夏装/角色夏收手1.webp" style="zoom:10%;" /> as 红叶 at center
 extend "你的社团大作业还没提交吧？"
@@ -83,6 +85,7 @@ show <img src="../../../../characters/立绘红叶/夏装/角色夏收手1.webp"
 旁白："红叶盯着我看了一会，但是我始终没有去对视线。"
 
 show <img src="../../../../characters/立绘红叶/夏装/角色夏收手4.webp" style="zoom:10%;" /> as 红叶 at center
+
 红叶："子文君，你在听什么？"
 子文："音乐。都是很冷门的内容，你肯定不会喜欢的。"
 红叶："是吗……{wait 1s}" -->
