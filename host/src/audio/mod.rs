@@ -11,7 +11,7 @@
 //!
 //! ## 路径处理
 //!
-//! 音频字节统一由调用方通过 [`ResourceManager`] 读取后，
+//! 音频字节统一由调用方通过 [`ResourceManager`](crate::resources::ResourceManager) 读取后，
 //! 调用 [`AudioManager::cache_audio_bytes`] 预缓存。
 //! `AudioManager` 不直接访问文件系统或 ZIP。
 

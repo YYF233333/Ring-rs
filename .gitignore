@@ -22,6 +22,8 @@ assets/*
 !assets/scripts/
 !assets/ui/
 !assets/manifest.json
+
+docs/engine/symbol-index.md
 saves/
 dist/
 vendor/

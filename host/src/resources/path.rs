@@ -11,8 +11,8 @@
 //!
 //! ## LogicalPath newtype
 //!
-//! [`LogicalPath`] 是规范化逻辑路径的 newtype 包装。所有通过 [`ResourceManager`]
-//! 和 [`ResourceSource`] 进行的资源访问都使用此类型，编译期防止逻辑路径与文件系统路径混用。
+//! [`LogicalPath`] 是规范化逻辑路径的 newtype 包装。所有通过 [`ResourceManager`](super::ResourceManager)
+//! 和 [`ResourceSource`](super::source::ResourceSource) 进行的资源访问都使用此类型，编译期防止逻辑路径与文件系统路径混用。
 
 use std::path::PathBuf;
 

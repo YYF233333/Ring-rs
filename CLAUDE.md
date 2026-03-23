@@ -63,6 +63,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 |------|------|
 | 导航地图 | `docs/engine/architecture/navigation-map.md` |
 | 摘要入口 | `docs/maintenance/summary-index.md` |
+| 符号索引 | `docs/engine/symbol-index.md` |
 | 脚本语法规范 | `docs/authoring/script-syntax.md` |
 | 经验沉淀 | `docs/maintenance/lessons-learned.md` |
 
@@ -73,6 +74,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | 一键门禁 | `cargo check-all` |
 | 测试 | `cargo test -p vn-runtime --lib` |
 | 覆盖率 | `cargo cov` |
+| 符号索引生成 | `cargo gen-symbols` |
 
 覆盖率报告：`target/llvm-cov/html/index.html`
 
@@ -108,6 +110,16 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 ### 摘要优先
 
 所有任务默认"摘要优先、源码兜底"：先按 `docs/maintenance/summary-index.md` 阅读摘要与导航，再决定源码最小读取范围。维护要求见 `docs/maintenance/summary-maintenance.md`。
+
+### 符号索引
+
+编码任务开始前，先读 `docs/engine/symbol-index.md`。该文件由 `cargo gen-symbols` 自动生成（基于 rustdoc JSON），列出所有 pub 符号的名称、类型、行号，以及 enum 变体名和 trait 方法名。用途：
+
+- 精确定位符号所在文件和行号，避免 grep 盲搜
+- 了解 enum 有哪些变体（写 match 时必需）
+- 了解 trait 有哪些方法（实现 trait 时必需）
+
+工作完成后如新增/删除/移动了 pub 符号，须刷新符号索引（`cargo gen-symbols`）。
 
 ### 源码读取约束（Token 护栏）
 

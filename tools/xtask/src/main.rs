@@ -8,6 +8,9 @@
 //! - `cov`: 运行 workspace 覆盖率（排除工具 crate 与平台胶水代码）
 //! - `script-check`: 检查脚本文件（语法、label、资源引用）
 //! - `mutants`: 运行变异测试（vn-runtime / host），检测测试质量
+//! - `gen-symbols`: 从 rustdoc JSON 生成符号索引（`docs/engine/symbol-index.md`）
+
+mod gen_symbols;
 
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, ExitStatus};
@@ -51,6 +54,9 @@ enum XtaskCommand {
 
     /// 运行变异测试（vn-runtime / host），检测测试质量
     Mutants(MutantsArgs),
+
+    /// 从 rustdoc JSON 生成符号索引（docs/engine/symbol-index.md）
+    GenSymbols,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -247,6 +253,9 @@ fn real_main() -> anyhow::Result<()> {
         }
         XtaskCommand::Mutants(args) => {
             run_mutants(&sh, args)?;
+        }
+        XtaskCommand::GenSymbols => {
+            gen_symbols::gen_symbols(&sh)?;
         }
     }
 

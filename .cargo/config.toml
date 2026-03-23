@@ -32,3 +32,6 @@ script-check = "run -p xtask -- script-check"
 # Pass extra args after --: cargo mutants-check -- --file vn-runtime/src/state.rs
 mutants-check = "run -p xtask -- mutants"
 mutants-host-check = "run -p xtask -- mutants --package host"
+
+# -------- Symbol index generation --------
+gen-symbols = "run -p xtask -- gen-symbols"
