@@ -18,10 +18,12 @@
 1. 窗口模式：`resumed` 创建 winit 窗口 -> 创建 `AppState` -> 读取默认字体 -> 初始化 `WgpuBackend` -> 设置 GPU 资源上下文
 2. 窗口模式：`window_event(RedrawRequested)` 首帧加载资源/脚本 -> 每帧 `update` -> 构建 sprite draw commands -> egui UI 渲染 -> 处理 `EguiAction` -> 提交帧
 3. Headless 模式：`headless::run` 加载 replay -> 以固定步长执行 `app::update` -> 运行 CPU-only egui -> 处理 `EguiAction`
+4. 小游戏启动时创建 `BridgeServer`（HTTP 服务器），通过 HTTP URL 加载 WebView；`about_to_wait` 每帧轮询 `bridge.poll()` 处理 HTTP 请求和游戏完成检测
 
 ## Dependencies
 
 - `host::app`（`AppState`、`update`、`build_game_draw_commands` 等）
+- `host::game_mode::BridgeServer`
 - `host::backend::WgpuBackend`
 - `egui_actions`、`egui_screens`
 
@@ -29,6 +31,7 @@
 
 - `HostApp` 只负责窗口模式；headless 路径不经过该类型
 - `backend` 和 `app_state` 在 `resumed` 后才初始化（均为 `Option`）
+- 小游戏活跃期间 `about_to_wait` 通过 `request_redraw()` 保持事件循环轮转，确保 HTTP 请求及时响应
 
 ## WhenToReadSource
 
@@ -36,8 +39,8 @@
 
 ## LastVerified
 
-2026-03-22
+2026-03-23
 
 ## Owner
 
-GPT-5.4
+claude-4.6-opus

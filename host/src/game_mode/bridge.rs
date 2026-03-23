@@ -1,41 +1,12 @@
-//! JS Bridge 协议定义
+//! Bridge 协议类型
 //!
-//! 定义引擎与小游戏 WebView 之间的通信协议。
+//! 定义引擎与小游戏 WebView 之间通信的值类型与响应格式。
 
 use serde::{Deserialize, Serialize};
 
-/// JS → Engine 请求
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type")]
-pub enum BridgeRequest {
-    /// 播放音效
-    #[serde(rename = "playSound")]
-    PlaySound { name: String },
-    /// 播放 BGM
-    #[serde(rename = "playBGM")]
-    PlayBgm {
-        name: String,
-        #[serde(default)]
-        r#loop: bool,
-    },
-    /// 读取游戏变量
-    #[serde(rename = "getState")]
-    GetState { key: String },
-    /// 写入游戏变量
-    #[serde(rename = "setState")]
-    SetState { key: String, value: BridgeValue },
-    /// 获取资源 URL
-    #[serde(rename = "getAssetUrl")]
-    GetAssetUrl { path: String },
-    /// 日志
-    #[serde(rename = "log")]
-    Log { level: String, message: String },
-    /// 游戏结束
-    #[serde(rename = "onComplete")]
-    OnComplete { result: BridgeValue },
-}
-
 /// Bridge 值类型（JSON 友好）
+///
+/// 用于从 JS 请求体中反序列化值，以及与 [`VarValue`](vn_runtime::state::VarValue) 互转。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum BridgeValue {
@@ -67,13 +38,13 @@ impl From<BridgeValue> for vn_runtime::state::VarValue {
 pub struct BridgeResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<BridgeValue>,
+    pub data: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
 impl BridgeResponse {
-    pub fn ok(data: Option<BridgeValue>) -> Self {
+    pub fn ok(data: Option<serde_json::Value>) -> Self {
         Self {
             success: true,
             data,

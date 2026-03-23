@@ -157,6 +157,7 @@ fn run_status(step: &str, program: &str, args: &[&str]) -> anyhow::Result<ExitSt
 /// - `app/command_handlers/audio.rs`：音频命令处理，依赖硬件
 /// - `ui/(asset_cache|image_slider|mod|nine_patch).rs`：egui UI 组件
 /// - `extensions/manifest.rs`：极小 serde struct
+///
 /// Builds the coverage ignore regex from `cov-ignore-regex.txt`.
 ///
 /// The file contains one pattern per line; comments (`#`) and blank lines are skipped.

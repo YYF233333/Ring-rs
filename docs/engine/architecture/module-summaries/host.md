@@ -34,6 +34,7 @@
 - [resources](host/resources.md)：资源加载、缓存与路径解析
 - [audio](host/audio.md)：BGM/SFX 播放与淡入淡出
 - [video](host/video.md)：Cutscene 视频播放（RFC-009）
+- [game_mode](host/game-mode.md)：小游戏模式（HTTP Bridge + WebView 嵌入）
 - [input](host/input.md)：winit 事件驱动的输入采集与 RuntimeInput 转换
 - [ui](host/ui.md)：主题、Toast、UI 上下文（布局/素材；页面构建见 `egui_screens/`，由 `host_app`/`main` 驱动渲染）
 - [backend](host/backend.md)：winit + wgpu + egui 渲染后端（SpriteRenderer / DissolveRenderer / GpuTexture）
@@ -73,8 +74,8 @@
 
 ## LastVerified
 
-2026-03-22
+2026-03-23
 
 ## Owner
 
-GPT-5.4
+claude-4.6-opus

@@ -20,20 +20,6 @@ const returnBtn = document.getElementById("return-btn");
 
 targetEl.textContent = TARGET_SCORE;
 
-function postToEngine(message) {
-  const payload = JSON.stringify(message);
-  if (window.ipc && typeof window.ipc.postMessage === "function") {
-    window.ipc.postMessage(payload);
-    return true;
-  }
-  if (window.engine && typeof window.engine.onComplete === "function" && message.type === "onComplete") {
-    window.engine.onComplete(message.result);
-    return true;
-  }
-  console.log("IPC unavailable, message:", payload);
-  return false;
-}
-
 function updateTimer() {
   timeLeft -= 0.1;
   if (timeLeft <= 0) {
@@ -61,21 +47,21 @@ function endGame() {
   }
 }
 
-clickBtn.addEventListener("click", () => {
+clickBtn.addEventListener("click", function() {
   if (gameOver) return;
   score++;
   scoreEl.textContent = score;
   scoreEl.classList.add("bump");
-  setTimeout(() => scoreEl.classList.remove("bump"), 100);
+  setTimeout(function() { scoreEl.classList.remove("bump"); }, 100);
 
   if (score >= TARGET_SCORE) {
     endGame();
   }
 });
 
-returnBtn.addEventListener("click", () => {
-  const result = score >= TARGET_SCORE ? "win" : "lose";
-  postToEngine({ type: "onComplete", result: result });
+returnBtn.addEventListener("click", function() {
+  var result = score >= TARGET_SCORE ? "win" : "lose";
+  engine.complete(result);
 });
 
 timerInterval = setInterval(updateTimer, 100);

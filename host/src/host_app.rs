@@ -20,13 +20,13 @@ use winit::window::{Window, WindowId};
 use host::egui_actions::{self, EguiAction};
 use host::egui_screens;
 
-use host::game_mode::{GameCompletion, GameMode};
+use host::game_mode::{BridgeServer, GameMode};
 
 /// WebView 小游戏运行时状态
 struct MiniGameRuntime {
     game_mode: GameMode,
     webview: Option<wry::WebView>,
-    result_rx: Option<std::sync::mpsc::Receiver<GameCompletion>>,
+    bridge: Option<BridgeServer>,
 }
 
 impl MiniGameRuntime {
@@ -34,7 +34,7 @@ impl MiniGameRuntime {
         Self {
             game_mode: GameMode::new(),
             webview: None,
-            result_rx: None,
+            bridge: None,
         }
     }
 }
@@ -192,21 +192,34 @@ impl ApplicationHandler for HostApp {
                 app::update(app_state, dt);
 
                 // ── 小游戏 WebView 生命周期 ──
-                // 1. 检查待启动的小游戏请求
                 if let Some(launch) = app_state.pending_game_launch.take() {
+                    let game_dir = app_state
+                        .config
+                        .assets_root
+                        .join("games")
+                        .join(&launch.game_id);
                     let (w, h) = backend.size();
-                    match mini_game.game_mode.start(
-                        backend.window(),
-                        (w, h),
-                        &launch,
-                        &app_state.config.assets_root,
-                    ) {
-                        Ok((webview, rx)) => {
-                            mini_game.webview = Some(webview);
-                            mini_game.result_rx = Some(rx);
-                        }
+                    match BridgeServer::start(game_dir) {
+                        Ok(bridge) => match mini_game.game_mode.start(
+                            backend.window(),
+                            (w, h),
+                            &launch,
+                            &bridge,
+                        ) {
+                            Ok(webview) => {
+                                mini_game.webview = Some(webview);
+                                mini_game.bridge = Some(bridge);
+                            }
+                            Err(e) => {
+                                tracing::warn!(error = %e, "WebView 创建失败，降级处理");
+                                app_state.input_manager.inject_ui_result(
+                                    launch.request_key,
+                                    vn_runtime::state::VarValue::String(String::new()),
+                                );
+                            }
+                        },
                         Err(e) => {
-                            tracing::warn!(error = %e, "WebView 创建失败，降级处理");
+                            tracing::warn!(error = %e, "HTTP Bridge 启动失败，降级处理");
                             app_state.input_manager.inject_ui_result(
                                 launch.request_key,
                                 vn_runtime::state::VarValue::String(String::new()),
@@ -368,30 +381,41 @@ impl ApplicationHandler for HostApp {
     }
 
     fn about_to_wait(&mut self, _el: &ActiveEventLoop) {
-        let completion = self
-            .mini_game
-            .result_rx
-            .as_ref()
-            .and_then(|rx| rx.try_recv().ok());
+        let HostApp {
+            mini_game,
+            app_state,
+            backend,
+            ..
+        } = self;
+
+        let completion = match (&mini_game.bridge, app_state.as_mut()) {
+            (Some(bridge), Some(state)) => bridge.poll(state),
+            _ => None,
+        };
 
         if let Some(completion) = completion
-            && let Some(request_key) = self.mini_game.game_mode.complete()
+            && let Some(request_key) = mini_game.game_mode.complete()
         {
-            if let Some(ref webview) = self.mini_game.webview {
+            if let Some(ref webview) = mini_game.webview {
                 let _ = webview.set_visible(false);
             }
-            self.mini_game.webview = None;
-            self.mini_game.result_rx = None;
+            mini_game.webview = None;
+            mini_game.bridge = None;
 
-            if let Some(app_state) = self.app_state.as_mut() {
+            if let Some(state) = app_state.as_mut() {
                 info!(key = %request_key, "小游戏完成，回传结果");
-                app_state
+                state
                     .input_manager
                     .inject_ui_result(request_key, completion.result);
             }
 
-            if let Some(backend) = self.backend.as_ref() {
-                backend.request_redraw();
+            if let Some(be) = backend.as_ref() {
+                be.request_redraw();
+            }
+        } else if mini_game.bridge.is_some() {
+            // 小游戏活跃期间保持事件循环轮转，确保 HTTP 请求及时响应
+            if let Some(be) = backend.as_ref() {
+                be.request_redraw();
             }
         }
     }

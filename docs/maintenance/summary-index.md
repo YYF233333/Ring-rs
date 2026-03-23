@@ -32,6 +32,7 @@
    - [resources](../engine/architecture/module-summaries/host/resources.md)
    - [audio](../engine/architecture/module-summaries/host/audio.md)
    - [video](../engine/architecture/module-summaries/host/video.md)
+   - [game_mode](../engine/architecture/module-summaries/host/game-mode.md)
    - [input](../engine/architecture/module-summaries/host/input.md)
    - [ui](../engine/architecture/module-summaries/host/ui.md)
    - [backend](../engine/architecture/module-summaries/host/backend.md)

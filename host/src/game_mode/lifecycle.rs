@@ -2,16 +2,13 @@
 //!
 //! 管理 WebView 的创建、运行和销毁。
 
-use std::borrow::Cow;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 
-use tracing::{info, warn};
+use tracing::info;
 use vn_runtime::state::VarValue;
 use wry::WebViewBuilder;
 
-use super::bridge::BridgeRequest;
+use super::http_bridge::BridgeServer;
 
 /// 游戏模式状态
 #[derive(Debug, Default)]
@@ -36,7 +33,7 @@ pub struct PendingGameLaunch {
     pub params: HashMap<String, VarValue>,
 }
 
-/// 小游戏完成结果（通过 channel 从 IPC handler 传回主线程）
+/// 小游戏完成结果
 pub struct GameCompletion {
     pub result: VarValue,
 }
@@ -59,69 +56,24 @@ impl GameMode {
         matches!(self.state, GameModeState::Running { .. })
     }
 
-    /// 启动小游戏：创建 WebView 并返回完成事件接收端
+    /// 启动小游戏：通过 HTTP Bridge 创建 WebView
     ///
-    /// 使用 wry custom protocol（`game://`）加载游戏资源，
-    /// 避免 `file://` 路径中 Windows 盘符冒号导致 `http::Uri` 解析失败。
+    /// WebView 通过 `http://127.0.0.1:{PORT}/index.html` 加载游戏页面，
+    /// JS SDK 通过 init_script 注入 `window.engine.*` API。
     pub fn start<W: wry::raw_window_handle::HasWindowHandle>(
         &mut self,
         window: &W,
         window_size: (u32, u32),
         launch: &PendingGameLaunch,
-        assets_root: &Path,
-    ) -> Result<(wry::WebView, mpsc::Receiver<GameCompletion>), GameModeError> {
+        bridge: &BridgeServer,
+    ) -> Result<wry::WebView, GameModeError> {
         if self.is_active() {
             return Err(GameModeError::AlreadyRunning);
         }
 
-        let game_dir = assets_root.join("games").join(&launch.game_id);
-        let index_path = game_dir.join("index.html");
-
-        if !index_path.exists() {
-            return Err(GameModeError::AssetsNotFound(
-                index_path.to_string_lossy().to_string(),
-            ));
-        }
-
-        let game_dir_abs = game_dir
-            .canonicalize()
-            .map_err(|e| GameModeError::AssetsNotFound(format!("{}: {}", game_dir.display(), e)))?;
-
-        let (tx, rx) = mpsc::channel::<GameCompletion>();
-
-        let init_script = r#"
-            window.engine = {
-                onComplete(result) {
-                    window.ipc.postMessage(JSON.stringify({ type: "onComplete", result: result }));
-                },
-                log(level, message) {
-                    window.ipc.postMessage(JSON.stringify({ type: "log", level: level, message: message }));
-                }
-            };
-        "#;
-
         let webview = WebViewBuilder::new()
-            .with_custom_protocol("game".to_string(), make_asset_handler(game_dir_abs))
-            .with_url("game://localhost/index.html")
-            .with_initialization_script(init_script)
-            .with_ipc_handler(move |request| {
-                let body = request.body();
-                match serde_json::from_str::<BridgeRequest>(body) {
-                    Ok(BridgeRequest::OnComplete { result }) => {
-                        let var_value: VarValue = result.into();
-                        let _ = tx.send(GameCompletion { result: var_value });
-                    }
-                    Ok(BridgeRequest::Log { level, message }) => {
-                        info!(level = %level, "[WebView] {}", message);
-                    }
-                    Ok(other) => {
-                        warn!(?other, "Unhandled BridgeRequest");
-                    }
-                    Err(e) => {
-                        warn!(error = %e, body = %body, "Failed to parse BridgeRequest");
-                    }
-                }
-            })
+            .with_url(bridge.game_url())
+            .with_initialization_script(super::http_bridge::js_sdk_init_script())
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Physical(wry::dpi::PhysicalPosition::new(0, 0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
@@ -137,9 +89,13 @@ impl GameMode {
             game_id: launch.game_id.clone(),
             request_key: launch.request_key.clone(),
         };
-        info!(game_id = %launch.game_id, "WebView 小游戏已启动 (custom protocol)");
+        info!(
+            game_id = %launch.game_id,
+            port = bridge.port(),
+            "WebView 小游戏已启动 (HTTP Bridge)"
+        );
 
-        Ok((webview, rx))
+        Ok(webview)
     }
 
     /// 小游戏完成，清理状态并返回 request_key
@@ -158,53 +114,6 @@ impl GameMode {
 impl Default for GameMode {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-/// 构造 custom protocol 的资源文件处理闭包
-///
-/// 将 `game://localhost/<path>` 映射到 `game_dir/<path>` 并返回文件内容。
-/// Windows 上 WebView2 会将 `game://` 翻译为 `http://game.localhost/`。
-fn make_asset_handler(
-    game_dir: PathBuf,
-) -> impl Fn(wry::WebViewId<'_>, wry::http::Request<Vec<u8>>) -> wry::http::Response<Cow<'static, [u8]>>
-+ 'static {
-    move |_id, request: wry::http::Request<Vec<u8>>| {
-        let uri_path = request.uri().path();
-        let relative = uri_path.strip_prefix('/').unwrap_or(uri_path);
-        let file_path = game_dir.join(relative);
-
-        let (data, mime) = if file_path.is_file() {
-            let data = std::fs::read(&file_path).unwrap_or_default();
-            let mime = mime_from_ext(file_path.extension().and_then(|e| e.to_str()));
-            (data, mime)
-        } else {
-            warn!(path = %file_path.display(), "Game asset not found");
-            (b"Not Found".to_vec(), "text/plain")
-        };
-
-        wry::http::Response::builder()
-            .header("Content-Type", mime)
-            .body(Cow::from(data))
-            .unwrap()
-    }
-}
-
-fn mime_from_ext(ext: Option<&str>) -> &'static str {
-    match ext {
-        Some("html" | "htm") => "text/html",
-        Some("js" | "mjs") => "application/javascript",
-        Some("css") => "text/css",
-        Some("json") => "application/json",
-        Some("png") => "image/png",
-        Some("jpg" | "jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("svg") => "image/svg+xml",
-        Some("wasm") => "application/wasm",
-        Some("mp3") => "audio/mpeg",
-        Some("ogg") => "audio/ogg",
-        Some("wav") => "audio/wav",
-        _ => "application/octet-stream",
     }
 }
 

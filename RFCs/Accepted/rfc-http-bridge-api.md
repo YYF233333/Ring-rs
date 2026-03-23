@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-023
-- 状态：Proposed
+- 状态：Implemented
 - 作者：claude-4.6-opus
 - 日期：2026-03-23
 - 相关范围：`host`（game_mode / host_app）、`assets/games/`
