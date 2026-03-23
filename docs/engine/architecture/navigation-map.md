@@ -57,7 +57,7 @@
 - **把 AST 变成命令（语义层）**：`runtime/executor/mod.rs`
 - **新增/修改命令类型（通信契约）**：`command/mod.rs`（同时要改 `host/` 的执行端）
 - **调整运行时状态/等待机制**：`state.rs`、`runtime/engine/mod.rs`
-- **存档兼容**：`save.rs` + [save_format.md](../reference/save-format.md)
+- **存档兼容**：`save.rs` + [save-format.md](../reference/save-format.md)
 
 ## `host/`：把 `Command` 变成“画面/音频/UI”
 

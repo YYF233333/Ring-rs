@@ -2,23 +2,21 @@
 
 ## Purpose
 
-`renderer` 负责将 `RenderState` 绘制为屏幕画面，管理背景过渡、场景切换遮罩、文本渲染与角色绘制顺序。
+`renderer` 把 `RenderState` 转成 `DrawCommand`，并维护背景过渡、场景遮罩、角色层级与镜头效果。对话框等 UI 文本不在这里绘制，而是由 egui 路径处理。
 
 ## PublicSurface
 
-- 模块入口：`host/src/renderer/mod.rs`（Renderer struct + `build_draw_commands` 顶层编排）
-- 绘制命令生成：`host/src/renderer/draw_commands.rs`（背景/角色/场景遮罩 -> DrawCommand）
-- 场景效果与过渡：`host/src/renderer/scene_effects.rs`（震动/模糊状态更新与背景过渡入口；背景 dissolve 由 `transition.rs` 的 `TransitionManager` 驱动）
+- 模块入口：`host/src/renderer/mod.rs`
 - 核心类型：`Renderer`、`DrawMode`
-- 关键公开子系统：`animation`、`effects`、`render_state`、`scene_transition`
-- 对外接口：`build_draw_commands`、`update_transition`、`start_scene_*`、`skip_scene_transition_to_end`
+- 关键子模块：`draw_commands`、`scene_effects`、`transition`、`scene_transition`
+- 常用接口：`build_draw_commands`、背景过渡更新、`start_scene_*`、`skip_scene_transition_to_end`
 
 ## KeyFlow
 
-1. `build_draw_commands` 按层级生成 DrawCommand：背景 -> 角色 -> 暗化/模糊遮罩 -> 场景过渡遮罩。
-2. 普通背景过渡由 `TransitionManager` 驱动 alpha 混合。
-3. `changeScene` 场景过渡由 `SceneTransitionManager` 管理多阶段流程。
-4. Rule 过渡场景下，`ImageDissolve` shader 根据进度渲染遮罩效果。
+1. `build_draw_commands` 依次生成背景、角色、场景效果遮罩与场景过渡遮罩。
+2. 背景 dissolve 由 `TransitionManager` 驱动。
+3. `changeScene` 的 Fade/FadeWhite/Rule 由 `SceneTransitionManager` 负责阶段推进。
+4. backend 只消费产出的 `DrawCommand`，不回写渲染状态。
 
 ## Dependencies
 
@@ -29,13 +27,13 @@
 
 ## Invariants
 
-- `Renderer` 只消费状态，不生成脚本语义状态。
-- 渲染层级固定，避免 UI 与角色/遮罩层次错乱。
+- `Renderer` 只消费状态，不承载脚本语义。
+- 渲染层级固定：背景 -> 角色 -> 场景效果 -> 场景过渡；UI 叠加在 backend/egui 路径完成。
 
 ## FailureModes
 
 - 纹理缺失导致背景或角色不可见。
-- Rule 过渡缺少遮罩纹理或 shader 未初始化导致异常。
+- Rule 过渡缺少遮罩纹理或后端无法消费遮罩命令，导致视觉异常。
 - 场景过渡中点处理不当导致背景切换时机错误。
 
 ## WhenToReadSource
@@ -53,8 +51,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4

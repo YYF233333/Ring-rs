@@ -2,20 +2,19 @@
 
 ## Purpose
 
-`renderer/animation` 提供通用动画时间轴系统，统一驱动角色、背景过渡、场景遮罩等对象属性变化。
+`renderer/animation` 提供 trait-based 时间轴系统，用统一接口驱动角色、场景过渡等对象的 `f32` 属性变化；它只管理插值与生命周期，不理解对象业务语义。
 
 ## PublicSurface
 
 - 模块入口：`host/src/renderer/animation/mod.rs`
-- 核心类型：`AnimationSystem`、`Animation`、`AnimationState`、`EasingFunction`
+- 核心类型：`AnimationSystem`、`Animation`、`AnimationState`、`AnimationEvent`、`EasingFunction`
 - Trait API：`Animatable`、`ObjectId`、`AnimPropertyKey`、`PropertyAccessor`
 
 ## KeyFlow
 
-1. 调用方将实现 `Animatable` 的对象注册到 `AnimationSystem`。
-2. 按属性名提交动画（起止值、时长、缓动函数）。
-3. 每帧 `update(dt)` 推进时间轴并产生事件。
-4. 渲染或逻辑层读取对象属性得到当前插值结果。
+1. 调用方注册实现 `Animatable` 的对象，获得 `ObjectId`。
+2. 动画系统按属性名启动插值，并在 `update(dt)` 中推进。
+3. 对象自己通过 `get_property` / `set_property` 暴露和承接变化。
 
 ## Dependencies
 
@@ -23,8 +22,8 @@
 
 ## Invariants
 
-- 动画系统只负责时间与插值，不感知对象业务语义。
-- 属性命名是跨模块协作契约，需保持一致。
+- 动画系统只负责时间与插值。
+- 属性名是跨模块契约，调用方与对象实现必须一致。
 
 ## FailureModes
 
@@ -43,8 +42,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4

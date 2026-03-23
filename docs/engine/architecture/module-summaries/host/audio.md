@@ -2,60 +2,45 @@
 
 ## Purpose
 
-`audio` 提供 Host 音频管理：BGM/SFX 播放、淡入淡出、交叉淡化、静音与音量状态管理。
+`audio` 管理 Host 侧音频状态与播放：BGM、SFX、duck、静音，以及淡入淡出/切歌过程。
 
 ## PublicSurface
 
-- 模块入口：`host/src/audio/mod.rs`（AudioManager struct、音量/duck/静音控制）
-- 播放逻辑：`host/src/audio/playback.rs`（play_bgm、stop_bgm、crossfade_bgm、play_sfx、update + 淡入淡出状态机）
-- 核心类型：`AudioManager`（`device_sink` 为 `Option<MixerDeviceSink>`，headless 时为 `None`）
-- 构造：`new()` 连接真实设备；`new_headless()` 无设备、仅追踪状态
-- 关键接口：`play_bgm`、`stop_bgm`、`crossfade_bgm`、`play_sfx`、`play_video_audio`、`duck`、`unduck`、`update`
+- 入口：`host/src/audio/mod.rs`
+- 播放实现：`host/src/audio/playback.rs`
+- 核心类型：`AudioManager`
+- 关键接口：`new`、`new_headless`、`cache_audio_bytes`、`play_bgm`、`stop_bgm`、`crossfade_bgm`、`play_sfx`、`play_video_audio`、`duck`、`unduck`、`update`
 
 ## KeyFlow
 
-1. 调用方通过 `ResourceManager.read_bytes()` 读取音频字节，然后 `AudioManager.cache_audio_bytes()` 预缓存。
-2. `play_bgm`：先更新状态（`current_bgm_path`、`fade_state`），再在有 `device_sink` 时执行 I/O，headless 下状态仍正确推进。
-3. `play_sfx`、`play_video_audio` 在无 `device_sink` 时提前返回（headless 安全）。
-4. BGM 路径进入独立播放器并维护 `FadeState`。
-5. 每帧 `update(dt)` 推进淡入淡出状态机与 duck multiplier 过渡。
-6. SFX 采用一次性播放器通道播放并自动释放。
-7. `duck()` / `unduck()` 通过独立的 `duck_multiplier` 平滑压低/恢复 BGM 音量。
-
-## Dependencies
-
-- 依赖 `rodio` 进行音频解码与播放
-- 依赖 `resources::normalize_logical_path` 统一逻辑路径
-- **不直接访问文件系统或 ZIP**，音频字节由外部注入
+1. 上层先通过 `ResourceManager` 取字节，再调用 `cache_audio_bytes()` 注入缓存。
+2. `play_bgm` / `crossfade_bgm` / `stop_bgm` 先更新状态，再在有真实设备时做 I/O，因此 headless 也能正确推进状态。
+3. `update(dt)` 统一推进淡入淡出与 duck multiplier。
+4. `play_video_audio()` 为 cutscene 音轨提供一次性播放器，不复用 BGM 通道。
 
 ## Invariants
 
-- `AudioManager` 不持有 `base_path` 或 `use_zip_mode`，所有音频字节通过 `cache_audio_bytes` 注入。
-- BGM 与 SFX 音量配置独立，静音状态统一影响有效输出。
-- 淡入淡出状态在 `update` 中推进，避免多处并发改写。
-- Duck multiplier 作为独立乘数叠加于所有 BGM 音量输出。
-
-## FailureModes
-
-- 音频设备不可用导致初始化失败。
-- 音频字节未缓存导致播放失败（日志警告）。
-- 字节解码失败导致播放降级。
+- `AudioManager` 不直接访问文件系统或资源来源；所有字节由外部注入。
+- BGM/SFX 音量、静音和 duck 是独立叠加关系。
+- 淡入淡出状态只在 `update()` 中推进，避免多处同时改写。
 
 ## WhenToReadSource
 
-- 需要调整 BGM 切换策略或淡入淡出曲线时。
-- 需要排查音频缓存行为时。
+- 需要调整切歌、淡入淡出或 duck 语义时。
+- 需要排查 headless 与真实设备模式的差异时。
+- 需要确认视频音轨与普通 SFX/BGM 的边界时。
 
 ## RelatedDocs
 
 - [host 总览](../host.md)
+- [app_command_handlers 摘要](app-command-handlers.md)
+- [video 摘要](video.md)
 - [resources 摘要](resources.md)
-- [config 摘要](config.md)
 
 ## LastVerified
 
-2026-03-19
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4

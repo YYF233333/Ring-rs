@@ -13,8 +13,10 @@
 
 - 新提案：新增 `rfc-<topic>.md`，状态为 `Proposed`
 - 实施中：标记为 `Active`
-- 已落地：标记为 `Accepted`，移动到Accepted子文件夹下
-- RFC文件更新时同步更新本文档中目录
+- 已落地：标记为 `Accepted`，移动到 `Accepted/` 子目录
+- 「文件」列只填写文件名，不填写路径前缀
+- 状态为 `Accepted` 时，默认到 `RFCs/Accepted/` 查找该文件；其余状态默认在 `RFCs/` 当前目录
+- RFC 文件迁移、重命名或状态变更时，同步更新本文档
 - RFC 编号按“提出顺序”递增分配，格式为 `RFC-XXX`（三位数）
 
 ## 当前 RFC
@@ -28,7 +30,7 @@
 | RFC-005 | 对话内联差分语法 | `rfc-inline-sprite-in-dialogue.md` | Proposed |
 | RFC-006 | 节奏标签与 extend 台词续接 | `rfc-rhythm-tags.md` | Accepted |
 | RFC-007 | 渲染后端迁移 (macroquad → winit+wgpu+egui) | `rfc-rendering-backend-migration.md` | Accepted |
-| RFC-008 | RenderBackend Trait -- 渲染后端抽象层 | `rfc-rendering-backend-trait.md` | Accepted |
+| RFC-008 | RenderBackend Trait -- 渲染后端抽象层 | `rfc-render-backend-trait.md` | Accepted |
 | RFC-009 | Cutscene 视频播放 | `rfc-cutscene-video-playback.md` | Accepted |
 | RFC-010 | 可定制 UI 系统 | `rfc-customizable-ui-system.md` | Accepted |
 | RFC-011 | UI 系统后续增强 | `rfc-ui-enhancements.md` | Accepted |

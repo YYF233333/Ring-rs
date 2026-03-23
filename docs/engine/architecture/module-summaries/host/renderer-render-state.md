@@ -2,19 +2,20 @@
 
 ## Purpose
 
-`renderer/render_state` 定义 Host 渲染态数据模型，集中表达当前背景、角色、对话、章节标记、选项和 UI 可见性。
+`renderer/render_state` 是 Host 侧的可渲染快照：背景、角色、对话、选项、章节标记、场景效果与文本模式都在这里汇合，供更新循环与 `Renderer` 共享。
 
 ## PublicSurface
 
 - 模块入口：`host/src/renderer/render_state/mod.rs`
-- 核心类型：`RenderState`、`CharacterSprite`、`DialogueState`、`ChoicesState`、`ChoiceItem`、`InlineWait`、`EffectiveCps`、`ChapterMarkState`、`SceneEffectState`、`TitleCardState`
-- 关键接口：背景/角色/对话/选择状态读写、打字机推进方法、`extend_dialogue`（台词续接）、`effective_text_speed`（字速查询）
+- 核心类型：`RenderState`、`CharacterSprite`、`DialogueState`、`ChoicesState`、`ChoiceItem`
+- 对话附属类型：`InlineWait`、`EffectiveCps`、`NvlEntry`
+- 常用接口：打字机推进、对话续接、内联等待更新、有效字速查询
 
 ## KeyFlow
 
-1. `CommandExecutor` 更新 `RenderState`（背景、角色、文本、选项等）。
-2. `app/update` 每帧推进章节标记和角色淡出回收。
-3. `Renderer` 读取 `RenderState` 进行无副作用渲染。
+1. `CommandExecutor` 写入背景、角色、对话与选项等状态。
+2. `app/update` 逐帧推进打字机、章节标记和淡出回收。
+3. `Renderer` 只读消费这些字段生成绘制命令。
 
 ## Dependencies
 
@@ -52,4 +53,4 @@
 
 ## Owner
 
-Composer
+GPT-5.4

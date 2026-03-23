@@ -2,43 +2,42 @@
 
 ## Purpose
 
-负责脚本语义模型与解析入口：定义 AST、表达式系统，并导出 `Parser` 供上层使用。
+定义脚本语义模型，并向上层导出解析入口与表达式求值能力。
 
 ## PublicSurface
 
 - 模块入口：`vn-runtime/src/script/mod.rs`
 - 子模块：`ast`、`expr`、`parser`
-- 重导出：`Script`、`ScriptNode`、`ChoiceOption`、`Parser`、表达式求值接口
+- 重导出：`Script`、`ScriptNode`、`ChoiceOption`、`Parser` 以及表达式求值接口
 
 ## KeyFlow
 
-1. 脚本文本进入 `parser`。
-2. 生成 `Script`（节点序列 + base_path + source_map）。
-3. `runtime/executor` 消费 `ScriptNode` 产生命令。
-4. 条件分支与变量赋值依赖 `expr` 求值器。
-5. 阶段 0 新增跨文件控制流节点：`CallScript`、`ReturnFromScript`。
-6. `ScriptNode::Dialogue` 扩展 `inline_effects`（内联标签）和 `no_wait`（自动推进）字段。
-7. 新增 `ScriptNode::Extend { content, inline_effects, no_wait }` 台词续接节点。
+1. `parser` 读取文本并产出 `Script`。
+2. `ast` 用 `ScriptNode` 描述章节、对话、控制流、媒体/UI 请求等脚本语义。
+3. `expr` 为条件分支、变量赋值和 UI 参数提供求值能力。
+4. `runtime/executor` 读取这些节点并生成 `Command` 或等待状态。
+5. 对话节点保留 `inline_effects` / `no_wait`，续接台词用 `Extend`，跨脚本流程用 `CallScript` / `ReturnFromScript`。
 
 ## Dependencies
 
-- 依赖 `command` 中的部分类型（如 transition、position）表达语义。
-- 被 `runtime`、`diagnostic`、`xtask script-check` 直接消费。
+- 复用 `command` 中的结构化类型表达位置、过渡和文本模式等语义。
+- 被 `runtime`、`diagnostic` 与脚本检查链路直接消费。
 
 ## Invariants
 
-- AST 只描述语义，不携带宿主层实现细节。
-- 表达式求值通过 `EvalContext` 访问变量，不读全局状态。
+- AST 只描述“脚本想表达什么”，不携带宿主实现细节。
+- 表达式求值通过 `EvalContext` 访问变量，不读取隐藏全局状态。
 
 ## FailureModes
 
-- 语法非法导致 `ParseError`。
-- 表达式变量缺失/类型不匹配导致求值错误。
+- 语法错误会在解析阶段产出 `ParseError`。
+- 变量缺失或类型不匹配会在求值阶段失败。
 
 ## WhenToReadSource
 
-- 新增脚本语法或扩展节点类型时。
-- 需要确认某个脚本语句映射到哪个 `ScriptNode` 时。
+- 需要确认某条语句具体落到哪个 `ScriptNode` 时。
+- 需要新增脚本语法、字段或控制流节点时。
+- 需要核对 UI 请求、跨脚本调用或对话扩展字段的精确语义时。
 
 ## RelatedDocs
 
@@ -48,8 +47,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4

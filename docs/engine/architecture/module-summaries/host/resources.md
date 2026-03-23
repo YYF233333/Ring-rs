@@ -2,23 +2,21 @@
 
 ## Purpose
 
-`resources` 负责 Host 资源访问：统一路径解析、纹理缓存、音频与文本读取、文件来源抽象（文件系统/ZIP）。
+`resources` 是 Host 的统一资源入口，负责逻辑路径规范化、纹理缓存、文本/字节读取，以及文件系统与 ZIP 两类来源的抽象切换。
 
 ## PublicSurface
 
 - 模块入口：`host/src/resources/mod.rs`
-- 核心类型：`ResourceManager`、`TextureCache`、`ResourceError`、`ResourceSource`、`LogicalPath`
-- 关键子模块：`cache`、`path`、`source`、`error`
-- `FsSource`/`ZipSource` 为 `pub(crate)` 可见性，外部只通过 `ResourceSource` trait 交互
+- 核心类型：`ResourceManager`、`TextureCache`、`LogicalPath`、`ResourceSource`、`ResourceError`
+- 关键能力：纹理加载/预加载、文本与字节读取、目录列举、`materialize_to_fs()`
+- `FsSource` / `ZipSource` 为 `pub(crate)`，对外只暴露 trait 抽象
 
 ## KeyFlow
 
-1. 资源路径通过 `LogicalPath::new()` 构造（自动规范化，去除 `assets/` 前缀、统一 `/` 分隔符）。
-2. 纹理加载先查 FIFO 缓存（键为 `LogicalPath.as_str()`），未命中则从 `ResourceSource` 读取、解码并通过 `TextureContext` 创建 `Arc<dyn Texture>` 后写回缓存。
-3. 音频/文本/字节资源通过 `ResourceManager` 统一接口读取。
-4. 需要真实文件系统路径的场景（如 FFmpeg）使用 `materialize_to_fs()`。
-5. 可选资源使用 `read_text_optional()` 避免 NotFound 错误。
-6. `FsSource`/`ZipSource` 只在 `init::create_resource_manager` 内部构造；需 source 时从 `ResourceManager::source()` 获取。
+1. 调用方先用 `LogicalPath::new()` 规范化路径。
+2. 纹理读取先查 FIFO 缓存，未命中时经 `ResourceSource` 读字节、解码，再用 `TextureContext` 建纹理。
+3. 文本/字节/列举接口都经 `ResourceManager` 统一下发到底层来源。
+4. 仅在需要真实文件路径的子系统中使用 `materialize_to_fs()`。
 
 ## LogicalPath
 
@@ -31,7 +29,7 @@
 
 - 依赖 `rendering_types::{Texture, TextureContext}` 完成纹理创建（不直接依赖 backend/wgpu）
 - 依赖 `image` crate 完成图片解码
-- 被 `renderer`、`app`、`audio`、`manifest`、脚本加载路径广泛调用
+- 被 `renderer`、`app`、`audio`、`manifest` 等模块广泛调用
 
 ## Invariants
 
@@ -59,7 +57,7 @@
 
 ## LastVerified
 
-2026-03-21
+2026-03-24
 
 ## Owner
 

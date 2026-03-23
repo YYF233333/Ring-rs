@@ -2,22 +2,21 @@
 
 ## Purpose
 
-`save_manager` 提供 Host 存档文件管理：槽位存档读写、存档列表、Continue 专用存档与展示用元信息提取。
+`save_manager` 负责 Host 层的存档文件落盘与列举，包括普通槽位、Continue 存档，以及 UI 所需的轻量展示信息与缩略图文件。
 
 ## PublicSurface
 
 - 模块入口：`host/src/save_manager/mod.rs`
 - 核心类型：`SaveManager`、`SaveInfo`
 - 常量：`MAX_SAVE_SLOTS`
-- 关键接口：`save/load/delete/list_saves`、`save_continue/load_continue`、`get_save_info/get_continue_info`、`thumbnail_path/save_thumbnail/load_thumbnail_bytes`、`next_available_slot`、`ensure_dir`
+- 关键接口：槽位存读删、Continue 存读删、信息提取、缩略图读写、`next_available_slot`、`ensure_dir`
 
 ## KeyFlow
 
-1. 启动或保存前通过 `ensure_dir` 确保存档目录存在。
-2. 槽位存档按 `slot_XXX.json` 读写 `vn_runtime::SaveData`；槽位可关联缩略图 `thumb_XXX.png`（`save_thumbnail`/`load_thumbnail_bytes`）。
-3. Continue 存档使用独立文件 `continue.json` 管理恢复入口。
-4. UI 层通过 `SaveInfo`（`get_save_info`/`get_continue_info`）提供展示信息（时间、章节、脚本、游玩时长）。
-5. 应用启动时 `PersistentStore::load(saves_dir)` 加载持久变量；执行 `fullRestart` 时 `merge_from + save` 写入磁盘。
+1. `ensure_dir()` 保证存档目录存在。
+2. 槽位存档读写 `slot_XXX.json`，缩略图读写 `thumb_XXX.png`。
+3. Continue 存档单独使用 `continue.json`。
+4. UI 通过 `get_save_info()` / `get_continue_info()` 获取展示元信息。
 
 ## Dependencies
 
@@ -48,7 +47,7 @@
 
 ## LastVerified
 
-2026-03-21
+2026-03-24
 
 ## Owner
 

@@ -2,44 +2,31 @@
 
 ## Purpose
 
-渲染抽象层（RFC-008）。定义 `Texture` trait、`TextureFactory` trait、`DrawCommand` 枚举以及 `TextureContext`，
-将 `renderer/` 和 `resources/` 模块与 wgpu 具体类型解耦。同时提供 `NullTexture` / `NullTextureFactory` 用于 headless 测试。
+渲染抽象层（RFC-008）。它把 `renderer` / `resources` 与具体 GPU 后端隔开，只暴露纹理工厂、纹理句柄和绘制命令，并保留 `NullTexture` 供 headless 路径与单测复用。
 
 ## PublicSurface
 
-| 类型 | 用途 |
-|------|------|
-| `trait Texture` | 纹理抽象接口（`width`/`height`/`width_u32`/`height_u32`/`size_bytes`/`as_any`） |
-| `trait TextureFactory` | 纹理创建工厂接口（`create_texture`） |
-| `TextureContext` | 持有 `Arc<dyn TextureFactory>`，注入到 `ResourceManager` |
-| `DrawCommand` | 绘制命令枚举（`Sprite`/`Rect`/`Dissolve`），使用 `Arc<dyn Texture>` |
-| `NullTexture` | Headless 纹理实现（仅存储尺寸） |
-| `NullTextureFactory` | Headless 纹理工厂（创建 `NullTexture`） |
+- `Texture`：统一纹理接口，含尺寸、估算占用与 `as_any`
+- `TextureFactory`：从 RGBA 字节创建纹理
+- `TextureContext`：把工厂注入 `ResourceManager`
+- `DrawCommand`：`Sprite` / `Rect` / `Dissolve`
+- `NullTexture` / `NullTextureFactory`：无 GPU 的测试实现
 
 ## KeyFlow
 
-```
-ResourceManager --set_texture_context()--> TextureContext --create_texture()--> Arc<dyn Texture>
-Renderer --build_draw_commands()--> Vec<DrawCommand> { Arc<dyn Texture> }
-WgpuBackend --render_frame()--> SpriteRenderer/DissolveRenderer (downcast to GpuTexture)
-```
-
-## Dependencies
-
-- `std::any::Any`（downcast 支持）
-- 无外部 crate 依赖
+1. `backend::WgpuBackend::texture_context()` 构造 `TextureContext`。
+2. `ResourceManager` 通过 `TextureFactory` 把解码后的字节转成 `Arc<dyn Texture>`。
+3. `Renderer` 只生产 `DrawCommand`；wgpu 后端在内部再向下转型到 `GpuTexture`。
 
 ## Invariants
 
-- `Texture` trait 要求 `Send + Sync + Debug + 'static`
-- `GpuTexture`（`backend/gpu_texture.rs`）实现 `Texture` trait
-- `DrawCommand` 使用 `Arc<dyn Texture>` 而非具体的 `Arc<GpuTexture>`
-- Backend 内部通过 `as_any().downcast_ref::<GpuTexture>()` 恢复具体类型
-- `NullTexture` / `NullTextureFactory` 无条件编译（不限于 `#[cfg(test)]`）
+- `DrawCommand` 始终持有 `Arc<dyn Texture>`，渲染逻辑不直接依赖 `wgpu` 类型。
+- 向下转型只发生在 backend 内部。
+- `NullTexture` / `NullTextureFactory` 常驻编译产物，不是仅测试可用。
 
 ## FailureModes
 
-- Backend downcast 失败（传入非 `GpuTexture` 的纹理到 wgpu backend）：panic with expect message
+- 若把非 `GpuTexture` 送入 wgpu backend 的 dissolve/sprite 路径，会在 backend 内部触发 downcast 失败。
 
 ## RelatedDocs
 
@@ -49,8 +36,8 @@ WgpuBackend --render_frame()--> SpriteRenderer/DissolveRenderer (downcast to Gpu
 
 ## LastVerified
 
-2026-03-20
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4

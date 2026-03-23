@@ -519,8 +519,8 @@ extend "然后她继续说道。"
 ### 跨文件脚本调度（阶段 0 新增）
 
 ```markdown
-callScript [prologue](../scripts/remake/ring/summer/prologue.md)
-callScript [chapter1](../scripts/remake/ring/summer/1-1.md)
+callScript [prologue](ring/summer/prologue.md)
+callScript [chapter1](ring/summer/1-1.md)
 returnFromScript
 ```
 

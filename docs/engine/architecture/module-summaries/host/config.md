@@ -2,21 +2,20 @@
 
 ## Purpose
 
-`config` 定义 Host 运行配置模型，负责配置加载、序列化与有效性校验。
-所有字段均为必填（`Option` 字段需显式写 `null`），配置文件缺失或字段缺失时直接报错。
+`config` 定义 Host 启动配置模型，负责加载、保存与校验。运行时不提供“缺字段自动补默认值”的回退；配置缺失、字段缺失或字段名拼错都直接报错。
 
 ## PublicSurface
 
 - 模块入口：`host/src/config/mod.rs`
-- 核心类型：`AppConfig`、`WindowConfig`、`DebugConfig`（含 `log_file`、`recording_buffer_size_mb`、`recording_output_dir`）、`AudioConfig`、`ResourceConfig`、`AssetSourceType`（Fs/Zip）
-- 关键接口：`AppConfig::load`（返回 `Result`）、`save`、`validate`
-- 错误类型：`ConfigError`（含 `LoadFailed`、`SerializationFailed`、`IoError`、`ValidationFailed`）
+- 核心类型：`AppConfig`、`WindowConfig`、`DebugConfig`、`AudioConfig`、`ResourceConfig`、`AssetSourceType`
+- 关键接口：`AppConfig::load`、`save`、`validate`
+- 错误类型：`ConfigError`
 
 ## KeyFlow
 
-1. 启动时读取 `config.json`，文件缺失或解析失败即报错退出。
-2. 运行前调用 `validate` 校验资源来源、入口脚本与音量范围。
-3. 其他模块（app/audio/resources）消费配置字段完成初始化。
+1. 启动时读取并反序列化 `config.json`。
+2. `validate()` 按资源来源检查 `assets_root` / `zip_path`、入口脚本与音量范围。
+3. 其他初始化路径消费已校验的 `AppConfig`。
 
 ## Dependencies
 
@@ -28,7 +27,7 @@
 - 配置文件必须存在且所有字段完整（无代码内默认值回退）。
 - 所有配置结构体使用 `#[serde(deny_unknown_fields)]` 拒绝未知字段。
 - `start_script_path` 必须有效，作为运行入口约束。
-- `impl Default` 仅供测试使用，运行时加载路径不调用。
+- `impl Default` 存在，但正式加载路径不依赖它补齐缺失字段。
 
 ## FailureModes
 
@@ -51,8 +50,8 @@
 
 ## LastVerified
 
-2026-03-19
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4

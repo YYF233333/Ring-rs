@@ -19,10 +19,10 @@
 cargo run
 ```
 
-无窗口回放/自动化调试可使用：
+无窗口回放/自动化调试可使用（需自备 `.jsonl` 录制文件；可先 GUI 运行后按 **F8** 导出，步骤见 [Headless 测试模式使用指南](docs/testing/headless-guide.md)）：
 
 ```bash
-cargo run -- --headless --replay-input recordings/example.jsonl
+cargo run -- --headless --replay-input recordings/your_recording.jsonl
 ```
 
 `--headless` 必须搭配 `--replay-input`；可选参数见 `host/src/main.rs` 中的 CLI 定义。

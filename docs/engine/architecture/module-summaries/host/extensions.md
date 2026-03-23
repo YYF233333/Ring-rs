@@ -2,55 +2,44 @@
 
 ## Purpose
 
-`host/extensions` 提供效果扩展 API、capability 注册中心与调度入口，用于把“效果能力”从核心流程中解耦。
+`host/extensions` 提供效果 capability 扩展层，把具体效果实现从主循环和命令执行器中解耦出来。
 
 ## PublicSurface
 
-- 模块入口：`host/src/extensions/mod.rs`
-- 核心类型：`ExtensionRegistry`、`EngineContext`、`ExtensionManifest`、`EffectExtension`、`EngineServices` trait（定义于 `services.rs`）、`CapabilityId` newtype；内建 capability 常量与 `build_builtin_registry` 在 `builtin_effects.rs`
-- 关键能力：注册扩展、版本兼容校验、capability 调度、扩展诊断记录
+- 入口：`host/src/extensions/mod.rs`
+- 核心类型：`ExtensionRegistry`、`CapabilityId`、`EffectExtension`、`ExtensionManifest`
+- 运行时上下文：`EngineContext`、`EngineServices`
+- 关键构造：`build_builtin_registry()`
 
 ## KeyFlow
 
-1. `AppState::new` 构建内建扩展注册表（`builtin_effects.rs`）：`effect.dissolve`、`effect.fade`、`effect.rule_mask`、`effect.move`，以及场景效果 `effect.scene.shake`、`effect.scene.blur`、`effect.scene.dim`、`effect.scene.title_card`。
-2. `command_executor` 产出带 `capability_id` 的 `EffectRequest`。
-3. `EngineContext` 持有 `&mut dyn EngineServices`（而非 `&mut CoreSystems`），通过 trait 抽象访问核心系统，打破对 `app` 模块的反向依赖。
-4. `effect_applier` 使用 `ExtensionRegistry` 按 capability 分发请求。
-5. capability 缺失或执行失败时执行 capability 级回退并输出诊断。
-
-## Dependencies
-
-- 上游依赖：`renderer/effects`（请求模型）
-- 下游依赖：`renderer` 动画与过渡系统
+1. `AppState::new()` 调用 `build_builtin_registry()` 注册内建 capability，包括 dissolve、fade、rule-mask、move 与 scene effect 系列。
+2. `command_executor` 产出带 `capability_id` 的 `EffectRequest`，`app/command_handlers/effect_applier` 再把请求送进 registry。
+3. `EngineContext` 通过 `EngineServices` trait 暴露受控引擎能力，避免扩展层反向依赖 `app`。
+4. registry 分发失败时由上层做 capability 级回退，并输出扩展诊断。
 
 ## Invariants
 
-- 同一 `capability_id` 只能由一个扩展注册，避免行为冲突。
-- 扩展 API 版本按主版本兼容；主版本不一致拒绝注册。
-- 诊断必须包含 `capability_id` 与扩展来源。
-- extensions 模块不 `use crate::app`，通过 `EngineServices` trait 抽象访问核心系统。
-
-## FailureModes
-
-- API 主版本不兼容，扩展注册失败。
-- capability 重复注册，触发冲突错误。
-- capability 执行失败，触发统一回退映射；若回退能力仍不可用，则放弃该效果请求。
+- 同一 `capability_id` 只能注册一次。
+- 扩展兼容性按 `ENGINE_API_VERSION` 校验。
+- extensions 访问核心系统必须经过 `EngineServices` 抽象边界。
 
 ## WhenToReadSource
 
-- 新增效果能力或迁移内建效果到扩展时。
-- 排查 capability 分发与回退行为不一致时。
+- 需要新增 capability、迁移内建效果或调整版本兼容策略时。
+- 需要排查 dispatch、回退或扩展诊断时。
+- 需要确认某个效果应落在 `renderer/effects` 还是 `extensions` 层时。
 
 ## RelatedDocs
 
-- [renderer_effects 摘要](renderer-effects.md)
 - [app_command_handlers 摘要](app-command-handlers.md)
-- [script_syntax_spec](../../../../authoring/script-syntax.md)
+- [renderer_effects 摘要](renderer-effects.md)
+- [脚本语法规范](../../../../authoring/script-syntax.md)
 
 ## LastVerified
 
-2026-03-18
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4

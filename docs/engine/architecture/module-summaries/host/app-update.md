@@ -2,49 +2,39 @@
 
 ## Purpose
 
-`app/update` 提供 Host 每帧更新主入口，负责按 `AppMode` 分发逻辑，并统一推进过渡、动画、章节标记和音频状态。
+`app/update` 是每帧更新入口：负责按 `AppMode` 分发逻辑，并统一推进 InGame 共享状态、cutscene、场景过渡与音频。
 
 ## PublicSurface
 
-- 模块入口：`host/src/app/update/mod.rs`
-- 对外接口：`update(app_state, dt: f32)`、`handle_script_mode_input`、`run_script_tick`、`skip_all_active_effects`
-- InGame 共享逻辑：`update_ingame_common` 为 `modes` 内私有；`tick_ingame_shared` 为 `pub(super)`，仅由本模块 `update()` 调用；**headless 不再直接调用二者**，统一走 `update(app_state, dt)`。
-- 子模块：`modes`、`script`、`scene_transition`
+- 入口：`host/src/app/update/mod.rs`
+- 关键接口：`update(app_state, dt)`、`handle_script_mode_input`、`run_script_tick`、`skip_all_active_effects`
+- 主要子模块：`modes`、`script`、`scene_transition`
 
 ## KeyFlow
 
-1. `update` 先更新 UI 上下文与 Toast。
-2. 根据 `navigation.current()` 分发到 `modes::*` 对应界面逻辑。
-3. InGame 下 `update_ingame` 内调 `update_ingame_common`（输入与推进模式分支）；`tick_ingame_shared` 统一推进背景/场景过渡、信号检测、动画系统、章节标记与淡出清理（均由 `update()` 编排，含 headless）。脚本相关 `RuntimeInput` 由 `handle_script_mode_input` 消费；`InputReceived` 事件流在该函数内通过 `event_stream.on_input_received` 发出（不再散落在其他更新路径）。
-4. 打字机更新：检测 `inline_wait`（定时递减 / 点击等待暂停）、按 `effective_text_speed` 推进字符、`no_wait` 完成后自动触发 Click。
-5. 最后统一更新音频管理器状态，保证各模式音频一致推进。
-6. `script.rs` 处理 `Command::RequestUI`：`call_game` 仍走 WebView 独立路径；其余 `mode` 通过 `AppState` 的 `ui_mode_registry.activate()` 路由到已注册的 `UiModeHandler`（激活失败则记录日志并忽略，不再在核心代码中硬编码各 mode 分支）。
-
-## Dependencies
-
-- 依赖 `app::AppState` 访问 core/ui/session 子系统
-- 依赖 `renderer` 进行过渡/动画更新
-- 依赖 `app_mode` 提供模式枚举与语义判定
+1. `update()` 先刷新 `UiContext` 与 `ToastManager`，再按当前 `AppMode` 分发。
+2. `modes.rs` 只保留模式相关逻辑；非 InGame 页面基本是 no-op，InGame 下负责 Normal/Auto/Skip、打字机与等待态输入。
+3. `tick_ingame_shared()` 在模式分发后统一推进背景/场景过渡、WaitForTime、scene effect、title card、video 与动画清理。
+4. `script.rs` 负责 Runtime tick、`Command` 执行、`RequestUI` 路由、cutscene 启停与结束信号回传。
+5. 音频 `update(dt)` 在所有模式下统一放在 `update()` 末尾推进。
 
 ## Invariants
 
-- 每帧只有一个 `AppMode` 分支被执行，状态推进单向且确定。
-- InGame 共享更新逻辑与菜单模式更新逻辑分离，避免重复分支。
-
-## FailureModes
-
-- 模式分发缺失或条件错误，导致特定页面不响应输入。
-- 场景过渡和脚本推进顺序不一致，造成渲染与等待状态错位。
+- 每帧只执行一个 `AppMode` 分支；共享的 InGame 时间推进收敛在 `tick_ingame_shared()`。
+- `skip_all_active_effects()` 是 Skip 模式的统一收敛入口。
+- `RequestUI` 与 `Cutscene` 的上层编排在 `script.rs`，不在 `command_executor` 内完成。
 
 ## WhenToReadSource
 
-- 需要调整推进模式（Normal/Auto/Skip）行为时。
-- 需要排查“某模式下更新缺失/重复执行”问题时。
+- 需要修改 Normal/Auto/Skip 的推进语义时。
+- 需要排查等待态、scene signal 或 cutscene 恢复链路时。
+- 需要确认某个 UI mode / 小游戏请求在哪一帧被激活时。
 
 ## RelatedDocs
 
 - [host 总览](../host.md)
 - [app 摘要](app.md)
+- [command_executor 摘要](command-executor.md)
 - [renderer_scene_transition 摘要](renderer-scene-transition.md)
 
 ## LastVerified

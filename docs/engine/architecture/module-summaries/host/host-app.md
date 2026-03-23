@@ -2,40 +2,42 @@
 
 ## Purpose
 
-`host_app` 实现 winit `ApplicationHandler` trait，是窗口模式下的生命周期和帧循环入口。负责窗口创建、事件分发、egui UI 编排和每帧渲染驱动；无窗口回放路径则由 `host/src/headless.rs` 负责镜像执行同一套 `app::update` 与 UI 编排。
+`host_app` 是窗口模式入口，负责 winit 生命周期、每帧驱动、GPU 后端接线，以及小游戏 WebView 的窗口内集成。
 
 ## PublicSurface
 
 - 文件：`host/src/host_app.rs`
-- 相关入口：`host/src/headless.rs`
-- 关键类型：`HostApp`
-- `HostApp::new(config, event_stream_path)` 构造应用实例（字体在 `resumed` 中按 `config.default_font` 加载）
-- `ApplicationHandler::resumed` 创建窗口，初始化 `AppState`，再创建 GPU 后端并回填 `TextureContext`
-- `ApplicationHandler::window_event` 分发输入/调用 `app::update`/驱动 egui UI/提交渲染帧
+- 核心类型：`HostApp`
+- 关键接口：`HostApp::new`、`ApplicationHandler::{resumed, window_event, about_to_wait}`
+- 配套入口：`host/src/headless.rs`
 
 ## KeyFlow
 
-1. 窗口模式：`resumed` 创建 winit 窗口 -> 创建 `AppState` -> 读取默认字体 -> 初始化 `WgpuBackend` -> 设置 GPU 资源上下文
-2. 窗口模式：`window_event(RedrawRequested)` 首帧加载资源/脚本 -> 每帧 `update` -> 构建 sprite draw commands -> egui UI 渲染（若 UI 模式活跃：`ui_mode_registry.take_active()` 取出 handler，`UiModeHandler::render()`；若返回 `Completed`/`Cancelled` 则 `complete_active()` 并向 runtime 注入 `RuntimeInput::UIResult`，否则 `restore_active()` 归还以便下一帧继续）-> 处理 `EguiAction` -> 提交帧
-3. Headless 模式：`headless::run` 加载 replay -> 以固定步长执行 `app::update` -> 运行 CPU-only egui -> 处理 `EguiAction`
-4. 小游戏启动时创建 `BridgeServer`（HTTP 服务器），通过 HTTP URL 加载 WebView；`about_to_wait` 每帧轮询 `bridge.poll()` 处理 HTTP 请求和游戏完成检测
-
-## Dependencies
-
-- `host::app`（`AppState`、`update`、`build_game_draw_commands` 等）
-- `host::game_mode::BridgeServer`
-- `host::backend::WgpuBackend`
-- `egui_actions`、`egui_screens`
+1. `resumed()` 创建窗口，构造 `AppState`，读取默认字体，初始化 `WgpuBackend`，并把 `TextureContext` 回填给 `ResourceManager`。
+2. `window_event(RedrawRequested)` 首帧延迟加载资源、脚本与 UI 素材；其后每帧执行 `app::update()`、补齐渲染资源、生成 draw commands。
+3. UI 帧构建已抽到 `build_ui::build_frame_ui()`，窗口模式与 `headless` 共用；`host_app` 只负责调度、消费 `EguiAction`、确认弹窗与缩略图截图。
+4. 若有活跃 `UiModeHandler`，本帧先 `take_active()` 渲染，再按结果 `restore_active()` 或 `complete_active()`，并在完成时注入 `RuntimeInput::UIResult`。
+5. `about_to_wait()` 轮询小游戏 `BridgeServer`，在 WebView 完成后回传结果并请求重绘。
 
 ## Invariants
 
-- `HostApp` 只负责窗口模式；headless 路径不经过该类型
-- `backend` 和 `app_state` 在 `resumed` 后才初始化（均为 `Option`）
-- 小游戏活跃期间 `about_to_wait` 通过 `request_redraw()` 保持事件循环轮转，确保 HTTP 请求及时响应
+- `backend` 与 `app_state` 只在 `resumed()` 之后有效。
+- 窗口模式的 UI 构建应复用 `build_ui`，避免与 `headless` 分叉。
+- 小游戏轮询放在 `about_to_wait()`，避免依赖 `RedrawRequested` 才能处理 HTTP 请求。
 
 ## WhenToReadSource
 
-- 需要修改窗口创建参数、事件处理流程或帧循环编排时
+- 需要修改窗口创建参数、帧循环顺序或截图保存时。
+- 需要排查小游戏 WebView 生命周期、UI mode 渲染或确认弹窗处理时。
+- 需要比较 windowed 与 `headless` 的 UI 调度差异时。
+
+## RelatedDocs
+
+- [host 总览](../host.md)
+- [app 摘要](app.md)
+- [egui_actions 摘要](egui-actions.md)
+- [egui_screens 摘要](egui-screens.md)
+- [game_mode 摘要](game-mode.md)
 
 ## LastVerified
 
@@ -43,4 +45,4 @@
 
 ## Owner
 
-claude-4.6-opus
+GPT-5.4

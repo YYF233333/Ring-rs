@@ -2,20 +2,20 @@
 
 ## Purpose
 
-`renderer/scene_transition` 管理 `changeScene` 的多阶段过渡（Fade/FadeWhite/Rule），并通过动画系统驱动遮罩与 UI 透明度。
+`renderer/scene_transition` 专管 `changeScene` 的多阶段转场。它把 Fade/FadeWhite/Rule 统一建模为状态机，并用动画系统驱动遮罩属性与 `ui_alpha`。
 
 ## PublicSurface
 
 - 模块入口：`host/src/renderer/scene_transition/mod.rs`
 - 核心类型：`SceneTransitionManager`、`SceneTransitionType`、`SceneTransitionPhase`
-- 关键能力：`start_*`、`update`、`is_at_midpoint`、`skip_current_phase`、`skip_to_end`
+- 关键接口：`start_*`、`update`、`is_at_midpoint`、`skip_current_phase`、`skip_to_end`
 
 ## KeyFlow
 
-1. 调用 `start_fade/start_fade_white/start_rule` 建立过渡上下文与待切背景。
-2. 状态机按阶段推进：`FadeIn -> (Blackout) -> FadeOut -> UIFadeIn -> Completed`。
-3. 中点阶段通过 `is_at_midpoint` 触发背景切换，保证时机唯一。
-4. Skip 路径可按阶段跳过，或 `skip_to_end` 一次完成并返回待切背景。
+1. `start_*` 记录待切背景并启动 `FadeIn`。
+2. 状态机推进为 `FadeIn -> (Blackout) -> FadeOut -> UIFadeIn -> Completed`。
+3. 调用方在 `is_at_midpoint()` 为真时取走 `pending_background` 完成背景切换。
+4. Skip 既可跳当前阶段，也可 `skip_to_end()` 直接返回待切背景。
 
 ## Dependencies
 
@@ -45,8 +45,8 @@
 
 ## LastVerified
 
-2026-03-18
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4

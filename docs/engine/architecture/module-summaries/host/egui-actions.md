@@ -2,42 +2,42 @@
 
 ## Purpose
 
-定义 `EguiAction` 枚举及其处理函数，将 egui UI 层的交互意图与 `AppState` 的状态变更解耦。
+`egui_actions` 定义 egui 层对应用层的动作协议，把页面构建与实际副作用处理解耦。
 
 ## PublicSurface
 
 - 文件：`host/src/egui_actions.rs`
-- `EguiAction` 枚举：`None`、`StartGame`、`StartAtLabel(String)`、`ContinueGame`、`NavigateTo`、`ReplaceTo`、`GoBack`、`ReturnToGame`、`ReturnToTitle`、`Exit`、`ApplySettings`、`OpenSave`、`OpenLoad`、`SaveToSlot`、`LoadFromSlot`、`DeleteSlot`、`QuickSave`、`QuickLoad`、`ToggleSkip`、`ToggleAuto`、`ShowConfirm { message, on_confirm }`
-- `handle_egui_action(app_state, action, save_load_tab, event_loop)` 消费 `EguiAction` 并执行对应状态变更
-- `action_def_to_egui(action: &ActionDef) -> EguiAction` 将声明式 `ActionDef` 转换为 `EguiAction`
-- `button_def_to_egui(button: &ButtonDef) -> EguiAction` 转换含 confirm 包装的按钮动作
-- 注：`StartWinter` 已泛化为 `StartAtLabel(String)`（RFC-012）
+- 核心类型：`EguiAction`
+- 关键接口：`handle_egui_action`、`action_def_to_egui`、`button_def_to_egui`
 
 ## KeyFlow
 
-1. `egui_screens` 中的 UI 构建函数返回 `EguiAction`
-2. `host_app` 拦截 `ShowConfirm` 变体，弹出确认对话框；用户确认后转发内嵌的 `on_confirm` 动作
-3. 其余动作由 `handle_egui_action` 翻译为 `AppState` 操作（导航、存档、设置保存等）
-
-## Dependencies
-
-- `host::app`（`AppState`、存档/加载/重启函数）
-- `winit::event_loop::ActiveEventLoop`（用于 `Exit` 动作）
+1. `egui_screens` 与 `build_ui` 只返回 `EguiAction`，不直接改 `AppState`。
+2. `action_def_to_egui` / `button_def_to_egui` 把 `ScreenDefinitions` 中的声明式动作转换为运行时动作，并在按钮层包上 `ShowConfirm`。
+3. `handle_egui_action` 统一处理导航、开局/继续、存读档、设置保存、播放模式切换与退出。
 
 ## Invariants
 
-- `EguiAction` 是 UI 层到应用层的单向通信通道
-- 所有 UI 交互副作用集中在 `handle_egui_action` 中处理
+- UI 副作用集中在 `handle_egui_action`，页面构建函数保持纯 UI。
+- `ShowConfirm` 必须由调用方先拦截；直接传入 `handle_egui_action` 属于错误用法。
+- `StartAtLabel(String)` 是当前通用的“从指定标签开始”入口。
 
 ## WhenToReadSource
 
-- 需要添加新的 UI 交互动作时
-- 需要修改现有动作的副作用逻辑时
+- 需要新增 UI 动作或修改某个动作的副作用时。
+- 需要排查按钮配置到 `AppState` 状态变更的映射时。
+- 需要确认哪些动作必须经过确认弹窗包装时。
+
+## RelatedDocs
+
+- [host_app 摘要](host-app.md)
+- [egui_screens 摘要](egui-screens.md)
+- [ui 摘要](ui.md)
 
 ## LastVerified
 
-2026-03-18
+2026-03-24
 
 ## Owner
 
-Composer
+GPT-5.4
