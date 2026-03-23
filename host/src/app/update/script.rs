@@ -222,46 +222,19 @@ pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
                                     params: params.clone(),
                                 });
                         }
-                    } else if mode == "show_map"
-                        && let Some(map_id) = params.get("map_id").and_then(|v| {
-                            if let vn_runtime::state::VarValue::String(s) = v {
-                                Some(s.as_str())
-                            } else {
-                                None
-                            }
-                        })
-                    {
-                        let map_path = format!("maps/{}.json", map_id);
-                        let logical = LogicalPath::new(&map_path);
-                        match app_state.core.resource_manager.read_text(&logical) {
-                            Ok(json_text) => {
-                                match serde_json::from_str::<crate::ui::map::MapDefinition>(
-                                    &json_text,
-                                ) {
-                                    Ok(definition) => {
-                                        let map_state = crate::ui::map::MapDisplayState::new(
-                                            definition,
-                                            key.clone(),
-                                        );
-                                        app_state.core.render_state.map_display = Some(map_state);
-                                        debug!(map_id, "地图加载成功");
-                                    }
-                                    Err(e) => {
-                                        warn!(
-                                            map_id,
-                                            error = %e,
-                                            "地图 JSON 解析失败"
-                                        );
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                warn!(
-                                    map_id,
-                                    error = %e,
-                                    "地图文件加载失败"
-                                );
-                            }
+                    } else {
+                        // 通过 UiModeRegistry 路由其他 UI 模式
+                        if let Err(e) = app_state.ui_mode_registry.activate(
+                            mode,
+                            key.clone(),
+                            params,
+                            &app_state.core.resource_manager,
+                        ) {
+                            warn!(
+                                mode = mode,
+                                error = %e,
+                                "UI 模式激活失败"
+                            );
                         }
                     }
                     continue;

@@ -30,7 +30,6 @@
 - `extend_dialogue` 追加文本时自动偏移新增内联效果的位置索引。
 - `text_mode: TextMode` 字段控制 ADV/NVL 渲染模式。
 - `nvl_entries: Vec<NvlEntry>` 累积 NVL 对话行。
-- `map_display: Option<MapDisplayState>` 持有当前地图叠层状态。
 
 ## FailureModes
 
@@ -49,7 +48,7 @@
 
 ## LastVerified
 
-2026-03-21
+2026-03-24
 
 ## Owner
 

@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-022
-- 状态：Proposed
+- 状态：Implemented
 - 作者：claude-4.6-opus
 - 日期：2026-03-23
 - 相关范围：`host`（ui_modes / app / ui / host_app / build_ui）
@@ -366,15 +366,15 @@ fn hit_test(&self, base_x: f32, base_y: f32) -> Option<usize> {
 
 ## 验收标准
 
-- [ ] UiModeHandler trait 定义完整
-- [ ] UiModeRegistry 支持 register / activate / render / cancel
-- [ ] MapModeHandler 正确加载背景 + 掩码图
-- [ ] 颜色掩码命中检测准确（含透明区域跳过）
-- [ ] 地图 UI 正确渲染（背景 + 悬停标签 + 禁用状态灰显）
-- [ ] 点击返回正确的 location.id 作为 UIResult
-- [ ] Esc 取消返回空字符串
-- [ ] 无 hit_mask 时回退到坐标矩形检测（向后兼容）
-- [ ] script.rs 中 show_map 不再硬编码（通过 registry 路由）
-- [ ] render_state 中 map_display 字段移除
-- [ ] `cargo check-all` 通过
-- [ ] 模块摘要文档更新
+- [x] UiModeHandler trait 定义完整
+- [x] UiModeRegistry 支持 register / activate / render / cancel
+- [x] MapModeHandler 正确加载背景 + 掩码图
+- [x] 颜色掩码命中检测准确（含透明区域跳过）
+- [x] 地图 UI 正确渲染（背景 + 悬停标签 + 禁用状态灰显）
+- [x] 点击返回正确的 location.id 作为 UIResult
+- [x] Esc 取消返回空字符串
+- [x] 无 hit_mask 时回退到坐标矩形检测（向后兼容）
+- [x] script.rs 中 show_map 不再硬编码（通过 registry 路由）
+- [x] render_state 中 map_display 字段移除
+- [x] `cargo check-all` 通过
+- [x] 模块摘要文档更新

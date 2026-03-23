@@ -37,6 +37,7 @@ pub mod rendering_types;
 pub mod resources;
 pub mod save_manager;
 pub mod ui;
+pub mod ui_modes;
 pub mod video;
 
 #[cfg(test)]
@@ -64,6 +65,7 @@ pub use resources::{
     CacheStats, LogicalPath, ResourceError, ResourceManager, ResourceSource, TextureCache,
 };
 pub use save_manager::SaveManager;
+pub use ui_modes::{UiModeError, UiModeHandler, UiModeRegistry, UiModeStatus};
 
 // 子系统容器类型
 pub use app::{CoreSystems, GameSession, UiSystems};

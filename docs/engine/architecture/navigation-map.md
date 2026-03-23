@@ -149,6 +149,7 @@
   - **VideoAudio**：`host/src/video/audio.rs`（FFmpeg 子进程音频提取与样本缓冲；实际播放由 `app/update/modes.rs` 调用 `AudioManager::play_video_audio()`）
 - **音频系统**：`host/src/audio/`（mod.rs: 结构/音量/duck; playback.rs: BGM/SFX 播放与淡入淡出）
 - **UI 基础设施**：`host/src/ui/`（layout/asset_cache/nine_patch/image_slider/toast/render_context/screen_defs）。定制指南见 `docs/engine/ui/ui-customization.md`
+- **UI 模式插件系统**：`host/src/ui_modes/`（UiModeHandler trait、UiModeRegistry、MapModeHandler）
 - **输入（winit 事件驱动）**：`host/src/input/`（`mod.rs`：`InputManager` 编排；`state.rs`：键鼠状态、防抖、长按；`choice_navigator.rs`：选择分支导航；`recording.rs`：录制/回放不变）
 - **事件流（结构化调试输出）**：`host/src/event_stream/`（`EngineEvent` + `EventStream`；便捷方法如 `on_script_tick`、`on_command_produced`、`on_command_executed`、`on_state_changed`、`on_input_received`、`on_transition_update`、`on_audio_event`）
 - **Headless 测试模式**：`host/src/headless.rs`（无窗口回放循环；主循环调用 `app::update(app_state, dt)`，与 GUI 共用每帧更新路径）

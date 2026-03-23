@@ -42,6 +42,7 @@
    - [host_app](../engine/architecture/module-summaries/host/host-app.md)
    - [egui_actions](../engine/architecture/module-summaries/host/egui-actions.md)
    - [egui_screens](../engine/architecture/module-summaries/host/egui-screens.md)
+   - [ui_modes](../engine/architecture/module-summaries/host/ui-modes.md)
 - [仓库导航地图](../engine/architecture/navigation-map.md)
 - [经验沉淀（Lessons Learned）](lessons-learned.md)
 - 仅当需要实现细节时再读源码

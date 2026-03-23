@@ -10,7 +10,9 @@ use crate::egui_actions::EguiAction;
 use crate::egui_screens;
 use crate::egui_screens::confirm::ConfirmDialog;
 use crate::save_manager::SaveInfo;
+use crate::ui_modes::{ActiveUiMode, UiModeStatus};
 use crate::{AppMode, PlaybackMode, SaveLoadPage, SaveLoadTab, UiRenderContext, UserSettings};
+use vn_runtime::state::VarValue;
 
 /// UI 帧构建所需的跨帧持久状态
 pub struct UiFrameState {
@@ -120,4 +122,19 @@ pub fn build_frame_ui(
     egui_screens::toast::build_toast_overlay(ctx, &app_state.ui.toast_manager, ui_ctx);
 
     (action, confirm_resolved)
+}
+
+/// 渲染活跃的 UI 模式，返回完成结果（如有）
+///
+/// 在 egui context 内调用。调用方负责管理 `ActiveUiMode` 的 take/restore 生命周期。
+pub fn render_active_ui_mode(
+    ctx: &egui::Context,
+    active: &mut ActiveUiMode,
+    scale: &crate::ui::layout::ScaleContext,
+) -> Option<(String, VarValue)> {
+    match active.handler.render(ctx, scale) {
+        UiModeStatus::Active => None,
+        UiModeStatus::Completed(value) => Some((active.key.clone(), value)),
+        UiModeStatus::Cancelled => Some((active.key.clone(), VarValue::String(String::new()))),
+    }
 }

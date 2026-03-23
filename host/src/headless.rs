@@ -19,7 +19,7 @@ use crate::AppMode;
 use crate::LogicalPath;
 use crate::app::{self, AppInit, AppState};
 use crate::backend::configure_egui_fonts;
-use crate::build_ui::{UiFrameState, build_frame_ui};
+use crate::build_ui::{UiFrameState, build_frame_ui, render_active_ui_mode};
 use crate::egui_actions::{self, EguiAction};
 use crate::egui_screens;
 use crate::input::recording::{InputEvent, InputReplayer, MouseButtonName};
@@ -344,7 +344,12 @@ fn headless_loop(
 
         let mut ui_action = EguiAction::None;
         let mut confirm_resolved = false;
+        let mut taken_ui_mode = app_state.ui_mode_registry.take_active();
+        let mut ui_mode_result: Option<(String, vn_runtime::state::VarValue)> = None;
         let _full_output = egui.ctx.run(raw_input, |ctx| {
+            if let Some(ref mut active) = taken_ui_mode {
+                ui_mode_result = render_active_ui_mode(ctx, active, ui_ctx.scale);
+            }
             let (action, resolved) = build_frame_ui(
                 ctx,
                 app_state,
@@ -355,6 +360,23 @@ fn headless_loop(
             ui_action = action;
             confirm_resolved = resolved;
         });
+
+        // 归还或完成 UI 模式
+        if let Some(active) = taken_ui_mode {
+            if ui_mode_result.is_some() {
+                app_state.ui_mode_registry.complete_active(active);
+            } else {
+                app_state.ui_mode_registry.restore_active(active);
+            }
+        }
+
+        // 处理 UI 模式完成结果
+        if let Some((key, value)) = ui_mode_result {
+            use vn_runtime::input::RuntimeInput;
+            app_state
+                .input_manager
+                .inject_input(RuntimeInput::ui_result(key, value));
+        }
 
         if confirm_resolved {
             ui_frame_state.pending_confirm = None;

@@ -16,7 +16,7 @@
 ## KeyFlow
 
 1. 窗口模式：`resumed` 创建 winit 窗口 -> 创建 `AppState` -> 读取默认字体 -> 初始化 `WgpuBackend` -> 设置 GPU 资源上下文
-2. 窗口模式：`window_event(RedrawRequested)` 首帧加载资源/脚本 -> 每帧 `update` -> 构建 sprite draw commands -> egui UI 渲染 -> 处理 `EguiAction` -> 提交帧
+2. 窗口模式：`window_event(RedrawRequested)` 首帧加载资源/脚本 -> 每帧 `update` -> 构建 sprite draw commands -> egui UI 渲染（若 UI 模式活跃：`ui_mode_registry.take_active()` 取出 handler，`UiModeHandler::render()`；若返回 `Completed`/`Cancelled` 则 `complete_active()` 并向 runtime 注入 `RuntimeInput::UIResult`，否则 `restore_active()` 归还以便下一帧继续）-> 处理 `EguiAction` -> 提交帧
 3. Headless 模式：`headless::run` 加载 replay -> 以固定步长执行 `app::update` -> 运行 CPU-only egui -> 处理 `EguiAction`
 4. 小游戏启动时创建 `BridgeServer`（HTTP 服务器），通过 HTTP URL 加载 WebView；`about_to_wait` 每帧轮询 `bridge.poll()` 处理 HTTP 请求和游戏完成检测
 
@@ -39,7 +39,7 @@
 
 ## LastVerified
 
-2026-03-23
+2026-03-24
 
 ## Owner
 

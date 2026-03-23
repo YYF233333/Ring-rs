@@ -40,6 +40,7 @@ use crate::renderer::ObjectId;
 use crate::renderer::{AnimationSystem, RenderState, Renderer};
 use crate::resources::ResourceManager;
 use crate::ui::{ScreenDefinitions, ToastManager, UiAssetCache, UiContext, UiLayoutConfig};
+use crate::ui_modes::UiModeRegistry;
 use crate::video::VideoPlayer;
 use crate::{AppConfig, AudioManager, CommandExecutor, InputManager};
 use std::collections::HashMap;
@@ -182,6 +183,9 @@ pub struct AppState {
 
     /// 待启动的小游戏请求（script.rs 设置，host_app.rs 消费）
     pub pending_game_launch: Option<crate::game_mode::PendingGameLaunch>,
+
+    /// UI 模式注册表（管理 show_map 等自定义 UI 模式）
+    pub ui_mode_registry: UiModeRegistry,
 }
 
 impl AppState {
@@ -267,6 +271,11 @@ impl AppState {
             loading_complete: false,
             event_stream,
             pending_game_launch: None,
+            ui_mode_registry: {
+                let mut registry = UiModeRegistry::new();
+                registry.register(Box::new(crate::ui_modes::map_handler::MapModeHandler::new()));
+                registry
+            },
         }
     }
 }

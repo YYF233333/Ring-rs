@@ -37,11 +37,6 @@ pub enum EguiAction {
         message: String,
         on_confirm: Box<EguiAction>,
     },
-    /// 地图位置选择（注入 UIResult 到 InputManager）
-    MapLocationSelected {
-        request_key: String,
-        location_id: String,
-    },
 }
 
 pub fn handle_egui_action(
@@ -176,20 +171,6 @@ pub fn handle_egui_action(
         }
         EguiAction::ShowConfirm { .. } => {
             unreachable!("ShowConfirm must be intercepted by the caller before handle_egui_action")
-        }
-        EguiAction::MapLocationSelected {
-            request_key,
-            location_id,
-        } => {
-            use vn_runtime::input::RuntimeInput;
-            use vn_runtime::state::VarValue;
-            app_state
-                .input_manager
-                .inject_input(RuntimeInput::ui_result(
-                    request_key,
-                    VarValue::String(location_id),
-                ));
-            app_state.core.render_state.map_display = None;
         }
     }
 }

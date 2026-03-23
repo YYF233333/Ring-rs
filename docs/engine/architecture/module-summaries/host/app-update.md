@@ -18,6 +18,7 @@
 3. InGame 下 `update_ingame` 内调 `update_ingame_common`（输入与推进模式分支）；`tick_ingame_shared` 统一推进背景/场景过渡、信号检测、动画系统、章节标记与淡出清理（均由 `update()` 编排，含 headless）。脚本相关 `RuntimeInput` 由 `handle_script_mode_input` 消费；`InputReceived` 事件流在该函数内通过 `event_stream.on_input_received` 发出（不再散落在其他更新路径）。
 4. 打字机更新：检测 `inline_wait`（定时递减 / 点击等待暂停）、按 `effective_text_speed` 推进字符、`no_wait` 完成后自动触发 Click。
 5. 最后统一更新音频管理器状态，保证各模式音频一致推进。
+6. `script.rs` 处理 `Command::RequestUI`：`call_game` 仍走 WebView 独立路径；其余 `mode` 通过 `AppState` 的 `ui_mode_registry.activate()` 路由到已注册的 `UiModeHandler`（激活失败则记录日志并忽略，不再在核心代码中硬编码各 mode 分支）。
 
 ## Dependencies
 
@@ -48,7 +49,7 @@
 
 ## LastVerified
 
-2026-03-21
+2026-03-24
 
 ## Owner
 
