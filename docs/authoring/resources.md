@@ -309,6 +309,38 @@ trait ResourceSource {
 
 ---
 
+## 多模态资源命名空间
+
+> RFC-025：为 Hub 多模态架构预留资源目录约定。
+
+当前 VN 模式的资源使用顶层目录（`backgrounds/`、`characters/`、`scripts/` 等），这些路径不含 mode 前缀。
+
+将来引入新 mode（如卡牌对战、地图探索）时，各 mode 应将自身资源放在 `modes/<mode_name>/` 命名空间下，避免与 VN 资源路径冲突。
+
+### 约定
+
+```
+assets/
+├── backgrounds/      # VN 资源（沿用现有约定）
+├── characters/
+├── scripts/
+├── bgm/
+├── sfx/
+├── modes/            # mode-specific 资源根
+│   ├── card_battle/  # 卡牌对战 mode 的资源
+│   │   ├── cards/
+│   │   └── ui/
+│   └── map_explore/  # 地图探索 mode 的资源
+│       ├── tiles/
+│       └── markers/
+```
+
+- `LogicalPath` 对 `modes/` 前缀无特殊处理，与其他路径一致。
+- 各 mode 在 `modes/<mode_name>/` 下自由组织子目录结构。
+- VN 资源保持现有顶层目录结构不变，无需迁移。
+
+---
+
 ## 最佳实践
 
 1. **资源组织**：保持清晰的目录结构，便于管理和打包

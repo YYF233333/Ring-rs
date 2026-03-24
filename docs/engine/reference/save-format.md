@@ -81,7 +81,8 @@ saves/
   "history": {
     "events": [...],
     "max_events": 1000
-  }
+  },
+  "mode_data": {}
 }
 ```
 
@@ -164,6 +165,21 @@ Runtime 的核心状态。
 |------|------|------|
 | `events` | array | 历史事件列表 |
 | `max_events` | number | 最大事件数 |
+
+### mode_data（可选）
+
+模态扩展数据，供非 VN mode（如卡牌对战、地图探索等）存储自身状态。VN 纯模式下此字段为空对象或不存在。
+
+- **类型**：`object`（键为 mode 标识字符串，值为该 mode 自定义的 JSON 对象）
+- **默认**：空对象 `{}`
+- **序列化**：为空时不写入 JSON（`skip_serializing_if`）
+- **兼容性**：旧存档不含此字段时，反序列化自动填充为空（`serde(default)`）
+
+```json
+"mode_data": {
+  "card_battle": { "deck": ["fire", "ice"], "score": 42 }
+}
+```
 
 ## 历史事件类型
 

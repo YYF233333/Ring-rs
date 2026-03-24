@@ -265,6 +265,10 @@ impl AppMode {
 }
 
 /// 玩家设置（与 config.json 分离，保存玩家偏好）
+///
+/// 当前包含通用音频/显示偏好和 VN 模态专属设置。
+/// VN-specific 字段（`text_speed`、`auto_delay`）将来引入多模态时，
+/// 可迁移至 mode-specific 的设置结构体（参见 RFC-025）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSettings {
     /// BGM 音量 (0.0 - 1.0)
@@ -275,9 +279,9 @@ pub struct UserSettings {
     pub muted: bool,
     /// 是否全屏
     pub fullscreen: bool,
-    /// 文字速度（每秒字符数）
+    /// 文字速度（每秒字符数）— VN-specific
     pub text_speed: f32,
-    /// 自动播放延迟（秒）
+    /// 自动播放延迟（秒）— VN-specific
     pub auto_delay: f32,
 }
 

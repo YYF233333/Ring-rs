@@ -150,6 +150,9 @@ impl InputManager {
     }
 
     /// 根据当前的 `WaitingReason` 将输入状态转换为 RuntimeInput
+    ///
+    /// 注意：当前方法的输入转换逻辑（WaitingReason → RuntimeInput）是 VN-specific 的，
+    /// 将在 RFC-026（mode 拆分）中迁移至 vn_mode 层，InputManager 只保留低层事件采集。
     pub fn update(&mut self, waiting: &WaitingReason, dt: f32) -> Option<RuntimeInput> {
         if let Some(input) = self.pending_input.take() {
             return Some(input);

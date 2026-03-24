@@ -44,10 +44,10 @@
 | RFC-019 | Headless 测试模式 | `rfc-headless-testing-mode.md` | Accepted |
 | RFC-020 | 双向 UI-Script 通信协议 | `rfc-bidirectional-ui-script-communication.md` | Accepted |
 | RFC-021 | WebView 小游戏集成 | `rfc-webview-minigame-integration.md` | Accepted |
-| RFC-022 | UI Mode Plugin System | `rfc-ui-mode-plugin-system.md` | Implemented |
+| RFC-022 | UI Mode Plugin System | `rfc-ui-mode-plugin-system.md` | Accepted |
 | RFC-023 | HTTP Bridge API | `rfc-http-bridge-api.md` | Accepted |
 | RFC-024 | VN+ Hub 架构愿景 | `rfc-vnplus-hub-architecture.md` | Proposed |
-| RFC-025 | 共享服务层提取 | `rfc-shared-services-extraction.md` | Proposed |
+| RFC-025 | 共享服务层提取 | `rfc-shared-services-extraction.md` | Accepted |
 | RFC-026 | 统一 Game Mode 框架 | `rfc-unified-game-mode-framework.md` | Proposed |
 | RFC-027 | 玩法脚本层集成 | `rfc-gameplay-scripting-layer.md` | Proposed |
 | RFC-028 | 脚本预览编辑器 | `rfc-script-preview-editor.md` | Proposed |

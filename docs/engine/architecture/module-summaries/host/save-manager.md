@@ -20,7 +20,7 @@
 
 ## Dependencies
 
-- 依赖 `vn_runtime::{SaveData, SaveError}`
+- 依赖 `vn_runtime::{SaveData, SaveError}`；`SaveData` 现包含 `mode_data` 扩展字段（RFC-025）
 - 被 `app/save` 与相关页面（存档/读档）消费
 - 持久化变量的磁盘读写由 `host/src/app/persistent.rs` 中的 `PersistentStore` 负责，属于应用层配套子系统，而非 `save_manager` 自身 API
 
@@ -51,4 +51,4 @@
 
 ## Owner
 
-GPT-5.4
+claude-4.6-opus

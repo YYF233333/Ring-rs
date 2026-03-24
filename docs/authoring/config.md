@@ -199,6 +199,37 @@
   - `zip_path` 指向的文件必须存在
 - 音量字段必须在 0.0~1.0
 
+## 字段归属分类
+
+> RFC-025：为 Hub 多模态架构准备，标注各配置字段是全局共享还是 VN 模态专属。
+
+### 全局配置（任何 mode 共用）
+
+以下字段属于通用宿主/应用层配置，不绑定 VN 语义：
+
+- **AppConfig**：`name`、`assets_root`、`saves_dir`、`asset_source`、`zip_path`
+- **WindowConfig**（全部）：`width`、`height`、`title`、`fullscreen`
+- **AudioConfig**（全部）：`master_volume`、`bgm_volume`、`sfx_volume`、`muted`
+- **ResourceConfig**（全部）：`texture_cache_size_mb`
+- **DebugConfig**（全部）：`script_check`、`log_level`、`log_file`、`recording_buffer_size_mb`、`recording_output_dir`
+
+### VN 工程约定（当前仅 VN 使用）
+
+以下字段与 VN 工程结构强相关，但作为「入口/布局配置」模式本身是通用的：
+
+- **AppConfig**：`start_script_path`（入口脚本）、`manifest_path`（立绘布局）、`default_font`（默认字体）
+
+### 运行时用户设置（VN 模态专属）
+
+以下字段位于 `UserSettings`（`host/src/app/app_mode/mod.rs`），不在 `config.json` 中：
+
+- `text_speed`：文字速度（每秒字符数）
+- `auto_delay`：自动播放延迟（秒）
+
+这些字段仅在 VN 文字演出中有意义。将来引入新 mode 时，各 mode 可定义自己的 mode-specific 用户设置。
+
+---
+
 ## 常见问题
 
 ### Q：为什么 `assets_root` 只写 `"assets"`，脚本里的 `<img src>` 却能用 `../backgrounds/...`？

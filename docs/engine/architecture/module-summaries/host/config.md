@@ -28,6 +28,7 @@
 - 所有配置结构体使用 `#[serde(deny_unknown_fields)]` 拒绝未知字段。
 - `start_script_path` 必须有效，作为运行入口约束。
 - `impl Default` 存在，但正式加载路径不依赖它补齐缺失字段。
+- VN-specific 的运行时设置（text_speed、auto_delay）不在 AppConfig 中，而在 UserSettings（app_mode）中（参见 RFC-025 字段归属文档化）。
 
 ## FailureModes
 
@@ -54,4 +55,4 @@
 
 ## Owner
 
-GPT-5.4
+claude-4.6-opus

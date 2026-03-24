@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-025
-- 状态：Proposed
+- 状态：Accepted
 - 作者：claude-4.6-opus
 - 日期：2026-03-24
 - 影响范围：`host`（app/audio/resources/save_manager/config）
@@ -104,13 +104,13 @@ pub struct SaveData {
 
 每个耦合点独立判定，全部完成后本 RFC 标记为 Accepted：
 
-- [ ] SaveData 包含 `mode_data` 扩展字段，现有存档兼容性不受影响
-- [ ] AudioManager 的 public API 无 VN-specific 方法（已上移或重命名）
-- [ ] ResourceManager 目录命名空间策略文档化
-- [ ] Config 字段归属（全局 vs VN-specific）文档化
-- [ ] InputManager 的 VN-specific 转换逻辑标记待拆分（RFC-026 时执行）
-- [ ] `cargo check-all` 通过
-- [ ] 相关模块摘要更新
+- [x] SaveData 包含 `mode_data` 扩展字段，现有存档兼容性不受影响
+- [x] AudioManager 的 public API 无 VN-specific 方法（审查确认已中立，无需改动）
+- [x] ResourceManager 目录命名空间策略文档化
+- [x] Config 字段归属（全局 vs VN-specific）文档化
+- [x] InputManager 的 VN-specific 转换逻辑标记待拆分（RFC-026 时执行）
+- [x] `cargo check-all` 通过（876 tests passed）
+- [x] 相关模块摘要更新（save-manager、config）
 
 ---
 
