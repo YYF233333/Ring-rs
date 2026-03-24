@@ -17,7 +17,8 @@
 2. `inject_replay_events()` 供 `headless` 重放；物理事件更新输入状态，`UIResult` 直接注入待消费输入。
 3. `begin_frame()` / `end_frame()` 围住一帧的输入生命周期，保证 just-pressed、滚轮与位移状态按帧清空。
 4. `update(waiting, dt)` 根据当前 `WaitingReason` 选择点击、选项、时间等待或无输入分支。
-5. `inject_ui_result()` 只用于 WebView 等脱离物理输入管线的交互结果，并会同步录制到回放流。
+5. Backspace 用于快照回退：由 `modes.rs` 直接检测，不经过 `WaitingReason` 路由；`recording.rs` 的 `key_code_from_name` 已映射 Backspace，供录制/回放一致识别。
+6. `inject_ui_result()` 只用于 WebView 等脱离物理输入管线的交互结果，并会同步录制到回放流。
 
 ## Invariants
 
@@ -44,4 +45,4 @@
 
 ## Owner
 
-GPT-5.4
+claude-4.6-opus

@@ -126,6 +126,16 @@ pub fn handle_script_mode_input(app_state: &mut AppState, input: RuntimeInput) {
 
 /// 执行一次 VNRuntime tick
 pub fn run_script_tick(app_state: &mut AppState, input: Option<RuntimeInput>) {
+    // 在停止点推进前保存快照（WaitForClick / WaitForChoice）
+    if input.is_some()
+        && matches!(
+            app_state.session.waiting_reason,
+            WaitingReason::WaitForClick | WaitingReason::WaitForChoice { .. }
+        )
+    {
+        super::super::snapshot::capture_snapshot(app_state);
+    }
+
     // 如果是选择输入，先清除选择界面
     if let Some(RuntimeInput::ChoiceSelected { index }) = &input {
         debug!(choice = index + 1, "用户选择了选项");

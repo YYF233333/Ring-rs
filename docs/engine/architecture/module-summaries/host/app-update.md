@@ -13,9 +13,9 @@
 ## KeyFlow
 
 1. `update()` 先刷新 `UiContext` 与 `ToastManager`，再按当前 `AppMode` 分发。
-2. `modes.rs` 只保留模式相关逻辑；非 InGame 页面基本是 no-op，InGame 下负责 Normal/Auto/Skip、打字机与等待态输入。
+2. `modes.rs` 只保留模式相关逻辑；非 InGame 页面基本是 no-op，InGame 下负责 Normal/Auto/Skip、打字机与等待态输入。Backspace 在 ESC 等逻辑之前检测，调用 `snapshot::rollback` 做快照回退。
 3. `tick_ingame_shared()` 在模式分发后统一推进背景/场景过渡、WaitForTime、scene effect、title card、video 与动画清理。
-4. `script.rs` 负责 Runtime tick、`Command` 执行、`RequestUI` 路由、cutscene 启停与结束信号回传。
+4. `script.rs` 负责 Runtime tick、`Command` 执行、`RequestUI` 路由、cutscene 启停与结束信号回传；`run_script_tick` 在停止点推进前自动保存快照。
 5. 音频 `update(dt)` 在所有模式下统一放在 `update()` 末尾推进。
 
 ## Invariants
@@ -43,4 +43,4 @@
 
 ## Owner
 
-GPT-5.4
+claude-4.6-opus

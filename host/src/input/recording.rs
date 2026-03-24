@@ -361,6 +361,7 @@ fn key_code_from_name(name: &str) -> Option<KeyCode> {
         "KeyA" => Some(KeyCode::KeyA),
         "KeyW" => Some(KeyCode::KeyW),
         "KeyS" => Some(KeyCode::KeyS),
+        "Backspace" => Some(KeyCode::Backspace),
         "F8" => Some(KeyCode::F8),
         _ => None,
     }

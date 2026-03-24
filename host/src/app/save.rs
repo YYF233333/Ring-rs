@@ -171,6 +171,9 @@ pub fn restore_from_save_data(app_state: &mut AppState, save_data: vn_runtime::S
     app_state.session.waiting_reason = WaitingReason::WaitForClick;
     app_state.play_start_time = std::time::Instant::now(); // 重置开始时间
 
+    // 加载存档后清空快照栈（快照不持久化）
+    app_state.snapshot_stack.clear();
+
     true
 }
 
@@ -216,6 +219,7 @@ pub fn return_to_title_from_game(app_state: &mut AppState, should_save_continue:
     app_state.session.vn_runtime = None;
     app_state.core.render_state = RenderState::new();
     app_state.session.script_finished = false;
+    app_state.snapshot_stack.clear();
 
     // 返回标题
     app_state.ui.navigation.return_to_title();
@@ -241,6 +245,7 @@ fn start_new_game_inner(app_state: &mut AppState, jump_label: Option<&str>) {
         app_state.core.render_state = RenderState::new();
         app_state.session.script_finished = false;
         app_state.play_start_time = std::time::Instant::now();
+        app_state.snapshot_stack.clear();
 
         if let Some(ref mut runtime) = app_state.session.vn_runtime {
             runtime.state_mut().persistent_variables = app_state.persistent_store.variables.clone();

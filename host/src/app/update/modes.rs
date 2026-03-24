@@ -53,6 +53,15 @@ pub(super) fn update_ingame(app_state: &mut AppState, dt: f32) {
         return;
     }
 
+    // Backspace 回退到上一个停止点
+    if app_state
+        .input_manager
+        .is_key_just_pressed(KeyCode::Backspace)
+        && super::super::snapshot::rollback(app_state)
+    {
+        return;
+    }
+
     // ESC 打开系统菜单（同时退出 Auto/Skip 模式）
     if app_state.input_manager.is_key_just_pressed(KeyCode::Escape) {
         app_state.session.playback_mode = PlaybackMode::Normal;

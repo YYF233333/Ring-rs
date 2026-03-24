@@ -22,6 +22,7 @@ mod engine_services;
 pub mod init;
 mod save;
 mod script_loader;
+pub(crate) mod snapshot;
 mod update;
 
 pub use bootstrap::*;
@@ -186,6 +187,11 @@ pub struct AppState {
 
     /// UI 模式注册表（管理 show_map 等自定义 UI 模式）
     pub ui_mode_registry: UiModeRegistry,
+
+    /// 快照栈（每个停止点自动保存，用于 Backspace 回退和历史跳转）
+    ///
+    /// 不持久化到存档，加载存档或新开游戏后为空。
+    pub snapshot_stack: snapshot::SnapshotStack,
 }
 
 impl AppState {
@@ -276,6 +282,7 @@ impl AppState {
                 registry.register(Box::new(crate::ui_modes::map_handler::MapModeHandler::new()));
                 registry
             },
+            snapshot_stack: snapshot::SnapshotStack::new(),
         }
     }
 }
