@@ -41,22 +41,21 @@ defineExpose({ show });
 <style scoped>
 .toast-container {
   position: fixed;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: clamp(16px, 6vh, 72px);
+  right: 24px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   pointer-events: none;
 }
 
 .toast-item {
-  padding: 10px 24px;
-  border-radius: 8px;
+  padding: 8px 20px;
+  border-radius: 6px;
   font-family: var(--vn-font-body);
-  font-size: 14px;
+  font-size: clamp(11px, 0.8vw, 14px);
   color: #e0e0e0;
   backdrop-filter: blur(12px);
   pointer-events: auto;
@@ -79,10 +78,10 @@ defineExpose({ show });
 }
 .toast-enter-from {
   opacity: 0;
-  transform: translateY(-16px);
+  transform: translateX(16px);
 }
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateX(8px);
 }
 </style>

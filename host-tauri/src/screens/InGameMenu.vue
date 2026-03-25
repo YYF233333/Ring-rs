@@ -1,24 +1,57 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useConfirmDialog } from "../composables/useConfirmDialog";
+import { useScreens } from "../composables/useScreens";
+
 const emit = defineEmits<{
-  resume: [];
-  save: [];
-  load: [];
-  history: [];
-  settings: [];
-  title: [];
+  action: [action: string];
 }>();
+
+const { screens, isButtonVisible, actionId } = useScreens();
+const { ask: askConfirm } = useConfirmDialog();
+
+const buttons = computed(() => {
+  if (!screens.value) return fallbackButtons;
+  return screens.value.ingame_menu.buttons.filter(isButtonVisible);
+});
+
+const fallbackButtons = [
+  { label: "继续", action: "go_back" as string | { start_at_label: string } },
+  { label: "保存", action: "open_save" as string | { start_at_label: string } },
+  { label: "读取", action: "open_load" as string | { start_at_label: string } },
+  { label: "设置", action: "navigate_settings" as string | { start_at_label: string } },
+  { label: "历史", action: "navigate_history" as string | { start_at_label: string } },
+  {
+    label: "返回标题",
+    action: "return_to_title" as string | { start_at_label: string },
+    confirm: "确定返回标题画面？",
+  },
+  {
+    label: "退出",
+    action: "exit" as string | { start_at_label: string },
+    confirm: "确定退出游戏？",
+  },
+];
+
+async function onButtonClick(btn: (typeof fallbackButtons)[number]) {
+  if ("confirm" in btn && btn.confirm) {
+    const confirmed = await askConfirm("确认", btn.confirm);
+    if (!confirmed) return;
+  }
+  emit("action", actionId(btn.action));
+}
 </script>
 
 <template>
-  <div class="ingame-menu-overlay" @click.self="emit('resume')">
+  <div class="ingame-menu-overlay" @click.self="emit('action', 'go_back')">
     <nav class="ingame-menu">
-      <button class="igm-btn" @click="emit('resume')">Resume</button>
-      <button class="igm-btn" @click="emit('save')">Save</button>
-      <button class="igm-btn" @click="emit('load')">Load</button>
-      <button class="igm-btn" @click="emit('history')">History</button>
-      <button class="igm-btn" @click="emit('settings')">Settings</button>
-      <button class="igm-btn igm-btn-danger" @click="emit('title')">
-        Return to Title
+      <button
+        v-for="(btn, i) in buttons"
+        :key="i"
+        class="igm-btn"
+        @click="onButtonClick(btn)"
+      >
+        {{ btn.label }}
       </button>
     </nav>
   </div>
@@ -39,32 +72,28 @@ const emit = defineEmits<{
 .ingame-menu {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
 .igm-btn {
-  width: 220px;
-  padding: 12px 0;
-  background: rgba(255, 255, 255, 0.06);
+  width: clamp(180px, 14vw, 260px);
+  padding: 10px 0;
+  background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: #c0c0c0;
+  border-radius: 6px;
+  color: var(--vn-color-ui-text, #c0c0c0);
   font-family: var(--vn-font-body);
-  font-size: 15px;
+  font-size: clamp(13px, 1.1vw, 18px);
   letter-spacing: 2px;
   cursor: pointer;
   transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
 }
 
 .igm-btn:hover {
-  background: rgba(100, 140, 255, 0.15);
-  border-color: rgba(100, 140, 255, 0.3);
-  color: #e0e0e0;
-}
-
-.igm-btn-danger:hover {
-  background: rgba(200, 60, 60, 0.2);
-  border-color: rgba(200, 60, 60, 0.4);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--vn-color-hover, rgba(255, 153, 0, 0.4));
+  color: var(--vn-color-hover, #ff9900);
 }
 </style>

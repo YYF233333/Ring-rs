@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useTheme } from "../composables/useTheme";
 import type { DialogueState } from "../types/render-state";
 
 const props = defineProps<{
   dialogue: DialogueState | null;
   uiVisible: boolean;
 }>();
+
+const { asset } = useTheme();
+
+const textboxUrl = computed(() => asset("textbox"));
+const nameboxUrl = computed(() => asset("namebox"));
 
 const visibleText = computed(() => {
   if (!props.dialogue) return "";
@@ -20,9 +26,23 @@ const showIndicator = computed(() => {
 <template>
   <Transition name="dialogue-fade">
     <div v-if="dialogue && uiVisible" class="dialogue-box">
-      <div v-if="dialogue.speaker" class="speaker-label">
-        {{ dialogue.speaker }}
+      <img
+        v-if="textboxUrl"
+        class="textbox-bg"
+        :src="textboxUrl"
+        alt=""
+      />
+
+      <div v-if="dialogue.speaker" class="namebox-wrapper">
+        <img
+          v-if="nameboxUrl"
+          class="namebox-bg"
+          :src="nameboxUrl"
+          alt=""
+        />
+        <span class="speaker-label">{{ dialogue.speaker }}</span>
       </div>
+
       <div class="dialogue-content">
         <span class="dialogue-text">{{ visibleText }}</span>
         <span v-if="showIndicator" class="advance-indicator">▼</span>
@@ -33,42 +53,79 @@ const showIndicator = computed(() => {
 
 <style scoped>
 .dialogue-box {
-  --dialogue-bg: rgba(10, 10, 20, 0.85);
-  --dialogue-radius: 0.6vw;
-  --speaker-color: #f0c040;
-  --text-color: #eaeaea;
+  --text-color: var(--vn-color-text, #1a1a1a);
+  --speaker-color: var(--vn-color-hover, #f0c040);
   --font-size: clamp(14px, 1.6vw, 22px);
 
   position: absolute;
-  bottom: 3vh;
-  left: 10%;
-  width: 80%;
-  padding: 1.8vh 2.2vw;
-  background: var(--dialogue-bg);
-  border-radius: var(--dialogue-radius);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: clamp(150px, 25vh, 280px);
   z-index: 100;
 }
 
-.speaker-label {
+.textbox-bg {
   position: absolute;
-  top: -2.4vh;
-  left: 1.5vw;
-  padding: 0.3vh 1vw;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+/* Fallback when textbox image not available */
+.dialogue-box:not(:has(.textbox-bg)) {
+  background: rgba(10, 10, 20, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.namebox-wrapper {
+  position: absolute;
+  top: -2px;
+  left: 18%;
+  transform: translateY(-100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100px;
+  height: 36px;
+}
+
+.namebox-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+/* Fallback namebox */
+.namebox-wrapper:not(:has(.namebox-bg)) {
   background: rgba(10, 10, 20, 0.9);
-  border-radius: var(--dialogue-radius) var(--dialogue-radius) 0 0;
+  border-radius: 4px 4px 0 0;
+  padding: 0 16px;
+}
+
+.speaker-label {
+  position: relative;
+  z-index: 1;
   color: var(--speaker-color);
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.85);
   font-weight: 600;
   letter-spacing: 0.05em;
+  padding: 0 16px;
+  white-space: nowrap;
 }
 
 .dialogue-content {
+  position: relative;
+  z-index: 1;
   color: var(--text-color);
   font-size: var(--font-size);
   line-height: 1.7;
-  min-height: 3.4em;
+  min-height: 3em;
+  padding: 6vh 22% 2vh 22%;
 }
 
 .dialogue-text {

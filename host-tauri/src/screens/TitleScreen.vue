@@ -1,26 +1,85 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useConfirmDialog } from "../composables/useConfirmDialog";
+import { useScreens } from "../composables/useScreens";
+import { useTheme } from "../composables/useTheme";
+
 const emit = defineEmits<{
-  "new-game": [];
-  continue: [];
-  load: [];
-  settings: [];
-  quit: [];
+  action: [action: string];
 }>();
+
+const { screens, isButtonVisible, resolveConditionalAsset, actionId } = useScreens();
+const { asset } = useTheme();
+const { ask: askConfirm } = useConfirmDialog();
+
+const titleDef = computed(() => screens.value?.title);
+
+const backgroundUrl = computed(() => {
+  if (!titleDef.value) return undefined;
+  const key = resolveConditionalAsset(titleDef.value.background);
+  return key ? asset(key) : undefined;
+});
+
+const overlayUrl = computed(() => {
+  if (!titleDef.value) return undefined;
+  return asset(titleDef.value.overlay);
+});
+
+const visibleButtons = computed(() => {
+  if (!titleDef.value) return fallbackButtons;
+  return titleDef.value.buttons.filter(isButtonVisible);
+});
+
+const fallbackButtons = [
+  { label: "开始游戏", action: "start_game" as string | { start_at_label: string } },
+  { label: "继续游戏", action: "continue_game" as string | { start_at_label: string } },
+  { label: "读取存档", action: "open_load" as string | { start_at_label: string } },
+  { label: "设置", action: "navigate_settings" as string | { start_at_label: string } },
+  {
+    label: "退出",
+    action: "exit" as string | { start_at_label: string },
+    confirm: "确定退出游戏？",
+  },
+];
+
+async function onButtonClick(btn: (typeof fallbackButtons)[number]) {
+  if ("confirm" in btn && btn.confirm) {
+    const confirmed = await askConfirm("确认", btn.confirm);
+    if (!confirmed) return;
+  }
+  emit("action", actionId(btn.action));
+}
 </script>
 
 <template>
   <div class="title-screen">
-    <div class="title-area">
-      <h1 class="game-title">Ring Engine</h1>
-    </div>
+    <img
+      v-if="backgroundUrl"
+      class="title-bg"
+      :src="backgroundUrl"
+      alt=""
+    />
+    <div v-else class="title-bg title-bg--fallback" />
 
-    <nav class="menu-list">
-      <button class="menu-btn" @click="emit('new-game')">New Game</button>
-      <button class="menu-btn" @click="emit('continue')">Continue</button>
-      <button class="menu-btn" @click="emit('load')">Load</button>
-      <button class="menu-btn" @click="emit('settings')">Settings</button>
-      <button class="menu-btn" @click="emit('quit')">Quit</button>
-    </nav>
+    <img
+      v-if="overlayUrl"
+      class="title-overlay"
+      :src="overlayUrl"
+      alt=""
+    />
+
+    <div class="title-content">
+      <nav class="menu-list">
+        <button
+          v-for="(btn, i) in visibleButtons"
+          :key="i"
+          class="menu-btn"
+          @click="onButtonClick(btn)"
+        >
+          {{ btn.label }}
+        </button>
+      </nav>
+    </div>
 
     <div class="version-tag">v0.1.0</div>
   </div>
@@ -30,68 +89,84 @@ const emit = defineEmits<{
 .title-screen {
   width: 100%;
   height: 100%;
-  background: linear-gradient(160deg, #0d0d1a 0%, #1a1a2e 50%, #16213e 100%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   position: relative;
+  overflow: hidden;
 }
 
-.title-area {
-  margin-top: 22vh;
-  text-align: center;
+.title-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
 }
 
-.game-title {
-  font-family: var(--vn-font-display);
-  font-size: 56px;
-  font-weight: 300;
-  color: #e0e0e0;
-  letter-spacing: 12px;
-  margin: 0;
-  text-shadow: 0 0 40px rgba(120, 140, 255, 0.25);
+.title-bg--fallback {
+  background: linear-gradient(160deg, #0d0d1a 0%, #1a1a2e 50%, #16213e 100%);
+}
+
+.title-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.title-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-left: 5vw;
 }
 
 .menu-list {
-  margin-top: 8vh;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  align-items: center;
+  gap: 8px;
 }
 
 .menu-btn {
-  width: 240px;
-  padding: 12px 0;
-  background: rgba(255, 255, 255, 0.06);
+  width: clamp(180px, 14vw, 260px);
+  padding: 10px 0;
+  background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  color: #c0c0c0;
+  border-radius: 6px;
+  color: var(--vn-color-ui-text, #c0c0c0);
   font-family: var(--vn-font-body);
-  font-size: 16px;
+  font-size: clamp(13px, 1.1vw, 18px);
   letter-spacing: 2px;
   cursor: pointer;
   transition: all 0.25s ease;
+  text-align: center;
+  backdrop-filter: blur(4px);
 }
 
 .menu-btn:hover {
-  background: rgba(100, 140, 255, 0.15);
-  border-color: rgba(100, 140, 255, 0.3);
-  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--vn-color-hover, rgba(255, 153, 0, 0.4));
+  color: var(--vn-color-hover, #ff9900);
   transform: translateX(4px);
 }
 
 .menu-btn:active {
   transform: translateX(2px);
-  background: rgba(100, 140, 255, 0.25);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .version-tag {
   position: absolute;
-  bottom: 20px;
-  right: 28px;
+  bottom: 16px;
+  right: 20px;
+  z-index: 2;
   font-family: var(--vn-font-body);
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.2);
 }
 </style>

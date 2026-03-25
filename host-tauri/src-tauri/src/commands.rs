@@ -282,6 +282,59 @@ pub fn log_frontend(level: String, module: String, message: String, data: Option
     }
 }
 
+// ── UI 配置 ──────────────────────────────────────────────────────────────────
+
+/// 返回 screens.json 全文（按钮/动作/条件可见性定义）
+#[command]
+pub fn get_screen_definitions(state: State<AppState>) -> Result<serde_json::Value, String> {
+    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let rm = &inner.services().resources;
+    let path = crate::resources::LogicalPath::new("ui/screens.json");
+    let text = rm.read_text(&path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&text).map_err(|e| format!("screens.json 解析失败: {e}"))
+}
+
+/// 返回 layout.json 中的 assets（素材 key → 逻辑路径）和 colors 部分
+#[command]
+pub fn get_ui_assets(state: State<AppState>) -> Result<serde_json::Value, String> {
+    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let rm = &inner.services().resources;
+    let path = crate::resources::LogicalPath::new("ui/layout.json");
+    let text = rm.read_text(&path).map_err(|e| e.to_string())?;
+    let full: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("layout.json 解析失败: {e}"))?;
+    Ok(serde_json::json!({
+        "assets": full.get("assets").cloned().unwrap_or(serde_json::Value::Object(Default::default())),
+        "colors": full.get("colors").cloned().unwrap_or(serde_json::Value::Object(Default::default())),
+    }))
+}
+
+/// 返回 UI 条件求值上下文（screens.json 的 visible 条件所需）
+#[command]
+pub fn get_ui_condition_context(state: State<AppState>) -> Result<serde_json::Value, String> {
+    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let svc = inner.services();
+    let has_continue = svc.saves.has_continue();
+    let persistent: serde_json::Map<String, serde_json::Value> = inner
+        .persistent_store
+        .variables
+        .iter()
+        .filter_map(|(k, v)| {
+            let json_val = match v {
+                vn_runtime::state::VarValue::Bool(b) => serde_json::Value::Bool(*b),
+                vn_runtime::state::VarValue::Int(i) => serde_json::json!(*i),
+                vn_runtime::state::VarValue::Float(f) => serde_json::json!(*f),
+                vn_runtime::state::VarValue::String(s) => serde_json::Value::String(s.clone()),
+            };
+            Some((k.clone(), json_val))
+        })
+        .collect();
+    Ok(serde_json::json!({
+        "has_continue": has_continue,
+        "persistent": persistent,
+    }))
+}
+
 // ── 调试快照 ─────────────────────────────────────────────────────────────────
 
 /// 返回完整的内部状态快照（供 Agent 调试用）

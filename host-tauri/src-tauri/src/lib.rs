@@ -136,6 +136,9 @@ pub fn run() {
             commands::get_playback_mode,
             commands::frontend_connected,
             commands::log_frontend,
+            commands::get_screen_definitions,
+            commands::get_ui_assets,
+            commands::get_ui_condition_context,
             commands::debug_snapshot,
         ])
         .run(tauri::generate_context!())

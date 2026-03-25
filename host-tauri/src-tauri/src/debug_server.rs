@@ -299,6 +299,55 @@ fn dispatch(
             Ok(serde_json::Value::Null)
         }
 
+        "get_screen_definitions" => {
+            let inner = state.lock().map_err(|e| e.to_string())?;
+            let rm = &inner.services().resources;
+            let path = crate::resources::LogicalPath::new("ui/screens.json");
+            let text = rm.read_text(&path).map_err(|e| e.to_string())?;
+            let val: serde_json::Value =
+                serde_json::from_str(&text).map_err(|e| format!("screens.json parse: {e}"))?;
+            Ok(val)
+        }
+
+        "get_ui_assets" => {
+            let inner = state.lock().map_err(|e| e.to_string())?;
+            let rm = &inner.services().resources;
+            let path = crate::resources::LogicalPath::new("ui/layout.json");
+            let text = rm.read_text(&path).map_err(|e| e.to_string())?;
+            let full: serde_json::Value =
+                serde_json::from_str(&text).map_err(|e| format!("layout.json parse: {e}"))?;
+            Ok(serde_json::json!({
+                "assets": full.get("assets").cloned().unwrap_or_default(),
+                "colors": full.get("colors").cloned().unwrap_or_default(),
+            }))
+        }
+
+        "get_ui_condition_context" => {
+            let inner = state.lock().map_err(|e| e.to_string())?;
+            let svc = inner.services();
+            let has_continue = svc.saves.has_continue();
+            let persistent: serde_json::Map<String, serde_json::Value> = inner
+                .persistent_store
+                .variables
+                .iter()
+                .filter_map(|(k, v)| {
+                    let json_val = match v {
+                        vn_runtime::state::VarValue::Bool(b) => serde_json::Value::Bool(*b),
+                        vn_runtime::state::VarValue::Int(i) => serde_json::json!(*i),
+                        vn_runtime::state::VarValue::Float(f) => serde_json::json!(*f),
+                        vn_runtime::state::VarValue::String(s) => {
+                            serde_json::Value::String(s.clone())
+                        }
+                    };
+                    Some((k.clone(), json_val))
+                })
+                .collect();
+            Ok(serde_json::json!({
+                "has_continue": has_continue,
+                "persistent": persistent,
+            }))
+        }
+
         "debug_snapshot" => {
             let inner = state.lock().map_err(|e| e.to_string())?;
             Ok(serde_json::json!({

@@ -61,6 +61,22 @@ Tauri 2 宿主应用——将 vn-runtime 的 Command 通过 IPC 序列化为 JSO
 | `debug_server.rs` | Debug HTTP 镜像 | 仅 debug build |
 | `src/` (前端) | Vue 3 渲染层；`composables/useEngine` 模块单例驱动 tick 与 IPC，`useConfirmDialog` 确认框；业务组件经 emit + 根组件接 `useEngine`，不直接 `callBackend` | [frontend.md](host-tauri/frontend.md) |
 
+## UI 配置桥接（RFC-030）
+
+Tauri 前端通过三个 IPC 命令消费共享 UI 配置：
+
+| IPC 命令 | 数据源 | 用途 |
+|----------|--------|------|
+| `get_screen_definitions` | `ui/screens.json` | 按钮/动作/条件可见性 |
+| `get_ui_assets` | `ui/layout.json` → assets + colors | GUI 素材路径 + 主题颜色 |
+| `get_ui_condition_context` | persistent_store + saves | 条件表达式求值上下文 |
+
+前端 composable 架构：
+- `useScreens()` — 消费 screens.json，提供按钮列表/动作映射/条件求值
+- `useTheme()` — 消费 assets/colors，初始化 CSS 变量，提供 `asset(key)` 方法
+
+布局采用 CSS-first 方案（`vw/vh/clamp()/flex/grid`），不消费 layout.json 的像素布局值。
+
 ## 与旧 host 的主要区别
 
 | 方面 | 旧 host (winit+wgpu+egui) | host-tauri |

@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, onUnmounted } from "vue";
 import { useSettings } from "../composables/useSettings";
-
-const emit = defineEmits<{
-  back: [];
-}>();
 
 const { settings, loadSettings, saveSettings, updateSetting } = useSettings();
 
@@ -12,36 +8,32 @@ onMounted(() => {
   loadSettings();
 });
 
+onUnmounted(() => {
+  saveSettings();
+});
+
 function onSlider(key: "bgm_volume" | "sfx_volume" | "text_speed", e: Event) {
-  const val = parseFloat((e.target as HTMLInputElement).value);
+  const val = Number.parseFloat((e.target as HTMLInputElement).value);
   updateSetting(key, val);
 }
 
 function onAutoDelay(e: Event) {
-  const val = parseFloat((e.target as HTMLInputElement).value);
+  const val = Number.parseFloat((e.target as HTMLInputElement).value);
   updateSetting("auto_delay", val);
 }
 
 function toggleFullscreen() {
   updateSetting("fullscreen", !settings.value.fullscreen);
 }
-
-async function onBack() {
-  await saveSettings();
-  emit("back");
-}
 </script>
 
 <template>
-  <div class="settings-screen">
-    <header class="settings-header">
-      <h2 class="settings-title">Settings</h2>
-      <button class="back-btn" @click="onBack">✕</button>
-    </header>
+  <div class="settings-content">
+    <h2 class="settings-title">设置</h2>
 
     <div class="settings-body">
       <div class="setting-row">
-        <label class="setting-label">BGM Volume</label>
+        <label class="setting-label">BGM 音量</label>
         <input
           type="range"
           class="setting-slider"
@@ -54,7 +46,7 @@ async function onBack() {
       </div>
 
       <div class="setting-row">
-        <label class="setting-label">SFX Volume</label>
+        <label class="setting-label">效果音量</label>
         <input
           type="range"
           class="setting-slider"
@@ -67,7 +59,7 @@ async function onBack() {
       </div>
 
       <div class="setting-row">
-        <label class="setting-label">Text Speed (CPS)</label>
+        <label class="setting-label">文字速度 (CPS)</label>
         <input
           type="range"
           class="setting-slider"
@@ -80,7 +72,7 @@ async function onBack() {
       </div>
 
       <div class="setting-row">
-        <label class="setting-label">Auto Delay (s)</label>
+        <label class="setting-label">自动延迟 (秒)</label>
         <input
           type="range"
           class="setting-slider"
@@ -94,7 +86,7 @@ async function onBack() {
       </div>
 
       <div class="setting-row">
-        <label class="setting-label">Fullscreen</label>
+        <label class="setting-label">全屏</label>
         <button
           class="toggle-btn"
           :class="{ active: settings.fullscreen }"
@@ -108,55 +100,25 @@ async function onBack() {
 </template>
 
 <style scoped>
-.settings-screen {
+.settings-content {
   width: 100%;
   height: 100%;
-  background: linear-gradient(160deg, #0d0d1a 0%, #1a1a2e 50%, #16213e 100%);
-  display: flex;
-  flex-direction: column;
-  padding: 40px 80px;
-  box-sizing: border-box;
-}
-
-.settings-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 40px;
 }
 
 .settings-title {
   font-family: var(--vn-font-body);
-  font-size: 24px;
+  font-size: clamp(16px, 1.4vw, 24px);
   font-weight: 400;
-  color: #e0e0e0;
+  color: var(--vn-color-ui-text, #e0e0e0);
   letter-spacing: 3px;
-  margin: 0;
-}
-
-.back-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: #aaa;
-  font-size: 18px;
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.back-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #e0e0e0;
+  margin: 0 0 3vh 0;
 }
 
 .settings-body {
-  max-width: 560px;
-  margin: 0 auto;
-  width: 100%;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: clamp(16px, 2.5vh, 32px);
 }
 
 .setting-row {
@@ -167,9 +129,9 @@ async function onBack() {
 
 .setting-label {
   font-family: var(--vn-font-body);
-  font-size: 14px;
+  font-size: clamp(12px, 0.9vw, 15px);
   color: #c0c0c0;
-  width: 160px;
+  width: clamp(100px, 10vw, 180px);
   flex-shrink: 0;
 }
 
@@ -186,42 +148,42 @@ async function onBack() {
 .setting-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: rgba(100, 140, 255, 0.7);
+  background: var(--vn-color-hover, rgba(255, 153, 0, 0.8));
   cursor: pointer;
   transition: background 0.2s;
 }
 .setting-slider::-webkit-slider-thumb:hover {
-  background: rgba(100, 140, 255, 1);
+  background: var(--vn-color-hover, #ff9900);
 }
 
 .setting-value {
   font-family: var(--vn-font-body);
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
-  width: 48px;
+  width: 40px;
   text-align: right;
 }
 
 .toggle-btn {
-  padding: 6px 20px;
+  padding: 6px 18px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.06);
   color: #aaa;
   font-family: var(--vn-font-body);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 .toggle-btn.active {
-  background: rgba(100, 140, 255, 0.25);
-  border-color: rgba(100, 140, 255, 0.4);
+  background: rgba(255, 153, 0, 0.2);
+  border-color: rgba(255, 153, 0, 0.4);
   color: #e0e0e0;
 }
 .toggle-btn:hover {
-  background: rgba(100, 140, 255, 0.15);
+  background: rgba(255, 153, 0, 0.15);
 }
 </style>
