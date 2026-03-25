@@ -21,6 +21,7 @@ use tracing::info;
 use vn_runtime::{SaveData, SaveError};
 
 /// 最大存档槽位数
+#[allow(dead_code)]
 pub const MAX_SAVE_SLOTS: u32 = 99;
 
 const CONTINUE_SAVE_NAME: &str = "continue.json";
@@ -106,6 +107,7 @@ impl SaveManager {
     }
 
     /// 保存 RGBA 像素数据为 PNG 缩略图（缩放到目标尺寸）
+    #[allow(dead_code)]
     pub fn save_thumbnail(
         &self,
         slot: u32,
@@ -132,6 +134,7 @@ impl SaveManager {
     }
 
     /// 检查存档是否存在
+    #[allow(dead_code)]
     pub fn exists(&self, slot: u32) -> bool {
         self.slot_path(slot).exists()
     }
@@ -181,6 +184,7 @@ impl SaveManager {
     }
 
     /// 保存 Continue 存档
+    #[allow(dead_code)]
     pub fn save_continue(&self, data: &SaveData) -> Result<(), SaveError> {
         self.ensure_dir()?;
         let path = self.continue_path();
@@ -231,6 +235,7 @@ pub struct SaveInfo {
 
 impl SaveInfo {
     /// 格式化时间戳为可读格式
+    #[allow(dead_code)]
     pub fn formatted_timestamp(&self) -> String {
         if let Ok(secs) = self.timestamp.parse::<u64>()
             && let Some(dt) = DateTime::<Utc>::from_timestamp(secs as i64, 0)

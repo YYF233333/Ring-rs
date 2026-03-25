@@ -254,6 +254,7 @@ impl RenderState {
         self.current_background = Some(path);
     }
 
+    #[allow(dead_code)]
     pub fn clear_background(&mut self) {
         self.current_background = None;
     }
@@ -286,20 +287,24 @@ impl RenderState {
         self.visible_characters.clear();
     }
 
+    #[allow(dead_code)]
     pub fn mark_character_fading_out(&mut self, alias: &str) {
         if let Some(c) = self.visible_characters.get_mut(alias) {
             c.fading_out = true;
         }
     }
 
+    #[allow(dead_code)]
     pub fn remove_fading_out_characters(&mut self) {
         self.visible_characters.retain(|_, c| !c.fading_out);
     }
 
+    #[allow(dead_code)]
     pub fn get_character_alpha(&self, alias: &str) -> Option<f32> {
         self.visible_characters.get(alias).map(|c| c.alpha)
     }
 
+    #[allow(dead_code)]
     pub fn set_character_alpha(&mut self, alias: &str, alpha: f32) {
         if let Some(c) = self.visible_characters.get_mut(alias) {
             c.alpha = alpha;
@@ -502,6 +507,7 @@ impl RenderState {
         });
     }
 
+    #[allow(dead_code)]
     pub fn clear_chapter_mark(&mut self) {
         self.chapter_mark = None;
     }

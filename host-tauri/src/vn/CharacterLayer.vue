@@ -19,13 +19,16 @@ const positionMap: Record<string, string> = {
 function getCharacterStyle(char: Readonly<CharacterSprite>): Record<string, string | number> {
   const x = positionMap[char.position] || "50%";
   const td = char.transition_duration ?? 0;
+  const transition = td > 0
+    ? `left ${td}s ease-in-out, opacity ${td}s ease-in-out, transform ${td}s ease-in-out`
+    : "none";
   return {
     position: "absolute",
     bottom: "0",
     left: x,
     transform: `translateX(-50%) translate(${char.offset_x}px, ${char.offset_y}px) scale(${char.scale_x}, ${char.scale_y})`,
-    opacity: char.target_alpha,
-    transition: td > 0 ? `opacity ${td}s ease-in-out, transform ${td}s ease-in-out` : "none",
+    opacity: char.alpha,
+    transition,
     zIndex: char.z_order,
     maxHeight: "100%",
   };

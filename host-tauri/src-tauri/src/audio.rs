@@ -71,7 +71,7 @@ impl AudioManager {
         debug!("BGM state: stop");
     }
 
-    /// 播放音效（加入队列，下帧由 `to_audio_state()` 输出后清空）
+    /// 播放音效（加入队列，下帧由 `drain_audio_state()` 输出后清空）
     pub fn play_sfx(&mut self, path: &str) {
         let logical_path = normalize_logical_path(path);
         let volume = if self.muted { 0.0 } else { self.sfx_volume };
@@ -110,7 +110,7 @@ impl AudioManager {
     }
 
     /// 生成当前帧的音频声明式状态，并清空 SFX 队列
-    pub fn to_audio_state(&mut self) -> AudioRenderState {
+    pub fn drain_audio_state(&mut self) -> AudioRenderState {
         let bgm = self.current_bgm_path.as_ref().map(|path| {
             let volume = if self.muted {
                 0.0

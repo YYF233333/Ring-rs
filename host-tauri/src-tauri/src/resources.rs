@@ -47,6 +47,7 @@ impl LogicalPath {
     }
 
     /// 拼接子路径并规范化。
+    #[allow(dead_code)]
     pub fn join(&self, relative: &str) -> Self {
         if self.0.is_empty() {
             Self::new(relative)
@@ -56,6 +57,7 @@ impl LogicalPath {
     }
 
     /// 转换为 [`PathBuf`]。
+    #[allow(dead_code)]
     pub fn to_path_buf(&self) -> PathBuf {
         PathBuf::from(&self.0)
     }
@@ -107,6 +109,7 @@ pub enum ResourceError {
         message: String,
     },
     /// 资源未找到
+    #[allow(dead_code)]
     #[error("资源未找到: {path}")]
     NotFound { path: String },
 }
@@ -142,6 +145,7 @@ impl ResourceManager {
     }
 
     /// 读取二进制资源
+    #[allow(dead_code)]
     pub fn read_bytes(&self, path: &LogicalPath) -> Result<Vec<u8>, ResourceError> {
         let full = self.resolve(path);
         std::fs::read(&full).map_err(|e| ResourceError::LoadFailed {
@@ -152,11 +156,13 @@ impl ResourceManager {
     }
 
     /// 返回逻辑路径对应的文件系统绝对路径（用于 asset 协议）
+    #[allow(dead_code)]
     pub fn resolve_fs_path(&self, path: &LogicalPath) -> PathBuf {
         self.resolve(path)
     }
 
     /// 检查资源是否存在
+    #[allow(dead_code)]
     pub fn resource_exists(&self, path: &LogicalPath) -> bool {
         self.resolve(path).exists()
     }

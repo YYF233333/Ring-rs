@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { SceneTransition } from "../types/render-state";
+import { useAssets } from "../composables/useAssets";
+import type { SceneTransition, SceneTransitionKind } from "../types/render-state";
+
+const { assetUrl } = useAssets();
 
 const props = defineProps<{
   sceneTransition: Readonly<SceneTransition> | null;
@@ -9,6 +12,16 @@ const props = defineProps<{
 const visible = computed(() => {
   const st = props.sceneTransition;
   return st != null && st.phase !== "Completed";
+});
+
+function isRule(kind: SceneTransitionKind): kind is { Rule: { mask_path: string; reversed: boolean } } {
+  return typeof kind === "object" && kind !== null && "Rule" in kind;
+}
+
+const ruleConfig = computed(() => {
+  const st = props.sceneTransition;
+  if (!st || !isRule(st.transition_type)) return null;
+  return st.transition_type.Rule;
 });
 
 const isWhite = computed(() => {
@@ -58,11 +71,27 @@ watch(
   { immediate: true },
 );
 
-const overlayStyle = computed(() => ({
-  backgroundColor: bgColor.value,
-  opacity: targetOpacity.value,
-  transition: transitionDuration.value > 0 ? `opacity ${transitionDuration.value}s linear` : "none",
-}));
+const overlayStyle = computed(() => {
+  const base: Record<string, string | number> = {
+    opacity: targetOpacity.value,
+    transition: transitionDuration.value > 0 ? `opacity ${transitionDuration.value}s linear` : "none",
+  };
+
+  if (ruleConfig.value) {
+    const url = assetUrl(ruleConfig.value.mask_path);
+    base.backgroundColor = "black";
+    base.maskImage = `url(${url})`;
+    base.maskSize = "cover";
+    base.maskRepeat = "no-repeat";
+    base.webkitMaskImage = `url(${url})`;
+    base.webkitMaskSize = "cover";
+    base.webkitMaskRepeat = "no-repeat";
+  } else {
+    base.backgroundColor = bgColor.value;
+  }
+
+  return base;
+});
 </script>
 
 <template>

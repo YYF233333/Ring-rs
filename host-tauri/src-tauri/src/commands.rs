@@ -319,14 +319,14 @@ pub fn get_ui_condition_context(state: State<AppState>) -> Result<serde_json::Va
         .persistent_store
         .variables
         .iter()
-        .filter_map(|(k, v)| {
+        .map(|(k, v)| {
             let json_val = match v {
                 vn_runtime::state::VarValue::Bool(b) => serde_json::Value::Bool(*b),
                 vn_runtime::state::VarValue::Int(i) => serde_json::json!(*i),
                 vn_runtime::state::VarValue::Float(f) => serde_json::json!(*f),
                 vn_runtime::state::VarValue::String(s) => serde_json::Value::String(s.clone()),
             };
-            Some((k.clone(), json_val))
+            (k.clone(), json_val)
         })
         .collect();
     Ok(serde_json::json!({

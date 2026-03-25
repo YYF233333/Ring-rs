@@ -119,15 +119,6 @@ impl AppConfig {
         Ok(config)
     }
 
-    /// 获取 manifest 完整路径（bootstrap-only）
-    pub fn manifest_full_path(&self) -> PathBuf {
-        self.assets_root.join(&self.manifest_path)
-    }
-
-    /// 获取入口脚本完整路径（bootstrap-only）
-    pub fn start_script_full_path(&self) -> PathBuf {
-        self.assets_root.join(&self.start_script_path)
-    }
 }
 
 /// 配置错误

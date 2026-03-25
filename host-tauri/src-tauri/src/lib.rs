@@ -4,6 +4,7 @@ mod commands;
 mod config;
 #[cfg(debug_assertions)]
 mod debug_server;
+#[allow(dead_code)]
 mod manifest;
 mod render_state;
 mod resources;

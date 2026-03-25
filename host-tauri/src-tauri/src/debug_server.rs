@@ -330,7 +330,7 @@ fn dispatch(
                 .persistent_store
                 .variables
                 .iter()
-                .filter_map(|(k, v)| {
+                .map(|(k, v)| {
                     let json_val = match v {
                         vn_runtime::state::VarValue::Bool(b) => serde_json::Value::Bool(*b),
                         vn_runtime::state::VarValue::Int(i) => serde_json::json!(*i),
@@ -339,7 +339,7 @@ fn dispatch(
                             serde_json::Value::String(s.clone())
                         }
                     };
-                    Some((k.clone(), json_val))
+                    (k.clone(), json_val)
                 })
                 .collect();
             Ok(serde_json::json!({

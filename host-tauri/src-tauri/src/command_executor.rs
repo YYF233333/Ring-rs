@@ -15,11 +15,14 @@ pub enum ExecuteResult {
     WaitForChoice {
         choice_count: usize,
     },
-    WaitForTime(u64),
     WaitForCutscene {
         video_path: String,
     },
-    Error(String),
+    FullRestart,
+    RequestUI {
+        key: String,
+        mode: String,
+    },
 }
 
 /// 需要由 Host 音频层执行的音频指令
@@ -40,11 +43,98 @@ pub enum AudioCommand {
     },
 }
 
+/// 场景效果请求（从 SceneEffect 命令解析出的参数）
+#[derive(Debug, Clone)]
+pub struct SceneEffectRequest {
+    pub kind: SceneEffectKind,
+    pub duration: f32,
+}
+
+/// 场景效果类别
+#[derive(Debug, Clone)]
+pub enum SceneEffectKind {
+    Shake { amplitude_x: f32, amplitude_y: f32 },
+    Blur,
+    BlurOut,
+    Dim { level: f32 },
+    DimReset,
+}
+
+impl SceneEffectRequest {
+    fn from_command(name: &str, args: &[(Option<String>, TransitionArg)]) -> Self {
+        let name_lower = name.to_lowercase();
+        let duration = Self::extract_duration(args);
+
+        if name_lower.contains("blur") {
+            if name_lower.contains("out") {
+                SceneEffectRequest {
+                    kind: SceneEffectKind::BlurOut,
+                    duration: duration.unwrap_or(0.5),
+                }
+            } else {
+                SceneEffectRequest {
+                    kind: SceneEffectKind::Blur,
+                    duration: duration.unwrap_or(0.5),
+                }
+            }
+        } else if name_lower.contains("dim") {
+            if name_lower.contains("reset") {
+                SceneEffectRequest {
+                    kind: SceneEffectKind::DimReset,
+                    duration: 0.0,
+                }
+            } else {
+                let level = Self::extract_level(args);
+                let dim = (level / 7.0).clamp(0.0, 1.0);
+                SceneEffectRequest {
+                    kind: SceneEffectKind::Dim { level: dim },
+                    duration: 0.0,
+                }
+            }
+        } else {
+            let (ax, ay) = if name_lower.contains("vertical") {
+                (0.0, 8.0)
+            } else if name_lower.contains("bounce") {
+                (0.0, 5.0)
+            } else {
+                (6.0, 4.0)
+            };
+            SceneEffectRequest {
+                kind: SceneEffectKind::Shake {
+                    amplitude_x: ax,
+                    amplitude_y: ay,
+                },
+                duration: duration.unwrap_or(0.3),
+            }
+        }
+    }
+
+    fn extract_duration(args: &[(Option<String>, TransitionArg)]) -> Option<f32> {
+        for (key, val) in args {
+            let is_duration = key.as_deref() == Some("duration")
+                || (key.is_none() && matches!(val, TransitionArg::Number(_)));
+            if is_duration && let TransitionArg::Number(n) = val {
+                return Some(*n as f32);
+            }
+        }
+        None
+    }
+
+    fn extract_level(args: &[(Option<String>, TransitionArg)]) -> f32 {
+        for (key, val) in args {
+            if key.as_deref() == Some("level") && let TransitionArg::Number(n) = val {
+                return *n as f32;
+            }
+        }
+        1.0
+    }
+}
+
 /// 一次 execute 调用的输出
 #[derive(Debug, Clone, Default)]
 pub struct CommandOutput {
-    pub result: ExecuteResult,
     pub audio_command: Option<AudioCommand>,
+    pub scene_effect_request: Option<SceneEffectRequest>,
 }
 
 /// 过渡效果分类（内部使用）
@@ -88,6 +178,13 @@ fn resolve_transition(transition: &Transition) -> (TransitionKind, f32) {
     }
 }
 
+/// 批量执行的输出
+pub struct BatchOutput {
+    pub result: ExecuteResult,
+    pub audio_commands: Vec<AudioCommand>,
+    pub scene_effect_request: Option<SceneEffectRequest>,
+}
+
 /// 命令执行器（管理过渡状态）
 #[derive(Debug)]
 pub struct CommandExecutor {
@@ -112,18 +209,15 @@ impl CommandExecutor {
                 if let Some(t) = transition {
                     let (kind, duration) = resolve_transition(t);
                     match kind {
-                        TransitionKind::Dissolve | TransitionKind::Move => {
+                        TransitionKind::None => {
+                            rs.set_background(path.clone());
+                        }
+                        _ => {
                             rs.background_transition = Some(BackgroundTransition {
                                 old_background: rs.current_background.clone(),
                                 new_background: path.clone(),
                                 duration,
                             });
-                            rs.set_background(path.clone());
-                        }
-                        TransitionKind::None => {
-                            rs.set_background(path.clone());
-                        }
-                        _ => {
                             rs.set_background(path.clone());
                         }
                     }
@@ -193,25 +287,41 @@ impl CommandExecutor {
                 position,
                 transition,
             } => {
-                let (trans_duration, start_alpha) = if let Some(t) = transition {
-                    let (_, duration) = resolve_transition(t);
-                    (Some(duration), 0.0)
-                } else {
-                    (None, 1.0)
-                };
+                let (kind, duration) = transition
+                    .as_ref()
+                    .map(resolve_transition)
+                    .unwrap_or((TransitionKind::None, 0.0));
 
                 if let Some(c) = rs.visible_characters.get_mut(alias) {
+                    let is_position_change = c.position != *position;
+                    let is_same_texture = c.texture_path == *path;
+
                     c.texture_path = path.clone();
                     c.position = *position;
-                    c.transition_duration = trans_duration;
                     c.target_alpha = 1.0;
-                    if trans_duration.is_none() {
+
+                    if is_position_change && matches!(kind, TransitionKind::Move) {
+                        c.transition_duration = Some(duration);
+                    } else if is_same_texture && is_position_change {
+                        c.transition_duration = None;
                         c.alpha = 1.0;
+                    } else {
+                        c.transition_duration = if matches!(kind, TransitionKind::None) {
+                            c.alpha = 1.0;
+                            None
+                        } else {
+                            Some(duration)
+                        };
                     }
                 } else {
+                    let (start_alpha, trans_dur) = if matches!(kind, TransitionKind::None) {
+                        (1.0, None)
+                    } else {
+                        (0.0, Some(duration))
+                    };
                     rs.show_character(alias.clone(), path.clone(), *position);
                     if let Some(c) = rs.visible_characters.get_mut(alias) {
-                        c.transition_duration = trans_duration;
+                        c.transition_duration = trans_dur;
                         c.alpha = start_alpha;
                         c.target_alpha = 1.0;
                     }
@@ -337,7 +447,11 @@ impl CommandExecutor {
                 ExecuteResult::Ok
             }
 
-            Command::SceneEffect { .. } => ExecuteResult::Ok,
+            Command::SceneEffect { name, args } => {
+                self.last_output.scene_effect_request =
+                    Some(SceneEffectRequest::from_command(name, args));
+                ExecuteResult::Ok
+            }
 
             Command::TitleCard { text, duration } => {
                 rs.title_card = Some(crate::render_state::TitleCardState {
@@ -360,30 +474,36 @@ impl CommandExecutor {
                 video_path: path.clone(),
             },
 
-            Command::FullRestart | Command::RequestUI { .. } => ExecuteResult::Ok,
+            Command::FullRestart => ExecuteResult::FullRestart,
+
+            Command::RequestUI { key, mode, .. } => ExecuteResult::RequestUI {
+                key: key.clone(),
+                mode: mode.clone(),
+            },
         }
     }
 
-    /// 批量执行命令，返回最后一个需要等待的结果
-    ///
-    /// 将所有命令产生的 AudioCommand 收集到 `collected_audio` 中，
-    /// 避免后续命令的 `execute()` 重置 `last_output` 导致丢失。
-    pub fn execute_batch(
-        &mut self,
-        cmds: &[Command],
-        rs: &mut RenderState,
-    ) -> (ExecuteResult, Vec<AudioCommand>) {
+    /// 批量执行命令，返回最后一个需要等待的结果及收集的副作用
+    pub fn execute_batch(&mut self, cmds: &[Command], rs: &mut RenderState) -> BatchOutput {
         let mut final_result = ExecuteResult::Ok;
         let mut audio_commands = Vec::new();
+        let mut scene_effect_request = None;
         for cmd in cmds {
             let result = self.execute(cmd, rs);
             if let Some(audio) = self.last_output.audio_command.take() {
                 audio_commands.push(audio);
             }
+            if let Some(effect) = self.last_output.scene_effect_request.take() {
+                scene_effect_request = Some(effect);
+            }
             if result != ExecuteResult::Ok {
                 final_result = result;
             }
         }
-        (final_result, audio_commands)
+        BatchOutput {
+            result: final_result,
+            audio_commands,
+            scene_effect_request,
+        }
     }
 }

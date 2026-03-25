@@ -8,7 +8,10 @@ use vn_runtime::state::{VarValue, WaitingReason};
 use vn_runtime::{Parser, RuntimeInput, Script, ScriptNode, VNRuntime};
 
 use crate::audio::AudioManager;
-use crate::command_executor::{AudioCommand, CommandExecutor, ExecuteResult};
+use crate::command_executor::{
+    AudioCommand, BatchOutput, CommandExecutor, ExecuteResult, SceneEffectKind,
+    SceneEffectRequest,
+};
 use crate::config::AppConfig;
 use crate::render_state::{CutsceneState, PlaybackMode, RenderState, SceneTransitionPhaseState};
 use crate::resources::{LogicalPath, ResourceManager};
@@ -189,6 +192,18 @@ pub struct AppStateInner {
     bg_transition_elapsed: f32,
     /// 场景过渡内部计时器
     scene_transition_elapsed: f32,
+    /// 活跃的 shake 动画状态
+    active_shake: Option<ShakeAnimation>,
+    /// 是否有活跃的场景效果（用于 signal 解析）
+    scene_effect_active: bool,
+}
+
+/// Shake 动画的运行时状态
+struct ShakeAnimation {
+    amplitude_x: f32,
+    amplitude_y: f32,
+    duration: f32,
+    elapsed: f32,
 }
 
 /// Host 侧的等待状态
@@ -224,6 +239,8 @@ impl AppStateInner {
             auto_timer: 0.0,
             bg_transition_elapsed: 0.0,
             scene_transition_elapsed: 0.0,
+            active_shake: None,
+            scene_effect_active: false,
         }
     }
 
@@ -273,6 +290,8 @@ impl AppStateInner {
         self.auto_timer = 0.0;
         self.bg_transition_elapsed = 0.0;
         self.scene_transition_elapsed = 0.0;
+        self.active_shake = None;
+        self.scene_effect_active = false;
     }
 
     /// 解析脚本并初始化运行时
@@ -424,7 +443,7 @@ impl AppStateInner {
         }
     }
 
-    /// 推进 chapter_mark / title_card / background_transition / scene_transition
+    /// 推进 chapter_mark / title_card / background_transition / scene_transition / 角色 alpha
     fn update_animations(&mut self, dt: f32) {
         self.render_state.update_chapter_mark(dt);
 
@@ -437,6 +456,32 @@ impl AppStateInner {
 
         self.update_background_transition(dt);
         self.update_scene_transition(dt);
+        self.update_character_alpha(dt);
+        self.update_shake(dt);
+    }
+
+    /// 推进角色 alpha 过渡，淡出完成后移除
+    fn update_character_alpha(&mut self, dt: f32) {
+        for c in self.render_state.visible_characters.values_mut() {
+            let duration = c.transition_duration.unwrap_or(0.0);
+            if duration > 0.0 && (c.alpha - c.target_alpha).abs() > f32::EPSILON {
+                let speed = dt / duration;
+                if c.alpha < c.target_alpha {
+                    c.alpha = (c.alpha + speed).min(c.target_alpha);
+                } else {
+                    c.alpha = (c.alpha - speed).max(c.target_alpha);
+                }
+                if (c.alpha - c.target_alpha).abs() <= f32::EPSILON {
+                    c.alpha = c.target_alpha;
+                    c.transition_duration = None;
+                }
+            } else if duration <= 0.0 {
+                c.alpha = c.target_alpha;
+            }
+        }
+        self.render_state
+            .visible_characters
+            .retain(|_, c| !(c.fading_out && c.alpha <= f32::EPSILON));
     }
 
     /// 解析 Signal 等待 + Time 等待
@@ -449,7 +494,7 @@ impl AppStateInner {
                     .as_ref()
                     .is_none_or(|st| st.phase == SceneTransitionPhaseState::Completed),
                 "title_card" => self.render_state.title_card.is_none(),
-                "scene_effect" => true,
+                "scene_effect" => !self.scene_effect_active,
                 "cutscene" => self.render_state.cutscene.is_none(),
                 _ => false,
             };
@@ -516,7 +561,7 @@ impl AppStateInner {
     fn sync_audio(&mut self, dt: f32) {
         if let Some(svc) = self.services.as_mut() {
             svc.audio.update(dt);
-            self.render_state.audio = svc.audio.to_audio_state();
+            self.render_state.audio = svc.audio.drain_audio_state();
         }
     }
 
@@ -665,7 +710,11 @@ impl AppStateInner {
 
         match rt.tick(None) {
             Ok((commands, waiting_reason)) => {
-                let (result, audio_commands) = self
+                let BatchOutput {
+                    result,
+                    audio_commands,
+                    scene_effect_request,
+                } = self
                     .command_executor
                     .execute_batch(&commands, &mut self.render_state);
 
@@ -681,7 +730,30 @@ impl AppStateInner {
                     self.dispatch_audio_command(cmd);
                 }
 
-                // Cutscene 命令需要 CommandExecutor 提供的 video_path 来设置 render_state
+                if let Some(req) = scene_effect_request {
+                    self.apply_scene_effect(req);
+                }
+
+                if result == ExecuteResult::FullRestart {
+                    self.return_to_title();
+                    return;
+                }
+
+                if let ExecuteResult::RequestUI { key, mode } = &result {
+                    warn!(
+                        key = %key, mode = %mode,
+                        "RequestUI 暂不支持，回传空字符串降级"
+                    );
+                    if let Some(rt) = self.runtime.as_mut() {
+                        let input = RuntimeInput::UIResult {
+                            key: key.clone(),
+                            value: VarValue::String(String::new()),
+                        };
+                        let _ = rt.tick(Some(input));
+                    }
+                    return;
+                }
+
                 if let ExecuteResult::WaitForCutscene { video_path } = &result {
                     self.render_state.cutscene = Some(CutsceneState {
                         video_path: video_path.clone(),
@@ -706,8 +778,18 @@ impl AppStateInner {
                     WaitingReason::WaitForSignal(signal_id) => {
                         self.waiting = WaitingFor::Signal(signal_id.as_str().to_string());
                     }
-                    WaitingReason::WaitForUIResult { .. } => {
-                        // Tauri 宿主暂不处理 UI Result
+                    WaitingReason::WaitForUIResult { key, .. } => {
+                        warn!(
+                            key = %key,
+                            "WaitForUIResult 暂不支持，回传空字符串降级"
+                        );
+                        if let Some(rt) = self.runtime.as_mut() {
+                            let input = RuntimeInput::UIResult {
+                                key: key.clone(),
+                                value: VarValue::String(String::new()),
+                            };
+                            let _ = rt.tick(Some(input));
+                        }
                     }
                 }
 
@@ -817,6 +899,63 @@ impl AppStateInner {
             AudioCommand::PlaySfx { path } => {
                 audio.play_sfx(&path);
             }
+        }
+    }
+
+    /// 应用场景效果请求
+    fn apply_scene_effect(&mut self, req: SceneEffectRequest) {
+        match req.kind {
+            SceneEffectKind::Shake {
+                amplitude_x,
+                amplitude_y,
+            } => {
+                self.active_shake = Some(ShakeAnimation {
+                    amplitude_x,
+                    amplitude_y,
+                    duration: req.duration,
+                    elapsed: 0.0,
+                });
+                self.scene_effect_active = true;
+            }
+            SceneEffectKind::Blur => {
+                self.render_state.scene_effect.blur_amount = 1.0;
+                self.scene_effect_active = false;
+            }
+            SceneEffectKind::BlurOut => {
+                self.render_state.scene_effect.blur_amount = 0.0;
+                self.scene_effect_active = false;
+            }
+            SceneEffectKind::Dim { level } => {
+                self.render_state.scene_effect.dim_level = level;
+                self.scene_effect_active = false;
+            }
+            SceneEffectKind::DimReset => {
+                self.render_state.scene_effect.dim_level = 0.0;
+                self.scene_effect_active = false;
+            }
+        }
+    }
+
+    /// 推进 shake 动画
+    fn update_shake(&mut self, dt: f32) {
+        let Some(shake) = self.active_shake.as_mut() else {
+            return;
+        };
+        shake.elapsed += dt;
+        if shake.elapsed >= shake.duration {
+            self.render_state.scene_effect.shake_offset_x = 0.0;
+            self.render_state.scene_effect.shake_offset_y = 0.0;
+            self.active_shake = None;
+            self.scene_effect_active = false;
+        } else {
+            let progress = shake.elapsed / shake.duration;
+            let decay = 1.0 - progress;
+            let freq = 30.0;
+            let phase = shake.elapsed * freq;
+            self.render_state.scene_effect.shake_offset_x =
+                shake.amplitude_x * decay * phase.sin();
+            self.render_state.scene_effect.shake_offset_y =
+                shake.amplitude_y * decay * phase.cos();
         }
     }
 }
