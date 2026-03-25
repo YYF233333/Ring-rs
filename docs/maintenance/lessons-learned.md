@@ -142,6 +142,12 @@ result.assert_waiting_click();
 - **原因**：`run_script_tick()` 使用 `CommandExecutor::execute_batch()` 的返回值（`ExecuteResult`）来设置 Host 等待状态，但 `ChangeScene` 的 `ExecuteResult` 为 `Ok`（仅修改 RenderState），忽略了 Runtime 返回的 `WaitingReason::WaitForSignal`。Runtime 永远等待信号但 Host 不知道需要发送信号，导致脚本在第一个 `changeScene with Fade` 处永久阻塞。
 - **正确做法**：用 Runtime 的 `WaitingReason`（权威来源）映射 Host 等待状态，而非 `ExecuteResult`（派生值）。`process_tick` 中检测过渡/动画完成后，通过 `RuntimeInput::Signal` 解除 Runtime 等待。同理，`WaitForTime` 也需要 Host 在 `process_tick` 中递减并解除。
 
+### Debug HTTP Server 与 Tauri WebView 双客户端竞争
+
+- **现象**：MCP 浏览器调试时，外部浏览器画面异常——打字机效果碎裂、游戏速度翻倍、对话推进不同步。直接构造 HTTP 请求（curl）则正常。
+- **原因**：`AppStateInner` 通过 `Arc<Mutex<>>` 被 Tauri IPC 和 Debug HTTP Server 共享。Tauri WebView 和外部浏览器各自运行独立的 `requestAnimationFrame` → `tick(dt)` 循环，导致：①两个 tick 交替推进打字机计时器 ②用户在一侧的点击对另一侧不可见 ③游戏以 2x 速度推进。
+- **正确做法**：使用 `RING_HEADLESS=1` 环境变量启动 Tauri dev，隐藏 Tauri 窗口使 WebView 的 rAF 被抑制，外部浏览器成为唯一客户端。前端 `useEngine` 的游戏循环额外检查 `document.hidden` 作为安全网。
+
 ---
 
 ## 如何贡献新条目

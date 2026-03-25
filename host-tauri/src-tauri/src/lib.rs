@@ -13,6 +13,7 @@ mod state;
 use state::{AppState, AppStateInner};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use tauri::Manager;
 use tracing::info;
 
 /// 从 CWD 向上查找包含 `assets` 子目录的祖先目录，作为项目根目录。
@@ -101,7 +102,16 @@ pub fn run() {
                 drop(inner);
 
                 #[cfg(debug_assertions)]
-                debug_server::start(shared_inner, assets_root);
+                {
+                    debug_server::start(shared_inner, assets_root);
+
+                    if std::env::var("RING_HEADLESS").is_ok() {
+                        info!("Headless 模式：Tauri 窗口已隐藏，请使用浏览器 http://localhost:5173 调试");
+                        if let Some(window) = _app.get_webview_window("main") {
+                            let _ = window.hide();
+                        }
+                    }
+                }
 
                 Ok(())
             }

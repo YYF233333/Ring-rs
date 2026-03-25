@@ -23,6 +23,11 @@ export function useEngine() {
 
   let tickCount = 0;
   function gameLoop() {
+    if (document.hidden) {
+      animFrameId = requestAnimationFrame(gameLoop);
+      return;
+    }
+
     const now = performance.now();
     const dt = (now - lastTime) / 1000;
     lastTime = now;

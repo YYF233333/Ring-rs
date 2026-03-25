@@ -32,9 +32,19 @@ INFO ring_engine_frontend: 项目根目录 root="F:\\Code\\Ring-rs"
 INFO ring_engine_frontend: Debug HTTP server: http://127.0.0.1:9528
 ```
 
-### 3. 浏览器调试
+### 3. 浏览器调试（Headless 模式）
 
-如果 browser MCP 可用，可通过浏览器进行可视化调试：
+通过 browser MCP 在外部浏览器中进行可视化调试。**必须使用 Headless 模式**以避免 Tauri 窗口和浏览器双客户端竞争状态。
+
+**启动方式：**
+
+```powershell
+cd host-tauri; $env:RING_HEADLESS="1"; pnpm tauri dev
+```
+
+设置 `RING_HEADLESS` 环境变量后，Tauri 窗口会自动隐藏，仅保留 Rust 后端和 Debug HTTP Server。外部浏览器成为唯一的游戏客户端。
+
+**调试操作：**
 
 1. 打开 `http://localhost:5173` — 前端自动检测非 Tauri 环境，回退到 HTTP API
 2. 可执行的操作：
@@ -46,6 +56,8 @@ INFO ring_engine_frontend: Debug HTTP server: http://127.0.0.1:9528
 ```javascript
 await fetch('http://localhost:9528/api/debug_snapshot', { method: 'POST' }).then(r => r.json())
 ```
+
+> **警告**：不设置 `RING_HEADLESS` 直接在浏览器打开 `localhost:5173` 会导致 Tauri 窗口和浏览器各自运行独立的游戏循环，竞争同一个 `AppStateInner`，产生状态不同步、打字机效果碎裂、游戏双倍速推进等问题。
 
 ### 4. 状态快照
 
