@@ -4,7 +4,7 @@
 
 ## 适用范围（当前）
 
-- 覆盖 `vn-runtime` 与 `host`。
+- 覆盖 `vn-runtime`、`host` 与 `host-tauri`。
 - 任务默认遵循“摘要优先、源码兜底”。
 
 ## 摘要结构
@@ -43,6 +43,15 @@
    - [egui_actions](../engine/architecture/module-summaries/host/egui-actions.md)
    - [egui_screens](../engine/architecture/module-summaries/host/egui-screens.md)
    - [ui_modes](../engine/architecture/module-summaries/host/ui-modes.md)
+- [host-tauri 模块总览](../engine/architecture/module-summaries/host-tauri.md)
+- `host-tauri` 子模块摘要（按任务选读）
+   - [state](../engine/architecture/module-summaries/host-tauri/state.md)
+   - [commands](../engine/architecture/module-summaries/host-tauri/commands.md)
+   - [command_executor](../engine/architecture/module-summaries/host-tauri/command-executor.md)
+   - [render_state](../engine/architecture/module-summaries/host-tauri/render-state.md)
+   - [audio](../engine/architecture/module-summaries/host-tauri/audio.md)
+   - [resources](../engine/architecture/module-summaries/host-tauri/resources.md)
+   - [frontend](../engine/architecture/module-summaries/host-tauri/frontend.md)
 - [符号索引（Symbol Index）](../engine/symbol-index.md)（pub 符号速查：名称/类型/行号/enum 变体/trait 方法）
 - [仓库导航地图](../engine/architecture/navigation-map.md)
 - [经验沉淀（Lessons Learned）](lessons-learned.md)

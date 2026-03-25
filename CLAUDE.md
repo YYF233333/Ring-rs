@@ -75,8 +75,8 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | 测试 | `cargo test -p vn-runtime --lib` |
 | 覆盖率 | `cargo cov` |
 | 符号索引生成 | `cargo gen-symbols` |
-| Tauri 开发 | `cd host-tauri/frontend; pnpm tauri dev` |
-| 前端类型检查 | `cd host-tauri/frontend; npx vue-tsc --noEmit` |
+| Tauri 开发 | `cd host-tauri; pnpm tauri dev` |
+| 前端类型检查 | `cd host-tauri; npx vue-tsc --noEmit` |
 
 覆盖率报告：`target/llvm-cov/html/index.html`
 

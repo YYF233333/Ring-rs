@@ -1,5 +1,8 @@
 import { ref, readonly } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { callBackend } from "./useBackend";
+import { createLogger } from "./useLogger";
+
+const log = createLogger("settings");
 
 export interface UserSettings {
   bgm_volume: number;
@@ -23,7 +26,7 @@ const settings = ref<UserSettings>({ ...DEFAULT_SETTINGS });
 export function useSettings() {
   async function loadSettings() {
     try {
-      const s = await invoke<UserSettings>("get_user_settings");
+      const s = await callBackend<UserSettings>("get_user_settings");
       settings.value = s;
     } catch {
       settings.value = { ...DEFAULT_SETTINGS };
@@ -32,9 +35,9 @@ export function useSettings() {
 
   async function saveSettings() {
     try {
-      await invoke("update_settings", { settings: settings.value });
+      await callBackend("update_settings", { settings: settings.value });
     } catch (e) {
-      console.error("保存设置失败:", e);
+      log.error("保存设置失败", e);
     }
   }
 

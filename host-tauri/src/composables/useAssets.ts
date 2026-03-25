@@ -1,13 +1,16 @@
 import { ref } from "vue";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { callBackend, resolveAssetSrc } from "./useBackend";
+import { createLogger } from "./useLogger";
+
+const log = createLogger("assets");
 
 let assetsRoot: string | null = null;
 const ready = ref(false);
 
 async function init() {
   if (assetsRoot !== null) return;
-  assetsRoot = await invoke<string>("get_assets_root");
-  console.debug("[useAssets] assetsRoot =", assetsRoot);
+  assetsRoot = await callBackend<string>("get_assets_root");
+  log.info("assetsRoot", assetsRoot);
   ready.value = true;
 }
 
@@ -30,8 +33,8 @@ function assetUrl(logicalPath: string | null | undefined): string | undefined {
   const normalized = normalizePath(logicalPath);
   const sep = assetsRoot.endsWith("/") || assetsRoot.endsWith("\\") ? "" : "/";
   const fullPath = `${assetsRoot}${sep}${normalized}`;
-  const url = convertFileSrc(fullPath);
-  console.debug("[useAssets] assetUrl:", logicalPath, "→", normalized, "→", url);
+  const url = resolveAssetSrc(fullPath, normalized);
+  log.debug(`assetUrl: ${logicalPath} → ${normalized} → ${url}`);
   return url;
 }
 

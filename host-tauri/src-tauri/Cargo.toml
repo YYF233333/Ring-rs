@@ -31,3 +31,6 @@ chrono = { version = "0.4", default-features = false, features = ["alloc", "cloc
 
 # 错误类型
 thiserror = "2.0.18"
+axum = "0.8.8"
+tower-http = { version = "0.6.8", features = ["cors", "fs"] }
+tokio = { version = "1.50.0", features = ["rt", "net"] }

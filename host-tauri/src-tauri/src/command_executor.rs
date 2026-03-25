@@ -322,9 +322,7 @@ impl CommandExecutor {
             }
 
             Command::PlaySfx { path } => {
-                self.last_output.audio_command = Some(AudioCommand::PlaySfx {
-                    path: path.clone(),
-                });
+                self.last_output.audio_command = Some(AudioCommand::PlaySfx { path: path.clone() });
                 ExecuteResult::Ok
             }
 

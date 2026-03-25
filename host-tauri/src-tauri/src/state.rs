@@ -45,7 +45,7 @@ pub struct HistoryEntry {
 
 /// Tauri 托管的全局应用状态
 pub struct AppState {
-    pub inner: std::sync::Mutex<AppStateInner>,
+    pub inner: std::sync::Arc<std::sync::Mutex<AppStateInner>>,
 }
 
 // ── 持久化存储 ──────────────────────────────────────────────────────────────
@@ -93,8 +93,7 @@ impl PersistentStore {
     /// 写入磁盘
     pub fn save(&self) -> Result<(), String> {
         if !self.saves_dir.exists() {
-            fs::create_dir_all(&self.saves_dir)
-                .map_err(|e| format!("无法创建存档目录: {e}"))?;
+            fs::create_dir_all(&self.saves_dir).map_err(|e| format!("无法创建存档目录: {e}"))?;
         }
         let path = self.saves_dir.join(PERSISTENT_FILE);
         let content = serde_json::to_string_pretty(&self.variables)
@@ -387,16 +386,18 @@ impl AppStateInner {
         }
 
         if !self.render_state.is_dialogue_complete() && !self.render_state.has_inline_wait() {
-            let speed = self
-                .render_state
-                .effective_text_speed(self.text_speed);
+            let speed = self.render_state.effective_text_speed(self.text_speed);
             self.typewriter_timer += dt * speed;
             while self.typewriter_timer >= 1.0 {
                 self.typewriter_timer -= 1.0;
                 let done = self.render_state.advance_typewriter();
                 if done {
                     self.typewriter_timer = 0.0;
-                    if self.render_state.dialogue.as_ref().is_some_and(|d| d.no_wait)
+                    if self
+                        .render_state
+                        .dialogue
+                        .as_ref()
+                        .is_some_and(|d| d.no_wait)
                         && self.waiting == WaitingFor::Click
                     {
                         self.waiting = WaitingFor::Nothing;
@@ -500,7 +501,11 @@ impl AppStateInner {
 
         if !self.render_state.is_dialogue_complete() {
             self.render_state.complete_typewriter();
-            if self.render_state.dialogue.as_ref().is_some_and(|d| d.no_wait)
+            if self
+                .render_state
+                .dialogue
+                .as_ref()
+                .is_some_and(|d| d.no_wait)
                 && self.waiting == WaitingFor::Click
             {
                 self.waiting = WaitingFor::Nothing;
@@ -662,7 +667,10 @@ impl AppStateInner {
             } else {
                 &frame.script_id
             };
-            let rm = self.resource_manager.as_ref().ok_or("ResourceManager 未初始化")?;
+            let rm = self
+                .resource_manager
+                .as_ref()
+                .ok_or("ResourceManager 未初始化")?;
             let logical = LogicalPath::new(frame_path);
             if let Ok(content) = rm.read_text(&logical) {
                 let fid = logical.file_stem().to_string();

@@ -15,7 +15,7 @@
 
 ## 重要文档（建议阅读顺序）
 
-- **摘要入口（vn-runtime + host）**：[摘要索引](../../maintenance/summary-index.md)
+- **摘要入口（vn-runtime + host + host-tauri）**：[摘要索引](../../maintenance/summary-index.md)
 - **架构硬约束**：[ARCH.md](../../../ARCH.md)（Runtime/Host 分离、显式状态、确定性、Command 驱动）
 - **RFC 计划索引**：[RFC 索引](../../../RFCs/README.md)
 - **内容制作入门**：[Getting Started](../../authoring/getting-started.md)（不改代码写脚本/素材 → 测试 → 打包发布）
@@ -182,7 +182,7 @@
 ## `host-tauri/`：Tauri 2 宿主（新架构）
 
 - **`host-tauri/src-tauri/`**：Rust 后端（Tauri IPC 命令 + vn-runtime 集成 + 音频 + 资源 + 存档）
-- **`host-tauri/frontend/`**：Vue 3 前端（VN 渲染组件 + 系统 UI 页面）
+- **`host-tauri/src/`**：Vue 3 前端源码（VN 渲染组件 + 系统 UI 页面；前端根目录为 `host-tauri/`，`package.json` 与 Vite 配置在此层）
 
 ### 入口与核心文件
 
@@ -195,9 +195,18 @@
 - **资源**：`host-tauri/src-tauri/src/resources.rs`（LogicalPath + 文件系统读取）
 - **存档**：`host-tauri/src-tauri/src/save_manager.rs`
 - **配置**：`host-tauri/src-tauri/src/config.rs`
-- **Vue 前端入口**：`host-tauri/frontend/src/App.vue`
-- **VN 渲染组件**：`host-tauri/frontend/src/vn/`（BackgroundLayer/CharacterLayer/DialogueBox/ChoicePanel/TransitionOverlay/etc.）
-- **系统 UI 页面**：`host-tauri/frontend/src/screens/`（TitleScreen/SaveLoadScreen/SettingsScreen/HistoryScreen/InGameMenu）
+- **Vue 前端入口**：`host-tauri/src/App.vue`
+- **VN 渲染组件**：`host-tauri/src/vn/`（BackgroundLayer/CharacterLayer/DialogueBox/ChoicePanel/TransitionOverlay/etc.）
+- **系统 UI 页面**：`host-tauri/src/screens/`（TitleScreen/SaveLoadScreen/SettingsScreen/HistoryScreen/InGameMenu）
+
+### 常见改动：我应该改哪里？
+
+- **想加一个新 IPC 命令** → `host-tauri/src-tauri/src/commands.rs`（添加 #[command] 函数）+ `lib.rs`（注册）+ `debug_server.rs`（添加 dispatch 分支）
+- **想改 VN 渲染逻辑** → `host-tauri/src/vn/` 下的 Vue 组件
+- **想改系统 UI 页面** → `host-tauri/src/screens/` 下的 Vue 组件
+- **想改前端状态管理** → `host-tauri/src/composables/` 下的 composable
+- **想改 Command 执行** → `host-tauri/src-tauri/src/command_executor.rs` + `state.rs`
+- **想改渲染状态结构** → `host-tauri/src-tauri/src/render_state.rs`（Rust）+ `host-tauri/src/types/render-state.ts`（TypeScript 镜像）
 
 ## “不要读/不要改”的目录（常见噪音）
 
@@ -208,8 +217,8 @@
 ## 当你想做 X（快速索引）
 
 - **想加/改脚本语法** → [脚本语法规范](../../authoring/script-syntax.md) + `vn-runtime/src/script/*`
-- **想加一个新 Command** → `vn-runtime/src/command/mod.rs` + `host/src/command_executor/*`
-- **想改 UI 页面** → `host/src/egui_screens/`（各页面 UI 构建）+ `host/src/ui/*`（主题/Toast）
+- **想加一个新 Command** → `vn-runtime/src/command/mod.rs` + `host/src/command_executor/*` + `host-tauri/src-tauri/src/command_executor.rs` + `host-tauri/src-tauri/src/commands.rs`
+- **想改 UI 页面** → `host/src/egui_screens/`（各页面 UI 构建）+ `host/src/ui/*`（主题/Toast）+ `host-tauri/src/screens/`
 - **想改资源路径解析/打包/缓存** → `host/src/resources/*` + [资源系统与打包](../../authoring/resources.md)
 - **想改存档/兼容** → `vn-runtime/src/save.rs` + `host/src/app/save.rs` + [save format](../reference/save-format.md)
 

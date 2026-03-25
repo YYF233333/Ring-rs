@@ -119,10 +119,7 @@ impl Manifest {
             ("nearright", 0.75, 0.95, 1.0),
             ("farright", 0.92, 0.90, 0.85),
         ] {
-            presets.insert(
-                name.to_string(),
-                PositionPreset { x, y, scale },
-            );
+            presets.insert(name.to_string(), PositionPreset { x, y, scale });
         }
 
         Self {

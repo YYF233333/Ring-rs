@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { invoke } from "@tauri-apps/api/core";
+import { callBackend } from "../composables/useBackend";
 
 const emit = defineEmits<{
   "new-game": [];
@@ -11,7 +11,7 @@ const emit = defineEmits<{
 
 async function onQuit() {
   try {
-    await invoke("quit_game");
+    await callBackend("quit_game");
   } catch {
     window.close();
   }

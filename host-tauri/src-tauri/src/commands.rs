@@ -1,10 +1,10 @@
-use tauri::{command, AppHandle, State};
+use tauri::{AppHandle, State, command};
 use vn_runtime::{AudioState, SaveData};
 
 use crate::config::AppConfig;
+use crate::render_state::PlaybackMode;
 use crate::render_state::RenderState;
 use crate::save_manager::SaveInfo;
-use crate::render_state::PlaybackMode;
 use crate::state::{AppState, HistoryEntry, UserSettings};
 
 /// 初始化游戏——解析脚本并返回初始渲染状态
@@ -63,15 +63,11 @@ pub fn get_render_state(state: State<AppState>) -> Result<RenderState, String> {
 pub fn save_game(state: State<AppState>, slot: u32) -> Result<(), String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner
-        .save_manager
-        .as_ref()
-        .ok_or("SaveManager 未初始化")?;
+    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
 
     let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
     let runtime_state = rt.state().clone();
-    let mut save_data = SaveData::new(slot, runtime_state)
-        .with_history(rt.history().clone());
+    let mut save_data = SaveData::new(slot, runtime_state).with_history(rt.history().clone());
 
     if let Some(ref cm) = inner.render_state.chapter_mark {
         save_data = save_data.with_chapter(&cm.title);
@@ -91,10 +87,7 @@ pub fn save_game(state: State<AppState>, slot: u32) -> Result<(), String> {
 pub fn load_game(state: State<AppState>, slot: u32) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner
-        .save_manager
-        .as_ref()
-        .ok_or("SaveManager 未初始化")?;
+    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
 
     let save_data = sm.load(slot).map_err(|e| e.to_string())?;
 
@@ -107,10 +100,7 @@ pub fn load_game(state: State<AppState>, slot: u32) -> Result<RenderState, Strin
 pub fn list_saves(state: State<AppState>) -> Result<Vec<SaveInfo>, String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner
-        .save_manager
-        .as_ref()
-        .ok_or("SaveManager 未初始化")?;
+    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
 
     let saves = sm.list_saves();
     let infos: Vec<SaveInfo> = saves
@@ -125,10 +115,7 @@ pub fn list_saves(state: State<AppState>) -> Result<Vec<SaveInfo>, String> {
 pub fn delete_save(state: State<AppState>, slot: u32) -> Result<(), String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner
-        .save_manager
-        .as_ref()
-        .ok_or("SaveManager 未初始化")?;
+    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
 
     sm.delete(slot).map_err(|e| e.to_string())
 }
@@ -210,10 +197,7 @@ pub fn return_to_title(state: State<AppState>) -> Result<(), String> {
 pub fn continue_game(state: State<AppState>) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner
-        .save_manager
-        .as_ref()
-        .ok_or("SaveManager 未初始化")?;
+    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
 
     if !sm.has_continue() {
         return Err("没有 continue 存档".to_string());
@@ -281,4 +265,35 @@ pub fn get_playback_mode(state: State<AppState>) -> Result<String, String> {
         PlaybackMode::Skip => "skip",
     };
     Ok(mode.to_string())
+}
+
+// ── 前端日志转发 ─────────────────────────────────────────────────────────────
+
+/// 接收前端日志并输出到 Rust tracing
+#[command]
+pub fn log_frontend(level: String, module: String, message: String, data: Option<String>) {
+    let data_str = data.as_deref().unwrap_or("");
+    match level.as_str() {
+        "error" => tracing::error!(target: "frontend", module = %module, "{message} {data_str}"),
+        "warn" => tracing::warn!(target: "frontend", module = %module, "{message} {data_str}"),
+        "info" => tracing::info!(target: "frontend", module = %module, "{message} {data_str}"),
+        _ => tracing::debug!(target: "frontend", module = %module, "{message} {data_str}"),
+    }
+}
+
+// ── 调试快照 ─────────────────────────────────────────────────────────────────
+
+/// 返回完整的内部状态快照（供 Agent 调试用）
+#[command]
+pub fn debug_snapshot(state: State<AppState>) -> Result<serde_json::Value, String> {
+    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "has_runtime": inner.runtime.is_some(),
+        "render_state": inner.render_state,
+        "playback_mode": format!("{:?}", inner.playback_mode),
+        "history_count": inner.history.len(),
+        "has_audio": inner.audio_manager.is_some(),
+        "current_bgm": inner.audio_manager.as_ref().and_then(|a| a.current_bgm_path().map(String::from)),
+        "user_settings": inner.user_settings,
+    }))
 }

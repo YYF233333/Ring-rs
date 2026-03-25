@@ -2,6 +2,8 @@ mod audio;
 mod command_executor;
 mod commands;
 mod config;
+#[cfg(debug_assertions)]
+mod debug_server;
 mod manifest;
 mod render_state;
 mod resources;
@@ -10,8 +12,7 @@ mod state;
 
 use state::{AppState, AppStateInner};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use tauri::Manager;
+use std::sync::{Arc, Mutex};
 use tracing::info;
 
 /// 从 CWD 向上查找包含 `assets` 子目录的祖先目录，作为项目根目录。
@@ -37,63 +38,73 @@ fn find_project_root() -> PathBuf {
 pub fn run() {
     tracing_subscriber::fmt::init();
 
+    let shared_inner = Arc::new(Mutex::new(AppStateInner::new()));
+
     tauri::Builder::default()
         .manage(AppState {
-            inner: Mutex::new(AppStateInner::new()),
+            inner: shared_inner.clone(),
         })
-        .setup(|app| {
-            let state = app.state::<AppState>();
-            let mut inner = state.inner.lock().expect("invariant: lock not poisoned");
+        .setup({
+            let shared_inner = shared_inner.clone();
+            move |_app| {
+                let mut inner = shared_inner.lock().expect("invariant: lock not poisoned");
 
-            let project_root = find_project_root();
-            info!(root = %project_root.display(), "项目根目录");
+                let project_root = find_project_root();
+                info!(root = %project_root.display(), "项目根目录");
 
-            // 尝试加载配置（config.json 不存在时使用默认值）
-            let cfg_path = project_root.join("config.json");
-            let cfg = config::AppConfig::load(&cfg_path).unwrap_or_else(|e| {
-                info!("使用默认配置 ({e})");
-                config::AppConfig::default()
-            });
+                // 尝试加载配置（config.json 不存在时使用默认值）
+                let cfg_path = project_root.join("config.json");
+                let cfg = config::AppConfig::load(&cfg_path).unwrap_or_else(|e| {
+                    info!("使用默认配置 ({e})");
+                    config::AppConfig::default()
+                });
 
-            // assets_root 相对于项目根目录解析
-            let assets_root = if cfg.assets_root.is_relative() {
-                project_root.join(&cfg.assets_root)
-            } else {
-                cfg.assets_root.clone()
-            };
-            info!(assets = %assets_root.display(), "资源根目录");
+                // assets_root 相对于项目根目录解析
+                let assets_root = if cfg.assets_root.is_relative() {
+                    project_root.join(&cfg.assets_root)
+                } else {
+                    cfg.assets_root.clone()
+                };
+                info!(assets = %assets_root.display(), "资源根目录");
 
-            let rm = resources::ResourceManager::new(&assets_root);
-            inner.resource_manager = Some(rm);
+                let rm = resources::ResourceManager::new(&assets_root);
+                inner.resource_manager = Some(rm);
 
-            // saves_dir 也相对于项目根目录解析
-            let saves_dir = if cfg.saves_dir.is_relative() {
-                project_root.join(&cfg.saves_dir)
-            } else {
-                cfg.saves_dir.clone()
-            };
-            let sm = save_manager::SaveManager::new(&saves_dir);
-            inner.save_manager = Some(sm);
+                // saves_dir 也相对于项目根目录解析
+                let saves_dir = if cfg.saves_dir.is_relative() {
+                    project_root.join(&cfg.saves_dir)
+                } else {
+                    cfg.saves_dir.clone()
+                };
+                let sm = save_manager::SaveManager::new(&saves_dir);
+                inner.save_manager = Some(sm);
 
-            // 初始化 AudioManager（失败时 warn 但不 crash）
-            match audio::AudioManager::new() {
-                Ok(mut am) => {
-                    am.set_bgm_volume(cfg.audio.bgm_volume);
-                    am.set_sfx_volume(cfg.audio.sfx_volume);
-                    inner.audio_manager = Some(am);
-                    info!("AudioManager 初始化成功");
+                // 初始化 AudioManager（失败时 warn 但不 crash）
+                match audio::AudioManager::new() {
+                    Ok(mut am) => {
+                        am.set_bgm_volume(cfg.audio.bgm_volume);
+                        am.set_sfx_volume(cfg.audio.sfx_volume);
+                        inner.audio_manager = Some(am);
+                        info!("AudioManager 初始化成功");
+                    }
+                    Err(e) => {
+                        tracing::warn!("AudioManager 初始化失败，音频功能不可用: {e}");
+                    }
                 }
-                Err(e) => {
-                    tracing::warn!("AudioManager 初始化失败，音频功能不可用: {e}");
-                }
+
+                // 加载持久化变量
+                inner.persistent_store = state::PersistentStore::load(&saves_dir);
+
+                inner.config = Some(cfg);
+                info!("子系统初始化完成");
+
+                drop(inner);
+
+                #[cfg(debug_assertions)]
+                debug_server::start(shared_inner, assets_root);
+
+                Ok(())
             }
-
-            // 加载持久化变量
-            inner.persistent_store = state::PersistentStore::load(&saves_dir);
-
-            inner.config = Some(cfg);
-            info!("子系统初始化完成");
-            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::init_game,
@@ -117,6 +128,8 @@ pub fn run() {
             commands::backspace,
             commands::set_playback_mode,
             commands::get_playback_mode,
+            commands::log_frontend,
+            commands::debug_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { callBackend } from "../composables/useBackend";
 import type { CutsceneState } from "../types/render-state";
 import { useAssets } from "../composables/useAssets";
 
@@ -20,7 +20,7 @@ const videoRef = ref<HTMLVideoElement | null>(null);
 
 async function endCutscene() {
   try {
-    await invoke("finish_cutscene");
+    await callBackend("finish_cutscene");
   } catch {
     /* best-effort */
   }

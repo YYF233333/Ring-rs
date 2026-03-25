@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { callBackend } from "./composables/useBackend";
 import { useEngine } from "./composables/useEngine";
 import { useNavigation } from "./composables/useNavigation";
 import { useAssets } from "./composables/useAssets";
@@ -74,7 +74,7 @@ async function onNewGame() {
 
 async function onContinue() {
   try {
-    const state = await invoke("continue_game");
+    const state = await callBackend("continue_game");
     if (state) {
       resetToIngame();
     } else {
@@ -126,7 +126,7 @@ async function onReturnToTitle() {
   showInGameMenu.value = false;
   stop();
   try {
-    await invoke("return_to_title");
+    await callBackend("return_to_title");
   } catch {
     /* best-effort */
   }
@@ -149,7 +149,7 @@ const playbackMode = ref<PlaybackMode>("Normal");
 async function setPlaybackMode(mode: PlaybackMode) {
   playbackMode.value = mode;
   try {
-    await invoke("set_playback_mode", { mode: mode.toLowerCase() });
+    await callBackend("set_playback_mode", { mode: mode.toLowerCase() });
   } catch {
     /* best-effort */
   }
@@ -157,7 +157,7 @@ async function setPlaybackMode(mode: PlaybackMode) {
 
 async function handleBackspace() {
   try {
-    await invoke("backspace");
+    await callBackend("backspace");
   } catch {
     /* no snapshot available */
   }

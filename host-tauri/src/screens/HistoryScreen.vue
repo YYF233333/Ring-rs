@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { callBackend } from "../composables/useBackend";
 
 export interface HistoryEntry {
   speaker: string | null;
@@ -15,7 +15,7 @@ const entries = ref<HistoryEntry[]>([]);
 
 onMounted(async () => {
   try {
-    entries.value = await invoke<HistoryEntry[]>("get_history");
+    entries.value = await callBackend<HistoryEntry[]>("get_history");
   } catch {
     entries.value = [];
   }
