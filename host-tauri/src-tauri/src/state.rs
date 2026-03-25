@@ -192,6 +192,8 @@ pub enum WaitingFor {
     Choice,
     Time { remaining_ms: u64 },
     Cutscene,
+    /// 等待 Host 侧事件完成（场景过渡、标题卡片等），对应 Runtime 的 WaitForSignal
+    Signal(String),
 }
 
 impl AppStateInner {
@@ -381,6 +383,59 @@ impl AppStateInner {
             }
         }
 
+        // 推进动画/过渡（在信号检测之前，确保同帧可检测到完成状态）
+        self.render_state.update_chapter_mark(dt);
+
+        if let Some(tc) = self.render_state.title_card.as_mut() {
+            tc.elapsed += dt;
+            if tc.elapsed >= tc.duration {
+                self.render_state.title_card = None;
+            }
+        }
+
+        self.update_background_transition(dt);
+        self.update_scene_transition(dt);
+
+        // 解析信号等待：检查 Host 侧事件是否已完成
+        //
+        // 只清除 Runtime 的等待状态，不调用 rt.tick()。
+        // 后续 run_script_tick() 会调用 rt.tick(None) 继续执行并正确处理返回的命令。
+        if let WaitingFor::Signal(ref signal_id) = self.waiting {
+            let resolved = match signal_id.as_str() {
+                "scene_transition" => self
+                    .render_state
+                    .scene_transition
+                    .as_ref()
+                    .map_or(true, |st| st.phase == SceneTransitionPhaseState::Completed),
+                "title_card" => self.render_state.title_card.is_none(),
+                "scene_effect" => true,
+                "cutscene" => self.render_state.cutscene.is_none(),
+                _ => false,
+            };
+            if resolved {
+                if let Some(rt) = self.runtime.as_mut() {
+                    rt.state_mut().clear_wait();
+                }
+                self.waiting = WaitingFor::Nothing;
+            }
+        }
+
+        // 解析时间等待
+        if let WaitingFor::Time { remaining_ms } = &self.waiting {
+            let elapsed_ms = (dt * 1000.0) as u64;
+            if elapsed_ms >= *remaining_ms {
+                if let Some(rt) = self.runtime.as_mut() {
+                    rt.state_mut().clear_wait();
+                }
+                self.waiting = WaitingFor::Nothing;
+            } else {
+                let decrement = elapsed_ms;
+                if let WaitingFor::Time { remaining_ms } = &mut self.waiting {
+                    *remaining_ms -= decrement;
+                }
+            }
+        }
+
         if self.waiting == WaitingFor::Nothing && !self.script_finished {
             self.run_script_tick();
         }
@@ -416,18 +471,6 @@ impl AppStateInner {
                 // 定时等待结束，继续打字
             }
         }
-
-        self.render_state.update_chapter_mark(dt);
-
-        if let Some(tc) = self.render_state.title_card.as_mut() {
-            tc.elapsed += dt;
-            if tc.elapsed >= tc.duration {
-                self.render_state.title_card = None;
-            }
-        }
-
-        self.update_background_transition(dt);
-        self.update_scene_transition(dt);
 
         if let Some(audio) = self.audio_manager.as_mut() {
             audio.update(dt);
@@ -582,7 +625,7 @@ impl AppStateInner {
 
         match rt.tick(None) {
             Ok((commands, waiting_reason)) => {
-                let result = self
+                let (result, audio_commands) = self
                     .command_executor
                     .execute_batch(&commands, &mut self.render_state);
 
@@ -595,30 +638,38 @@ impl AppStateInner {
                     }
                 }
 
-                let audio_cmd = self.command_executor.last_output.audio_command.take();
-                if let Some(cmd) = audio_cmd {
+                for cmd in audio_commands {
                     self.dispatch_audio_command(cmd);
                 }
 
-                match result {
-                    ExecuteResult::Ok => {}
-                    ExecuteResult::WaitForClick => {
+                // Cutscene 命令需要 CommandExecutor 提供的 video_path 来设置 render_state
+                if let ExecuteResult::WaitForCutscene { video_path } = &result {
+                    self.render_state.cutscene = Some(CutsceneState {
+                        video_path: video_path.clone(),
+                        is_playing: true,
+                    });
+                }
+
+                // 用 Runtime 的 waiting_reason（权威来源）映射 Host 等待状态
+                match &waiting_reason {
+                    WaitingReason::None => {}
+                    WaitingReason::WaitForClick => {
                         self.waiting = WaitingFor::Click;
                     }
-                    ExecuteResult::WaitForChoice { .. } => {
+                    WaitingReason::WaitForChoice { .. } => {
                         self.waiting = WaitingFor::Choice;
                     }
-                    ExecuteResult::WaitForTime(ms) => {
-                        self.waiting = WaitingFor::Time { remaining_ms: ms };
+                    WaitingReason::WaitForTime(duration) => {
+                        self.waiting =
+                            WaitingFor::Time { remaining_ms: duration.as_millis() as u64 };
                     }
-                    ExecuteResult::WaitForCutscene { video_path } => {
-                        self.render_state.cutscene = Some(CutsceneState {
-                            video_path,
-                            is_playing: true,
-                        });
-                        self.waiting = WaitingFor::Cutscene;
+                    WaitingReason::WaitForSignal(signal_id) => {
+                        self.waiting =
+                            WaitingFor::Signal(signal_id.as_str().to_string());
                     }
-                    ExecuteResult::Error(_) => {}
+                    WaitingReason::WaitForUIResult { .. } => {
+                        // Tauri 宿主暂不处理 UI Result
+                    }
                 }
 
                 // 同步 runtime persistent 变量到 PersistentStore

@@ -136,6 +136,12 @@ result.assert_waiting_click();
 - **原因**：录制导出仅在 F8 手动触发。panic hook 只打印信息，不实际导出。FFI abort 场景下析构函数也无法运行。
 - **正确做法**：`AppState` 实现 `Drop`，在 `std::thread::panicking()` 时自动调用 `export_recording`。可覆盖正常 unwind 的 panic；FFI abort 无法覆盖，需从根源避免 FFI 边界 panic。
 
+### host-tauri 未处理 WaitForSignal 导致游戏无法推进
+
+- **现象**：New Game 后画面一直黑屏，无法显示对话或推进剧情。
+- **原因**：`run_script_tick()` 使用 `CommandExecutor::execute_batch()` 的返回值（`ExecuteResult`）来设置 Host 等待状态，但 `ChangeScene` 的 `ExecuteResult` 为 `Ok`（仅修改 RenderState），忽略了 Runtime 返回的 `WaitingReason::WaitForSignal`。Runtime 永远等待信号但 Host 不知道需要发送信号，导致脚本在第一个 `changeScene with Fade` 处永久阻塞。
+- **正确做法**：用 Runtime 的 `WaitingReason`（权威来源）映射 Host 等待状态，而非 `ExecuteResult`（派生值）。`process_tick` 中检测过渡/动画完成后，通过 `RuntimeInput::Signal` 解除 Runtime 等待。同理，`WaitForTime` 也需要 Host 在 `process_tick` 中递减并解除。
+
 ---
 
 ## 如何贡献新条目

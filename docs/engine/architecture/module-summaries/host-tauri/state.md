@@ -13,7 +13,7 @@
 |------|------|
 | `AppState` | Tauri managed state，内含 `Arc<Mutex<AppStateInner>>` |
 | `AppStateInner` | 所有游戏状态的聚合体（750 行核心逻辑） |
-| `WaitingFor` | Host 侧等待状态枚举：Nothing / Click / Choice / Time / Cutscene |
+| `WaitingFor` | Host 侧等待状态枚举：Nothing / Click / Choice / Time / Cutscene / Signal |
 | `UserSettings` | 用户可调设置（音量、文字速度、Auto 延迟、全屏） |
 | `HistoryEntry` | 对话历史条目（speaker + text） |
 | `PersistentStore` | 跨会话持久化变量存储（`$persistent.key`） |
@@ -61,22 +61,24 @@ AppStateInner {
 process_tick(dt)
   ├─ Skip 模式：若等待点击 → 立即完成打字机 → 清除等待
   ├─ Auto 模式：对话完成后累积计时 → 超过 auto_delay → 清除等待
+  ├─ 更新 chapter_mark / title_card / background_transition / scene_transition 动画
+  ├─ 解析信号等待：检查 Host 侧事件是否完成 → 发送 Signal 解除 Runtime 等待
+  │   ├─ scene_transition 完成 → Signal("scene_transition")
+  │   ├─ title_card 消失 → Signal("title_card")
+  │   └─ scene_effect / cutscene 完成 → 对应信号
+  ├─ 解析时间等待：递减 remaining_ms → 归零时清除 Runtime 等待
   ├─ 若 waiting == Nothing 且脚本未结束 → run_script_tick()
   ├─ 推进打字机（基于 text_speed × dt，处理 inline_wait / effective_cps）
-  ├─ 更新 chapter_mark 动画
-  ├─ 更新 title_card 计时
-  ├─ 更新 background_transition (dissolve 进度)
-  ├─ 更新 scene_transition (多阶段状态机：FadeIn→Blackout→FadeOut→UIFadeIn→Completed)
   └─ audio_manager.update(dt) 推进淡入淡出和 duck
 ```
 
 ### 脚本推进 (`run_script_tick`)
 
 1. `VNRuntime::tick(None)` → 产出 `(Vec<Command>, WaitingReason)`
-2. `CommandExecutor::execute_batch()` → 翻译为 RenderState 变更，返回 `ExecuteResult`
+2. `CommandExecutor::execute_batch()` → 翻译为 RenderState 变更，返回 `(ExecuteResult, Vec<AudioCommand>)`
 3. 记录对话到 history（去重）
-4. 分派 AudioCommand 到 AudioManager
-5. 根据 ExecuteResult 设置 `waiting` 状态
+4. 分派所有 AudioCommand 到 AudioManager
+5. 根据 Runtime 的 `WaitingReason`（权威来源）设置 `waiting` 状态
 6. 同步 runtime persistent 变量到 PersistentStore
 7. 若无命令且无等待 → 标记 `script_finished`
 

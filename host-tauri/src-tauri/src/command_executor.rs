@@ -374,14 +374,25 @@ impl CommandExecutor {
     }
 
     /// 批量执行命令，返回最后一个需要等待的结果
-    pub fn execute_batch(&mut self, cmds: &[Command], rs: &mut RenderState) -> ExecuteResult {
+    ///
+    /// 将所有命令产生的 AudioCommand 收集到 `collected_audio` 中，
+    /// 避免后续命令的 `execute()` 重置 `last_output` 导致丢失。
+    pub fn execute_batch(
+        &mut self,
+        cmds: &[Command],
+        rs: &mut RenderState,
+    ) -> (ExecuteResult, Vec<AudioCommand>) {
         let mut final_result = ExecuteResult::Ok;
+        let mut audio_commands = Vec::new();
         for cmd in cmds {
             let result = self.execute(cmd, rs);
+            if let Some(audio) = self.last_output.audio_command.take() {
+                audio_commands.push(audio);
+            }
             if result != ExecuteResult::Ok {
                 final_result = result;
             }
         }
-        final_result
+        (final_result, audio_commands)
     }
 }

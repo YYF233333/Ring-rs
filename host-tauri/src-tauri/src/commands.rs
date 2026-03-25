@@ -289,6 +289,8 @@ pub fn debug_snapshot(state: State<AppState>) -> Result<serde_json::Value, Strin
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
     Ok(serde_json::json!({
         "has_runtime": inner.runtime.is_some(),
+        "waiting": inner.waiting,
+        "script_finished": inner.script_finished,
         "render_state": inner.render_state,
         "playback_mode": format!("{:?}", inner.playback_mode),
         "history_count": inner.history.len(),
