@@ -1,0 +1,33 @@
+[package]
+name = "host-tauri"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "host_tauri_lib"
+doctest = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+vn-runtime = { version = "0.1.0", path = "../../vn-runtime" }
+
+# 音频
+rodio = { version = "0.22", default-features = false, features = ["mp3", "wav", "flac", "vorbis", "playback"] }
+
+# 图像（用于存档缩略图）
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+
+# 日志
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi"] }
+
+# 时间格式化（存档时间）
+chrono = { version = "0.4", default-features = false, features = ["alloc", "clock"] }
+
+# 错误类型
+thiserror = "2.0.18"

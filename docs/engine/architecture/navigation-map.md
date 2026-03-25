@@ -6,7 +6,8 @@
 ## 顶层概览（Workspace）
 
 - **`vn-runtime/`**：纯逻辑 Runtime（脚本解析/执行/状态/存档），**不依赖引擎与 IO**。
-- **`host/`**：winit + wgpu + egui 宿主（渲染/音频/输入/资源），把 Runtime 的 `Command` 转换为实际效果。
+- **`host/`**：winit + wgpu + egui 宿主（旧架构，待删除）。
+- **`host-tauri/`**：Tauri 2 宿主（新架构）。Rust 后端 + Vue 3 前端，把 Runtime 的 `Command` 通过 IPC 序列化为 JSON 渲染状态。
 - **`tools/xtask/`**：本地自检与 CI 共用的质量门禁、覆盖率和开发辅助命令入口。
 - **`tools/asset-packer/`**：资源打包工具（可选工作流）。
 - **`assets/`**：游戏资源（背景/立绘/脚本/音频/字体/manifest）。
@@ -177,6 +178,26 @@
 - **脚本检查**：`cargo script-check`（检查脚本语法/label/资源引用）
 - **Dev Mode 自动脚本检查**：Host 启动时基于 `config.json` 的 `debug.script_check` 自动运行（debug build 默认开启）
 - **覆盖率**：`cargo cov`，报告：`target/llvm-cov/html/index.html`
+
+## `host-tauri/`：Tauri 2 宿主（新架构）
+
+- **`host-tauri/src-tauri/`**：Rust 后端（Tauri IPC 命令 + vn-runtime 集成 + 音频 + 资源 + 存档）
+- **`host-tauri/frontend/`**：Vue 3 前端（VN 渲染组件 + 系统 UI 页面）
+
+### 入口与核心文件
+
+- **入口**：`host-tauri/src-tauri/src/lib.rs`（Tauri Builder + 模块注册）
+- **IPC 命令**：`host-tauri/src-tauri/src/commands.rs`
+- **应用状态**：`host-tauri/src-tauri/src/state.rs`（AppState + tick/click/choose 逻辑）
+- **渲染状态**：`host-tauri/src-tauri/src/render_state.rs`（可序列化 → JSON → 前端渲染）
+- **命令执行器**：`host-tauri/src-tauri/src/command_executor.rs`
+- **音频**：`host-tauri/src-tauri/src/audio.rs`（rodio 播放）
+- **资源**：`host-tauri/src-tauri/src/resources.rs`（LogicalPath + 文件系统读取）
+- **存档**：`host-tauri/src-tauri/src/save_manager.rs`
+- **配置**：`host-tauri/src-tauri/src/config.rs`
+- **Vue 前端入口**：`host-tauri/frontend/src/App.vue`
+- **VN 渲染组件**：`host-tauri/frontend/src/vn/`（BackgroundLayer/CharacterLayer/DialogueBox/ChoicePanel/TransitionOverlay/etc.）
+- **系统 UI 页面**：`host-tauri/frontend/src/screens/`（TitleScreen/SaveLoadScreen/SettingsScreen/HistoryScreen/InGameMenu）
 
 ## “不要读/不要改”的目录（常见噪音）
 
