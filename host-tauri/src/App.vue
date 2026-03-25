@@ -196,6 +196,7 @@ function onKeyUp(e: KeyboardEvent) {
 }
 
 onMounted(async () => {
+  await callBackend("frontend_connected").catch(() => {});
   await initAssets();
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);

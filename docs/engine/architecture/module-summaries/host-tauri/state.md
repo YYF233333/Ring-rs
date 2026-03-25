@@ -46,14 +46,15 @@ AppStateInner {
 
 ## 数据流
 
-### 游戏初始化 (`init_game_from_resource`)
+### 游戏初始化 (`init_game` / `init_game_from_resource`)
 
-1. ResourceManager 读取入口脚本文本
-2. Parser 解析为 Script AST
-3. 创建 VNRuntime，注册脚本到 registry
-4. 递归预加载所有 `callScript` 引用的子脚本（`preload_called_scripts`）
-5. 注入 PersistentStore 中的持久化变量到 runtime
-6. 调用 `run_script_tick()` 执行首帧
+1. `init_game` 与 `init_game_from_resource` 均先调用 `reset_session()`，清理上一会话遗留状态（runtime、render_state、history、快照栈、playback_mode、音频等），再进入后续步骤
+2. ResourceManager 读取入口脚本文本
+3. Parser 解析为 Script AST
+4. 创建 VNRuntime，注册脚本到 registry
+5. 递归预加载所有 `callScript` 引用的子脚本（`preload_called_scripts`）
+6. 通过 `inject_persistent_vars()` 将 PersistentStore 中的持久化变量注入 runtime
+7. 调用 `run_script_tick()` 执行首帧
 
 ### 每帧 tick (`process_tick`)
 
@@ -97,6 +98,7 @@ process_tick(dt)
 - 快照栈最大 50 条，超出时从底部淘汰
 - `script_finished` 仅在 runtime.tick 返回空命令且无等待时设置
 - 持久化变量在每次 `run_script_tick` 后同步，`return_to_title` 时写盘
+- 会话级清理（停止音频、清空 runtime / render_state / history / snapshot_stack / playback_mode 等）统一由私有方法 `reset_session()` 承担；`init_game`、`init_game_from_resource` 开局前调用，`return_to_title` 内部亦调用（再额外做持久化变量保存与写盘），避免散落重复重置
 - `init_game_from_resource` 会递归预加载所有子脚本，包括条件分支内的 `CallScript`
 - `restore_from_save` 会重新加载 call_stack 中引用的所有脚本到 registry
 

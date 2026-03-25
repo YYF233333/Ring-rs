@@ -219,30 +219,48 @@ impl AppStateInner {
         }
     }
 
+    /// 将 PersistentStore 中的变量注入到当前 runtime。
+    fn inject_persistent_vars(&mut self) {
+        if self.persistent_store.variables.is_empty() {
+            return;
+        }
+        if let Some(rt) = self.runtime.as_mut() {
+            for (k, v) in &self.persistent_store.variables {
+                rt.state_mut().set_persistent_var(k.clone(), v.clone());
+            }
+        }
+    }
+
+    /// 重置游戏会话状态——停止音频、清空 runtime 与渲染状态。
+    ///
+    /// `return_to_title`、`init_game` 等需要"干净开始"的方法共用此逻辑，
+    /// 确保不会遗漏子系统清理。
+    fn reset_session(&mut self) {
+        if let Some(audio) = self.audio_manager.as_mut() {
+            audio.stop_bgm(None);
+        }
+        self.runtime = None;
+        self.render_state = RenderState::new();
+        self.waiting = WaitingFor::Nothing;
+        self.typewriter_timer = 0.0;
+        self.script_finished = false;
+        self.history.clear();
+        self.snapshot_stack.clear();
+        self.playback_mode = PlaybackMode::Normal;
+        self.auto_timer = 0.0;
+    }
+
     /// 解析脚本并初始化运行时
     pub fn init_game(&mut self, script_content: &str) -> Result<(), String> {
+        self.reset_session();
+
         let mut parser = Parser::new();
         let script = parser
             .parse("main", script_content)
             .map_err(|e| format!("脚本解析失败: {e}"))?;
         self.runtime = Some(VNRuntime::new(script));
-        self.render_state = RenderState::new();
-        self.waiting = WaitingFor::Nothing;
-        self.typewriter_timer = 0.0;
-        self.script_finished = false;
-        self.snapshot_stack.clear();
-        self.playback_mode = PlaybackMode::Normal;
-        self.auto_timer = 0.0;
 
-        // 注入持久化变量到 runtime
-        if !self.persistent_store.variables.is_empty() {
-            if let Some(rt) = self.runtime.as_mut() {
-                for (k, v) in &self.persistent_store.variables {
-                    rt.state_mut().set_persistent_var(k.clone(), v.clone());
-                }
-            }
-        }
-
+        self.inject_persistent_vars();
         self.run_script_tick();
         Ok(())
     }
@@ -283,23 +301,10 @@ impl AppStateInner {
         visited.insert(normalized);
         Self::preload_called_scripts(&mut runtime, rm, &script, &mut visited);
 
+        self.reset_session();
         self.runtime = Some(runtime);
-        self.render_state = RenderState::new();
-        self.waiting = WaitingFor::Nothing;
-        self.typewriter_timer = 0.0;
-        self.script_finished = false;
-        self.snapshot_stack.clear();
-        self.playback_mode = PlaybackMode::Normal;
-        self.auto_timer = 0.0;
 
-        if !self.persistent_store.variables.is_empty() {
-            if let Some(rt) = self.runtime.as_mut() {
-                for (k, v) in &self.persistent_store.variables {
-                    rt.state_mut().set_persistent_var(k.clone(), v.clone());
-                }
-            }
-        }
-
+        self.inject_persistent_vars();
         self.run_script_tick();
         Ok(())
     }
@@ -757,20 +762,10 @@ impl AppStateInner {
 
     /// 重置到标题画面状态
     pub fn return_to_title(&mut self) {
-        // 保存持久化变量到磁盘
         if let Err(e) = self.persistent_store.save() {
             warn!("返回标题时持久化变量保存失败: {e}");
         }
-
-        self.runtime = None;
-        self.render_state = RenderState::new();
-        self.waiting = WaitingFor::Nothing;
-        self.typewriter_timer = 0.0;
-        self.script_finished = false;
-        self.history.clear();
-        self.snapshot_stack.clear();
-        self.playback_mode = PlaybackMode::Normal;
-        self.auto_timer = 0.0;
+        self.reset_session();
     }
 
     /// 分派音频命令到 AudioManager

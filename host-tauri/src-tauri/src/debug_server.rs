@@ -214,9 +214,6 @@ fn dispatch(
 
         "return_to_title" => {
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            if let Some(audio) = inner.audio_manager.as_mut() {
-                audio.stop_bgm(Some(0.5));
-            }
             inner.return_to_title();
             Ok(serde_json::Value::Null)
         }
@@ -289,6 +286,12 @@ fn dispatch(
                 }
                 _ => tracing::debug!(target: "frontend", module = %module, "{message} {data}"),
             }
+            Ok(serde_json::Value::Null)
+        }
+
+        "frontend_connected" => {
+            let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.return_to_title();
             Ok(serde_json::Value::Null)
         }
 

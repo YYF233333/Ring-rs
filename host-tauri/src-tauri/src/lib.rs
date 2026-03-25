@@ -138,6 +138,7 @@ pub fn run() {
             commands::backspace,
             commands::set_playback_mode,
             commands::get_playback_mode,
+            commands::frontend_connected,
             commands::log_frontend,
             commands::debug_snapshot,
         ])

@@ -36,6 +36,9 @@ AudioManager {
 ### 音频播放流程
 
 ```
+AppStateInner::reset_session()（会话重置 / 干净启动 / 回标题等路径）
+  └─ 调用 stop_bgm(None)，立即停止当前 BGM（不依赖脚本 Command）
+
 CommandExecutor::execute()
   └─ 返回 AudioCommand (PlayBgm/StopBgm/PlaySfx/BgmDuck/BgmUnduck)
 
@@ -71,6 +74,7 @@ AudioManager::update(dt) (每帧)
 - Headless 模式下 `play_bgm` 等状态更新在前、I/O 在后，确保 current_bgm_path 和 fade_state 正确
 - SFX 使用 `Player::connect_new` + `detach()`，播放完自动释放
 - fade_state 的生命周期以单个 BGM 操作为单位
+- 会话级「立刻停 BGM」由 `state.rs` 的 `reset_session()` 统一触发，不再由 `commands.rs` / IPC 命令层单独调用 `stop_bgm`；脚本内 `StopBgm` 仍经 `dispatch_audio_command` 路径
 
 ## 与其他模块的关系
 

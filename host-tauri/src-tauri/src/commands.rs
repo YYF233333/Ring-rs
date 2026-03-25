@@ -183,11 +183,6 @@ pub fn get_history(state: State<AppState>) -> Result<Vec<HistoryEntry>, String> 
 #[command]
 pub fn return_to_title(state: State<AppState>) -> Result<(), String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-
-    if let Some(audio) = inner.audio_manager.as_mut() {
-        audio.stop_bgm(Some(0.5));
-    }
-
     inner.return_to_title();
     Ok(())
 }
@@ -265,6 +260,18 @@ pub fn get_playback_mode(state: State<AppState>) -> Result<String, String> {
         PlaybackMode::Skip => "skip",
     };
     Ok(mode.to_string())
+}
+
+// ── 前端生命周期 ─────────────────────────────────────────────────────────────
+
+/// 前端（重新）连接通知——重置后端会话状态，确保无残留音频或游戏状态。
+///
+/// 前端 mount 时调用。覆盖浏览器刷新、WebView 重建、HMR 热重载等场景。
+#[command]
+pub fn frontend_connected(state: State<AppState>) -> Result<(), String> {
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.return_to_title();
+    Ok(())
 }
 
 // ── 前端日志转发 ─────────────────────────────────────────────────────────────
