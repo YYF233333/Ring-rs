@@ -376,7 +376,15 @@ impl RenderState {
         if d.visible_chars >= total {
             d.is_complete = true;
         }
-        d.is_complete
+        let complete = d.is_complete;
+        let visible = d.visible_chars;
+
+        if let Some(entry) = self.nvl_entries.last_mut() {
+            entry.visible_chars = visible;
+            entry.is_complete = complete;
+        }
+
+        complete
     }
 
     pub fn complete_typewriter(&mut self) {
@@ -385,6 +393,10 @@ impl RenderState {
             d.is_complete = true;
             d.inline_wait = None;
             d.effective_cps = None;
+        }
+        if let Some(entry) = self.nvl_entries.last_mut() {
+            entry.visible_chars = entry.content.chars().count();
+            entry.is_complete = true;
         }
     }
 
@@ -408,6 +420,10 @@ impl RenderState {
             d.inline_effects.extend(shifted);
             d.is_complete = false;
             d.no_wait = no_wait;
+        }
+        if let Some(entry) = self.nvl_entries.last_mut() {
+            entry.content.push_str(&content);
+            entry.is_complete = false;
         }
     }
 
