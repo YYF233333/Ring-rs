@@ -3,6 +3,21 @@ use std::collections::HashMap;
 use serde::Serialize;
 use vn_runtime::command::{InlineEffect, InlineEffectKind, Position, TextMode};
 
+/// 将 Position 枚举转换为 manifest 预设名称
+pub(crate) fn position_to_preset_name(position: Position) -> &'static str {
+    match position {
+        Position::Left => "left",
+        Position::NearLeft => "nearleft",
+        Position::FarLeft => "farleft",
+        Position::Center => "center",
+        Position::NearMiddle => "nearmiddle",
+        Position::FarMiddle => "farmiddle",
+        Position::Right => "right",
+        Position::NearRight => "nearright",
+        Position::FarRight => "farright",
+    }
+}
+
 /// 当前帧的完整渲染状态
 ///
 /// 通过 Tauri IPC 序列化后推送给 Vue 前端。
@@ -46,6 +61,16 @@ pub struct CharacterSprite {
     pub transition_duration: Option<f32>,
     /// 目标 alpha（前端用 CSS transition 动画到此值）
     pub target_alpha: f32,
+    /// 归一化水平位置 (0–1)，来自 manifest preset
+    pub pos_x: f32,
+    /// 归一化垂直位置 (0–1)，来自 manifest preset
+    pub pos_y: f32,
+    /// 归一化锚点水平偏移 (0–1)，来自 manifest group config
+    pub anchor_x: f32,
+    /// 归一化锚点垂直偏移 (0–1)，来自 manifest group config
+    pub anchor_y: f32,
+    /// 合成缩放倍率 (pre_scale × preset.scale)
+    pub render_scale: f32,
 }
 
 /// 背景 dissolve 过渡（声明式：前端用 duration 设 CSS transition）
@@ -262,7 +287,16 @@ impl RenderState {
     // ── 角色 ──
 
     /// 添加角色立绘
-    pub fn show_character(&mut self, alias: String, texture_path: String, position: Position) {
+    pub fn show_character(
+        &mut self,
+        alias: String,
+        texture_path: String,
+        position: Position,
+        manifest: &crate::manifest::Manifest,
+    ) {
+        let preset_name = position_to_preset_name(position);
+        let preset = manifest.get_preset(preset_name);
+        let group = manifest.get_group_config(&texture_path);
         let sprite = CharacterSprite {
             texture_path,
             position,
@@ -275,6 +309,11 @@ impl RenderState {
             scale_y: 1.0,
             transition_duration: None,
             target_alpha: 1.0,
+            pos_x: preset.x,
+            pos_y: preset.y,
+            anchor_x: group.anchor.x,
+            anchor_y: group.anchor.y,
+            render_scale: group.pre_scale * preset.scale,
         };
         self.visible_characters.insert(alias, sprite);
     }

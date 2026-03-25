@@ -1,6 +1,7 @@
 use serde::Serialize;
 use vn_runtime::command::{Command, TextMode, Transition, TransitionArg};
 
+use crate::manifest::Manifest;
 use crate::render_state::{
     BackgroundTransition, ChoiceItem, RenderState, SceneTransition, SceneTransitionKind,
     SceneTransitionPhaseState,
@@ -199,7 +200,12 @@ impl CommandExecutor {
     }
 
     /// 执行单条 Command，就地修改 RenderState
-    pub fn execute(&mut self, cmd: &Command, rs: &mut RenderState) -> ExecuteResult {
+    pub fn execute(
+        &mut self,
+        cmd: &Command,
+        rs: &mut RenderState,
+        manifest: &Manifest,
+    ) -> ExecuteResult {
         self.last_output = CommandOutput::default();
 
         match cmd {
@@ -292,6 +298,11 @@ impl CommandExecutor {
                     .map(resolve_transition)
                     .unwrap_or((TransitionKind::None, 0.0));
 
+                let preset_name =
+                    crate::render_state::position_to_preset_name(*position);
+                let preset = manifest.get_preset(preset_name);
+                let group = manifest.get_group_config(path);
+
                 if let Some(c) = rs.visible_characters.get_mut(alias) {
                     let is_position_change = c.position != *position;
                     let is_same_texture = c.texture_path == *path;
@@ -299,6 +310,11 @@ impl CommandExecutor {
                     c.texture_path = path.clone();
                     c.position = *position;
                     c.target_alpha = 1.0;
+                    c.pos_x = preset.x;
+                    c.pos_y = preset.y;
+                    c.anchor_x = group.anchor.x;
+                    c.anchor_y = group.anchor.y;
+                    c.render_scale = group.pre_scale * preset.scale;
 
                     if is_position_change && matches!(kind, TransitionKind::Move) {
                         c.transition_duration = Some(duration);
@@ -319,7 +335,7 @@ impl CommandExecutor {
                     } else {
                         (0.0, Some(duration))
                     };
-                    rs.show_character(alias.clone(), path.clone(), *position);
+                    rs.show_character(alias.clone(), path.clone(), *position, manifest);
                     if let Some(c) = rs.visible_characters.get_mut(alias) {
                         c.transition_duration = trans_dur;
                         c.alpha = start_alpha;
@@ -484,12 +500,17 @@ impl CommandExecutor {
     }
 
     /// 批量执行命令，返回最后一个需要等待的结果及收集的副作用
-    pub fn execute_batch(&mut self, cmds: &[Command], rs: &mut RenderState) -> BatchOutput {
+    pub fn execute_batch(
+        &mut self,
+        cmds: &[Command],
+        rs: &mut RenderState,
+        manifest: &Manifest,
+    ) -> BatchOutput {
         let mut final_result = ExecuteResult::Ok;
         let mut audio_commands = Vec::new();
         let mut scene_effect_request = None;
         for cmd in cmds {
-            let result = self.execute(cmd, rs);
+            let result = self.execute(cmd, rs, manifest);
             if let Some(audio) = self.last_output.audio_command.take() {
                 audio_commands.push(audio);
             }

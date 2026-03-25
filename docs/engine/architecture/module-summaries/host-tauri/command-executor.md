@@ -1,6 +1,6 @@
 # host-tauri/command_executor
 
-> LastVerified: 2026-03-25
+> LastVerified: 2026-03-26
 > Owner: Claude
 
 ## 职责
@@ -23,11 +23,11 @@
 Command (from vn-runtime)
   │
   ▼
-CommandExecutor::execute(cmd, &mut render_state)
+CommandExecutor::execute(cmd, &mut render_state, manifest)
   │
   ├─ 视觉命令 → 直接修改 RenderState 字段
   │   ├─ ShowBackground/ChangeScene → set_background + 过渡状态
-  │   ├─ ShowCharacter/HideCharacter → visible_characters 增删改
+  │   ├─ ShowCharacter/HideCharacter → visible_characters 增删改（`execute()` 接受 `&Manifest`，将 `Position` 枚举解析为归一化坐标并写入 `CharacterSprite`）
   │   ├─ ShowText/ExtendText → start_typewriter / extend_dialogue
   │   ├─ PresentChoices → set_choices
   │   ├─ ChapterMark/TitleCard → 设置标记状态

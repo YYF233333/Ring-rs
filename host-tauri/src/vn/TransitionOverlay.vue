@@ -14,7 +14,9 @@ const visible = computed(() => {
   return st != null && st.phase !== "Completed";
 });
 
-function isRule(kind: SceneTransitionKind): kind is { Rule: { mask_path: string; reversed: boolean } } {
+function isRule(
+  kind: SceneTransitionKind,
+): kind is { Rule: { mask_path: string; reversed: boolean } } {
   return typeof kind === "object" && kind !== null && "Rule" in kind;
 }
 
@@ -74,7 +76,8 @@ watch(
 const overlayStyle = computed(() => {
   const base: Record<string, string | number> = {
     opacity: targetOpacity.value,
-    transition: transitionDuration.value > 0 ? `opacity ${transitionDuration.value}s linear` : "none",
+    transition:
+      transitionDuration.value > 0 ? `opacity ${transitionDuration.value}s linear` : "none",
   };
 
   if (ruleConfig.value) {

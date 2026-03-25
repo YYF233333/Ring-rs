@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useAssets } from "../composables/useAssets";
 import type { CharacterSprite } from "../types/render-state";
+
+const DESIGN_WIDTH = 1920;
+const DESIGN_HEIGHT = 1080;
 
 const { assetUrl } = useAssets();
 
@@ -8,29 +12,43 @@ defineProps<{
   characters: Readonly<Record<string, CharacterSprite>>;
 }>();
 
-const positionMap: Record<string, string> = {
-  Left: "15%",
-  NearLeft: "30%",
-  Center: "50%",
-  NearRight: "70%",
-  Right: "85%",
-};
+const vpWidth = ref(window.innerWidth);
+const vpHeight = ref(window.innerHeight);
+
+function onResize() {
+  vpWidth.value = window.innerWidth;
+  vpHeight.value = window.innerHeight;
+}
+
+onMounted(() => window.addEventListener("resize", onResize));
+onBeforeUnmount(() => window.removeEventListener("resize", onResize));
+
+const baseScale = computed(() =>
+  Math.min(vpWidth.value / DESIGN_WIDTH, vpHeight.value / DESIGN_HEIGHT),
+);
 
 function getCharacterStyle(char: Readonly<CharacterSprite>): Record<string, string | number> {
-  const x = positionMap[char.position] || "50%";
   const td = char.transition_duration ?? 0;
-  const transition = td > 0
-    ? `left ${td}s ease-in-out, opacity ${td}s ease-in-out, transform ${td}s ease-in-out`
-    : "none";
+  const transition =
+    td > 0
+      ? `left ${td}s ease-in-out, top ${td}s ease-in-out, opacity ${td}s ease-in-out, transform ${td}s ease-in-out`
+      : "none";
+
+  const anchorXPct = char.anchor_x * 100;
+  const anchorYPct = char.anchor_y * 100;
+  const s = baseScale.value;
+  const scaleX = s * char.render_scale * char.scale_x;
+  const scaleY = s * char.render_scale * char.scale_y;
+
   return {
     position: "absolute",
-    bottom: "0",
-    left: x,
-    transform: `translateX(-50%) translate(${char.offset_x}px, ${char.offset_y}px) scale(${char.scale_x}, ${char.scale_y})`,
-    opacity: char.alpha,
+    left: `${char.pos_x * 100}%`,
+    top: `${char.pos_y * 100}%`,
+    transformOrigin: `${anchorXPct}% ${anchorYPct}%`,
+    transform: `translate(${-anchorXPct}%, ${-anchorYPct}%) translate(${char.offset_x}px, ${char.offset_y}px) scale(${scaleX}, ${scaleY})`,
+    opacity: char.target_alpha,
     transition,
     zIndex: char.z_order,
-    maxHeight: "100%",
   };
 }
 </script>
@@ -54,6 +72,7 @@ function getCharacterStyle(char: Readonly<CharacterSprite>): Record<string, stri
   inset: 0;
   z-index: 1;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .character-sprite {

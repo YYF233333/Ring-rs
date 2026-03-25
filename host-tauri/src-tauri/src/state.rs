@@ -162,6 +162,7 @@ pub struct Services {
     pub resources: ResourceManager,
     pub saves: SaveManager,
     pub config: AppConfig,
+    pub manifest: crate::manifest::Manifest,
 }
 
 /// 应用状态内部结构（被 Mutex 保护）
@@ -710,13 +711,18 @@ impl AppStateInner {
 
         match rt.tick(None) {
             Ok((commands, waiting_reason)) => {
+                let manifest = &self
+                    .services
+                    .as_ref()
+                    .expect("invariant: services initialized in setup()")
+                    .manifest;
                 let BatchOutput {
                     result,
                     audio_commands,
                     scene_effect_request,
                 } = self
                     .command_executor
-                    .execute_batch(&commands, &mut self.render_state);
+                    .execute_batch(&commands, &mut self.render_state, manifest);
 
                 if let Some(ref d) = self.render_state.dialogue
                     && (d.visible_chars == 0 || !d.content.is_empty()) {

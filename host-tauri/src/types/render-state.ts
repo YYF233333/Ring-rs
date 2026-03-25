@@ -18,7 +18,16 @@ export interface RenderState {
 
 export interface CharacterSprite {
   texture_path: string;
-  position: "Left" | "Right" | "Center" | "NearLeft" | "NearRight";
+  position:
+    | "Left"
+    | "Right"
+    | "Center"
+    | "NearLeft"
+    | "NearRight"
+    | "NearMiddle"
+    | "FarLeft"
+    | "FarRight"
+    | "FarMiddle";
   z_order: number;
   fading_out: boolean;
   alpha: number;
@@ -28,6 +37,16 @@ export interface CharacterSprite {
   scale_y: number;
   transition_duration: number | null;
   target_alpha: number;
+  /** 归一化水平位置 (0–1)，来自 manifest preset */
+  pos_x: number;
+  /** 归一化垂直位置 (0–1)，来自 manifest preset */
+  pos_y: number;
+  /** 归一化锚点水平偏移 (0–1)，来自 manifest group config */
+  anchor_x: number;
+  /** 归一化锚点垂直偏移 (0–1)，来自 manifest group config */
+  anchor_y: number;
+  /** 合成缩放倍率 (pre_scale × preset.scale) */
+  render_scale: number;
 }
 
 export interface DialogueState {

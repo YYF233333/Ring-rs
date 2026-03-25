@@ -1,6 +1,6 @@
 # host-tauri/render_state
 
-> LastVerified: 2026-03-25
+> LastVerified: 2026-03-26
 > Owner: Claude
 
 ## 职责
@@ -19,7 +19,7 @@
 
 | 类型 | 说明 |
 |------|------|
-| `CharacterSprite` | 角色立绘显示状态（路径、位置、alpha、过渡时长等） |
+| `CharacterSprite` | 角色立绘显示状态（路径、alpha、过渡时长等；含 `pos_x` / `pos_y` / `anchor_x` / `anchor_y` / `render_scale`，由后端据 manifest 解析脚本 `Position` 后填入） |
 | `DialogueState` | 对话框打字机状态（speaker、content、visible_chars、inline effects） |
 | `ChoicesState` / `ChoiceItem` | 选择界面状态 |
 | `ChapterMarkState` / `ChapterMarkPhase` | 章节标记动画（FadeIn→Visible→FadeOut） |

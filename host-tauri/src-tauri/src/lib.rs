@@ -4,7 +4,6 @@ mod commands;
 mod config;
 #[cfg(debug_assertions)]
 mod debug_server;
-#[allow(dead_code)]
 mod manifest;
 mod render_state;
 mod resources;
@@ -79,6 +78,17 @@ pub fn run() {
                 };
                 let sm = save_manager::SaveManager::new(&saves_dir);
 
+                // 加载 manifest（立绘元数据）
+                let manifest_fs_path = assets_root.join(&cfg.manifest_path);
+                let manifest = manifest::Manifest::load(
+                    &manifest_fs_path.to_string_lossy(),
+                )
+                .unwrap_or_else(|e| {
+                    info!("使用默认 manifest ({e})");
+                    manifest::Manifest::with_defaults()
+                });
+                info!(presets = manifest.presets.len(), "Manifest 加载完成");
+
                 // 初始化 AudioManager（headless 状态追踪，无设备依赖）
                 let mut am = audio::AudioManager::new();
                 am.set_bgm_volume(cfg.audio.bgm_volume);
@@ -93,6 +103,7 @@ pub fn run() {
                     resources: rm,
                     saves: sm,
                     config: cfg,
+                    manifest,
                 });
                 info!("子系统初始化完成");
 

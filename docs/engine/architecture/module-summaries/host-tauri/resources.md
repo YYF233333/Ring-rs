@@ -1,6 +1,6 @@
 # host-tauri/resources
 
-> LastVerified: 2026-03-25
+> LastVerified: 2026-03-26
 > Owner: Claude
 
 ## 职责
@@ -86,7 +86,7 @@ std::fs::read / read_to_string → Result<T, ResourceError>
 
 ## 附录：Manifest
 
-`manifest.rs` 提供立绘元数据管理：
+`manifest.rs` 提供立绘元数据管理。`Manifest` 在应用初始化时加载并存入 `Services`；`CommandExecutor` 在处理 `ShowCharacter` 时读取它，将脚本中的 `Position` 解析为写入 `CharacterSprite` 的归一化坐标与缩放。
 
 | 类型 | 说明 |
 |------|------|

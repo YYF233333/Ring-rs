@@ -1,6 +1,6 @@
 # host-tauri 模块总览
 
-> LastVerified: 2026-03-25
+> LastVerified: 2026-03-26
 > Owner: Claude
 
 ## 职责
@@ -57,7 +57,7 @@ Tauri 2 宿主应用——将 vn-runtime 的 Command 通过 IPC 序列化为 JSO
 | `resources.rs` | 资源路径管理 | [resources.md](host-tauri/resources.md) |
 | `save_manager.rs` | 存档读写 | [state.md](host-tauri/state.md) 附录 |
 | `config.rs` | 应用配置 | [state.md](host-tauri/state.md) 附录 |
-| `manifest.rs` | 立绘元数据 | [resources.md](host-tauri/resources.md) 附录 |
+| `manifest.rs` | 立绘元数据；由 `Services` 持有，命令执行器通过它把脚本中的 `Position` 解析为角色站位 | [resources.md](host-tauri/resources.md) 附录 |
 | `debug_server.rs` | Debug HTTP 镜像 | 仅 debug build |
 | `src/` (前端) | Vue 3 渲染层；`composables/useEngine` 模块单例驱动 tick 与 IPC，`useConfirmDialog` 确认框；业务组件经 emit + 根组件接 `useEngine`，不直接 `callBackend` | [frontend.md](host-tauri/frontend.md) |
 

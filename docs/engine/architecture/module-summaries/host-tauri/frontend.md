@@ -1,6 +1,6 @@
 # host-tauri/frontend
 
-> LastVerified: 2026-03-25
+> LastVerified: 2026-03-26
 > Owner: Claude
 
 ## 职责
@@ -34,7 +34,7 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 |------|------|
 | `VNScene` | VN 场景容器：组合背景、角色、对话、选择等子组件 |
 | `BackgroundLayer` | 背景图渲染，处理 dissolve 过渡 |
-| `CharacterLayer` | 角色立绘层，处理位置/透明度/过渡动画 |
+| `CharacterLayer` | 角色立绘层；使用后端下发的 `pos_x`、`pos_y`、`anchor_x`、`anchor_y`、`render_scale`（manifest 解析结果）做 CSS 定位与缩放，不再使用前端硬编码的 `positionMap` |
 | `DialogueBox` | 对话框，显示打字机效果文本（ADV/NVL 模式） |
 | `ChoicePanel` | 分支选择面板 |
 | `TransitionOverlay` | 场景过渡遮罩（fade/fadewhite/rule） |
