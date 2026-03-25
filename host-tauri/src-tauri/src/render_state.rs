@@ -26,6 +26,8 @@ pub struct RenderState {
     pub cutscene: Option<CutsceneState>,
     /// 当前播放模式
     pub playback_mode: PlaybackMode,
+    /// 音频声明式状态
+    pub audio: AudioRenderState,
 }
 
 /// 角色立绘在场景中的显示状态
@@ -46,32 +48,26 @@ pub struct CharacterSprite {
     pub target_alpha: f32,
 }
 
-/// 背景 dissolve 过渡
+/// 背景 dissolve 过渡（声明式：前端用 duration 设 CSS transition）
 #[derive(Debug, Clone, Serialize)]
 pub struct BackgroundTransition {
     /// 旧背景路径
     pub old_background: Option<String>,
+    /// 新背景路径
+    pub new_background: String,
     /// 过渡时长（秒）
     pub duration: f32,
-    /// 当前进度 (0.0–1.0)
-    pub progress: f32,
 }
 
-/// 场景遮罩过渡（fade/fadewhite/rule）
+/// 场景遮罩过渡（声明式：前端根据 phase + duration 设 CSS transition）
 #[derive(Debug, Clone, Serialize)]
 pub struct SceneTransition {
     /// 过渡类型
     pub transition_type: SceneTransitionKind,
-    /// 当前阶段
+    /// 当前阶段（后端按 duration 计时推进）
     pub phase: SceneTransitionPhaseState,
     /// 每阶段时长（秒）
     pub duration: f32,
-    /// 遮罩透明度 (0.0–1.0)
-    pub mask_alpha: f32,
-    /// Rule 进度 (0.0–1.0)
-    pub progress: f32,
-    /// UI 透明度
-    pub ui_alpha: f32,
     /// 待切换背景
     pub pending_background: Option<String>,
 }
@@ -88,9 +84,8 @@ pub enum SceneTransitionKind {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum SceneTransitionPhaseState {
     FadeIn,
-    Blackout,
+    Hold,
     FadeOut,
-    UIFadeIn,
     Completed,
 }
 
@@ -195,6 +190,38 @@ pub enum PlaybackMode {
     Skip,
 }
 
+/// 音频声明式状态——后端描述"应该播什么"，前端负责实际播放
+#[derive(Debug, Clone, Serialize)]
+pub struct AudioRenderState {
+    /// 当前应播放的 BGM（None 表示静音）
+    pub bgm: Option<BgmState>,
+    /// 本帧需要播放的一次性音效（前端播放后忽略，下帧清空）
+    pub sfx_queue: Vec<SfxRequest>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BgmState {
+    pub path: String,
+    pub looping: bool,
+    /// 最终音量 (0.0–1.0)，已含 duck/mute 计算
+    pub volume: f32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SfxRequest {
+    pub path: String,
+    pub volume: f32,
+}
+
+impl AudioRenderState {
+    pub fn silent() -> Self {
+        Self {
+            bgm: None,
+            sfx_queue: Vec::new(),
+        }
+    }
+}
+
 const CHAPTER_MARK_FADE_IN: f32 = 0.5;
 const CHAPTER_MARK_VISIBLE: f32 = 2.0;
 const CHAPTER_MARK_FADE_OUT: f32 = 0.5;
@@ -217,6 +244,7 @@ impl RenderState {
             scene_transition: None,
             cutscene: None,
             playback_mode: PlaybackMode::Normal,
+            audio: AudioRenderState::silent(),
         }
     }
 

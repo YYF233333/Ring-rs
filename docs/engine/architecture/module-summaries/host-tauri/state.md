@@ -24,23 +24,25 @@
 
 ```
 AppStateInner {
-    runtime:           Option<VNRuntime>,       // vn-runtime 实例
-    command_executor:  CommandExecutor,          // Command → RenderState 翻译器
-    render_state:      RenderState,             // 当前渲染快照
-    waiting:           WaitingFor,              // 当前等待状态
-    typewriter_timer:  f32,                     // 打字机累积计时
-    text_speed:        f32,                     // 基础文字速度 (CPS)
-    script_finished:   bool,                    // 脚本是否执行完毕
-    audio_manager:     Option<AudioManager>,    // 音频（初始化失败时 None）
-    resource_manager:  Option<ResourceManager>, // 资源读取
-    save_manager:      Option<SaveManager>,     // 存档
-    config:            Option<AppConfig>,        // 运行时配置
-    history:           Vec<HistoryEntry>,        // 对话历史（最新在前）
-    user_settings:     UserSettings,            // 用户设置
-    persistent_store:  PersistentStore,         // 持久化变量
-    snapshot_stack:    SnapshotStack,           // 回退快照栈
-    playback_mode:     PlaybackMode,            // Normal / Auto / Skip
-    auto_timer:        f32,                     // Auto 模式计时器
+    runtime:                   Option<VNRuntime>,       // vn-runtime 实例
+    command_executor:          CommandExecutor,         // Command → RenderState 翻译器
+    render_state:              RenderState,             // 当前渲染快照
+    waiting:                   WaitingFor,              // 当前等待状态
+    typewriter_timer:          f32,                     // 打字机累积计时
+    text_speed:                f32,                     // 基础文字速度 (CPS)
+    script_finished:           bool,                    // 脚本是否执行完毕
+    audio_manager:             Option<AudioManager>,    // 音频状态追踪（初始化失败时 None）
+    resource_manager:          Option<ResourceManager>, // 资源读取
+    save_manager:              Option<SaveManager>,     // 存档
+    config:                    Option<AppConfig>,       // 运行时配置
+    history:                   Vec<HistoryEntry>,       // 对话历史（最新在前）
+    user_settings:             UserSettings,            // 用户设置
+    persistent_store:          PersistentStore,         // 持久化变量
+    snapshot_stack:            SnapshotStack,           // 回退快照栈
+    playback_mode:             PlaybackMode,            // Normal / Auto / Skip
+    auto_timer:                f32,                     // Auto 模式计时器
+    bg_transition_elapsed:     f32,                     // 背景 dissolve 内部计时（不写入 RenderState.progress）
+    scene_transition_elapsed:  f32,                     // 场景过渡各阶段内部计时
 }
 ```
 
@@ -62,7 +64,9 @@ AppStateInner {
 process_tick(dt)
   ├─ Skip 模式：若等待点击 → 立即完成打字机 → 清除等待
   ├─ Auto 模式：对话完成后累积计时 → 超过 auto_delay → 清除等待
-  ├─ 更新 chapter_mark / title_card / background_transition / scene_transition 动画
+  ├─ 更新 chapter_mark / title_card
+  ├─ update_background_transition(dt)：用 bg_transition_elapsed 累计，到期清除 background_transition（声明式字段不含 progress）
+  ├─ update_scene_transition(dt)：用 scene_transition_elapsed 推进 FadeIn → Hold(0.2s) → FadeOut → Completed（phase 写入 RenderState，不推送 mask/ui progress）
   ├─ 解析信号等待：检查 Host 侧事件是否完成 → 发送 Signal 解除 Runtime 等待
   │   ├─ scene_transition 完成 → Signal("scene_transition")
   │   ├─ title_card 消失 → Signal("title_card")
@@ -70,7 +74,7 @@ process_tick(dt)
   ├─ 解析时间等待：递减 remaining_ms → 归零时清除 Runtime 等待
   ├─ 若 waiting == Nothing 且脚本未结束 → run_script_tick()
   ├─ 推进打字机（基于 text_speed × dt，处理 inline_wait / effective_cps）
-  └─ audio_manager.update(dt) 推进淡入淡出和 duck
+  └─ audio_manager.update(dt) 后 render_state.audio = audio.to_audio_state()（headless → IPC → 前端 Web Audio）
 ```
 
 ### 脚本推进 (`run_script_tick`)
@@ -78,7 +82,7 @@ process_tick(dt)
 1. `VNRuntime::tick(None)` → 产出 `(Vec<Command>, WaitingReason)`
 2. `CommandExecutor::execute_batch()` → 翻译为 RenderState 变更，返回 `(ExecuteResult, Vec<AudioCommand>)`
 3. 记录对话到 history（去重）
-4. 分派所有 AudioCommand 到 AudioManager
+4. 分派所有 AudioCommand 到 `dispatch_audio_command`（仅更新 `AudioManager` 内存状态，**不** `resource_manager.read_bytes`、不 `cache_audio_bytes`）
 5. 根据 Runtime 的 `WaitingReason`（权威来源）设置 `waiting` 状态
 6. 同步 runtime persistent 变量到 PersistentStore
 7. 若无命令且无等待 → 标记 `script_finished`

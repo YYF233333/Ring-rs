@@ -80,18 +80,12 @@ pub fn run() {
                 let sm = save_manager::SaveManager::new(&saves_dir);
                 inner.save_manager = Some(sm);
 
-                // 初始化 AudioManager（失败时 warn 但不 crash）
-                match audio::AudioManager::new() {
-                    Ok(mut am) => {
-                        am.set_bgm_volume(cfg.audio.bgm_volume);
-                        am.set_sfx_volume(cfg.audio.sfx_volume);
-                        inner.audio_manager = Some(am);
-                        info!("AudioManager 初始化成功");
-                    }
-                    Err(e) => {
-                        tracing::warn!("AudioManager 初始化失败，音频功能不可用: {e}");
-                    }
-                }
+                // 初始化 AudioManager（headless 状态追踪，无设备依赖）
+                let mut am = audio::AudioManager::new();
+                am.set_bgm_volume(cfg.audio.bgm_volume);
+                am.set_sfx_volume(cfg.audio.sfx_volume);
+                inner.audio_manager = Some(am);
+                info!("AudioManager 初始化成功");
 
                 // 加载持久化变量
                 inner.persistent_store = state::PersistentStore::load(&saves_dir);

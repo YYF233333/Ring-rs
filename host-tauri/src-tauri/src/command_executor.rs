@@ -115,8 +115,8 @@ impl CommandExecutor {
                         TransitionKind::Dissolve | TransitionKind::Move => {
                             rs.background_transition = Some(BackgroundTransition {
                                 old_background: rs.current_background.clone(),
+                                new_background: path.clone(),
                                 duration,
-                                progress: 0.0,
                             });
                             rs.set_background(path.clone());
                         }
@@ -142,8 +142,8 @@ impl CommandExecutor {
                         TransitionKind::Dissolve | TransitionKind::Move => {
                             rs.background_transition = Some(BackgroundTransition {
                                 old_background: rs.current_background.clone(),
+                                new_background: path.clone(),
                                 duration,
-                                progress: 0.0,
                             });
                             rs.set_background(path.clone());
                         }
@@ -152,9 +152,6 @@ impl CommandExecutor {
                                 transition_type: SceneTransitionKind::Fade,
                                 phase: SceneTransitionPhaseState::FadeIn,
                                 duration,
-                                mask_alpha: 0.0,
-                                progress: 0.0,
-                                ui_alpha: 0.0,
                                 pending_background: Some(path.clone()),
                             });
                         }
@@ -163,9 +160,6 @@ impl CommandExecutor {
                                 transition_type: SceneTransitionKind::FadeWhite,
                                 phase: SceneTransitionPhaseState::FadeIn,
                                 duration,
-                                mask_alpha: 0.0,
-                                progress: 0.0,
-                                ui_alpha: 0.0,
                                 pending_background: Some(path.clone()),
                             });
                         }
@@ -180,9 +174,6 @@ impl CommandExecutor {
                                 },
                                 phase: SceneTransitionPhaseState::FadeIn,
                                 duration,
-                                mask_alpha: 0.0,
-                                progress: 0.0,
-                                ui_alpha: 0.0,
                                 pending_background: Some(path.clone()),
                             });
                         }

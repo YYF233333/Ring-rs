@@ -182,6 +182,10 @@ pub struct AppStateInner {
     pub playback_mode: PlaybackMode,
     /// Auto 模式计时器
     pub auto_timer: f32,
+    /// 背景过渡内部计时器
+    bg_transition_elapsed: f32,
+    /// 场景过渡内部计时器
+    scene_transition_elapsed: f32,
 }
 
 /// Host 侧的等待状态
@@ -216,6 +220,8 @@ impl AppStateInner {
             snapshot_stack: SnapshotStack::new(50),
             playback_mode: PlaybackMode::Normal,
             auto_timer: 0.0,
+            bg_transition_elapsed: 0.0,
+            scene_transition_elapsed: 0.0,
         }
     }
 
@@ -248,6 +254,8 @@ impl AppStateInner {
         self.snapshot_stack.clear();
         self.playback_mode = PlaybackMode::Normal;
         self.auto_timer = 0.0;
+        self.bg_transition_elapsed = 0.0;
+        self.scene_transition_elapsed = 0.0;
     }
 
     /// 解析脚本并初始化运行时
@@ -479,66 +487,59 @@ impl AppStateInner {
 
         if let Some(audio) = self.audio_manager.as_mut() {
             audio.update(dt);
+            self.render_state.audio = audio.to_audio_state();
         }
 
         // 同步 playback_mode 到 render_state
         self.render_state.playback_mode = self.playback_mode.clone();
     }
 
-    /// 推进背景 dissolve 过渡
+    /// 推进背景 dissolve 过渡（内部计时器，不推到 RenderState）
     fn update_background_transition(&mut self, dt: f32) {
-        let completed = if let Some(bt) = self.render_state.background_transition.as_mut() {
-            bt.progress += dt / bt.duration;
-            bt.progress >= 1.0
-        } else {
-            false
-        };
-        if completed {
-            self.render_state.background_transition = None;
+        if let Some(bt) = self.render_state.background_transition.as_mut() {
+            self.bg_transition_elapsed += dt;
+            if self.bg_transition_elapsed >= bt.duration {
+                self.render_state.background_transition = None;
+                self.bg_transition_elapsed = 0.0;
+            }
         }
     }
 
-    /// 推进场景遮罩过渡（多阶段状态机）
+    /// 推进场景遮罩过渡（内部计时器推进 phase，不计算渐变值）
     fn update_scene_transition(&mut self, dt: f32) {
-        const BLACKOUT_HOLD: f32 = 0.2;
+        const HOLD_DURATION: f32 = 0.2;
 
         let Some(st) = self.render_state.scene_transition.as_mut() else {
             return;
         };
 
+        self.scene_transition_elapsed += dt;
+
         match st.phase {
             SceneTransitionPhaseState::FadeIn => {
-                st.mask_alpha = (st.mask_alpha + dt / st.duration).min(1.0);
-                if st.mask_alpha >= 1.0 {
+                if self.scene_transition_elapsed >= st.duration {
                     if let Some(bg) = st.pending_background.take() {
                         self.render_state.current_background = Some(bg);
                     }
-                    st.phase = SceneTransitionPhaseState::Blackout;
-                    st.progress = 0.0;
+                    st.phase = SceneTransitionPhaseState::Hold;
+                    self.scene_transition_elapsed = 0.0;
                 }
             }
-            SceneTransitionPhaseState::Blackout => {
-                st.progress += dt / BLACKOUT_HOLD;
-                if st.progress >= 1.0 {
+            SceneTransitionPhaseState::Hold => {
+                if self.scene_transition_elapsed >= HOLD_DURATION {
                     st.phase = SceneTransitionPhaseState::FadeOut;
-                    st.progress = 0.0;
+                    self.scene_transition_elapsed = 0.0;
                 }
             }
             SceneTransitionPhaseState::FadeOut => {
-                st.mask_alpha = (st.mask_alpha - dt / st.duration).max(0.0);
-                if st.mask_alpha <= 0.0 {
-                    st.phase = SceneTransitionPhaseState::UIFadeIn;
-                    st.ui_alpha = 0.0;
-                }
-            }
-            SceneTransitionPhaseState::UIFadeIn => {
-                st.ui_alpha = (st.ui_alpha + dt / 0.3).min(1.0);
-                if st.ui_alpha >= 1.0 {
+                if self.scene_transition_elapsed >= st.duration {
                     st.phase = SceneTransitionPhaseState::Completed;
+                    self.scene_transition_elapsed = 0.0;
                 }
             }
             SceneTransitionPhaseState::Completed => {
                 self.render_state.scene_transition = None;
+                self.scene_transition_elapsed = 0.0;
             }
         }
     }
@@ -768,7 +769,7 @@ impl AppStateInner {
         self.reset_session();
     }
 
-    /// 分派音频命令到 AudioManager
+    /// 分派音频命令到 AudioManager（headless 状态追踪）
     fn dispatch_audio_command(&mut self, cmd: AudioCommand) {
         let Some(audio) = self.audio_manager.as_mut() else {
             warn!("收到音频命令但 AudioManager 未初始化");
@@ -780,12 +781,6 @@ impl AppStateInner {
                 looping,
                 fade_in,
             } => {
-                if let Some(rm) = self.resource_manager.as_ref() {
-                    let logical = LogicalPath::new(&path);
-                    if let Ok(bytes) = rm.read_bytes(&logical) {
-                        audio.cache_audio_bytes(logical.as_str(), bytes);
-                    }
-                }
                 audio.play_bgm(&path, looping, fade_in);
             }
             AudioCommand::StopBgm { fade_out } => {
@@ -798,12 +793,6 @@ impl AppStateInner {
                 audio.unduck();
             }
             AudioCommand::PlaySfx { path } => {
-                if let Some(rm) = self.resource_manager.as_ref() {
-                    let logical = LogicalPath::new(&path);
-                    if let Ok(bytes) = rm.read_bytes(&logical) {
-                        audio.cache_audio_bytes(logical.as_str(), bytes);
-                    }
-                }
                 audio.play_sfx(&path);
             }
         }

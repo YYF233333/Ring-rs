@@ -51,3 +51,4 @@
 | RFC-026 | 统一 Game Mode 框架 | `rfc-unified-game-mode-framework.md` | Superseded（将基于 Tauri 重新设计） |
 | RFC-027 | 玩法脚本层集成 | `rfc-gameplay-scripting-layer.md` | Proposed |
 | RFC-028 | 脚本预览编辑器 | `rfc-script-preview-editor.md` | Accepted |
+| RFC-029 | 前端媒体统一——动画模型收敛与音频前端化 | `rfc-frontend-media-unification.md` | Accepted |

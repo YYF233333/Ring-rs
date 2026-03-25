@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { callBackend } from "./composables/useBackend";
 import { useEngine } from "./composables/useEngine";
 import { useNavigation } from "./composables/useNavigation";
 import { useAssets } from "./composables/useAssets";
+import { useAudio } from "./composables/useAudio";
 import type { SaveInfo, PlaybackMode } from "./types/render-state";
 import VNScene from "./vn/VNScene.vue";
 import TitleScreen from "./screens/TitleScreen.vue";
@@ -25,6 +26,9 @@ const {
   loadGame,
   listSaves,
 } = useEngine();
+
+const audioState = computed(() => renderState.value?.audio);
+const { dispose: disposeAudio } = useAudio(audioState);
 
 const { currentScreen, navigateTo, goBack, resetToTitle, resetToIngame } =
   useNavigation();
@@ -205,6 +209,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);
   window.removeEventListener("keyup", onKeyUp);
+  disposeAudio();
 });
 </script>
 

@@ -13,6 +13,7 @@ export interface RenderState {
   scene_transition: Readonly<SceneTransition> | null;
   cutscene: Readonly<CutsceneState> | null;
   playback_mode: PlaybackMode;
+  audio: Readonly<AudioRenderState>;
 }
 
 export interface CharacterSprite {
@@ -87,17 +88,14 @@ export interface ChoiceItem {
 
 export interface BackgroundTransition {
   old_background: string | null;
+  new_background: string;
   duration: number;
-  progress: number;
 }
 
 export interface SceneTransition {
   transition_type: SceneTransitionKind;
   phase: SceneTransitionPhaseState;
   duration: number;
-  mask_alpha: number;
-  progress: number;
-  ui_alpha: number;
   pending_background: string | null;
 }
 
@@ -108,9 +106,8 @@ export type SceneTransitionKind =
 
 export type SceneTransitionPhaseState =
   | "FadeIn"
-  | "Blackout"
+  | "Hold"
   | "FadeOut"
-  | "UIFadeIn"
   | "Completed";
 
 // ── 视频过场 ─────────────────────────────────────────────────────────────────
@@ -123,6 +120,25 @@ export interface CutsceneState {
 // ── 播放模式 ─────────────────────────────────────────────────────────────────
 
 export type PlaybackMode = "Normal" | "Auto" | "Skip";
+
+// ── 音频状态 ─────────────────────────────────────────────────────────────────
+
+export interface AudioRenderState {
+  bgm: Readonly<BgmState> | null;
+  sfx_queue: readonly SfxRequest[];
+}
+
+export interface BgmState {
+  path: string;
+  looping: boolean;
+  /** 最终音量 (0.0–1.0)，已含 duck/mute 计算 */
+  volume: number;
+}
+
+export interface SfxRequest {
+  path: string;
+  volume: number;
+}
 
 // ── 存档 ─────────────────────────────────────────────────────────────────────
 
