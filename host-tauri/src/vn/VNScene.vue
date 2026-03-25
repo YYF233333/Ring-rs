@@ -15,6 +15,7 @@ defineProps<{
 
 const emit = defineEmits<{
   choose: [index: number];
+  "cutscene-finished": [];
 }>();
 </script>
 
@@ -46,6 +47,7 @@ const emit = defineEmits<{
     <VideoOverlay
       v-if="renderState.cutscene"
       :cutscene="renderState.cutscene"
+      @finished="emit('cutscene-finished')"
     />
   </div>
 </template>

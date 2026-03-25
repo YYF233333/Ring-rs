@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { callBackend } from "../composables/useBackend";
 import type { CutsceneState } from "../types/render-state";
 import { useAssets } from "../composables/useAssets";
 
@@ -18,12 +17,7 @@ const emit = defineEmits<{
 
 const videoRef = ref<HTMLVideoElement | null>(null);
 
-async function endCutscene() {
-  try {
-    await callBackend("finish_cutscene");
-  } catch {
-    /* best-effort */
-  }
+function endCutscene() {
   emit("finished");
 }
 

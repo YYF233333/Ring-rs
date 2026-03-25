@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { callBackend } from "../composables/useBackend";
-
 const emit = defineEmits<{
   "new-game": [];
   continue: [];
@@ -8,14 +6,6 @@ const emit = defineEmits<{
   settings: [];
   quit: [];
 }>();
-
-async function onQuit() {
-  try {
-    await callBackend("quit_game");
-  } catch {
-    window.close();
-  }
-}
 </script>
 
 <template>
@@ -29,7 +19,7 @@ async function onQuit() {
       <button class="menu-btn" @click="emit('continue')">Continue</button>
       <button class="menu-btn" @click="emit('load')">Load</button>
       <button class="menu-btn" @click="emit('settings')">Settings</button>
-      <button class="menu-btn" @click="onQuit">Quit</button>
+      <button class="menu-btn" @click="emit('quit')">Quit</button>
     </nav>
 
     <div class="version-tag">v0.1.0</div>

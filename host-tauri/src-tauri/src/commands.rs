@@ -15,7 +15,7 @@ use crate::state::{AppState, HistoryEntry, UserSettings};
 pub fn init_game(state: State<AppState>, script_path: String) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    if inner.resource_manager.is_some() {
+    if inner.services.is_some() {
         inner.init_game_from_resource(&script_path)?;
     } else {
         let content = std::fs::read_to_string(&script_path)
@@ -63,8 +63,7 @@ pub fn get_render_state(state: State<AppState>) -> Result<RenderState, String> {
 pub fn save_game(state: State<AppState>, slot: u32) -> Result<(), String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-
+    let svc = inner.services();
     let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
     let runtime_state = rt.state().clone();
     let mut save_data = SaveData::new(slot, runtime_state).with_history(rt.history().clone());
@@ -72,14 +71,12 @@ pub fn save_game(state: State<AppState>, slot: u32) -> Result<(), String> {
     if let Some(ref cm) = inner.render_state.chapter_mark {
         save_data = save_data.with_chapter(&cm.title);
     }
-    if let Some(ref audio) = inner.audio_manager {
-        save_data = save_data.with_audio(AudioState {
-            current_bgm: audio.current_bgm_path().map(|s| s.to_string()),
-            bgm_looping: true,
-        });
-    }
+    save_data = save_data.with_audio(AudioState {
+        current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
+        bgm_looping: true,
+    });
 
-    sm.save(&save_data).map_err(|e| e.to_string())
+    svc.saves.save(&save_data).map_err(|e| e.to_string())
 }
 
 /// 加载指定槽位的存档
@@ -87,9 +84,7 @@ pub fn save_game(state: State<AppState>, slot: u32) -> Result<(), String> {
 pub fn load_game(state: State<AppState>, slot: u32) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-
-    let save_data = sm.load(slot).map_err(|e| e.to_string())?;
+    let save_data = inner.services().saves.load(slot).map_err(|e| e.to_string())?;
 
     inner.restore_from_save(save_data)?;
     Ok(inner.render_state.clone())
@@ -100,12 +95,11 @@ pub fn load_game(state: State<AppState>, slot: u32) -> Result<RenderState, Strin
 pub fn list_saves(state: State<AppState>) -> Result<Vec<SaveInfo>, String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-
-    let saves = sm.list_saves();
+    let svc = inner.services();
+    let saves = svc.saves.list_saves();
     let infos: Vec<SaveInfo> = saves
         .iter()
-        .filter_map(|(slot, _)| sm.get_save_info(*slot))
+        .filter_map(|(slot, _)| svc.saves.get_save_info(*slot))
         .collect();
     Ok(infos)
 }
@@ -114,10 +108,7 @@ pub fn list_saves(state: State<AppState>) -> Result<Vec<SaveInfo>, String> {
 #[command]
 pub fn delete_save(state: State<AppState>, slot: u32) -> Result<(), String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
-
-    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-
-    sm.delete(slot).map_err(|e| e.to_string())
+    inner.services().saves.delete(slot).map_err(|e| e.to_string())
 }
 
 // ── 配置 ─────────────────────────────────────────────────────────────────────
@@ -126,21 +117,19 @@ pub fn delete_save(state: State<AppState>, slot: u32) -> Result<(), String> {
 #[command]
 pub fn get_assets_root(state: State<AppState>) -> Result<String, String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
-    let rm = inner
-        .resource_manager
-        .as_ref()
-        .ok_or("ResourceManager 未初始化")?;
-    Ok(rm.base_path().to_string_lossy().to_string())
+    Ok(inner
+        .services()
+        .resources
+        .base_path()
+        .to_string_lossy()
+        .to_string())
 }
 
 /// 获取当前配置
 #[command]
 pub fn get_config(state: State<AppState>) -> Result<AppConfig, String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner
-        .config
-        .clone()
-        .ok_or_else(|| "配置未初始化".to_string())
+    Ok(inner.services().config.clone())
 }
 
 // ── 用户设置 ─────────────────────────────────────────────────────────────────
@@ -159,10 +148,9 @@ pub fn update_settings(state: State<AppState>, settings: UserSettings) -> Result
 
     inner.text_speed = settings.text_speed;
 
-    if let Some(audio) = inner.audio_manager.as_mut() {
-        audio.set_bgm_volume(settings.bgm_volume / 100.0);
-        audio.set_sfx_volume(settings.sfx_volume / 100.0);
-    }
+    let svc = inner.services_mut();
+    svc.audio.set_bgm_volume(settings.bgm_volume / 100.0);
+    svc.audio.set_sfx_volume(settings.sfx_volume / 100.0);
 
     inner.user_settings = settings;
     Ok(())
@@ -192,13 +180,11 @@ pub fn return_to_title(state: State<AppState>) -> Result<(), String> {
 pub fn continue_game(state: State<AppState>) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-
-    if !sm.has_continue() {
+    let svc = inner.services();
+    if !svc.saves.has_continue() {
         return Err("没有 continue 存档".to_string());
     }
-
-    let save_data = sm.load_continue().map_err(|e| e.to_string())?;
+    let save_data = svc.saves.load_continue().map_err(|e| e.to_string())?;
 
     inner.restore_from_save(save_data)?;
     Ok(inner.render_state.clone())
@@ -301,8 +287,8 @@ pub fn debug_snapshot(state: State<AppState>) -> Result<serde_json::Value, Strin
         "render_state": inner.render_state,
         "playback_mode": format!("{:?}", inner.playback_mode),
         "history_count": inner.history.len(),
-        "has_audio": inner.audio_manager.is_some(),
-        "current_bgm": inner.audio_manager.as_ref().and_then(|a| a.current_bgm_path().map(String::from)),
+        "has_audio": inner.services.is_some(),
+        "current_bgm": inner.services().audio.current_bgm_path().map(String::from),
         "user_settings": inner.user_settings,
     }))
 }

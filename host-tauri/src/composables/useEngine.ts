@@ -1,27 +1,28 @@
 import { ref, readonly } from "vue";
 import { callBackend } from "./useBackend";
-import type { RenderState, SaveInfo, AppConfig } from "../types/render-state";
+import type {
+  AppConfig,
+  HistoryEntry,
+  PlaybackMode,
+  RenderState,
+  SaveInfo,
+} from "../types/render-state";
 import { createLogger } from "./useLogger";
 
 const log = createLogger("engine");
 
+// ── 模块级单例状态 ──────────────────────────────────────────────────────────
+
+const renderState = ref<RenderState | null>(null);
+const isRunning = ref(false);
+const playbackMode = ref<PlaybackMode>("Normal");
+let animFrameId: number | null = null;
+let lastTime = 0;
+let tickCount = 0;
+
 export function useEngine() {
-  const renderState = ref<RenderState | null>(null);
-  const isRunning = ref(false);
-  let animFrameId: number | null = null;
-  let lastTime = 0;
+  // ── 游戏循环 ────────────────────────────────────────────────────────────
 
-  async function startGame(scriptPath: string) {
-    log.info("startGame", scriptPath);
-    const state = await callBackend<RenderState>("init_game", { scriptPath });
-    log.debug("init_game returned", JSON.stringify(state).slice(0, 500));
-    renderState.value = state;
-    isRunning.value = true;
-    lastTime = performance.now();
-    gameLoop();
-  }
-
-  let tickCount = 0;
   function gameLoop() {
     if (document.hidden) {
       animFrameId = requestAnimationFrame(gameLoop);
@@ -29,7 +30,7 @@ export function useEngine() {
     }
 
     const now = performance.now();
-    const dt = (now - lastTime) / 1000;
+    const dt = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
 
     callBackend<RenderState>("tick", { dt })
@@ -52,6 +53,26 @@ export function useEngine() {
       });
   }
 
+  // ── 生命周期 ────────────────────────────────────────────────────────────
+
+  async function startGame(scriptPath: string) {
+    log.info("startGame", scriptPath);
+    const state = await callBackend<RenderState>("init_game", { scriptPath });
+    log.debug("init_game returned", JSON.stringify(state).slice(0, 500));
+    renderState.value = state;
+    isRunning.value = true;
+    lastTime = performance.now();
+    gameLoop();
+  }
+
+  function stop() {
+    isRunning.value = false;
+    tickCount = 0;
+    if (animFrameId !== null) cancelAnimationFrame(animFrameId);
+  }
+
+  // ── 交互 ────────────────────────────────────────────────────────────────
+
   async function handleClick() {
     if (!isRunning.value) return;
     const state = await callBackend<RenderState>("click");
@@ -64,18 +85,65 @@ export function useEngine() {
     renderState.value = state;
   }
 
-  function stop() {
-    isRunning.value = false;
-    if (animFrameId !== null) cancelAnimationFrame(animFrameId);
+  async function continueGame(): Promise<RenderState> {
+    stop();
+    const state = await callBackend<RenderState>("continue_game");
+    renderState.value = state;
+    isRunning.value = true;
+    lastTime = performance.now();
+    gameLoop();
+    return state;
   }
 
-  // ── 存档 ───────────────────────────────────────────────────────────────
+  async function returnToTitle() {
+    stop();
+    await callBackend("return_to_title");
+  }
+
+  async function setPlaybackMode(mode: PlaybackMode) {
+    playbackMode.value = mode;
+    await callBackend("set_playback_mode", { mode: mode.toLowerCase() });
+  }
+
+  async function backspace() {
+    if (!isRunning.value) return;
+    try {
+      const state = await callBackend<RenderState>("backspace");
+      renderState.value = state;
+    } catch {
+      // no snapshot available
+    }
+  }
+
+  async function frontendConnected() {
+    await callBackend("frontend_connected").catch(() => {});
+  }
+
+  async function finishCutscene() {
+    const state = await callBackend<RenderState>("finish_cutscene");
+    renderState.value = state;
+  }
+
+  async function getHistory(): Promise<HistoryEntry[]> {
+    return await callBackend<HistoryEntry[]>("get_history");
+  }
+
+  async function quitGame() {
+    try {
+      await callBackend("quit_game");
+    } catch {
+      window.close();
+    }
+  }
+
+  // ── 存档 ────────────────────────────────────────────────────────────────
 
   async function saveGame(slot: number) {
     await callBackend("save_game", { slot });
   }
 
   async function loadGame(slot: number) {
+    stop();
     const state = await callBackend<RenderState>("load_game", { slot });
     renderState.value = state;
     isRunning.value = true;
@@ -98,14 +166,23 @@ export function useEngine() {
   return {
     renderState: readonly(renderState),
     isRunning: readonly(isRunning),
+    playbackMode: readonly(playbackMode),
     startGame,
     handleClick,
     handleChoose,
     stop,
     saveGame,
     loadGame,
+    continueGame,
     listSaves,
     deleteSave,
     getConfig,
+    returnToTitle,
+    setPlaybackMode,
+    backspace,
+    frontendConnected,
+    finishCutscene,
+    getHistory,
+    quitGame,
   };
 }

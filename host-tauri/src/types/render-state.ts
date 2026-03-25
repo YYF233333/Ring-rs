@@ -150,6 +150,13 @@ export interface SaveInfo {
   play_time_secs: number;
 }
 
+// ── 历史记录 ─────────────────────────────────────────────────────────────────
+
+export interface HistoryEntry {
+  speaker: string | null;
+  text: string;
+}
+
 // ── 配置 ─────────────────────────────────────────────────────────────────────
 
 export interface AppConfig {

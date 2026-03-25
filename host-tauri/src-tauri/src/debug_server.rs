@@ -88,7 +88,7 @@ fn dispatch(
                 .ok_or("missing scriptPath")?
                 .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            if inner.resource_manager.is_some() {
+            if inner.services.is_some() {
                 inner.init_game_from_resource(&script_path)?;
             } else {
                 let content = std::fs::read_to_string(&script_path)
@@ -126,7 +126,7 @@ fn dispatch(
         "save_game" => {
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let inner = state.lock().map_err(|e| e.to_string())?;
-            let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
+            let svc = inner.services();
             let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
             let runtime_state = rt.state().clone();
             let mut save_data =
@@ -134,32 +134,29 @@ fn dispatch(
             if let Some(ref cm) = inner.render_state.chapter_mark {
                 save_data = save_data.with_chapter(&cm.title);
             }
-            if let Some(ref audio) = inner.audio_manager {
-                save_data = save_data.with_audio(vn_runtime::AudioState {
-                    current_bgm: audio.current_bgm_path().map(|s| s.to_string()),
-                    bgm_looping: true,
-                });
-            }
-            sm.save(&save_data).map_err(|e| e.to_string())?;
+            save_data = save_data.with_audio(vn_runtime::AudioState {
+                current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
+                bgm_looping: true,
+            });
+            svc.saves.save(&save_data).map_err(|e| e.to_string())?;
             Ok(serde_json::Value::Null)
         }
 
         "load_game" => {
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-            let save_data = sm.load(slot).map_err(|e| e.to_string())?;
+            let save_data = inner.services().saves.load(slot).map_err(|e| e.to_string())?;
             inner.restore_from_save(save_data)?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "list_saves" => {
             let inner = state.lock().map_err(|e| e.to_string())?;
-            let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-            let saves = sm.list_saves();
+            let svc = inner.services();
+            let saves = svc.saves.list_saves();
             let infos: Vec<_> = saves
                 .iter()
-                .filter_map(|(slot, _)| sm.get_save_info(*slot))
+                .filter_map(|(slot, _)| svc.saves.get_save_info(*slot))
                 .collect();
             Ok(serde_json::to_value(&infos).unwrap_or_default())
         }
@@ -167,25 +164,25 @@ fn dispatch(
         "delete_save" => {
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let inner = state.lock().map_err(|e| e.to_string())?;
-            let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-            sm.delete(slot).map_err(|e| e.to_string())?;
+            inner.services().saves.delete(slot).map_err(|e| e.to_string())?;
             Ok(serde_json::Value::Null)
         }
 
         "get_assets_root" => {
             let inner = state.lock().map_err(|e| e.to_string())?;
-            let rm = inner
-                .resource_manager
-                .as_ref()
-                .ok_or("ResourceManager 未初始化")?;
             Ok(serde_json::Value::String(
-                rm.base_path().to_string_lossy().to_string(),
+                inner
+                    .services()
+                    .resources
+                    .base_path()
+                    .to_string_lossy()
+                    .to_string(),
             ))
         }
 
         "get_config" => {
             let inner = state.lock().map_err(|e| e.to_string())?;
-            let cfg = inner.config.clone().ok_or("配置未初始化")?;
+            let cfg = inner.services().config.clone();
             Ok(serde_json::to_value(&cfg).unwrap_or_default())
         }
 
@@ -199,10 +196,9 @@ fn dispatch(
                 .map_err(|e| format!("Invalid settings: {e}"))?;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
             inner.text_speed = settings.text_speed;
-            if let Some(audio) = inner.audio_manager.as_mut() {
-                audio.set_bgm_volume(settings.bgm_volume / 100.0);
-                audio.set_sfx_volume(settings.sfx_volume / 100.0);
-            }
+            let svc = inner.services_mut();
+            svc.audio.set_bgm_volume(settings.bgm_volume / 100.0);
+            svc.audio.set_sfx_volume(settings.sfx_volume / 100.0);
             inner.user_settings = settings;
             Ok(serde_json::Value::Null)
         }
@@ -220,11 +216,11 @@ fn dispatch(
 
         "continue_game" => {
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            let sm = inner.save_manager.as_ref().ok_or("SaveManager 未初始化")?;
-            if !sm.has_continue() {
+            let svc = inner.services();
+            if !svc.saves.has_continue() {
                 return Err("没有 continue 存档".to_string());
             }
-            let save_data = sm.load_continue().map_err(|e| e.to_string())?;
+            let save_data = svc.saves.load_continue().map_err(|e| e.to_string())?;
             inner.restore_from_save(save_data)?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -299,11 +295,13 @@ fn dispatch(
             let inner = state.lock().map_err(|e| e.to_string())?;
             Ok(serde_json::json!({
                 "has_runtime": inner.runtime.is_some(),
+                "waiting": inner.waiting,
+                "script_finished": inner.script_finished,
                 "render_state": inner.render_state,
                 "playback_mode": format!("{:?}", inner.playback_mode),
                 "history_count": inner.history.len(),
-                "has_audio": inner.audio_manager.is_some(),
-                "current_bgm": inner.audio_manager.as_ref().and_then(|a| a.current_bgm_path().map(String::from)),
+                "has_audio": inner.services.is_some(),
+                "current_bgm": inner.services().audio.current_bgm_path().map(String::from),
                 "user_settings": inner.user_settings,
             }))
         }

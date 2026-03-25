@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { callBackend } from "../composables/useBackend";
+import { useEngine } from "../composables/useEngine";
+import type { HistoryEntry } from "../types/render-state";
 
-export interface HistoryEntry {
-  speaker: string | null;
-  text: string;
-}
+const { getHistory } = useEngine();
 
 const emit = defineEmits<{
   back: [];
@@ -15,7 +13,7 @@ const entries = ref<HistoryEntry[]>([]);
 
 onMounted(async () => {
   try {
-    entries.value = await callBackend<HistoryEntry[]>("get_history");
+    entries.value = await getHistory();
   } catch {
     entries.value = [];
   }

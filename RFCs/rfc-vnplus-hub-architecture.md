@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-024
-- 状态：Proposed（v2：Tauri 路线）
+- 状态：Active（Phase 1 进行中；v2 Tauri 路线）
 - 作者：claude-4.6-opus
 - 日期：2026-03-24（v1）；2026-03-25（v2 重设计）
 - 影响范围：`host`（整体架构迁移）、`vn-runtime`（接口层面不变）
@@ -127,16 +127,15 @@ Ring Engine (VN+) — Tauri 版
 ├── host-tauri/src-tauri/（Rust 后端）
 │   ├── vn-runtime 集成（直接依赖）
 │   ├── 共享服务层
-│   │   ├── AudioManager（Rust 侧 rodio 播放）
+│   │   ├── AudioManager（headless 状态追踪，实际播放由前端 Web Audio 驱动；见 RFC-029）
 │   │   ├── ResourceManager（asset: 协议暴露资源）
 │   │   ├── SaveManager
-│   │   ├── InputManager（消费前端 IPC 输入）
 │   │   └── Config
 │   ├── 状态管理（RenderState、CommandExecutor）
 │   ├── Tauri IPC 命令层（tick、click、save、load...）
 │   └── 模态调度（Rust 侧状态机）
 │
-├── host-tauri/frontend/（Vue WebView 前端）
+├── host-tauri/src/（Vue WebView 前端，前端根目录为 host-tauri/）
 │   ├── vn/（VN 渲染组件）
 │   │   ├── BackgroundLayer.vue
 │   │   ├── CharacterLayer.vue
@@ -148,7 +147,13 @@ Ring Engine (VN+) — Tauri 版
 │   │   ├── SaveLoadScreen.vue
 │   │   ├── SettingsScreen.vue
 │   │   ├── HistoryScreen.vue
-│   │   └── ...
+│   │   └── InGameMenu.vue
+│   ├── composables/（状态管理层）
+│   │   ├── useEngine.ts / useBackend.ts / useAudio.ts
+│   │   ├── useAssets.ts / useSettings.ts / useNavigation.ts
+│   │   └── useLogger.ts
+│   ├── types/（TypeScript 类型镜像）
+│   │   └── render-state.ts
 │   └── modes/（玩法模态，按需添加）
 │       └── [future] CardBattle.vue / StrategyMap.vue / ...
 │
@@ -166,7 +171,7 @@ AppState
 ├── command_executor                   
 ├── RenderState ──── Tauri event ──►  VN 渲染组件
 │   (serialize as JSON)                ├── 背景（<img> + CSS transition）
-├── AudioManager                       ├── 立绘（<img> + CSS transform）
+├── AudioManager（headless 状态追踪）   ├── 立绘（<img> + CSS transform）
 ├── ResourceManager                    ├── 对话框（HTML rich text）
 ├── SaveManager                        ├── 选项（按钮列表）
 │                                      └── 过渡遮罩（CSS/Canvas）
@@ -275,26 +280,39 @@ Rule 过渡是唯一需要 Canvas/WebGL 的效果，可用 PixiJS filter 或裸 
 
 ### Phase 0：当前（纯 VN 开发 + 迁移准备）
 
-- **状态**：正在进行
+- **状态**：✅ 完成
 - 继续纯 VN 开发和 ref-project 重制（在当前 wgpu host 上）
 - RFC-028 Phase A（Snapshot + 回退）已完成，Phase B/C 冻结（待迁移后在新架构上重新设计）
 
 ### Phase 1：Tauri 最小 Host + VN 核心渲染
 
-- **触发条件**：ref-project 达到稳定里程碑，有时间窗口做架构迁移
-- 搭建 `host-tauri` crate（Cargo workspace member）
-- Rust 后端：接入 vn-runtime + CommandExecutor + 共享服务，暴露 Tauri IPC 命令
-- Vue 前端：实现 VN 核心渲染（背景 + 立绘 + 对话框 + 选项 + 过渡效果）
-- 验收：一个完整 VN 场景可在 Tauri host 中从头到尾跑通
-- 当前 wgpu `host` 保留，两个 host 共存
+- **状态**：🔧 进行中（大部分完成，剩余功能缺口见下表）
+- ~~搭建 `host-tauri` crate（Cargo workspace member）~~ ✅
+- ~~Rust 后端：接入 vn-runtime + CommandExecutor + 共享服务，暴露 Tauri IPC 命令~~ ✅（24 个 IPC 命令）
+- Vue 前端：实现 VN 核心渲染 — **部分完成**
+  - ✅ 背景 + dissolve/move 过渡
+  - ✅ 立绘 + 位置/透明度/过渡动画
+  - ✅ 对话框（ADV 模式 + 打字机 + inline effects）
+  - ✅ 选项面板
+  - ✅ 场景过渡遮罩（Fade/FadeWhite）
+  - ✅ 章节标记 + 字卡
+  - ✅ 视频过场
+  - ✅ 音频（Web Audio 前端驱动）
+  - ✅ 快照回退（Backspace）
+  - ✅ Skip/Auto 播放模式
+  - ❌ **scene_effect 未渲染**（shake/blur/dim 指令无效果）
+  - ❌ **NVL 模式未渲染**（类型已定义，前端未实现）
+  - ❌ **Rule 过渡未实现**（需 Canvas/WebGL）
+- ~~当前 wgpu `host` 保留，两个 host 共存~~ ✅
+- **验收：一个完整 VN 场景可跑通** — ⚠️ 受上述缺口影响，仅限不使用 shake/blur/dim/NVL/Rule 的场景
 
 ### Phase 2：UI 页面迁移 + game_mode 统一
 
-- **触发条件**：Phase 1 核心渲染稳定
-- 迁移所有 UI 页面到 Vue（标题、菜单、存档/读档、设置、历史）
-- game_mode（HTTP Bridge + WebView）退役——小游戏直接作为 Vue 组件接入
-- 存档/读档/设置等功能走 Tauri IPC
-- 验收：Tauri host 功能完全对齐当前 wgpu host
+- **状态**：🔧 进行中（已超前实施部分 UI 页面）
+- ~~迁移所有 UI 页面到 Vue~~ — **已完成**：标题画面、存档/读档、设置、历史、游戏内菜单
+- game_mode（HTTP Bridge + WebView）退役 — 尚未执行
+- ~~存档/读档/设置等功能走 Tauri IPC~~ ✅
+- 验收：Tauri host 功能完全对齐当前 wgpu host — **未达标**（受 Phase 1 功能缺口影响）
 
 ### Phase 3：玩法模态扩展
 
@@ -327,16 +345,20 @@ Ring-rs/ (Cargo workspace)
 │   │   ├── src/
 │   │   │   ├── main.rs
 │   │   │   ├── commands.rs       # Tauri IPC 命令
-│   │   │   ├── state.rs          # AppState（复用核心逻辑）
-│   │   │   └── bridge.rs         # RenderState → JSON 序列化
+│   │   │   ├── state.rs          # AppState（核心状态管理）
+│   │   │   ├── command_executor.rs # Command → RenderState 翻译
+│   │   │   ├── render_state.rs   # 可序列化渲染状态（#[derive(Serialize)]）
+│   │   │   ├── audio.rs          # Headless 音频状态追踪
+│   │   │   └── debug_server.rs   # Debug HTTP 镜像（仅 debug build）
 │   │   └── tauri.conf.json
-│   └── frontend/
-│       ├── package.json          # pnpm 管理
-│       ├── vite.config.ts
-│       └── src/
-│           ├── App.vue
-│           ├── vn/               # VN 渲染组件
-│           └── screens/          # UI 页面
+│   ├── package.json              # pnpm 管理（前端根目录即 host-tauri/）
+│   ├── vite.config.ts
+│   └── src/
+│       ├── App.vue
+│       ├── composables/          # 状态管理层
+│       ├── vn/                   # VN 渲染组件
+│       ├── screens/              # UI 页面
+│       └── types/                # TypeScript 类型镜像
 ├── tools/
 └── ...
 ```

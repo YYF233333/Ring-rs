@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { callBackend } from "./composables/useBackend";
 import { useEngine } from "./composables/useEngine";
 import { useNavigation } from "./composables/useNavigation";
 import { useAssets } from "./composables/useAssets";
 import { useAudio } from "./composables/useAudio";
-import type { SaveInfo, PlaybackMode } from "./types/render-state";
+import { useConfirmDialog } from "./composables/useConfirmDialog";
+import type { SaveInfo } from "./types/render-state";
 import VNScene from "./vn/VNScene.vue";
 import TitleScreen from "./screens/TitleScreen.vue";
 import SaveLoadScreen from "./screens/SaveLoadScreen.vue";
@@ -18,13 +18,21 @@ import SkipAutoIndicator from "./components/SkipAutoIndicator.vue";
 
 const {
   renderState,
+  playbackMode,
   startGame,
   handleClick,
   handleChoose,
-  stop,
   saveGame,
   loadGame,
+  continueGame,
   listSaves,
+  getConfig,
+  returnToTitle,
+  setPlaybackMode,
+  backspace,
+  frontendConnected,
+  finishCutscene,
+  quitGame,
 } = useEngine();
 
 const audioState = computed(() => renderState.value?.audio);
@@ -39,29 +47,14 @@ const showInGameMenu = ref(false);
 const toast = ref<InstanceType<typeof Toast> | null>(null);
 const saves = ref<SaveInfo[]>([]);
 
-const confirmVisible = ref(false);
-const confirmTitle = ref("");
-const confirmMessage = ref("");
-let confirmResolve: ((v: boolean) => void) | null = null;
-
-function askConfirm(title: string, message: string): Promise<boolean> {
-  confirmTitle.value = title;
-  confirmMessage.value = message;
-  confirmVisible.value = true;
-  return new Promise((resolve) => {
-    confirmResolve = resolve;
-  });
-}
-
-function onConfirm() {
-  confirmVisible.value = false;
-  confirmResolve?.(true);
-}
-
-function onCancelConfirm() {
-  confirmVisible.value = false;
-  confirmResolve?.(false);
-}
+const {
+  visible: confirmVisible,
+  title: confirmTitle,
+  message: confirmMessage,
+  ask: askConfirm,
+  confirm: onConfirm,
+  cancel: onCancelConfirm,
+} = useConfirmDialog();
 
 async function refreshSaves() {
   saves.value = await listSaves();
@@ -69,7 +62,9 @@ async function refreshSaves() {
 
 async function onNewGame() {
   try {
-    await startGame("scripts/remake/main.md");
+    const config = await getConfig();
+    const scriptPath = config?.start_script_path || "scripts/main.md";
+    await startGame(scriptPath);
     resetToIngame();
   } catch {
     toast.value?.show("启动失败", "error");
@@ -78,12 +73,8 @@ async function onNewGame() {
 
 async function onContinue() {
   try {
-    const state = await callBackend("continue_game");
-    if (state) {
-      resetToIngame();
-    } else {
-      toast.value?.show("没有可继续的存档", "info");
-    }
+    await continueGame();
+    resetToIngame();
   } catch {
     toast.value?.show("没有可继续的存档", "info");
   }
@@ -128,9 +119,8 @@ async function onReturnToTitle() {
   if (!confirmed) return;
 
   showInGameMenu.value = false;
-  stop();
   try {
-    await callBackend("return_to_title");
+    await returnToTitle();
   } catch {
     /* best-effort */
   }
@@ -145,25 +135,6 @@ function onSceneClick() {
 function onRightClick() {
   if (currentScreen.value === "ingame") {
     showInGameMenu.value = !showInGameMenu.value;
-  }
-}
-
-const playbackMode = ref<PlaybackMode>("Normal");
-
-async function setPlaybackMode(mode: PlaybackMode) {
-  playbackMode.value = mode;
-  try {
-    await callBackend("set_playback_mode", { mode: mode.toLowerCase() });
-  } catch {
-    /* best-effort */
-  }
-}
-
-async function handleBackspace() {
-  try {
-    await callBackend("backspace");
-  } catch {
-    /* no snapshot available */
   }
 }
 
@@ -183,7 +154,7 @@ function onKeyDown(e: KeyboardEvent) {
     return;
   }
   if (e.key === "Backspace") {
-    handleBackspace();
+    backspace();
     return;
   }
   if (e.key === " " || e.key === "Enter") {
@@ -200,7 +171,7 @@ function onKeyUp(e: KeyboardEvent) {
 }
 
 onMounted(async () => {
-  await callBackend("frontend_connected").catch(() => {});
+  await frontendConnected();
   await initAssets();
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
@@ -222,7 +193,7 @@ onBeforeUnmount(() => {
       @continue="onContinue"
       @load="onNavigateLoad"
       @settings="navigateTo('settings')"
-      @quit="() => {}"
+      @quit="quitGame"
     />
 
     <!-- In-Game -->
@@ -235,6 +206,7 @@ onBeforeUnmount(() => {
         v-if="renderState"
         :render-state="renderState"
         @choose="handleChoose"
+        @cutscene-finished="finishCutscene"
       />
       <div v-else class="loading">加载中...</div>
 

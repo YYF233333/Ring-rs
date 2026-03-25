@@ -152,6 +152,15 @@ impl SnapshotStack {
 
 // ── 应用状态 ────────────────────────────────────────────────────────────────
 
+/// setup() 中一次性初始化的子系统集合。
+/// 初始化后不可能为 None——通过 `services()` 访问器断言此不变量。
+pub struct Services {
+    pub audio: AudioManager,
+    pub resources: ResourceManager,
+    pub saves: SaveManager,
+    pub config: AppConfig,
+}
+
 /// 应用状态内部结构（被 Mutex 保护）
 pub struct AppStateInner {
     pub runtime: Option<VNRuntime>,
@@ -162,14 +171,8 @@ pub struct AppStateInner {
     /// 打字机基础速度（字符/秒）
     pub text_speed: f32,
     pub script_finished: bool,
-    /// 音频管理器（初始化失败时为 None）
-    pub audio_manager: Option<AudioManager>,
-    /// 资源管理器
-    pub resource_manager: Option<ResourceManager>,
-    /// 存档管理器
-    pub save_manager: Option<SaveManager>,
-    /// 应用配置
-    pub config: Option<AppConfig>,
+    /// setup() 初始化的子系统集合
+    pub services: Option<Services>,
     /// 对话历史（最新在前）
     pub history: Vec<HistoryEntry>,
     /// 用户设置
@@ -210,10 +213,7 @@ impl AppStateInner {
             typewriter_timer: 0.0,
             text_speed: 30.0,
             script_finished: false,
-            audio_manager: None,
-            resource_manager: None,
-            save_manager: None,
-            config: None,
+            services: None,
             history: Vec::new(),
             user_settings: UserSettings::default(),
             persistent_store: PersistentStore::empty(),
@@ -223,6 +223,21 @@ impl AppStateInner {
             bg_transition_elapsed: 0.0,
             scene_transition_elapsed: 0.0,
         }
+    }
+
+    /// 获取已初始化的子系统引用。
+    /// setup() 完成后此断言不会失败。
+    pub fn services(&self) -> &Services {
+        self.services
+            .as_ref()
+            .expect("invariant: services initialized in setup()")
+    }
+
+    /// 获取已初始化的子系统可变引用。
+    pub fn services_mut(&mut self) -> &mut Services {
+        self.services
+            .as_mut()
+            .expect("invariant: services initialized in setup()")
     }
 
     /// 将 PersistentStore 中的变量注入到当前 runtime。
@@ -242,8 +257,8 @@ impl AppStateInner {
     /// `return_to_title`、`init_game` 等需要"干净开始"的方法共用此逻辑，
     /// 确保不会遗漏子系统清理。
     fn reset_session(&mut self) {
-        if let Some(audio) = self.audio_manager.as_mut() {
-            audio.stop_bgm(None);
+        if let Some(svc) = self.services.as_mut() {
+            svc.audio.stop_bgm(None);
         }
         self.runtime = None;
         self.render_state = RenderState::new();
@@ -278,10 +293,7 @@ impl AppStateInner {
     /// 除入口脚本外，递归预加载所有 `callScript` 引用的子脚本，
     /// 保证运行时执行到跨文件调用时不会因脚本未注册而失败。
     pub fn init_game_from_resource(&mut self, script_path: &str) -> Result<(), String> {
-        let rm = self
-            .resource_manager
-            .as_ref()
-            .ok_or("ResourceManager 未初始化")?;
+        let rm = &self.services().resources;
 
         let logical = LogicalPath::new(script_path);
         let content = rm
@@ -378,13 +390,26 @@ impl AppStateInner {
 
     /// 每帧调用，推进打字机和计时器
     pub fn process_tick(&mut self, dt: f32) {
-        // Skip 模式：对话未完成时立即完成打字机并推进
+        self.advance_playback_mode(dt);
+        self.update_animations(dt);
+        self.resolve_waits(dt);
+
+        if self.waiting == WaitingFor::Nothing && !self.script_finished {
+            self.run_script_tick();
+        }
+
+        self.advance_typewriter(dt);
+        self.sync_audio(dt);
+        self.render_state.playback_mode = self.playback_mode.clone();
+    }
+
+    /// Skip 模式立即推进 + Auto 模式计时推进
+    fn advance_playback_mode(&mut self, dt: f32) {
         if self.playback_mode == PlaybackMode::Skip && self.waiting == WaitingFor::Click {
             self.render_state.complete_typewriter();
             self.clear_click_wait();
         }
 
-        // Auto 模式：对话完成后计时自动推进
         if self.playback_mode == PlaybackMode::Auto
             && self.waiting == WaitingFor::Click
             && self.render_state.is_dialogue_complete()
@@ -395,8 +420,10 @@ impl AppStateInner {
                 self.clear_click_wait();
             }
         }
+    }
 
-        // 推进动画/过渡（在信号检测之前，确保同帧可检测到完成状态）
+    /// 推进 chapter_mark / title_card / background_transition / scene_transition
+    fn update_animations(&mut self, dt: f32) {
         self.render_state.update_chapter_mark(dt);
 
         if let Some(tc) = self.render_state.title_card.as_mut() {
@@ -408,11 +435,10 @@ impl AppStateInner {
 
         self.update_background_transition(dt);
         self.update_scene_transition(dt);
+    }
 
-        // 解析信号等待：检查 Host 侧事件是否已完成
-        //
-        // 只清除 Runtime 的等待状态，不调用 rt.tick()。
-        // 后续 run_script_tick() 会调用 rt.tick(None) 继续执行并正确处理返回的命令。
+    /// 解析 Signal 等待 + Time 等待
+    fn resolve_waits(&mut self, dt: f32) {
         if let WaitingFor::Signal(ref signal_id) = self.waiting {
             let resolved = match signal_id.as_str() {
                 "scene_transition" => self
@@ -433,7 +459,6 @@ impl AppStateInner {
             }
         }
 
-        // 解析时间等待
         if let WaitingFor::Time { remaining_ms } = &self.waiting {
             let elapsed_ms = (dt * 1000.0) as u64;
             if elapsed_ms >= *remaining_ms {
@@ -448,11 +473,10 @@ impl AppStateInner {
                 }
             }
         }
+    }
 
-        if self.waiting == WaitingFor::Nothing && !self.script_finished {
-            self.run_script_tick();
-        }
-
+    /// 推进打字机 + inline wait
+    fn advance_typewriter(&mut self, dt: f32) {
         if !self.render_state.is_dialogue_complete() && !self.render_state.has_inline_wait() {
             let speed = self.render_state.effective_text_speed(self.text_speed);
             self.typewriter_timer += dt * speed;
@@ -484,14 +508,14 @@ impl AppStateInner {
                 // 定时等待结束，继续打字
             }
         }
+    }
 
-        if let Some(audio) = self.audio_manager.as_mut() {
-            audio.update(dt);
-            self.render_state.audio = audio.to_audio_state();
+    /// 同步音频状态到 render_state
+    fn sync_audio(&mut self, dt: f32) {
+        if let Some(svc) = self.services.as_mut() {
+            svc.audio.update(dt);
+            self.render_state.audio = svc.audio.to_audio_state();
         }
-
-        // 同步 playback_mode 到 render_state
-        self.render_state.playback_mode = self.playback_mode.clone();
     }
 
     /// 推进背景 dissolve 过渡（内部计时器，不推到 RenderState）
@@ -724,6 +748,10 @@ impl AppStateInner {
         }
 
         let rt = self.runtime.as_mut().ok_or("游戏未启动")?;
+        let svc = self
+            .services
+            .as_ref()
+            .expect("invariant: services initialized in setup()");
 
         // 恢复 call_stack 中引用的脚本到 registry
         for frame in &save_data.runtime_state.call_stack {
@@ -732,12 +760,8 @@ impl AppStateInner {
             } else {
                 &frame.script_id
             };
-            let rm = self
-                .resource_manager
-                .as_ref()
-                .ok_or("ResourceManager 未初始化")?;
             let logical = LogicalPath::new(frame_path);
-            if let Ok(content) = rm.read_text(&logical) {
+            if let Ok(content) = svc.resources.read_text(&logical) {
                 let fid = logical.file_stem().to_string();
                 let fbase = logical.parent_dir().to_string();
                 let mut parser = Parser::new();
@@ -771,10 +795,7 @@ impl AppStateInner {
 
     /// 分派音频命令到 AudioManager（headless 状态追踪）
     fn dispatch_audio_command(&mut self, cmd: AudioCommand) {
-        let Some(audio) = self.audio_manager.as_mut() else {
-            warn!("收到音频命令但 AudioManager 未初始化");
-            return;
-        };
+        let audio = &mut self.services_mut().audio;
         match cmd {
             AudioCommand::PlayBgm {
                 path,

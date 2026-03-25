@@ -5,14 +5,15 @@
 
 ## 职责
 
-核心应用状态管理——持有 VNRuntime、RenderState、各子系统 manager 以及游戏循环（tick/click/choose）逻辑。
+核心应用状态管理——持有 VNRuntime、RenderState、`Services` 聚合的子系统以及游戏循环（tick/click/choose）逻辑。
 
 ## 关键类型/结构
 
 | 类型 | 说明 |
 |------|------|
 | `AppState` | Tauri managed state，内含 `Arc<Mutex<AppStateInner>>` |
-| `AppStateInner` | 所有游戏状态的聚合体（750 行核心逻辑） |
+| `AppStateInner` | 所有游戏状态的聚合体（核心逻辑） |
+| `Services` | setup 一次性注入：`AudioManager`、`ResourceManager`、`SaveManager`、`AppConfig`；经 `services()` / `services_mut()` 访问 |
 | `WaitingFor` | Host 侧等待状态枚举：Nothing / Click / Choice / Time / Cutscene / Signal |
 | `UserSettings` | 用户可调设置（音量、文字速度、Auto 延迟、全屏） |
 | `HistoryEntry` | 对话历史条目（speaker + text） |
@@ -31,10 +32,7 @@ AppStateInner {
     typewriter_timer:          f32,                     // 打字机累积计时
     text_speed:                f32,                     // 基础文字速度 (CPS)
     script_finished:           bool,                    // 脚本是否执行完毕
-    audio_manager:             Option<AudioManager>,    // 音频状态追踪（初始化失败时 None）
-    resource_manager:          Option<ResourceManager>, // 资源读取
-    save_manager:              Option<SaveManager>,     // 存档
-    config:                    Option<AppConfig>,       // 运行时配置
+    services:                  Option<Services>,        // 子系统集合（setup 注入；未就绪时 None，业务路径经访问器断言）
     history:                   Vec<HistoryEntry>,       // 对话历史（最新在前）
     user_settings:             UserSettings,            // 用户设置
     persistent_store:          PersistentStore,         // 持久化变量
@@ -60,21 +58,25 @@ AppStateInner {
 
 ### 每帧 tick (`process_tick`)
 
+`process_tick` 按顺序委托子方法（原单体逻辑已拆分）：
+
 ```
 process_tick(dt)
-  ├─ Skip 模式：若等待点击 → 立即完成打字机 → 清除等待
-  ├─ Auto 模式：对话完成后累积计时 → 超过 auto_delay → 清除等待
-  ├─ 更新 chapter_mark / title_card
-  ├─ update_background_transition(dt)：用 bg_transition_elapsed 累计，到期清除 background_transition（声明式字段不含 progress）
-  ├─ update_scene_transition(dt)：用 scene_transition_elapsed 推进 FadeIn → Hold(0.2s) → FadeOut → Completed（phase 写入 RenderState，不推送 mask/ui progress）
-  ├─ 解析信号等待：检查 Host 侧事件是否完成 → 发送 Signal 解除 Runtime 等待
-  │   ├─ scene_transition 完成 → Signal("scene_transition")
-  │   ├─ title_card 消失 → Signal("title_card")
-  │   └─ scene_effect / cutscene 完成 → 对应信号
-  ├─ 解析时间等待：递减 remaining_ms → 归零时清除 Runtime 等待
+  ├─ advance_playback_mode(dt)
+  │   ├─ Skip + 等待点击 → 完成打字机 → clear_click_wait
+  │   └─ Auto + 等待点击 + 对话完成 → 累积 auto_timer → 超时 clear_click_wait
+  ├─ update_animations(dt)
+  │   ├─ update_chapter_mark
+  │   ├─ title_card 计时到期清除
+  │   ├─ update_background_transition：bg_transition_elapsed 累计，到期清除 background_transition
+  │   └─ update_scene_transition：scene_transition_elapsed 推进 FadeIn → Hold(0.2s) → FadeOut → Completed
+  ├─ resolve_waits(dt)
+  │   ├─ Signal 等待：scene_transition / title_card / scene_effect / cutscene 等条件满足 → clear_wait
+  │   └─ Time 等待：递减 remaining_ms → 归零 clear_wait
   ├─ 若 waiting == Nothing 且脚本未结束 → run_script_tick()
-  ├─ 推进打字机（基于 text_speed × dt，处理 inline_wait / effective_cps）
-  └─ audio_manager.update(dt) 后 render_state.audio = audio.to_audio_state()（headless → IPC → 前端 Web Audio）
+  ├─ advance_typewriter(dt)：effective_cps、inline_wait / inline 定时等待
+  └─ sync_audio(dt)：services.audio.update(dt) → render_state.audio = to_audio_state()（headless → IPC → 前端 Web Audio）
+  （末尾将 playback_mode 写回 render_state）
 ```
 
 ### 脚本推进 (`run_script_tick`)
@@ -82,7 +84,7 @@ process_tick(dt)
 1. `VNRuntime::tick(None)` → 产出 `(Vec<Command>, WaitingReason)`
 2. `CommandExecutor::execute_batch()` → 翻译为 RenderState 变更，返回 `(ExecuteResult, Vec<AudioCommand>)`
 3. 记录对话到 history（去重）
-4. 分派所有 AudioCommand 到 `dispatch_audio_command`（仅更新 `AudioManager` 内存状态，**不** `resource_manager.read_bytes`、不 `cache_audio_bytes`）
+4. 分派所有 AudioCommand 到 `dispatch_audio_command`（仅更新 `services().audio` 内存状态，**不** `services().resources.read_bytes`、不 `cache_audio_bytes`）
 5. 根据 Runtime 的 `WaitingReason`（权威来源）设置 `waiting` 状态
 6. 同步 runtime persistent 变量到 PersistentStore
 7. 若无命令且无等待 → 标记 `script_finished`
@@ -105,6 +107,7 @@ process_tick(dt)
 - 会话级清理（停止音频、清空 runtime / render_state / history / snapshot_stack / playback_mode 等）统一由私有方法 `reset_session()` 承担；`init_game`、`init_game_from_resource` 开局前调用，`return_to_title` 内部亦调用（再额外做持久化变量保存与写盘），避免散落重复重置
 - `init_game_from_resource` 会递归预加载所有子脚本，包括条件分支内的 `CallScript`
 - `restore_from_save` 会重新加载 call_stack 中引用的所有脚本到 registry
+- `services` 在 Tauri `setup()` 中整包注入；凡需访问 audio/resources/saves/config 的业务路径使用 `services()` / `services_mut()`，以 `expect("invariant: services initialized in setup()")` 断言已初始化（与原先四处 `Option` 解包语义一致，但聚合为单点不变量）
 
 ## 与其他模块的关系
 
@@ -113,10 +116,10 @@ process_tick(dt)
 | `commands.rs` | 被依赖：所有 IPC command 调用 AppStateInner 方法 |
 | `command_executor.rs` | 持有实例：`self.command_executor` |
 | `render_state.rs` | 持有实例：`self.render_state` |
-| `audio.rs` | 持有实例：`self.audio_manager` |
-| `resources.rs` | 持有实例：`self.resource_manager` |
-| `save_manager.rs` | 持有实例：`self.save_manager` |
-| `config.rs` | 持有实例：`self.config` |
+| `audio.rs` | 经 `Services`：`self.services().audio` |
+| `resources.rs` | 经 `Services`：`self.services().resources` |
+| `save_manager.rs` | 经 `Services`：`self.services().saves` |
+| `config.rs` | 经 `Services`：`self.services().config` |
 | `vn-runtime` | 依赖：VNRuntime, Parser, Command, RuntimeState, SaveData |
 
 ## 附录：PersistentStore

@@ -10,7 +10,7 @@ mod resources;
 mod save_manager;
 mod state;
 
-use state::{AppState, AppStateInner};
+use state::{AppState, AppStateInner, Services};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
@@ -69,7 +69,6 @@ pub fn run() {
                 info!(assets = %assets_root.display(), "资源根目录");
 
                 let rm = resources::ResourceManager::new(&assets_root);
-                inner.resource_manager = Some(rm);
 
                 // saves_dir 也相对于项目根目录解析
                 let saves_dir = if cfg.saves_dir.is_relative() {
@@ -78,19 +77,22 @@ pub fn run() {
                     cfg.saves_dir.clone()
                 };
                 let sm = save_manager::SaveManager::new(&saves_dir);
-                inner.save_manager = Some(sm);
 
                 // 初始化 AudioManager（headless 状态追踪，无设备依赖）
                 let mut am = audio::AudioManager::new();
                 am.set_bgm_volume(cfg.audio.bgm_volume);
                 am.set_sfx_volume(cfg.audio.sfx_volume);
-                inner.audio_manager = Some(am);
                 info!("AudioManager 初始化成功");
 
                 // 加载持久化变量
                 inner.persistent_store = state::PersistentStore::load(&saves_dir);
 
-                inner.config = Some(cfg);
+                inner.services = Some(Services {
+                    audio: am,
+                    resources: rm,
+                    saves: sm,
+                    config: cfg,
+                });
                 info!("子系统初始化完成");
 
                 drop(inner);
