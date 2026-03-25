@@ -1,5 +1,4 @@
-import { ref, readonly } from "vue";
-import { callBackend } from "./useBackend";
+import { readonly, ref } from "vue";
 import type {
   AppConfig,
   HistoryEntry,
@@ -7,6 +6,7 @@ import type {
   RenderState,
   SaveInfo,
 } from "../types/render-state";
+import { callBackend } from "./useBackend";
 import { createLogger } from "./useLogger";
 
 const log = createLogger("engine");
@@ -38,7 +38,9 @@ export function useEngine() {
         renderState.value = state;
         tickCount++;
         if (tickCount <= 5 || tickCount % 300 === 0) {
-          log.debug(`tick #${tickCount}: bg=${state.current_background}, dialogue=${state.dialogue?.content?.slice(0, 30)}, transition=${!!state.scene_transition}, ui=${state.ui_visible}`);
+          log.debug(
+            `tick #${tickCount}: bg=${state.current_background}, dialogue=${state.dialogue?.content?.slice(0, 30)}, transition=${!!state.scene_transition}, ui=${state.ui_visible}`,
+          );
         }
       })
       .catch((err) => {

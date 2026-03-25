@@ -1,21 +1,22 @@
 //! 发行版构建流程
 //!
-//! 将资源打包、编译二进制、检测 FFmpeg、组装发行版目录。
+//! 将资源打包、编译 Tauri 应用、检测 FFmpeg、组装发行版目录。
 
 use crate::pack::{pack_assets, pack_directory};
-use crate::utils::{ffmpeg_exe_name, required_file_name, run_cargo_command};
+use crate::utils::{ffmpeg_exe_name, required_file_name, run_command};
 use anyhow::{Result, bail};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_GAME_NAME: &str = "Ring";
+const FRONTEND_DIR: &str = "host-tauri";
 
 /// 创建完整发行版
 ///
 /// 步骤：
 /// 1. 打包 assets -> game.zip
-/// 2. `cargo build --release` 编译 host
+/// 2. `pnpm -C host-tauri tauri build --no-bundle` 编译 Tauri 应用
 /// 3. 检查 config.json
 /// 4. 检测 FFmpeg 二进制
 /// 5. 组装发行版目录（并可选打包为 ZIP）
@@ -35,26 +36,24 @@ pub fn create_release(
         DEFAULT_GAME_NAME.to_string()
     };
 
-    // 步骤 1: 打包资源
     println!("步骤 1/5: 打包资源...");
     pack_assets(assets_dir, zip_output)?;
     println!();
 
-    // 步骤 2: 编译 release 版本
-    println!("步骤 2/5: 编译 release 版本的 host...");
-    run_cargo_command(
-        "执行 cargo build --release --package host",
-        &["build", "--release", "--package", "host"],
+    println!("步骤 2/5: 编译 Tauri 应用（release，不生成安装包）...");
+    run_command(
+        &format!("执行 pnpm -C {FRONTEND_DIR} tauri build --no-bundle"),
+        "pnpm",
+        &["-C", FRONTEND_DIR, "tauri", "build", "--no-bundle"],
     )?;
 
-    let host_binary = host_binary_path();
+    let host_binary = tauri_binary_path();
     if !host_binary.exists() {
         bail!("找不到编译后的二进制文件: {:?}", host_binary);
     }
     println!("编译完成: {:?}", host_binary);
     println!();
 
-    // 步骤 3: 检查配置文件
     println!("步骤 3/5: 检查配置文件...");
     if !config_path.exists() {
         bail!("找不到 config.json 文件");
@@ -63,7 +62,6 @@ pub fn create_release(
     println!("游戏名称: {}", game_name);
     println!();
 
-    // 步骤 4: 检测 FFmpeg
     println!("步骤 4/5: 检测 FFmpeg 二进制...");
     let ffmpeg = detect_ffmpeg();
     match &ffmpeg {
@@ -78,7 +76,6 @@ pub fn create_release(
     }
     println!();
 
-    // 步骤 5: 组装发行版目录
     println!("步骤 5/5: 创建发行版目录...");
     assemble_release_dir(
         release_dir,
@@ -89,7 +86,6 @@ pub fn create_release(
         ffmpeg.as_deref(),
     )?;
 
-    // 可选：打包整个发行版为 ZIP
     if create_zip {
         println!();
         println!("打包发行版为 ZIP...");
@@ -118,13 +114,11 @@ fn assemble_release_dir(
     }
     std::fs::create_dir_all(release_dir)?;
 
-    // 移动资源包
     let zip_name = required_file_name(zip_output, "资源 ZIP 输出路径必须是文件")?;
     let zip_dest = release_dir.join(zip_name);
     std::fs::rename(zip_output, &zip_dest)?;
     println!("  移动资源包: {:?} -> {:?}", zip_output, zip_dest);
 
-    // 复制并重命名可执行文件
     let binary_filename = binary_name(game_name);
     let binary_dest = release_dir.join(&binary_filename);
     std::fs::copy(host_binary, &binary_dest)?;
@@ -133,13 +127,11 @@ fn assemble_release_dir(
         host_binary, binary_dest, binary_filename
     );
 
-    // 复制并更新 config.json
     let config_dest = release_dir.join("config.json");
     std::fs::copy(config_path, &config_dest)?;
     update_config_for_release(&config_dest, &zip_name.to_string_lossy())?;
     println!("  复制配置并更新为 ZIP 模式");
 
-    // 复制 FFmpeg（如果存在）
     if let Some(ffmpeg_path) = ffmpeg {
         let ffmpeg_dest = release_dir.join(ffmpeg_exe_name());
         std::fs::copy(ffmpeg_path, &ffmpeg_dest)?;
@@ -233,7 +225,6 @@ fn detect_ffmpeg() -> Option<PathBuf> {
         return Some(bin_path);
     }
 
-    // 通过 where/which 查找系统 PATH 中的绝对路径
     let which_cmd = if cfg!(target_os = "windows") {
         "where"
     } else {
@@ -255,11 +246,12 @@ fn detect_ffmpeg() -> Option<PathBuf> {
     None
 }
 
-fn host_binary_path() -> PathBuf {
+/// Tauri 二进制产物路径（workspace 共享 target 目录）
+fn tauri_binary_path() -> PathBuf {
     if cfg!(target_os = "windows") {
-        PathBuf::from("target/release/host.exe")
+        PathBuf::from("target/release/host-tauri.exe")
     } else {
-        PathBuf::from("target/release/host")
+        PathBuf::from("target/release/host-tauri")
     }
 }
 

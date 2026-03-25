@@ -63,10 +63,17 @@ cd host-tauri; pnpm tauri dev
 | `.vue` / `.ts` 文件 | Vite HMR 自动热更新，无需重启 |
 | Rust 源码 | Tauri CLI 检测变更 → 自动重新编译 → 重启后端窗口 |
 
-### 类型检查
+### 代码检查
 
 ```bash
-cd host-tauri; npx vue-tsc --noEmit
+# 格式化 + lint（自动修复）
+pnpm -C host-tauri check:write
+
+# 类型检查
+pnpm -C host-tauri typecheck
+
+# 一键前端门禁（biome + vue-tsc，通过 xtask）
+cargo fe-check
 ```
 
 ## IPC 约定

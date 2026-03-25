@@ -150,16 +150,18 @@ cargo pack release --output-dir dist --zip
 
 ```
 dist/
-├── My VN.exe      # 可执行文件（根据 config.json.name 自动命名并清理非法字符）
+├── My VN.exe      # Tauri 应用（根据 config.json.name 自动命名并清理非法字符）
 ├── game.zip       # 资源包（包含整个 assets/）
-└── config.json    # 已自动改成 ZIP 模式（asset_source=zip, zip_path=game.zip）
+├── config.json    # 已自动改成 ZIP 模式（asset_source=zip, zip_path=game.zip）
+└── ffmpeg.exe     # 可选（若检测到 FFmpeg）
 # 使用 --zip 时，仓库根目录下还会生成 My VN.zip（即 dist/ 的压缩包）
 ```
 
 说明：
 
+- 此命令会先执行 `pnpm tauri build --no-bundle` 构建 Tauri 应用（含前端），再打包游戏资源
 - `dist/config.json` 会被自动改成 ZIP 模式；**不会修改**仓库根目录的 `config.json`
-- 分发时把 `dist/` 内的可执行文件、`game.zip`、`config.json` 交付给玩家即可（若打包时检测到 FFmpeg 还会多一个 ffmpeg 可执行文件）；不需要再带 `assets/` 目录
+- 分发时把 `dist/` 内的可执行文件、`game.zip`、`config.json` 交付给玩家即可；不需要再带 `assets/` 目录
 
 ### 发布前自检（强烈建议）
 

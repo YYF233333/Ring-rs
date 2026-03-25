@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { BackgroundTransition } from "../types/render-state";
 import { useAssets } from "../composables/useAssets";
+import type { BackgroundTransition } from "../types/render-state";
 
 const { assetUrl } = useAssets();
 
@@ -12,9 +12,7 @@ const props = defineProps<{
 
 const backgroundUrl = computed(() => assetUrl(props.backgroundPath));
 
-const oldBackgroundUrl = computed(() =>
-  assetUrl(props.backgroundTransition?.old_background),
-);
+const oldBackgroundUrl = computed(() => assetUrl(props.backgroundTransition?.old_background));
 
 const isDissolving = computed(() => props.backgroundTransition != null);
 

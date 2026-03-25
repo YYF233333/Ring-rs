@@ -104,11 +104,7 @@ export type SceneTransitionKind =
   | "FadeWhite"
   | { Rule: { mask_path: string; reversed: boolean } };
 
-export type SceneTransitionPhaseState =
-  | "FadeIn"
-  | "Hold"
-  | "FadeOut"
-  | "Completed";
+export type SceneTransitionPhaseState = "FadeIn" | "Hold" | "FadeOut" | "Completed";
 
 // ── 视频过场 ─────────────────────────────────────────────────────────────────
 

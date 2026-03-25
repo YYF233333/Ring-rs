@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { RenderState } from "../types/render-state";
 import BackgroundLayer from "./BackgroundLayer.vue";
-import CharacterLayer from "./CharacterLayer.vue";
-import DialogueBox from "./DialogueBox.vue";
-import ChoicePanel from "./ChoicePanel.vue";
 import ChapterMark from "./ChapterMark.vue";
+import CharacterLayer from "./CharacterLayer.vue";
+import ChoicePanel from "./ChoicePanel.vue";
+import DialogueBox from "./DialogueBox.vue";
 import TitleCard from "./TitleCard.vue";
 import TransitionOverlay from "./TransitionOverlay.vue";
 import VideoOverlay from "./VideoOverlay.vue";

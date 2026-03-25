@@ -71,12 +71,14 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 | 用途 | 命令 |
 |------|------|
-| 一键门禁 | `cargo check-all` |
+| 一键门禁 | `cargo check-all`（含 Rust fmt/clippy/test + 前端 biome/typecheck） |
+| 前端检查 | `cargo fe-check`（仅 biome + vue-tsc，不触发 Rust 门禁） |
 | 测试 | `cargo test -p vn-runtime --lib` |
 | 覆盖率 | `cargo cov` |
 | 符号索引生成 | `cargo gen-symbols` |
 | Tauri 开发 | `cd host-tauri; pnpm tauri dev` |
-| 前端类型检查 | `cd host-tauri; npx vue-tsc --noEmit` |
+| 前端格式化+lint | `pnpm -C host-tauri check:write` |
+| 前端类型检查 | `pnpm -C host-tauri typecheck` |
 
 覆盖率报告：`target/llvm-cov/html/index.html`
 

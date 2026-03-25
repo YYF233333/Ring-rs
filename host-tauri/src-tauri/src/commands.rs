@@ -84,7 +84,11 @@ pub fn save_game(state: State<AppState>, slot: u32) -> Result<(), String> {
 pub fn load_game(state: State<AppState>, slot: u32) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
 
-    let save_data = inner.services().saves.load(slot).map_err(|e| e.to_string())?;
+    let save_data = inner
+        .services()
+        .saves
+        .load(slot)
+        .map_err(|e| e.to_string())?;
 
     inner.restore_from_save(save_data)?;
     Ok(inner.render_state.clone())
@@ -108,7 +112,11 @@ pub fn list_saves(state: State<AppState>) -> Result<Vec<SaveInfo>, String> {
 #[command]
 pub fn delete_save(state: State<AppState>, slot: u32) -> Result<(), String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.services().saves.delete(slot).map_err(|e| e.to_string())
+    inner
+        .services()
+        .saves
+        .delete(slot)
+        .map_err(|e| e.to_string())
 }
 
 // ── 配置 ─────────────────────────────────────────────────────────────────────

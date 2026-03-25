@@ -54,7 +54,7 @@
 - **用途**：游戏名称。
 - **影响**：
   - 窗口标题通常由 `window.title` 决定（更直接）。
-  - 打包发行版时（`cargo pack release ...`），会用 `name` 来给可执行文件命名（并清理不适合作为文件名的字符）。
+  - 打包发行版时（`cargo pack release ...`），会用 `name` 来给 Tauri 可执行文件命名（并清理不适合作为文件名的字符）。
 - **参考值**：默认配置中为 `"Ring VN Engine"`；写 `null` 时打包工具使用 `"Ring"`。
 
 ### `assets_root`

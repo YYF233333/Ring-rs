@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "check": "biome check .",
+    "check:write": "biome check --write .",
+    "typecheck": "vue-tsc --noEmit",
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
@@ -14,6 +17,7 @@
     "vue": "^3.5.30"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.9",
     "@tauri-apps/cli": "^2.10.1",
     "@vitejs/plugin-vue": "^6.0.5",
     "typescript": "^6.0.2",

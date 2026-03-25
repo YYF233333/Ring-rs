@@ -1,6 +1,6 @@
 # 覆盖率（Coverage）口径与运行指南
 
-本项目当前由 CI 执行 `cargo check-all` 作为质量门禁；覆盖率本身仍以**本地可复现**为主。覆盖率统一使用 **workspace 口径**（排除工具 crate 与平台胶水代码），用于趋势观察与回归信号。
+本项目当前由 CI 执行 `cargo check-all` 作为质量门禁（含 Rust fmt/clippy/test + 前端 biome/vue-tsc typecheck）；覆盖率本身仍以**本地可复现**为主。覆盖率统一使用 **workspace 口径**（排除工具 crate 与平台胶水代码），用于趋势观察与回归信号。
 
 ---
 

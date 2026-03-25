@@ -52,6 +52,7 @@ pub struct WindowConfig {
 
 /// 调试配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct DebugConfig {
     pub log_level: Option<String>,
 }
@@ -92,11 +93,6 @@ impl Default for WindowConfig {
     }
 }
 
-impl Default for DebugConfig {
-    fn default() -> Self {
-        Self { log_level: None }
-    }
-}
 
 impl Default for AudioConfig {
     fn default() -> Self {

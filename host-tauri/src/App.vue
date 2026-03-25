@@ -1,20 +1,20 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { useEngine } from "./composables/useEngine";
-import { useNavigation } from "./composables/useNavigation";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import ConfirmDialog from "./components/ConfirmDialog.vue";
+import SkipAutoIndicator from "./components/SkipAutoIndicator.vue";
+import type Toast from "./components/Toast.vue";
 import { useAssets } from "./composables/useAssets";
 import { useAudio } from "./composables/useAudio";
 import { useConfirmDialog } from "./composables/useConfirmDialog";
-import type { SaveInfo } from "./types/render-state";
-import VNScene from "./vn/VNScene.vue";
-import TitleScreen from "./screens/TitleScreen.vue";
-import SaveLoadScreen from "./screens/SaveLoadScreen.vue";
-import SettingsScreen from "./screens/SettingsScreen.vue";
+import { useEngine } from "./composables/useEngine";
+import { useNavigation } from "./composables/useNavigation";
 import HistoryScreen from "./screens/HistoryScreen.vue";
 import InGameMenu from "./screens/InGameMenu.vue";
-import Toast from "./components/Toast.vue";
-import ConfirmDialog from "./components/ConfirmDialog.vue";
-import SkipAutoIndicator from "./components/SkipAutoIndicator.vue";
+import SaveLoadScreen from "./screens/SaveLoadScreen.vue";
+import SettingsScreen from "./screens/SettingsScreen.vue";
+import TitleScreen from "./screens/TitleScreen.vue";
+import type { SaveInfo } from "./types/render-state";
+import VNScene from "./vn/VNScene.vue";
 
 const {
   renderState,
@@ -38,8 +38,7 @@ const {
 const audioState = computed(() => renderState.value?.audio);
 const { dispose: disposeAudio } = useAudio(audioState);
 
-const { currentScreen, navigateTo, goBack, resetToTitle, resetToIngame } =
-  useNavigation();
+const { currentScreen, navigateTo, goBack, resetToTitle, resetToIngame } = useNavigation();
 
 const { init: initAssets } = useAssets();
 
@@ -112,10 +111,7 @@ async function onLoad(slot: number) {
 }
 
 async function onReturnToTitle() {
-  const confirmed = await askConfirm(
-    "返回标题",
-    "确定要返回标题画面吗？未保存的进度将丢失。",
-  );
+  const confirmed = await askConfirm("返回标题", "确定要返回标题画面吗？未保存的进度将丢失。");
   if (!confirmed) return;
 
   showInGameMenu.value = false;

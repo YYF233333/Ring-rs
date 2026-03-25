@@ -1,12 +1,6 @@
-import { ref, readonly } from "vue";
+import { readonly, ref } from "vue";
 
-export type Screen =
-  | "title"
-  | "ingame"
-  | "save"
-  | "load"
-  | "settings"
-  | "history";
+export type Screen = "title" | "ingame" | "save" | "load" | "settings" | "history";
 
 const currentScreen = ref<Screen>("title");
 const screenStack = ref<Screen[]>([]);

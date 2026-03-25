@@ -1,4 +1,4 @@
-import { ref, readonly } from "vue";
+import { readonly, ref } from "vue";
 import { callBackend } from "./useBackend";
 import { createLogger } from "./useLogger";
 
@@ -41,10 +41,7 @@ export function useSettings() {
     }
   }
 
-  function updateSetting<K extends keyof UserSettings>(
-    key: K,
-    value: UserSettings[K],
-  ) {
+  function updateSetting<K extends keyof UserSettings>(key: K, value: UserSettings[K]) {
     settings.value = { ...settings.value, [key]: value };
   }
 

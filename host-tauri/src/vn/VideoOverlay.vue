@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import type { CutsceneState } from "../types/render-state";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useAssets } from "../composables/useAssets";
+import type { CutsceneState } from "../types/render-state";
 
 const { assetUrl } = useAssets();
 

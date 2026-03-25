@@ -145,7 +145,11 @@ fn dispatch(
         "load_game" => {
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            let save_data = inner.services().saves.load(slot).map_err(|e| e.to_string())?;
+            let save_data = inner
+                .services()
+                .saves
+                .load(slot)
+                .map_err(|e| e.to_string())?;
             inner.restore_from_save(save_data)?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -164,7 +168,11 @@ fn dispatch(
         "delete_save" => {
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let inner = state.lock().map_err(|e| e.to_string())?;
-            inner.services().saves.delete(slot).map_err(|e| e.to_string())?;
+            inner
+                .services()
+                .saves
+                .delete(slot)
+                .map_err(|e| e.to_string())?;
             Ok(serde_json::Value::Null)
         }
 

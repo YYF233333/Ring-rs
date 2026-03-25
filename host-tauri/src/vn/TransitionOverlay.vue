@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { SceneTransition } from "../types/render-state";
 
 const props = defineProps<{
@@ -17,7 +17,7 @@ const isWhite = computed(() => {
   return typeof st.transition_type === "string" && st.transition_type === "FadeWhite";
 });
 
-const bgColor = computed(() => isWhite.value ? "white" : "black");
+const bgColor = computed(() => (isWhite.value ? "white" : "black"));
 
 const targetOpacity = ref(0);
 const transitionDuration = ref(0);
@@ -61,9 +61,7 @@ watch(
 const overlayStyle = computed(() => ({
   backgroundColor: bgColor.value,
   opacity: targetOpacity.value,
-  transition: transitionDuration.value > 0
-    ? `opacity ${transitionDuration.value}s linear`
-    : "none",
+  transition: transitionDuration.value > 0 ? `opacity ${transitionDuration.value}s linear` : "none",
 }));
 </script>
 

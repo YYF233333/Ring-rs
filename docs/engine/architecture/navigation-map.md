@@ -174,7 +174,8 @@
 
 ## 开发工作流（质量门禁/覆盖率）
 
-- **一键门禁**：`cargo check-all`（本地自检与 CI 共用；由 `tools/xtask` 串行执行 fmt --all → clippy --fix → test）
+- **一键门禁**：`cargo check-all`（本地自检与 CI 共用；由 `tools/xtask` 串行执行 fmt → biome check:write → clippy --fix → vue-tsc typecheck → test）
+- **前端检查**：`cargo fe-check`（仅运行 biome + vue-tsc，不触发 Rust 门禁）
 - **脚本检查**：`cargo script-check`（检查脚本语法/label/资源引用）
 - **Dev Mode 自动脚本检查**：Host 启动时基于 `config.json` 的 `debug.script_check` 自动运行（debug build 默认开启）
 - **覆盖率**：`cargo cov`，报告：`target/llvm-cov/html/index.html`

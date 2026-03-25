@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { CharacterSprite } from "../types/render-state";
 import { useAssets } from "../composables/useAssets";
+import type { CharacterSprite } from "../types/render-state";
 
 const { assetUrl } = useAssets();
 
@@ -25,10 +25,7 @@ function getCharacterStyle(char: Readonly<CharacterSprite>): Record<string, stri
     left: x,
     transform: `translateX(-50%) translate(${char.offset_x}px, ${char.offset_y}px) scale(${char.scale_x}, ${char.scale_y})`,
     opacity: char.target_alpha,
-    transition:
-      td > 0
-        ? `opacity ${td}s ease-in-out, transform ${td}s ease-in-out`
-        : "none",
+    transition: td > 0 ? `opacity ${td}s ease-in-out, transform ${td}s ease-in-out` : "none",
     zIndex: char.z_order,
     maxHeight: "100%",
   };

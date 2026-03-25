@@ -4,11 +4,11 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use xshell::Shell;
 
-/// 运行 cargo 子命令，失败时附带描述信息
-pub fn run_cargo_command(description: &str, args: &[&str]) -> Result<()> {
+/// 运行外部命令，失败时附带描述信息
+pub fn run_command(description: &str, program: &str, args: &[&str]) -> Result<()> {
     let sh = Shell::new()?;
     println!("{description}");
-    sh.cmd("cargo")
+    sh.cmd(program)
         .args(args)
         .run()
         .with_context(|| format!("{description} 失败"))

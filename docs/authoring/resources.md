@@ -183,7 +183,7 @@ cargo run -p asset-packer -- verify game.zip --input assets
 
 1. **开发阶段**：使用文件系统模式（`asset_source: "fs"`）
 2. **打包资源**：
-   - **推荐的一键发行**：使用 `cargo pack release --output-dir dist --zip`（会自动生成 ZIP 模式的 `dist/config.json`）
+   - **推荐的一键发行**：使用 `cargo pack release --output-dir dist --zip`（会构建 Tauri 应用、打包游戏资源、自动生成 ZIP 模式的 `dist/config.json`）
    - **手工打包**：运行 `cargo run -p asset-packer` 生成 `game.zip`
 3. **更新配置（仅手工打包需要）**：修改 `config.json`，设置 `asset_source: "zip"` 和 `zip_path: "game.zip"`
 4. **测试发布**：删除或重命名 `assets` 目录，运行游戏验证 ZIP 模式
@@ -192,10 +192,11 @@ cargo run -p asset-packer -- verify game.zip --input assets
 ### 发布目录结构
 
 ```
-发布目录/
-├── host.exe              # 游戏可执行文件
+dist/
+├── Ring.exe              # Tauri 应用（内嵌前端，按 config.json name 重命名）
 ├── game.zip              # 资源包（包含所有 assets）
-└── config.json            # 配置文件
+├── config.json           # 配置文件（已自动设为 ZIP 模式）
+└── ffmpeg.exe            # 可选（若检测到 FFmpeg）
 ```
 
 **注意**：发布时不需要 `assets/` 目录，所有资源都在 `game.zip` 中。

@@ -146,14 +146,13 @@ impl SaveManager {
         if let Ok(entries) = fs::read_dir(&self.saves_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.starts_with("slot_")
+                if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                    && name.starts_with("slot_")
                         && name.ends_with(".json")
                         && let Ok(slot) = name[5..8].parse::<u32>()
                     {
                         saves.push((slot, path));
                     }
-                }
             }
         }
         saves.sort_by_key(|(slot, _)| *slot);

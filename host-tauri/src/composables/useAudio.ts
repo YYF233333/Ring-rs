@@ -1,4 +1,4 @@
-import { watch, ref, type Ref, type DeepReadonly } from "vue";
+import { type DeepReadonly, type Ref, ref, watch } from "vue";
 import type { AudioRenderState } from "../types/render-state";
 import { useAssets } from "./useAssets";
 import { createLogger } from "./useLogger";
@@ -104,10 +104,7 @@ export function useAudio(audioState: Ref<DeepReadonly<AudioRenderState> | undefi
 
   function setBgmVolume(volume: number) {
     if (bgmGainNode && audioCtx) {
-      bgmGainNode.gain.linearRampToValueAtTime(
-        volume,
-        audioCtx.currentTime + 0.1,
-      );
+      bgmGainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 0.1);
     }
   }
 

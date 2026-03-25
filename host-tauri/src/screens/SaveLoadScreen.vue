@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { computed, ref } from "vue";
 import type { SaveInfo } from "../types/render-state";
 
 const props = defineProps<{
@@ -16,9 +16,7 @@ const emit = defineEmits<{
 const SLOTS_PER_PAGE = 9;
 const currentPage = ref(0);
 
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(SLOTS_PER_PAGE * 3 / SLOTS_PER_PAGE)),
-);
+const totalPages = computed(() => Math.max(1, Math.ceil((SLOTS_PER_PAGE * 3) / SLOTS_PER_PAGE)));
 
 const visibleSlots = computed(() => {
   const start = currentPage.value * SLOTS_PER_PAGE + 1;
@@ -41,7 +39,7 @@ function onSlotClick(slot: number) {
 
 function formatTimestamp(ts: string): string {
   const secs = parseInt(ts, 10);
-  if (isNaN(secs)) return ts;
+  if (Number.isNaN(secs)) return ts;
   const d = new Date(secs * 1000);
   return d.toLocaleString("zh-CN", {
     year: "numeric",

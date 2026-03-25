@@ -197,7 +197,9 @@ pub enum WaitingFor {
     Nothing,
     Click,
     Choice,
-    Time { remaining_ms: u64 },
+    Time {
+        remaining_ms: u64,
+    },
     Cutscene,
     /// 等待 Host 侧事件完成（场景过渡、标题卡片等），对应 Runtime 的 WaitForSignal
     Signal(String),
@@ -445,7 +447,7 @@ impl AppStateInner {
                     .render_state
                     .scene_transition
                     .as_ref()
-                    .map_or(true, |st| st.phase == SceneTransitionPhaseState::Completed),
+                    .is_none_or(|st| st.phase == SceneTransitionPhaseState::Completed),
                 "title_card" => self.render_state.title_card.is_none(),
                 "scene_effect" => true,
                 "cutscene" => self.render_state.cutscene.is_none(),
@@ -667,14 +669,13 @@ impl AppStateInner {
                     .command_executor
                     .execute_batch(&commands, &mut self.render_state);
 
-                if let Some(ref d) = self.render_state.dialogue {
-                    if d.visible_chars == 0 || !d.content.is_empty() {
+                if let Some(ref d) = self.render_state.dialogue
+                    && (d.visible_chars == 0 || !d.content.is_empty()) {
                         let last_text = self.history.first().map(|h| h.text.as_str());
                         if last_text != Some(&d.content) {
                             self.push_history(d.speaker.clone(), d.content.clone());
                         }
                     }
-                }
 
                 for cmd in audio_commands {
                     self.dispatch_audio_command(cmd);
@@ -698,12 +699,12 @@ impl AppStateInner {
                         self.waiting = WaitingFor::Choice;
                     }
                     WaitingReason::WaitForTime(duration) => {
-                        self.waiting =
-                            WaitingFor::Time { remaining_ms: duration.as_millis() as u64 };
+                        self.waiting = WaitingFor::Time {
+                            remaining_ms: duration.as_millis() as u64,
+                        };
                     }
                     WaitingReason::WaitForSignal(signal_id) => {
-                        self.waiting =
-                            WaitingFor::Signal(signal_id.as_str().to_string());
+                        self.waiting = WaitingFor::Signal(signal_id.as_str().to_string());
                     }
                     WaitingReason::WaitForUIResult { .. } => {
                         // Tauri 宿主暂不处理 UI Result

@@ -1,4 +1,4 @@
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 const DEBUG_API_BASE = "http://localhost:9528";
 
@@ -11,10 +11,7 @@ export function isTauri(): boolean {
  * 统一后端调用入口。
  * Tauri 模式下走 IPC invoke，浏览器模式下走 HTTP API 回退。
  */
-export async function callBackend<T>(
-  command: string,
-  args?: Record<string, unknown>,
-): Promise<T> {
+export async function callBackend<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri()) {
     return invoke<T>(command, args);
   }
@@ -36,10 +33,7 @@ export async function callBackend<T>(
  * 将资源文件路径转换为可加载的 URL。
  * Tauri 模式下使用 asset protocol，浏览器模式下走 HTTP 代理。
  */
-export function resolveAssetSrc(
-  fullPath: string,
-  logicalPath: string,
-): string {
+export function resolveAssetSrc(fullPath: string, logicalPath: string): string {
   if (isTauri()) {
     return convertFileSrc(fullPath);
   }

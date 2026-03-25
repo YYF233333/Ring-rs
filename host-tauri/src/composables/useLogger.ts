@@ -19,9 +19,7 @@ export function createLogger(module: string) {
 
     consoleFns[level](`[${module}]`, message, ...(data !== undefined ? [data] : []));
 
-    callBackend("log_frontend", { level, module, message, data: dataStr }).catch(
-      () => {},
-    );
+    callBackend("log_frontend", { level, module, message, data: dataStr }).catch(() => {});
   }
 
   return {
