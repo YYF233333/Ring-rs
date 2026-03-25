@@ -182,6 +182,11 @@ function onKeyDown(e: KeyboardEvent) {
     handleBackspace();
     return;
   }
+  if (e.key === " " || e.key === "Enter") {
+    e.preventDefault();
+    onSceneClick();
+    return;
+  }
 }
 
 function onKeyUp(e: KeyboardEvent) {

@@ -368,7 +368,7 @@ impl AppStateInner {
         // Skip 模式：对话未完成时立即完成打字机并推进
         if self.playback_mode == PlaybackMode::Skip && self.waiting == WaitingFor::Click {
             self.render_state.complete_typewriter();
-            self.waiting = WaitingFor::Nothing;
+            self.clear_click_wait();
         }
 
         // Auto 模式：对话完成后计时自动推进
@@ -379,7 +379,7 @@ impl AppStateInner {
             self.auto_timer += dt;
             if self.auto_timer >= self.user_settings.auto_delay {
                 self.auto_timer = 0.0;
-                self.waiting = WaitingFor::Nothing;
+                self.clear_click_wait();
             }
         }
 
@@ -455,7 +455,7 @@ impl AppStateInner {
                         .is_some_and(|d| d.no_wait)
                         && self.waiting == WaitingFor::Click
                     {
-                        self.waiting = WaitingFor::Nothing;
+                        self.clear_click_wait();
                     }
                     break;
                 }
@@ -551,7 +551,7 @@ impl AppStateInner {
                 .is_some_and(|d| d.no_wait)
                 && self.waiting == WaitingFor::Click
             {
-                self.waiting = WaitingFor::Nothing;
+                self.clear_click_wait();
             }
             return;
         }
@@ -563,8 +563,16 @@ impl AppStateInner {
 
         if self.waiting == WaitingFor::Click {
             self.capture_snapshot();
-            self.waiting = WaitingFor::Nothing;
+            self.clear_click_wait();
         }
+    }
+
+    /// 清除 Click 等待——同时清除 host 侧和 runtime 侧的等待状态
+    fn clear_click_wait(&mut self) {
+        if let Some(rt) = self.runtime.as_mut() {
+            rt.state_mut().clear_wait();
+        }
+        self.waiting = WaitingFor::Nothing;
     }
 
     /// 捕获当前状态快照（用于 Backspace 回退）
