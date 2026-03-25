@@ -3,9 +3,9 @@
 ## 元信息
 
 - 编号：RFC-028
-- 状态：Proposed（v3 拆解重设计）
+- 状态：**Accepted**（Phase A 已实现；Phase B/C 冻结——因 Host 架构迁移至 Tauri，后两阶段待迁移后在新架构上重新设计）
 - 作者：claude-4.6-opus
-- 日期：2026-03-24
+- 日期：2026-03-24（Proposed）；2026-03-25（Accepted + Phase B/C 冻结）
 - 影响范围：`host`（快照系统、回退 UI、recording 热重载）、`vn-runtime`（状态快照 API）
 - 前置：无（与 Hub 架构正交，可独立推进）
 - 父 RFC：RFC-024（VN+ Hub 架构愿景）
@@ -192,20 +192,24 @@ impl VNRuntime {
 
 ## 实施路径
 
-### Phase A：Snapshot 系统 + 回退
+### Phase A：Snapshot 系统 + 回退 ✅ 已完成
 
-1. 实现 `StateSnapshot` 结构和快照栈（不设上限、不持久化）
-2. 在每个停止点自动保存快照
-3. 绑定 Backspace 键实现单步回退
-4. VNRuntime 新增 `snapshot_state()` / `restore_state()` API
+1. ✅ 实现 `StateSnapshot` 结构和快照栈（不设上限、不持久化）
+2. ✅ 在每个停止点自动保存快照
+3. ✅ 绑定 Backspace 键实现单步回退
+4. ✅ VNRuntime 新增 `snapshot_state()` / `restore_state()` API
 
-### Phase B：可点击历史记录
+### Phase B：可点击历史记录 ❄️ 冻结
+
+> **冻结原因**：Host 架构迁移至 Tauri（RFC-024 v2）。历史记录界面将在 Tauri 前端（Vue）中重新实现，egui 版本不再开发。迁移完成后在新架构上重新设计，基于 Web 技术实现体验将更好。
 
 1. 历史记录与快照建立索引对应关系
 2. 历史记录界面增加可点击跳转按钮
 3. 点击后恢复到对应快照并继续游玩
 
-### Phase C：F5 热重载
+### Phase C：F5 热重载 ❄️ 冻结
+
+> **冻结原因**：同 Phase B。Tauri 架构下前端 Vite HMR 提供毫秒级热更新（改 UI/样式不需要重启），脚本热重载的需求和实现方式都将重新评估。
 
 1. 绑定 F5 热键
 2. 按下时保存当前 recording 状态
@@ -228,22 +232,22 @@ impl VNRuntime {
 
 ## 验收标准
 
-### Phase A
+### Phase A ✅
 
-- [ ] 每个停止点自动保存 StateSnapshot
-- [ ] Backspace 键可回退到上一个停止点，渲染效果正确恢复
-- [ ] 连续 Backspace 可逐步回退多个停止点
-- [ ] 快照不写入存档文件
-- [ ] 加载存档后快照历史为空
-- [ ] `cargo check-all` 通过
+- [x] 每个停止点自动保存 StateSnapshot
+- [x] Backspace 键可回退到上一个停止点，渲染效果正确恢复
+- [x] 连续 Backspace 可逐步回退多个停止点
+- [x] 快照不写入存档文件
+- [x] 加载存档后快照历史为空
+- [x] `cargo check-all` 通过
 
-### Phase B
+### Phase B ❄️ 冻结（待 Tauri 迁移后重新设计）
 
 - [ ] 历史记录界面中每条记录可点击
 - [ ] 点击后跳转到对应位置，渲染效果正确恢复
 - [ ] 跳转后可正常继续游玩（前进/回退均正常）
 
-### Phase C
+### Phase C ❄️ 冻结（待 Tauri 迁移后重新设计）
 
 - [ ] F5 键触发热重载，重启后自动推进到之前的位置
 - [ ] 热重载后渲染效果与重启前一致

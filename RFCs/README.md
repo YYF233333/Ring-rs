@@ -50,4 +50,4 @@
 | RFC-025 | 共享服务层提取 | `rfc-shared-services-extraction.md` | Accepted |
 | RFC-026 | 统一 Game Mode 框架 | `rfc-unified-game-mode-framework.md` | Proposed |
 | RFC-027 | 玩法脚本层集成 | `rfc-gameplay-scripting-layer.md` | Proposed |
-| RFC-028 | 脚本预览编辑器 | `rfc-script-preview-editor.md` | Proposed |
+| RFC-028 | 脚本预览编辑器 | `rfc-script-preview-editor.md` | Accepted |
