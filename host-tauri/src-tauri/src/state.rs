@@ -9,8 +9,7 @@ use vn_runtime::{Parser, RuntimeInput, Script, ScriptNode, VNRuntime};
 
 use crate::audio::AudioManager;
 use crate::command_executor::{
-    AudioCommand, BatchOutput, CommandExecutor, ExecuteResult, SceneEffectKind,
-    SceneEffectRequest,
+    AudioCommand, BatchOutput, CommandExecutor, ExecuteResult, SceneEffectKind, SceneEffectRequest,
 };
 use crate::config::AppConfig;
 use crate::render_state::{CutsceneState, PlaybackMode, RenderState, SceneTransitionPhaseState};
@@ -720,17 +719,20 @@ impl AppStateInner {
                     result,
                     audio_commands,
                     scene_effect_request,
-                } = self
-                    .command_executor
-                    .execute_batch(&commands, &mut self.render_state, manifest);
+                } = self.command_executor.execute_batch(
+                    &commands,
+                    &mut self.render_state,
+                    manifest,
+                );
 
                 if let Some(ref d) = self.render_state.dialogue
-                    && (d.visible_chars == 0 || !d.content.is_empty()) {
-                        let last_text = self.history.first().map(|h| h.text.as_str());
-                        if last_text != Some(&d.content) {
-                            self.push_history(d.speaker.clone(), d.content.clone());
-                        }
+                    && (d.visible_chars == 0 || !d.content.is_empty())
+                {
+                    let last_text = self.history.first().map(|h| h.text.as_str());
+                    if last_text != Some(&d.content) {
+                        self.push_history(d.speaker.clone(), d.content.clone());
                     }
+                }
 
                 for cmd in audio_commands {
                     self.dispatch_audio_command(cmd);
@@ -958,10 +960,8 @@ impl AppStateInner {
             let decay = 1.0 - progress;
             let freq = 30.0;
             let phase = shake.elapsed * freq;
-            self.render_state.scene_effect.shake_offset_x =
-                shake.amplitude_x * decay * phase.sin();
-            self.render_state.scene_effect.shake_offset_y =
-                shake.amplitude_y * decay * phase.cos();
+            self.render_state.scene_effect.shake_offset_x = shake.amplitude_x * decay * phase.sin();
+            self.render_state.scene_effect.shake_offset_y = shake.amplitude_y * decay * phase.cos();
         }
     }
 }

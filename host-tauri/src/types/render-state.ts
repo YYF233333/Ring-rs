@@ -141,6 +141,13 @@ export type PlaybackMode = "Normal" | "Auto" | "Skip";
 export interface AudioRenderState {
   bgm: Readonly<BgmState> | null;
   sfx_queue: readonly SfxRequest[];
+  /** BGM 过渡信号（一次性），前端根据 bgm 变化推断过渡方式 */
+  bgm_transition: Readonly<BgmTransition> | null;
+}
+
+export interface BgmTransition {
+  /** 过渡时长（秒） */
+  duration: number;
 }
 
 export interface BgmState {
@@ -181,6 +188,7 @@ export interface AppConfig {
   manifest_path: string;
   start_script_path: string;
   asset_source: "fs" | "zip";
+  zip_path: string | null;
   window: {
     width: number;
     height: number;

@@ -81,6 +81,10 @@ const overlayStyle = computed(() => {
   };
 
   if (ruleConfig.value) {
+    // TODO: ruleConfig.value.reversed 已从后端传递但前端未消费。
+    // 旧 Host 的 shader 通过反转遮罩亮度值 (1.0 - mask) 实现反向过渡，
+    // 当前 CSS mask-image + 整层不透明度方案无法直接表达此语义。
+    // 待 Rule 过渡整体升级为 Canvas/WebGL 时一并实现。
     const url = assetUrl(ruleConfig.value.mask_path);
     base.backgroundColor = "black";
     base.maskImage = `url(${url})`;

@@ -222,6 +222,20 @@ pub struct AudioRenderState {
     pub bgm: Option<BgmState>,
     /// 本帧需要播放的一次性音效（前端播放后忽略，下帧清空）
     pub sfx_queue: Vec<SfxRequest>,
+    /// BGM 过渡信号（一次性，前端消费后下帧为 None）
+    ///
+    /// 前端根据 `bgm` 字段的变化类型推断过渡方式：
+    /// - Some → None：fade out
+    /// - None → Some：fade in
+    /// - Some(A) → Some(B)：crossfade
+    pub bgm_transition: Option<BgmTransition>,
+}
+
+/// BGM 过渡参数（一次性信号）
+#[derive(Debug, Clone, Serialize)]
+pub struct BgmTransition {
+    /// 过渡时长（秒）
+    pub duration: f32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -243,6 +257,7 @@ impl AudioRenderState {
         Self {
             bgm: None,
             sfx_queue: Vec::new(),
+            bgm_transition: None,
         }
     }
 }

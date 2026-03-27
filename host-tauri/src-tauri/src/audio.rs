@@ -5,7 +5,7 @@
 
 use tracing::debug;
 
-use crate::render_state::{AudioRenderState, BgmState, SfxRequest};
+use crate::render_state::{AudioRenderState, BgmState, BgmTransition, SfxRequest};
 use crate::resources::normalize_logical_path;
 
 /// 音频管理器（headless 状态追踪）
@@ -18,11 +18,16 @@ pub struct AudioManager {
     duck_multiplier: f32,
     duck_target: f32,
     sfx_queue: Vec<SfxRequest>,
+    /// 待下发给前端的 BGM 过渡信号，`drain_audio_state()` 时 take 消费
+    pending_transition: Option<f32>,
 }
 
 impl AudioManager {
     const DUCK_VOLUME_RATIO: f32 = 0.3;
     const DUCK_FADE_SPEED: f32 = 3.0;
+
+    const CROSSFADE_DURATION: f32 = 1.0;
+    const FADE_IN_DURATION: f32 = 0.5;
 
     pub fn new() -> Self {
         Self {
@@ -34,6 +39,7 @@ impl AudioManager {
             duck_multiplier: 1.0,
             duck_target: 1.0,
             sfx_queue: Vec::new(),
+            pending_transition: None,
         }
     }
 
@@ -57,15 +63,32 @@ impl AudioManager {
     /// 播放 BGM（仅更新状态）
     pub fn play_bgm(&mut self, path: &str, looping: bool, _fade_in: Option<f32>) {
         let logical_path = normalize_logical_path(path);
+
+        let is_same = self
+            .current_bgm_path
+            .as_ref()
+            .is_some_and(|p| *p == logical_path);
+        if !is_same {
+            let duration = if self.current_bgm_path.is_some() {
+                Self::CROSSFADE_DURATION
+            } else {
+                Self::FADE_IN_DURATION
+            };
+            self.pending_transition = Some(duration);
+        }
+
         self.current_bgm_path = Some(logical_path.clone());
         self.bgm_looping = looping;
         debug!(path = %logical_path, looping, "BGM state: play");
     }
 
     /// 停止 BGM（仅更新状态）
-    pub fn stop_bgm(&mut self, _fade_out: Option<f32>) {
+    pub fn stop_bgm(&mut self, fade_out: Option<f32>) {
         if self.current_bgm_path.is_none() {
             return;
+        }
+        if let Some(duration) = fade_out {
+            self.pending_transition = Some(duration);
         }
         self.current_bgm_path = None;
         debug!("BGM state: stop");
@@ -125,7 +148,15 @@ impl AudioManager {
         });
 
         let sfx_queue = std::mem::take(&mut self.sfx_queue);
+        let bgm_transition = self
+            .pending_transition
+            .take()
+            .map(|duration| BgmTransition { duration });
 
-        AudioRenderState { bgm, sfx_queue }
+        AudioRenderState {
+            bgm,
+            sfx_queue,
+            bgm_transition,
+        }
     }
 }

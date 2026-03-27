@@ -33,6 +33,9 @@ pub struct AppConfig {
     pub start_script_path: String,
     /// 资源来源类型
     pub asset_source: AssetSourceType,
+    /// ZIP 文件路径（当 asset_source 为 Zip 时使用，相对于项目根目录）
+    #[serde(default)]
+    pub zip_path: Option<String>,
     /// 窗口配置
     pub window: WindowConfig,
     /// 调试配置
@@ -51,8 +54,7 @@ pub struct WindowConfig {
 }
 
 /// 调试配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DebugConfig {
     pub log_level: Option<String>,
 }
@@ -75,6 +77,7 @@ impl Default for AppConfig {
             manifest_path: "manifest.json".to_string(),
             start_script_path: String::new(),
             asset_source: AssetSourceType::default(),
+            zip_path: None,
             window: WindowConfig::default(),
             debug: DebugConfig::default(),
             audio: AudioConfig::default(),
@@ -92,7 +95,6 @@ impl Default for WindowConfig {
         }
     }
 }
-
 
 impl Default for AudioConfig {
     fn default() -> Self {
@@ -118,7 +120,6 @@ impl AppConfig {
         info!(path = ?path, "配置文件加载成功");
         Ok(config)
     }
-
 }
 
 /// 配置错误

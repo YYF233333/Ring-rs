@@ -123,7 +123,9 @@ impl SceneEffectRequest {
 
     fn extract_level(args: &[(Option<String>, TransitionArg)]) -> f32 {
         for (key, val) in args {
-            if key.as_deref() == Some("level") && let TransitionArg::Number(n) = val {
+            if key.as_deref() == Some("level")
+                && let TransitionArg::Number(n) = val
+            {
                 return *n as f32;
             }
         }
@@ -298,8 +300,7 @@ impl CommandExecutor {
                     .map(resolve_transition)
                     .unwrap_or((TransitionKind::None, 0.0));
 
-                let preset_name =
-                    crate::render_state::position_to_preset_name(*position);
+                let preset_name = crate::render_state::position_to_preset_name(*position);
                 let preset = manifest.get_preset(preset_name);
                 let group = manifest.get_group_config(path);
 

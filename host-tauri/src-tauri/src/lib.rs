@@ -35,6 +35,31 @@ fn find_project_root() -> PathBuf {
     cwd
 }
 
+/// 根据配置创建 ResourceManager（FS 或 ZIP 模式）
+fn create_resource_manager(
+    cfg: &config::AppConfig,
+    assets_root: &Path,
+    project_root: &Path,
+) -> resources::ResourceManager {
+    match cfg.asset_source {
+        config::AssetSourceType::Fs => {
+            info!("资源来源: 文件系统");
+            resources::ResourceManager::new(assets_root)
+        }
+        config::AssetSourceType::Zip => {
+            let zip_rel = cfg.zip_path.as_deref().unwrap_or("assets.zip");
+            let zip_path = if Path::new(zip_rel).is_relative() {
+                project_root.join(zip_rel)
+            } else {
+                PathBuf::from(zip_rel)
+            };
+            info!(path = %zip_path.display(), "资源来源: ZIP");
+            let source = resources::ZipSource::open(&zip_path).expect("ZIP 资源文件打开失败");
+            resources::ResourceManager::with_source(Box::new(source), assets_root)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -68,7 +93,7 @@ pub fn run() {
                 };
                 info!(assets = %assets_root.display(), "资源根目录");
 
-                let rm = resources::ResourceManager::new(&assets_root);
+                let rm = create_resource_manager(&cfg, &assets_root, &project_root);
 
                 // saves_dir 也相对于项目根目录解析
                 let saves_dir = if cfg.saves_dir.is_relative() {

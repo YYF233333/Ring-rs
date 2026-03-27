@@ -1,18 +1,21 @@
 # host-tauri/resources
 
-> LastVerified: 2026-03-26
+> LastVerified: 2026-03-28
 > Owner: Claude
 
 ## 职责
 
-资源路径规范化与文件系统读取——提供 `LogicalPath` 类型约束和 `ResourceManager` 统一资源访问。
+资源路径规范化与多来源读取——提供 `LogicalPath` 类型约束、`ResourceSource` trait 抽象和 `ResourceManager` 统一入口。后端脚本、JSON 等通过 trait 从文件系统或 ZIP 读取；前端资源（图片/音频/视频）仍通过 Tauri asset protocol 使用文件系统路径（由 `base_path` 解析）。
 
 ## 关键类型/结构
 
 | 类型 | 说明 |
 |------|------|
 | `LogicalPath` | newtype 包装的规范化逻辑路径（相对于 assets_root，`/` 分隔，无 `assets/` 前缀） |
-| `ResourceManager` | 简化版资源管理器（仅文件系统模式，持有 `base_path`） |
+| `ResourceSource` | 资源来源抽象 trait：`read_text`、`read_bytes`、`exists`（`Send + Sync`） |
+| `FsSource` | 文件系统实现：`base_path` + `std::fs` 读写 |
+| `ZipSource` | ZIP 文件实现（`cfg(feature = "zip")`）：预建路径索引、按需从归档读取 |
+| `ResourceManager` | 统一资源管理器：后端读取通过 `ResourceSource` 代理，持有 `source: Box<dyn ResourceSource>` 与 `base_path: PathBuf` |
 | `ResourceError` | 资源错误枚举：LoadFailed / NotFound |
 
 ### LogicalPath 不变量
@@ -36,12 +39,13 @@
 
 | 方法 | 说明 |
 |------|------|
-| `new(base_path)` | 创建资源管理器 |
-| `read_text(path)` | 读取文本资源 |
-| `read_bytes(path)` | 读取二进制资源 |
-| `resolve_fs_path(path)` | 返回文件系统绝对路径 |
-| `resource_exists(path)` | 检查资源是否存在 |
-| `base_path()` | 获取 assets 根目录 |
+| `new(base_path)` | 创建资源管理器（内部使用 `FsSource`） |
+| `with_source(source, base_path)` | 使用指定 `ResourceSource` 创建；`base_path` 仍用于 asset protocol |
+| `read_text(path)` | 读取文本资源（经 `source`） |
+| `read_bytes(path)` | 读取二进制资源（经 `source`） |
+| `resolve_fs_path(path)` | 返回逻辑路径对应的文件系统绝对路径（用于 asset 协议） |
+| `resource_exists(path)` | 检查资源是否存在（经 `source.exists`） |
+| `base_path()` | 获取 assets 根目录（文件系统路径） |
 
 ## 数据流
 
@@ -52,10 +56,10 @@
 LogicalPath::new() → 规范化（统一分隔符、解析 ..、去除 assets/ 前缀）
   │
   ▼
-ResourceManager::resolve() → base_path.join(logical_path)
+ResourceManager::read_* / resource_exists
   │
   ▼
-std::fs::read / read_to_string → Result<T, ResourceError>
+ResourceSource trait（FsSource 或 ZipSource）→ 实际读取，而非在 ResourceManager 内直接 std::fs（FS 模式下由 FsSource 内部使用 std::fs）
 ```
 
 ### normalize_logical_path 处理规则
@@ -68,20 +72,20 @@ std::fs::read / read_to_string → Result<T, ResourceError>
 
 ## 关键不变量
 
-- `ResourceManager` 仅支持文件系统模式（简化版，无 ZIP 支持）
-- 所有资源路径必须通过 `LogicalPath` 类型约束，禁止裸字符串调用
-- `resolve()` 是内部方法，外部通过 `read_text`/`read_bytes`/`resolve_fs_path` 访问
-- 路径规范化是幂等的
+- 支持 **FS** 与 **ZIP** 两种后端来源，由构造时注入的 `ResourceSource` 决定。
+- 所有资源路径必须通过 `LogicalPath` 类型约束，禁止裸字符串调用 `ResourceManager`。
+- `base_path` 始终为文件系统上的 assets 根，供前端 asset protocol 解析 URL；与 ZIP 后端并存，不因 ZIP 而省略。
+- 路径规范化是幂等的。
 
 ## 与其他模块的关系
 
 | 模块 | 关系 |
 |------|------|
-| `state.rs` | 被持有：`AppStateInner.resource_manager`，用于脚本加载和音频字节读取 |
+| `state.rs` | 被持有：`AppStateInner.resource_manager`，用于脚本加载等 |
 | `audio.rs` | 使用：`normalize_logical_path` 规范化音频路径 |
 | `manifest.rs` | 使用：`normalize_logical_path` 规范化立绘路径 |
 | `commands.rs` | 使用：`get_assets_root` 返回 base_path |
-| `lib.rs` | 创建：setup 中根据配置创建 ResourceManager |
+| `lib.rs` | 创建：`create_resource_manager` 根据 `AppConfig.asset_source` 选择 `ResourceManager::new`（FS）或 `ResourceManager::with_source(Box::new(ZipSource::open(...)), assets_root)`（ZIP，需 `zip` feature） |
 | 前端 `useAssets.ts` | 间接：通过 `get_assets_root` IPC 获取路径后拼接 |
 
 ## 附录：Manifest
