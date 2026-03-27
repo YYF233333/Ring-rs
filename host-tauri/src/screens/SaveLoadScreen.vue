@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useEngine } from "../composables/useEngine";
 import type { SaveInfo } from "../types/render-state";
 
@@ -13,12 +13,14 @@ const emit = defineEmits<{
   load: [slot: number];
 }>();
 
-const { deleteSave } = useEngine();
+const { deleteSave, getThumbnail } = useEngine();
 
 const SLOTS_PER_PAGE = 6;
 const currentPage = ref(0);
 
 const totalPages = computed(() => Math.max(1, Math.ceil((SLOTS_PER_PAGE * 5) / SLOTS_PER_PAGE)));
+
+const thumbnails: Record<number, string | null> = reactive({});
 
 const visibleSlots = computed(() => {
   const start = currentPage.value * SLOTS_PER_PAGE + 1;
@@ -31,6 +33,23 @@ const visibleSlots = computed(() => {
   return slots;
 });
 
+async function loadThumbnails() {
+  for (const { slot, info } of visibleSlots.value) {
+    if (info && !(slot in thumbnails)) {
+      getThumbnail(slot).then((b64) => {
+        thumbnails[slot] = b64;
+      });
+    }
+  }
+}
+
+watch([currentPage, () => props.saves], loadThumbnails, { immediate: true });
+
+function thumbnailSrc(slot: number): string | undefined {
+  const b64 = thumbnails[slot];
+  return b64 ? `data:image/png;base64,${b64}` : undefined;
+}
+
 function onSlotClick(slot: number) {
   if (props.mode === "save") {
     emit("save", slot);
@@ -41,6 +60,7 @@ function onSlotClick(slot: number) {
 
 async function onDelete(slot: number, ev: Event) {
   ev.stopPropagation();
+  delete thumbnails[slot];
   await deleteSave(slot);
 }
 
@@ -71,7 +91,13 @@ function formatTimestamp(ts: string): string {
         @click="onSlotClick(item.slot)"
       >
         <div class="slot-thumb">
-          <span v-if="!item.info" class="slot-empty-label">空</span>
+          <img
+            v-if="item.info && thumbnailSrc(item.slot)"
+            :src="thumbnailSrc(item.slot)"
+            class="slot-thumb-img"
+            draggable="false"
+          />
+          <span v-else-if="!item.info" class="slot-empty-label">空</span>
           <span v-else class="slot-number">#{{ item.slot }}</span>
         </div>
         <div v-if="item.info" class="slot-meta">
@@ -170,6 +196,13 @@ function formatTimestamp(ts: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+
+.slot-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .slot-empty-label {

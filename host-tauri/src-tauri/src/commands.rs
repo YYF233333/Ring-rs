@@ -108,6 +108,46 @@ pub fn list_saves(state: State<AppState>) -> Result<Vec<SaveInfo>, String> {
     Ok(infos)
 }
 
+/// 保存游戏并附带缩略图（base64 编码的 PNG）
+#[command]
+pub fn save_game_with_thumbnail(
+    state: State<AppState>,
+    slot: u32,
+    thumbnail_base64: String,
+) -> Result<(), String> {
+    use base64::Engine as _;
+
+    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let svc = inner.services();
+    let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
+    let runtime_state = rt.state().clone();
+    let mut save_data = SaveData::new(slot, runtime_state).with_history(rt.history().clone());
+
+    if let Some(ref cm) = inner.render_state.chapter_mark {
+        save_data = save_data.with_chapter(&cm.title);
+    }
+    save_data = save_data.with_audio(AudioState {
+        current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
+        bgm_looping: true,
+    });
+
+    let png_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&thumbnail_base64)
+        .map_err(|e| format!("base64 解码失败: {e}"))?;
+    svc.saves
+        .save_thumbnail_png(slot, &png_bytes)
+        .map_err(|e| format!("缩略图保存失败: {e}"))?;
+
+    svc.saves.save(&save_data).map_err(|e| e.to_string())
+}
+
+/// 获取指定槽位的缩略图（base64 编码的 PNG）
+#[command]
+pub fn get_thumbnail(state: State<AppState>, slot: u32) -> Result<Option<String>, String> {
+    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    Ok(inner.services().saves.load_thumbnail_base64(slot))
+}
+
 /// 删除指定槽位的存档
 #[command]
 pub fn delete_save(state: State<AppState>, slot: u32) -> Result<(), String> {

@@ -121,7 +121,7 @@ export interface SceneTransition {
 export type SceneTransitionKind =
   | "Fade"
   | "FadeWhite"
-  | { Rule: { mask_path: string; reversed: boolean } };
+  | { Rule: { mask_path: string; reversed: boolean; ramp: number } };
 
 export type SceneTransitionPhaseState = "FadeIn" | "Hold" | "FadeOut" | "Completed";
 

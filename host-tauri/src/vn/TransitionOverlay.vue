@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useAssets } from "../composables/useAssets";
 import type { SceneTransition, SceneTransitionKind } from "../types/render-state";
-
-const { assetUrl } = useAssets();
+import RuleTransitionCanvas from "./RuleTransitionCanvas.vue";
 
 const props = defineProps<{
   sceneTransition: Readonly<SceneTransition> | null;
@@ -16,7 +14,7 @@ const visible = computed(() => {
 
 function isRule(
   kind: SceneTransitionKind,
-): kind is { Rule: { mask_path: string; reversed: boolean } } {
+): kind is { Rule: { mask_path: string; reversed: boolean; ramp: number } } {
   return typeof kind === "object" && kind !== null && "Rule" in kind;
 }
 
@@ -42,6 +40,7 @@ watch(
   (phase) => {
     const st = props.sceneTransition;
     if (!st) return;
+    if (isRule(st.transition_type)) return;
 
     switch (phase) {
       case "FadeIn":
@@ -73,36 +72,28 @@ watch(
   { immediate: true },
 );
 
-const overlayStyle = computed(() => {
-  const base: Record<string, string | number> = {
-    opacity: targetOpacity.value,
-    transition:
-      transitionDuration.value > 0 ? `opacity ${transitionDuration.value}s linear` : "none",
-  };
-
-  if (ruleConfig.value) {
-    // TODO: ruleConfig.value.reversed 已从后端传递但前端未消费。
-    // 旧 Host 的 shader 通过反转遮罩亮度值 (1.0 - mask) 实现反向过渡，
-    // 当前 CSS mask-image + 整层不透明度方案无法直接表达此语义。
-    // 待 Rule 过渡整体升级为 Canvas/WebGL 时一并实现。
-    const url = assetUrl(ruleConfig.value.mask_path);
-    base.backgroundColor = "black";
-    base.maskImage = `url(${url})`;
-    base.maskSize = "cover";
-    base.maskRepeat = "no-repeat";
-    base.webkitMaskImage = `url(${url})`;
-    base.webkitMaskSize = "cover";
-    base.webkitMaskRepeat = "no-repeat";
-  } else {
-    base.backgroundColor = bgColor.value;
-  }
-
-  return base;
-});
+const fadeOverlayStyle = computed(() => ({
+  backgroundColor: bgColor.value,
+  opacity: targetOpacity.value,
+  transition:
+    transitionDuration.value > 0
+      ? `opacity ${transitionDuration.value}s var(--vn-ease-scene)`
+      : "none",
+}));
 </script>
 
 <template>
-  <div v-if="visible" class="transition-overlay" :style="overlayStyle" />
+  <template v-if="visible">
+    <RuleTransitionCanvas
+      v-if="ruleConfig && sceneTransition"
+      :mask-path="ruleConfig.mask_path"
+      :reversed="ruleConfig.reversed"
+      :ramp="ruleConfig.ramp"
+      :duration="sceneTransition.duration"
+      :phase="sceneTransition.phase"
+    />
+    <div v-else class="transition-overlay" :style="fadeOverlayStyle" />
+  </template>
 </template>
 
 <style scoped>

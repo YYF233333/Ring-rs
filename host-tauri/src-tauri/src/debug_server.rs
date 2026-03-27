@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
+use base64::Engine as _;
 use axum::extract::{Path, State as AxState};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -163,6 +164,39 @@ fn dispatch(
                 .filter_map(|(slot, _)| svc.saves.get_save_info(*slot))
                 .collect();
             Ok(serde_json::to_value(&infos).unwrap_or_default())
+        }
+
+        "save_game_with_thumbnail" => {
+            let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
+            let thumbnail_base64 = args["thumbnail_base64"]
+                .as_str()
+                .ok_or("missing thumbnail_base64")?;
+            let inner = state.lock().map_err(|e| e.to_string())?;
+            let svc = inner.services();
+            let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
+            let runtime_state = rt.state().clone();
+            let mut save_data =
+                vn_runtime::SaveData::new(slot, runtime_state).with_history(rt.history().clone());
+            if let Some(ref cm) = inner.render_state.chapter_mark {
+                save_data = save_data.with_chapter(&cm.title);
+            }
+            save_data = save_data.with_audio(vn_runtime::AudioState {
+                current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
+                bgm_looping: true,
+            });
+            let png_bytes = base64::engine::general_purpose::STANDARD
+                .decode(thumbnail_base64)
+                .map_err(|e| format!("base64 decode: {e}"))?;
+            svc.saves.save_thumbnail_png(slot, &png_bytes)?;
+            svc.saves.save(&save_data).map_err(|e| e.to_string())?;
+            Ok(serde_json::Value::Null)
+        }
+
+        "get_thumbnail" => {
+            let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
+            let inner = state.lock().map_err(|e| e.to_string())?;
+            let b64 = inner.services().saves.load_thumbnail_base64(slot);
+            Ok(serde_json::to_value(&b64).unwrap_or_default())
         }
 
         "delete_save" => {

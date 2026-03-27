@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import SkipAutoIndicator from "./components/SkipAutoIndicator.vue";
-import Toast from "./components/Toast.vue";
+import type Toast from "./components/Toast.vue";
 import { useAssets } from "./composables/useAssets";
 import { useAudio } from "./composables/useAudio";
 import { useConfirmDialog } from "./composables/useConfirmDialog";
@@ -375,6 +375,9 @@ onBeforeUnmount(() => {
   --vn-bg-overlay: rgba(0, 0, 0, 0.85);
   --vn-text-primary: #e0e0e0;
   --vn-accent: rgba(100, 140, 255, 0.6);
+  --vn-ease-scene: cubic-bezier(0.455, 0.03, 0.515, 0.955);
+  --vn-ease-character: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --vn-ease-ui: ease;
 }
 
 html,

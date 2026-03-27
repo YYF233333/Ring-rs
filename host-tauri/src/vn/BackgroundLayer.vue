@@ -29,7 +29,7 @@ const dissolveDuration = computed(() => {
       :src="oldBackgroundUrl"
       class="background-image background-old"
       :style="{
-        transition: `opacity ${dissolveDuration}s ease-in-out`,
+        transition: `opacity ${dissolveDuration}s var(--vn-ease-scene)`,
         opacity: 0,
       }"
       alt=""
@@ -43,7 +43,7 @@ const dissolveDuration = computed(() => {
       class="background-image"
       :style="{
         transition: isDissolving
-          ? `opacity ${dissolveDuration}s ease-in-out`
+          ? `opacity ${dissolveDuration}s var(--vn-ease-scene)`
           : 'none',
       }"
       alt=""

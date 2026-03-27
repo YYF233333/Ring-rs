@@ -102,7 +102,11 @@ pub struct SceneTransition {
 pub enum SceneTransitionKind {
     Fade,
     FadeWhite,
-    Rule { mask_path: String, reversed: bool },
+    Rule {
+        mask_path: String,
+        reversed: bool,
+        ramp: f32,
+    },
 }
 
 /// 场景过渡阶段

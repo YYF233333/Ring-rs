@@ -6,8 +6,10 @@ import type {
   RenderState,
   SaveInfo,
 } from "../types/render-state";
+import { useAssets } from "./useAssets";
 import { callBackend } from "./useBackend";
 import { createLogger } from "./useLogger";
+import { captureScene } from "./useSceneCapture";
 
 const log = createLogger("engine");
 
@@ -141,6 +143,15 @@ export function useEngine() {
   // ── 存档 ────────────────────────────────────────────────────────────────
 
   async function saveGame(slot: number) {
+    const { assetUrl } = useAssets();
+    const rs = renderState.value;
+    if (rs) {
+      const thumbnail_base64 = await captureScene(rs, assetUrl);
+      if (thumbnail_base64) {
+        await callBackend("save_game_with_thumbnail", { slot, thumbnail_base64 });
+        return;
+      }
+    }
     await callBackend("save_game", { slot });
   }
 
@@ -161,6 +172,10 @@ export function useEngine() {
     await callBackend("delete_save", { slot });
   }
 
+  async function getThumbnail(slot: number): Promise<string | null> {
+    return await callBackend<string | null>("get_thumbnail", { slot });
+  }
+
   async function getConfig(): Promise<AppConfig | null> {
     return await callBackend<AppConfig>("get_config");
   }
@@ -178,6 +193,7 @@ export function useEngine() {
     continueGame,
     listSaves,
     deleteSave,
+    getThumbnail,
     getConfig,
     returnToTitle,
     setPlaybackMode,

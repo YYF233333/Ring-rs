@@ -147,7 +147,11 @@ enum TransitionKind {
     Fade,
     FadeWhite,
     Move,
-    Rule { mask_path: String, reversed: bool },
+    Rule {
+        mask_path: String,
+        reversed: bool,
+        ramp: f32,
+    },
 }
 
 /// 解析 Transition 为效果类型和时长
@@ -169,10 +173,18 @@ fn resolve_transition(transition: &Transition) -> (TransitionKind, f32) {
                 })
                 .unwrap_or_default();
             let reversed = transition.get_reversed().unwrap_or(false);
+            let ramp = transition
+                .get_arg("ramp", 3)
+                .and_then(|a| match a {
+                    TransitionArg::Number(n) => Some(*n as f32),
+                    _ => None,
+                })
+                .unwrap_or(0.1);
             (
                 TransitionKind::Rule {
                     mask_path,
                     reversed,
+                    ramp,
                 },
                 duration.unwrap_or(0.5),
             )
@@ -268,11 +280,13 @@ impl CommandExecutor {
                         TransitionKind::Rule {
                             mask_path,
                             reversed,
+                            ramp,
                         } => {
                             rs.scene_transition = Some(SceneTransition {
                                 transition_type: SceneTransitionKind::Rule {
                                     mask_path,
                                     reversed,
+                                    ramp,
                                 },
                                 phase: SceneTransitionPhaseState::FadeIn,
                                 duration,

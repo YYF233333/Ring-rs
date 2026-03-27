@@ -61,6 +61,9 @@
 |------|------|
 | Shake | 后端 `update_shake()`：30Hz + 衰减正弦，与旧 Host `AnimationSystem` 行为对齐 |
 | Blur / Dim | 后端 `blur_amount` / `dim_level`，前端 CSS filter，功能等价 |
+| Rule 过渡 `reversed` | `RuleTransitionCanvas.vue`（Canvas 2D 逐像素 dissolve）：支持 reversed + ramp（smoothstep 柔和边缘），与旧 Host shader 行为对齐 |
+| 存档缩略图 | 前端 Canvas 合成（背景+角色）→ base64 PNG → IPC `save_game_with_thumbnail`；`SaveLoadScreen.vue` 展示 |
+| 缓动体系 | CSS 变量 `--vn-ease-scene`（EaseInOutQuad）/ `--vn-ease-character`（EaseInOutCubic）/ `--vn-ease-ui`（ease）统一各组件 |
 
 ### 2.3 ZIP 模式说明
 
@@ -70,15 +73,7 @@ ZIP 资源来源已完整支持。后端注册 `ring-asset` 自定义协议 hand
 
 ## 三、未完成与差距
 
-### 3.1 表现与 UI
-
-| 项 | 旧 Host | host-tauri 现状 | 备注 |
-|----|---------|-----------------|------|
-| **Rule 过渡 `reversed`** | DissolveRenderer shader 支持 reversed | 类型有 `reversed` 字段；`TransitionOverlay.vue` TODO | CSS mask + 整层不透明度难以表达反转遮罩语义；**延后**至 Canvas/WebGL 升级时一并做 |
-| **存档缩略图** | GPU readback → PNG，`save_thumbnail` | 无截图管线；`save_thumbnail` 未调用；`SaveLoadScreen.vue` 仅槽位号 | 可用 Tauri 窗口截图或前端采集后写入并在列表展示 |
-| **缓动体系统一** | `AnimationSystem` + `EasingFunction` 枚举 | 多为 CSS `ease` / `ease-in-out` 与局部线性插值 | Shake/Blur/Dim 已覆盖；若要对齐「全场景同一套 easing」，需前端库或后端统一曲线 |
-
-### 3.2 测试、调试与自动化
+### 3.1 测试、调试与自动化
 
 现有调试体系：Agent 通过 `cursor-ide-browser` MCP 直接操作游戏（`debug_server.rs` 将 IPC 镜像为 HTTP 端点），配合 `debug_snapshot` 获取完整引擎状态。这套体系替代了旧 Host 中部分测试/调试特性。
 
@@ -124,23 +119,15 @@ ZIP 资源来源已完整支持。后端注册 `ring-asset` 自定义协议 hand
 
 ## 五、优先级建议（仅待办）
 
-### P0（用户体验）
+### P1（开发体验 / 测试）
 
-1. **Rule 过渡 `reversed`** — 与 Canvas/WebGL 升级绑定，当前方案刻意延后。
+1. **Headless CLI** — 独立 CLI 工具（无 Tauri/WebView），复用 vn-runtime + CommandExecutor，用于 CI 脚本验证与批量跑通测试。
 
-### P1（功能完整性）
+### P2（可扩展性，按需）
 
-2. **存档缩略图** — 采集、写入、存读档 UI 展示。
-
-### P2（开发体验 / 测试）
-
-3. **Headless CLI** — 独立 CLI 工具（无 Tauri/WebView），复用 vn-runtime + CommandExecutor，用于 CI 脚本验证与批量跑通测试。
-
-### P3（可扩展性，按需）
-
-4. **UI 模式插件** — `RequestUI` 前端完整实现。
-5. **小游戏模式** — iframe / 组件嵌入与通信。
-6. **扩展/能力系统** — 仅在有第三方效果插件需求时。
+2. **UI 模式插件** — `RequestUI` 前端完整实现。
+3. **小游戏模式** — iframe / 组件嵌入与通信。
+4. **扩展/能力系统** — 仅在有第三方效果插件需求时。
 
 ### 已决定不迁移（测试/调试类）
 

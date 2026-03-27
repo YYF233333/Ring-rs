@@ -31,7 +31,7 @@ function getCharacterStyle(char: Readonly<CharacterSprite>): Record<string, stri
   const td = char.transition_duration ?? 0;
   const transition =
     td > 0
-      ? `left ${td}s ease-in-out, top ${td}s ease-in-out, opacity ${td}s ease-in-out, transform ${td}s ease-in-out`
+      ? `left ${td}s var(--vn-ease-character), top ${td}s var(--vn-ease-character), opacity ${td}s var(--vn-ease-character), transform ${td}s var(--vn-ease-character)`
       : "none";
 
   const anchorXPct = char.anchor_x * 100;
