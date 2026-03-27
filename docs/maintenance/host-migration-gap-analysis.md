@@ -64,7 +64,7 @@
 
 ### 2.3 ZIP 模式说明
 
-ZIP 已支持后端读取（脚本、JSON 等）。前端资源加载仍依赖 asset protocol（通常需文件系统路径）；纯 ZIP 包场景下若要让 `<img>` 等走 WebView，需额外约定（例如解压目录或自定义协议），与「后端可读 ZIP」是两层问题。
+ZIP 资源来源已完整支持。后端注册 `ring-asset` 自定义协议 handler（`lib.rs`），前端通过 `convertFileSrc(logicalPath, "ring-asset")` 生成协议 URL，WebView 的 `<img>` / `<audio>` / `<video>` 等元素直接通过该协议加载资源，协议 handler 内部委托 `ResourceManager` 读取——FS 与 ZIP 来源对前端完全透明，不再需要文件系统路径。
 
 ---
 

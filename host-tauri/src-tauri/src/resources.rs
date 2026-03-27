@@ -2,8 +2,9 @@
 //!
 //! 提供 [`LogicalPath`] 路径规范化、[`ResourceSource`] 后端抽象和 [`ResourceManager`] 统一入口。
 //!
-//! 后端读取（脚本、JSON）通过 [`ResourceSource`] trait 支持文件系统和 ZIP 两种来源。
-//! 前端资源加载（图片/音频/视频）仍通过 Tauri asset protocol 使用文件系统路径。
+//! 所有资源（脚本、JSON、图片、音频、视频）统一通过 [`ResourceSource`] trait 读取，
+//! 支持文件系统和 ZIP 两种来源。前端通过 `ring-asset` 自定义协议访问资源，
+//! 协议 handler 内部使用 [`ResourceManager`] 透明处理 FS/ZIP 差异。
 
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -267,11 +268,11 @@ pub use zip_source::ZipSource;
 
 /// 统一资源管理器
 ///
-/// 后端读取通过 [`ResourceSource`] trait 代理（支持 FS / ZIP），
-/// `base_path` 始终指向文件系统路径，供前端 asset protocol 解析。
+/// 后端读取通过 [`ResourceSource`] trait 代理（支持 FS / ZIP）。
+/// 前端通过 `ring-asset` 自定义协议请求资源，handler 内部委托到此管理器。
 pub struct ResourceManager {
     source: Box<dyn ResourceSource>,
-    /// 文件系统根路径（始终可用，供 asset protocol URL 解析）
+    /// 文件系统根路径（开发期 debug server 静态文件服务仍需要）
     base_path: PathBuf,
 }
 
@@ -301,7 +302,6 @@ impl ResourceManager {
     }
 
     /// 读取二进制资源
-    #[allow(dead_code)]
     pub fn read_bytes(&self, path: &LogicalPath) -> Result<Vec<u8>, ResourceError> {
         self.source.read_bytes(path)
     }
@@ -321,6 +321,35 @@ impl ResourceManager {
     /// 获取 assets 根目录（文件系统路径，供 asset protocol 使用）
     pub fn base_path(&self) -> &Path {
         &self.base_path
+    }
+}
+
+// ── MIME 推断 ────────────────────────────────────────────────────────────────
+
+/// 根据文件扩展名推断 MIME type（用于自定义协议 handler 的 Content-Type）。
+pub fn guess_mime_type(path: &str) -> &'static str {
+    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "mp3" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        "wav" => "audio/wav",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "json" => "application/json",
+        "css" => "text/css",
+        "js" => "text/javascript",
+        "html" | "htm" => "text/html",
+        "txt" | "md" | "rks" => "text/plain",
+        "woff2" => "font/woff2",
+        "woff" => "font/woff",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        _ => "application/octet-stream",
     }
 }
 
@@ -363,6 +392,27 @@ mod tests {
         let path = LogicalPath::new("nope.txt");
         assert!(!source.exists(&path));
         assert!(source.read_text(&path).is_err());
+    }
+
+    #[test]
+    fn guess_mime_common_types() {
+        assert_eq!(guess_mime_type("bg/sky.png"), "image/png");
+        assert_eq!(guess_mime_type("bg/sky.jpg"), "image/jpeg");
+        assert_eq!(guess_mime_type("bg/sky.jpeg"), "image/jpeg");
+        assert_eq!(guess_mime_type("bg/sky.webp"), "image/webp");
+        assert_eq!(guess_mime_type("bgm/track.mp3"), "audio/mpeg");
+        assert_eq!(guess_mime_type("bgm/track.ogg"), "audio/ogg");
+        assert_eq!(guess_mime_type("video/op.mp4"), "video/mp4");
+        assert_eq!(guess_mime_type("ui/layout.json"), "application/json");
+        assert_eq!(guess_mime_type("gui/theme.css"), "text/css");
+        assert_eq!(guess_mime_type("fonts/noto.woff2"), "font/woff2");
+        assert_eq!(guess_mime_type("unknown.xyz"), "application/octet-stream");
+    }
+
+    #[test]
+    fn guess_mime_case_insensitive() {
+        assert_eq!(guess_mime_type("BG/SKY.PNG"), "image/png");
+        assert_eq!(guess_mime_type("track.MP3"), "audio/mpeg");
     }
 
     mod zip_tests {
@@ -431,6 +481,22 @@ mod tests {
             let path = LogicalPath::new("test.txt");
             assert_eq!(rm.read_text(&path).unwrap(), "via manager");
             assert_eq!(rm.base_path(), Path::new("/fake/base"));
+
+            std::fs::remove_file(&zip_path).ok();
+        }
+
+        #[test]
+        fn zip_manifest_via_resource_manager() {
+            let manifest_json = br#"{"characters":{},"presets":{},"defaults":{"anchor":{"x":0.5,"y":1.0},"pre_scale":1.0}}"#;
+            let zip_path = create_test_zip(&[("manifest.json", manifest_json)]);
+
+            let source = ZipSource::open(&zip_path).unwrap();
+            let rm = ResourceManager::with_source(Box::new(source), "/fake/base");
+
+            let path = LogicalPath::new("manifest.json");
+            let content = rm.read_text(&path).unwrap();
+            let manifest: serde_json::Value = serde_json::from_str(&content).unwrap();
+            assert!(manifest.get("defaults").is_some());
 
             std::fs::remove_file(&zip_path).ok();
         }

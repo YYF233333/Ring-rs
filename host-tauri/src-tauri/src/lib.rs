@@ -11,20 +11,45 @@ mod save_manager;
 mod state;
 
 use state::{AppState, AppStateInner, Services};
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
-use tracing::info;
+use tauri::http;
+use tracing::{info, warn};
 
-/// 从 CWD 向上查找包含 `assets` 子目录的祖先目录，作为项目根目录。
+/// 简易 percent-decode：处理 URL 路径中的 `%XX` 编码（如中文文件名）。
+fn percent_decode(input: &str) -> String {
+    let mut out = Vec::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(byte) = u8::from_str_radix(
+                &input[i + 1..i + 3],
+                16,
+            ) {
+                out.push(byte);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| input.to_string())
+}
+
+/// 定位项目根目录。
 ///
-/// 开发模式下 Tauri 的 CWD 通常是 `host-tauri/src-tauri/`，
-/// 而 assets 位于仓库根目录，需要向上两级才能找到。
+/// 优先查找 `config.json`（release 产物中始终存在），
+/// 回退查找 `assets/` 子目录（开发模式兼容）。
+/// 开发模式下 Tauri 的 CWD 通常是 `host-tauri/src-tauri/`，需要向上遍历。
 fn find_project_root() -> PathBuf {
     let cwd = std::env::current_dir().unwrap_or_default();
     let mut dir: &Path = &cwd;
     loop {
-        if dir.join("assets").is_dir() {
+        if dir.join("config.json").is_file() || dir.join("assets").is_dir() {
             return dir.to_path_buf();
         }
         match dir.parent() {
@@ -70,6 +95,44 @@ pub fn run() {
         .manage(AppState {
             inner: shared_inner.clone(),
         })
+        .register_uri_scheme_protocol("ring-asset", {
+            let shared = shared_inner.clone();
+            move |_ctx, request| {
+                let path_raw = percent_decode(request.uri().path().trim_start_matches('/'));
+                let logical = resources::LogicalPath::new(&path_raw);
+                let mime = resources::guess_mime_type(logical.as_str());
+
+                let inner = shared.lock().expect("invariant: lock not poisoned");
+                let result = if let Some(svc) = inner.services.as_ref() {
+                    svc.resources.read_bytes(&logical)
+                } else {
+                    Err(resources::ResourceError::LoadFailed {
+                        path: logical.as_str().to_string(),
+                        kind: "protocol".to_string(),
+                        message: "services not initialized".to_string(),
+                    })
+                };
+                drop(inner);
+
+                match result {
+                    Ok(bytes) => http::Response::builder()
+                        .status(200)
+                        .header("Content-Type", mime)
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(Cow::from(bytes))
+                        .unwrap(),
+                    Err(e) => {
+                        warn!(path = %logical, error = %e, "ring-asset 协议资源未找到");
+                        let msg = format!("Not Found: {logical}");
+                        http::Response::builder()
+                            .status(404)
+                            .header("Content-Type", "text/plain")
+                            .body(Cow::from(msg.into_bytes()))
+                            .unwrap()
+                    }
+                }
+            }
+        })
         .setup({
             let shared_inner = shared_inner.clone();
             move |_app| {
@@ -103,15 +166,19 @@ pub fn run() {
                 };
                 let sm = save_manager::SaveManager::new(&saves_dir);
 
-                // 加载 manifest（立绘元数据）
-                let manifest_fs_path = assets_root.join(&cfg.manifest_path);
-                let manifest = manifest::Manifest::load(
-                    &manifest_fs_path.to_string_lossy(),
-                )
-                .unwrap_or_else(|e| {
-                    info!("使用默认 manifest ({e})");
-                    manifest::Manifest::with_defaults()
-                });
+                // 加载 manifest（立绘元数据）——通过 ResourceManager 统一读取（FS/ZIP 透明）
+                let manifest_logical = resources::LogicalPath::new(&cfg.manifest_path);
+                let manifest = match rm.read_text(&manifest_logical) {
+                    Ok(content) => serde_json::from_str::<manifest::Manifest>(&content)
+                        .unwrap_or_else(|e| {
+                            info!("manifest JSON 解析失败，使用默认 ({e})");
+                            manifest::Manifest::with_defaults()
+                        }),
+                    Err(e) => {
+                        info!("manifest 加载失败，使用默认 ({e})");
+                        manifest::Manifest::with_defaults()
+                    }
+                };
                 info!(presets = manifest.presets.len(), "Manifest 加载完成");
 
                 // 初始化 AudioManager（headless 状态追踪，无设备依赖）

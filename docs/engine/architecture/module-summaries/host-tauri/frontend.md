@@ -1,6 +1,6 @@
 # host-tauri/frontend
 
-> LastVerified: 2026-03-26
+> LastVerified: 2026-03-28
 > Owner: Claude
 
 ## 职责
@@ -23,7 +23,7 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | `useBackend` | 统一后端调用入口：Tauri 模式走 `invoke()`，浏览器模式走 HTTP fetch（debug server） |
 | `useEngine` | **模块级单例**（共享 `renderState` / 游戏循环）：`startGame`、`handleClick`、`handleChoose`、`stop`、存档 `saveGame`/`loadGame`/`listSaves`/`deleteSave`、`getConfig`；另暴露 `continueGame`、`returnToTitle`、`setPlaybackMode`、`backspace`、`frontendConnected`、`finishCutscene`、`getHistory`、`quitGame` |
 | `useConfirmDialog` | 模块级确认框：`ask(title, message)` 返回 `Promise<boolean>`，与 `ConfirmDialog.vue` 配合 |
-| `useAssets` | 资源 URL 管理：获取 assets_root → `assetUrl(logicalPath)` 拼接可访问 URL |
+| `useAssets` | 资源 URL 管理：`assetUrl(logicalPath)` 通过 `ring-asset` 自定义协议（Tauri）或 debug HTTP server（浏览器）生成可访问 URL |
 | `useSettings` | 用户设置管理（单例）：load/save/update 与后端同步 |
 | `useNavigation` | 页面导航状态机（单例）：Screen 枚举 + 栈式导航 |
 | `useLogger` | 模块级日志：同时输出到 browser console 和 Rust tracing（通过 IPC 转发） |
@@ -92,8 +92,10 @@ RenderState.current_background = "images/bg01.png" (逻辑路径)
   │
   ▼
 useAssets.assetUrl("images/bg01.png")
-  ├─ Tauri 模式 → convertFileSrc(assetsRoot + "/images/bg01.png")
-  │   → "asset://localhost/F:/Code/Ring-rs/assets/images/bg01.png"
+  ├─ Tauri 模式 → convertFileSrc("images/bg01.png", "ring-asset")
+  │   → "ring-asset://localhost/images/bg01.png"（macOS/Linux）
+  │   → "http://ring-asset.localhost/images/bg01.png"（Windows）
+  │   协议 handler 内部通过 ResourceManager 读取（FS/ZIP 透明）
   └─ Debug 模式 → "http://localhost:9528/assets/images/bg01.png"
 ```
 

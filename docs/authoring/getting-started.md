@@ -181,5 +181,5 @@ cargo pack verify dist/game.zip --input assets
 
 ### Q：发布时为什么不需要 `assets/`？
 
-发布模式下资源来自 `game.zip`（`asset_source: "zip"`），所有 `assets/` 内容都被打进 ZIP 里了。
+发布模式下资源来自 `game.zip`（`asset_source: "zip"`），所有 `assets/` 内容都被打进 ZIP 里了。`host-tauri` 通过 `ring-asset` 自定义协议直接从 ZIP 读取资源并提供给 WebView，无需解压到磁盘。
 

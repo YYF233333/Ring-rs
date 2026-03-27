@@ -5,7 +5,7 @@
 
 ## 职责
 
-资源路径规范化与多来源读取——提供 `LogicalPath` 类型约束、`ResourceSource` trait 抽象和 `ResourceManager` 统一入口。后端脚本、JSON 等通过 trait 从文件系统或 ZIP 读取；前端资源（图片/音频/视频）仍通过 Tauri asset protocol 使用文件系统路径（由 `base_path` 解析）。
+资源路径规范化与多来源读取——提供 `LogicalPath` 类型约束、`ResourceSource` trait 抽象和 `ResourceManager` 统一入口。后端脚本、JSON 等通过 trait 从文件系统或 ZIP 读取；前端资源（图片/音频/视频）通过 `ring-asset` 自定义协议访问，协议 handler 内部委托 `ResourceManager`，FS/ZIP 来源对前端透明。
 
 ## 关键类型/结构
 
@@ -40,7 +40,7 @@
 | 方法 | 说明 |
 |------|------|
 | `new(base_path)` | 创建资源管理器（内部使用 `FsSource`） |
-| `with_source(source, base_path)` | 使用指定 `ResourceSource` 创建；`base_path` 仍用于 asset protocol |
+| `with_source(source, base_path)` | 使用指定 `ResourceSource` 创建；`base_path` 仍用于开发期 debug server 静态文件服务 |
 | `read_text(path)` | 读取文本资源（经 `source`） |
 | `read_bytes(path)` | 读取二进制资源（经 `source`） |
 | `resolve_fs_path(path)` | 返回逻辑路径对应的文件系统绝对路径（用于 asset 协议） |
@@ -74,7 +74,8 @@ ResourceSource trait（FsSource 或 ZipSource）→ 实际读取，而非在 Res
 
 - 支持 **FS** 与 **ZIP** 两种后端来源，由构造时注入的 `ResourceSource` 决定。
 - 所有资源路径必须通过 `LogicalPath` 类型约束，禁止裸字符串调用 `ResourceManager`。
-- `base_path` 始终为文件系统上的 assets 根，供前端 asset protocol 解析 URL；与 ZIP 后端并存，不因 ZIP 而省略。
+- 前端通过 `ring-asset://` 协议访问资源，协议 handler 内部委托 `ResourceManager` 读取，FS/ZIP 对前端透明。
+- `base_path` 始终为文件系统上的 assets 根，用于开发期 debug server 静态文件服务；与 ZIP 后端并存，不因 ZIP 而省略。
 - 路径规范化是幂等的。
 
 ## 与其他模块的关系
@@ -84,9 +85,9 @@ ResourceSource trait（FsSource 或 ZipSource）→ 实际读取，而非在 Res
 | `state.rs` | 被持有：`AppStateInner.resource_manager`，用于脚本加载等 |
 | `audio.rs` | 使用：`normalize_logical_path` 规范化音频路径 |
 | `manifest.rs` | 使用：`normalize_logical_path` 规范化立绘路径 |
-| `commands.rs` | 使用：`get_assets_root` 返回 base_path |
-| `lib.rs` | 创建：`create_resource_manager` 根据 `AppConfig.asset_source` 选择 `ResourceManager::new`（FS）或 `ResourceManager::with_source(Box::new(ZipSource::open(...)), assets_root)`（ZIP，需 `zip` feature） |
-| 前端 `useAssets.ts` | 间接：通过 `get_assets_root` IPC 获取路径后拼接 |
+| `commands.rs` | 使用：`get_assets_root` 返回 base_path（已弱化，前端不再依赖） |
+| `lib.rs` | 创建：`create_resource_manager` 根据 `AppConfig.asset_source` 选择 FS/ZIP；注册 `ring-asset` 协议 handler，handler 内部调用 `ResourceManager::read_bytes` |
+| 前端 `useAssets.ts` | 间接：通过 `convertFileSrc(logicalPath, "ring-asset")` 生成协议 URL，不再需要 `get_assets_root` |
 
 ## 附录：Manifest
 

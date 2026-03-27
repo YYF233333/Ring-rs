@@ -30,12 +30,15 @@ export async function callBackend<T>(command: string, args?: Record<string, unkn
 }
 
 /**
- * 将资源文件路径转换为可加载的 URL。
- * Tauri 模式下使用 asset protocol，浏览器模式下走 HTTP 代理。
+ * 将逻辑资源路径转换为可加载的 URL。
+ *
+ * Tauri 模式下使用 `ring-asset` 自定义协议（`convertFileSrc` 自动处理
+ * Windows `http://ring-asset.localhost/...` vs macOS/Linux `ring-asset://localhost/...`）。
+ * 浏览器调试模式下走 debug HTTP server 的静态文件服务。
  */
-export function resolveAssetSrc(fullPath: string, logicalPath: string): string {
+export function resolveAssetSrc(logicalPath: string): string {
   if (isTauri()) {
-    return convertFileSrc(fullPath);
+    return convertFileSrc(logicalPath, "ring-asset");
   }
   return `${DEBUG_API_BASE}/assets/${logicalPath}`;
 }

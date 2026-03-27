@@ -91,7 +91,8 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// 从文件加载
+    /// 从文件加载（初始化已改为通过 ResourceManager，此方法保留供直接使用）
+    #[allow(dead_code)]
     pub fn load(path: &str) -> Result<Self, String> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("无法读取 manifest 文件: {} - {}", path, e))?;
@@ -99,6 +100,7 @@ impl Manifest {
     }
 
     /// 从字节数据加载
+    #[allow(dead_code)]
     pub fn load_from_bytes(bytes: &[u8]) -> Result<Self, String> {
         let content = String::from_utf8(bytes.to_vec())
             .map_err(|e| format!("无法将字节转换为 UTF-8 字符串: {}", e))?;

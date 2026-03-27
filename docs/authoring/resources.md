@@ -61,7 +61,8 @@
 ```
 
 **特点**：
-- 从 ZIP 文件中读取资源
+- 从 ZIP 文件中读取资源，无需解压
+- `host-tauri` 通过 `ring-asset` 自定义协议直接从 ZIP 提供资源给 WebView，前端无需文件系统路径
 - 适合发布，资源集中在一个文件
 - 启动时会验证 ZIP 文件是否存在
 
@@ -199,7 +200,7 @@ dist/
 └── ffmpeg.exe            # 可选（若检测到 FFmpeg）
 ```
 
-**注意**：发布时不需要 `assets/` 目录，所有资源都在 `game.zip` 中。
+**注意**：发布时不需要 `assets/` 目录——所有资源都在 `game.zip` 中，`host-tauri` 通过 `ring-asset` 协议直接从 ZIP 读取并提供给 WebView，无需解压。
 
 ---
 
