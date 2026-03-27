@@ -27,5 +27,6 @@ alwaysApply: false
 - **Do** VN 渲染组件放 `vn/`，系统 UI 放 `screens/`，通用 UI 放 `components/`。
 - **Do** 组件通过 emit 向上通信，由 `App.vue`（通过 `useEngine`）统一处理后端调用。
 - **Don't** 在 Vue 组件（包括 `App.vue`）中直接 `import { callBackend }` — 用 `useEngine` 封装。
+- **Don't** 将模板里会直接渲染的 `.vue` 组件写成 `import type`；这会让组件在运行时被擦除并触发 `Failed to resolve component`。参见 `docs/maintenance/lessons-learned.md`。
 - **Don't** 在 Vue 组件中直接 `console.log` — 用 `createLogger`。
 - **Don't** 在前端维护游戏状态（如对话进度、角色位置）— 这是后端职责。

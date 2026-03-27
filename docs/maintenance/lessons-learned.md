@@ -77,6 +77,16 @@
 
 ---
 
+## 前端与 Vue
+
+### 模板里使用的 `.vue` 组件误写成 `import type`
+
+- **现象**：Vite / Vue 在运行时反复报警 `Failed to resolve component: Xxx`，但同名组件文件实际存在，TypeScript 类型检查也可能仍然通过。
+- **原因**：在 `<script setup>` 中把模板要渲染的组件写成了 `import type Foo from "./Foo.vue"`。类型导入会在运行时被擦除，Vue 编译器无法把它注册为模板组件。
+- **正确做法**：凡是会在模板里直接使用的 `.vue` 组件，一律使用普通导入：`import Foo from "./Foo.vue"`。只有纯类型位置才使用 `import type`，并避免对 `.vue` SFC 本体做类型导入。
+
+---
+
 ## 存档兼容
 
 ### 新增 RuntimeState 字段破坏旧存档加载

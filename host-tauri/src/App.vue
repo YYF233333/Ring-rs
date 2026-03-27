@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import SkipAutoIndicator from "./components/SkipAutoIndicator.vue";
-import type Toast from "./components/Toast.vue";
+import Toast from "./components/Toast.vue";
 import { useAssets } from "./composables/useAssets";
 import { useAudio } from "./composables/useAudio";
 import { useConfirmDialog } from "./composables/useConfirmDialog";

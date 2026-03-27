@@ -80,12 +80,14 @@ ZIP 资源来源已完整支持。后端注册 `ring-asset` 自定义协议 hand
 
 ### 3.2 测试、调试与自动化
 
-| 项 | 旧 Host 要点 | host-tauri 现状 | 迁移方向（概要） |
-|----|--------------|-----------------|------------------|
-| **输入录制与回放** | `RecordingBuffer`、`RecordingExporter`（JSONL）、`InputReplayer`、F8 / Panic 导出；`host/src/input/recording.rs` | 未实现 | 前端录浏览器事件 → JSONL，或 Playwright 等替代 |
-| **Headless** | CPU-only egui、固定帧循环、与回放联动；`--headless`、`--replay-input`、`--exit-on`、`--max-frames`、`--timeout-sec` 等 | 仅 `RING_HEADLESS` 藏窗，仍依赖 WebView | 独立 CLI 复用 vn-runtime + CommandExecutor，可无 Tauri |
-| **事件流（EventStream）** | `EngineEvent` JSONL；`host/src/event_stream/mod.rs` | 无对等；Debug HTTP 的 `debug_snapshot` 不等价 | tracing 关键路径，或 Tauri 事件通道 |
-| **CLI 参数** | 与 headless/回放/事件流联动 | 无 CLI，仅环境变量 | 与 headless/工具链一并设计 |
+现有调试体系：Agent 通过 `cursor-ide-browser` MCP 直接操作游戏（`debug_server.rs` 将 IPC 镜像为 HTTP 端点），配合 `debug_snapshot` 获取完整引擎状态。这套体系替代了旧 Host 中部分测试/调试特性。
+
+| 项 | 旧 Host 要点 | host-tauri 现状 | 判定与方向 |
+|----|--------------|-----------------|-----------|
+| **输入录制与回放** | `RecordingBuffer`、`RecordingExporter`（JSONL）、`InputReplayer`、F8 / Panic 导出；`host/src/input/recording.rs` | 未实现 | **不迁移。** Agent MCP 浏览器替代交互式调试与 bug 复现；确定性回归由 vn-runtime 单元测试覆盖；前端回归测试如需可用 Playwright |
+| **Headless / CLI** | CPU-only egui、固定帧循环、与回放联动；`--headless`、`--replay-input`、`--exit-on`、`--max-frames`、`--timeout-sec` 等 | 仅 `RING_HEADLESS` 藏窗，仍依赖 WebView | **值得实现，方向重定义。** 不做 "藏窗 WebView"，而是独立 CLI 工具复用 vn-runtime + CommandExecutor（无 Tauri/WebView 依赖）。核心用例：CI 脚本验证（`ring-cli validate scripts/`）、批量跑通测试、输出状态 JSON 供断言 |
+| **事件流（EventStream）** | `EngineEvent` JSONL；`host/src/event_stream/mod.rs` | 无对等；Debug HTTP 的 `debug_snapshot` 不等价 | **不建立独立系统。** 交互式调试由 `debug_snapshot` + Agent MCP 覆盖；事件序列追踪由 `tracing` span/event 覆盖（按需补充关键路径的 tracing 并配合 JSON formatter 即可获得 JSONL 输出）|
+| **CLI 参数** | 与 headless/回放/事件流联动 | 无 CLI，仅环境变量 | 随 Headless CLI 工具一并设计 |
 
 ### 3.3 扩展与嵌入
 
@@ -132,12 +134,15 @@ ZIP 资源来源已完整支持。后端注册 `ring-asset` 自定义协议 hand
 
 ### P2（开发体验 / 测试）
 
-3. **Headless 与 CLI** — CI、脚本验证、基准（可与独立 CLI 同规划）。
-4. **输入录制与回放** — 自动化测试、Bug 复现。
-5. **事件流** — 调试与性能分析。
+3. **Headless CLI** — 独立 CLI 工具（无 Tauri/WebView），复用 vn-runtime + CommandExecutor，用于 CI 脚本验证与批量跑通测试。
 
 ### P3（可扩展性，按需）
 
-6. **UI 模式插件** — `RequestUI` 前端完整实现。
-7. **小游戏模式** — iframe / 组件嵌入与通信。
-8. **扩展/能力系统** — 仅在有第三方效果插件需求时。
+4. **UI 模式插件** — `RequestUI` 前端完整实现。
+5. **小游戏模式** — iframe / 组件嵌入与通信。
+6. **扩展/能力系统** — 仅在有第三方效果插件需求时。
+
+### 已决定不迁移（测试/调试类）
+
+- **输入录制与回放** — Agent MCP 浏览器替代交互式调试；确定性回归由 vn-runtime 单元测试 + Playwright 覆盖。
+- **事件流（EventStream）** — `debug_snapshot` + Agent MCP 覆盖交互式调试；`tracing` 覆盖事件序列追踪。
