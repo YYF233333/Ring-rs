@@ -255,6 +255,20 @@ pub fn finish_cutscene(state: State<AppState>) -> Result<RenderState, String> {
     Ok(inner.render_state.clone())
 }
 
+// ── UI 交互结果 ──────────────────────────────────────────────────────────────
+
+/// 前端 UI 模式完成交互后回传结果（requestUI / callGame / showMap）
+#[command]
+pub fn submit_ui_result(
+    state: State<AppState>,
+    key: String,
+    value: serde_json::Value,
+) -> Result<RenderState, String> {
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.handle_ui_result(key, value)?;
+    Ok(inner.render_state.clone())
+}
+
 // ── 快照回退 ─────────────────────────────────────────────────────────────────
 
 /// 回退到上一个快照（Backspace）

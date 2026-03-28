@@ -1,6 +1,6 @@
 # host-tauri/state
 
-> LastVerified: 2026-03-25
+> LastVerified: 2026-03-28
 > Owner: Claude
 
 ## 职责
@@ -14,7 +14,7 @@
 | `AppState` | Tauri managed state，内含 `Arc<Mutex<AppStateInner>>` |
 | `AppStateInner` | 所有游戏状态的聚合体（核心逻辑） |
 | `Services` | setup 一次性注入：`AudioManager`、`ResourceManager`、`SaveManager`、`AppConfig`；经 `services()` / `services_mut()` 访问 |
-| `WaitingFor` | Host 侧等待状态枚举：Nothing / Click / Choice / Time / Cutscene / Signal |
+| `WaitingFor` | Host 侧等待状态枚举：Nothing / Click / Choice / Time / Cutscene / Signal / UIResult { key: String } |
 | `UserSettings` | 用户可调设置（音量、文字速度、Auto 延迟、全屏） |
 | `HistoryEntry` | 对话历史条目（speaker + text） |
 | `PersistentStore` | 跨会话持久化变量存储（`$persistent.key`） |
@@ -89,13 +89,16 @@ process_tick(dt)
 6. 同步 runtime persistent 变量到 PersistentStore
 7. 若无命令且无等待 → 标记 `script_finished`
 
+当 `ExecuteResult::RequestUI` 出现时：将 `mode` / `key` / `params` 写入 `render_state.active_ui_mode`（`UiModeRequest`），并设置 `waiting = UIResult { key }`，**不再**将 UI 结果降级为空字符串；前端通过 `handle_ui_result(key, value)` 回传后解除等待并继续 `run_script_tick`。
+
 ### 用户交互
 
 | 操作 | 方法 | 行为 |
 |------|------|------|
 | 点击 | `process_click()` | 打字中→完成打字；inline_wait→清除；等待点击→捕获快照→清除等待 |
 | 选择 | `process_choose(index)` | 注入 `RuntimeInput::choice` → runtime.tick → 清除选项 → 清除等待 |
-| 回退 | `restore_snapshot()` | 弹出快照栈 → 恢复 render_state + runtime_state + history 截断 |
+| UI结果 | `handle_ui_result(key, value)` | 校验 `key` 与当前 `UIResult` 等待一致 → 注入 `RuntimeInput::UIResult` → 清除 `active_ui_mode` 与 `waiting` → `run_script_tick` |
+| 回退 | `restore_snapshot()` | 弹出快照栈 → 恢复 render_state + runtime_state + history 截断；**额外**清除 `active_ui_mode` |
 | 结束过场 | `finish_cutscene()` | 清除 cutscene 状态 + 清除 Cutscene 等待 |
 
 ## 关键不变量

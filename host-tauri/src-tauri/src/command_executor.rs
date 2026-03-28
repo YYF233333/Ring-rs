@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use serde::Serialize;
 use vn_runtime::command::{Command, TextMode, Transition, TransitionArg};
+use vn_runtime::state::VarValue;
 
 use crate::manifest::Manifest;
 use crate::render_state::{
@@ -23,6 +26,7 @@ pub enum ExecuteResult {
     RequestUI {
         key: String,
         mode: String,
+        params: HashMap<String, VarValue>,
     },
 }
 
@@ -507,9 +511,10 @@ impl CommandExecutor {
 
             Command::FullRestart => ExecuteResult::FullRestart,
 
-            Command::RequestUI { key, mode, .. } => ExecuteResult::RequestUI {
+            Command::RequestUI { key, mode, params } => ExecuteResult::RequestUI {
                 key: key.clone(),
                 mode: mode.clone(),
+                params: params.clone(),
             },
         }
     }

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import SkipAutoIndicator from "./components/SkipAutoIndicator.vue";
-import type Toast from "./components/Toast.vue";
+import Toast from "./components/Toast.vue";
 import { useAssets } from "./composables/useAssets";
 import { useAudio } from "./composables/useAudio";
 import { useConfirmDialog } from "./composables/useConfirmDialog";
@@ -18,6 +18,10 @@ import SettingsScreen from "./screens/SettingsScreen.vue";
 import TitleScreen from "./screens/TitleScreen.vue";
 import type { SaveInfo } from "./types/render-state";
 import VNScene from "./vn/VNScene.vue";
+
+type ToastHandle = {
+  show: (message: string, type?: "success" | "error" | "info") => void;
+};
 
 const {
   renderState,
@@ -35,6 +39,7 @@ const {
   backspace,
   frontendConnected,
   finishCutscene,
+  submitUiResult,
   quitGame,
 } = useEngine();
 
@@ -56,7 +61,7 @@ const { init: initScreens, refreshConditions } = useScreens();
 const { init: initTheme } = useTheme();
 
 const showInGameMenu = ref(false);
-const toast = ref<InstanceType<typeof Toast> | null>(null);
+const toast = ref<ToastHandle | null>(null);
 const saves = ref<SaveInfo[]>([]);
 
 const {
@@ -238,6 +243,7 @@ async function handleQuickAction(action: string) {
 
 function onSceneClick() {
   if (showInGameMenu.value) return;
+  if (renderState.value?.active_ui_mode) return;
   handleClick();
 }
 
@@ -253,6 +259,7 @@ function onKeyDown(e: KeyboardEvent) {
     return;
   }
   if (currentScreen.value !== "ingame" || showInGameMenu.value) return;
+  if (renderState.value?.active_ui_mode) return;
 
   if (e.key === "Control") {
     setPlaybackMode("Skip");
@@ -314,6 +321,7 @@ onBeforeUnmount(() => {
         @choose="handleChoose"
         @cutscene-finished="finishCutscene"
         @quick-action="handleQuickAction"
+        @ui-result="(key: string, value: unknown) => submitUiResult(key, value)"
       />
       <div v-else class="loading">加载中...</div>
 

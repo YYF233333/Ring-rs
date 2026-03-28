@@ -206,11 +206,7 @@ mod zip_source {
             })?;
 
             let index: HashSet<String> = (0..archive.len())
-                .filter_map(|i| {
-                    archive
-                        .name_for_index(i)
-                        .map(normalize_logical_path)
-                })
+                .filter_map(|i| archive.name_for_index(i).map(normalize_logical_path))
                 .collect();
 
             Ok(Self {

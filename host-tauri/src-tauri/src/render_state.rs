@@ -2,6 +2,41 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 use vn_runtime::command::{InlineEffect, InlineEffectKind, Position, TextMode};
+use vn_runtime::state::VarValue;
+
+/// 活跃的 UI 模式请求（`requestUI` 命令触发，前端据此展示对应组件）
+#[derive(Debug, Clone, Serialize)]
+pub struct UiModeRequest {
+    pub mode: String,
+    pub key: String,
+    pub params: HashMap<String, serde_json::Value>,
+}
+
+/// 将 `VarValue` 转换为 JSON 友好的 `serde_json::Value`
+pub fn var_value_to_json(v: &VarValue) -> serde_json::Value {
+    match v {
+        VarValue::Bool(b) => serde_json::Value::Bool(*b),
+        VarValue::Int(i) => serde_json::json!(*i),
+        VarValue::Float(f) => serde_json::json!(*f),
+        VarValue::String(s) => serde_json::Value::String(s.clone()),
+    }
+}
+
+/// 将 JSON `serde_json::Value` 转换为 `VarValue`
+pub fn json_to_var_value(v: &serde_json::Value) -> VarValue {
+    match v {
+        serde_json::Value::Bool(b) => VarValue::Bool(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                VarValue::Int(i)
+            } else {
+                VarValue::Float(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        serde_json::Value::String(s) => VarValue::String(s.clone()),
+        _ => VarValue::String(v.to_string()),
+    }
+}
 
 /// 将 Position 枚举转换为 manifest 预设名称
 pub(crate) fn position_to_preset_name(position: Position) -> &'static str {
@@ -43,6 +78,8 @@ pub struct RenderState {
     pub playback_mode: PlaybackMode,
     /// 音频声明式状态
     pub audio: AudioRenderState,
+    /// 活跃的 UI 模式请求（`requestUI` 触发时有值，前端据此展示对应 UI 组件）
+    pub active_ui_mode: Option<UiModeRequest>,
 }
 
 /// 角色立绘在场景中的显示状态
@@ -289,6 +326,7 @@ impl RenderState {
             cutscene: None,
             playback_mode: PlaybackMode::Normal,
             audio: AudioRenderState::silent(),
+            active_ui_mode: None,
         }
     }
 

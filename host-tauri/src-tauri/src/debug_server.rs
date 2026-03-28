@@ -11,11 +11,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
-use base64::Engine as _;
 use axum::extract::{Path, State as AxState};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::post;
+use base64::Engine as _;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
@@ -272,6 +272,14 @@ fn dispatch(
         "finish_cutscene" => {
             let mut inner = state.lock().map_err(|e| e.to_string())?;
             inner.finish_cutscene();
+            Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
+        }
+
+        "submit_ui_result" => {
+            let key = args["key"].as_str().ok_or("missing key")?.to_string();
+            let value = args["value"].clone();
+            let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.handle_ui_result(key, value)?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 

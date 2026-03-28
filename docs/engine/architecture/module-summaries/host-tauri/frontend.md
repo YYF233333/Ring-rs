@@ -14,14 +14,14 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | 文件 | 说明 |
 |------|------|
 | `main.ts` | 应用入口，全局错误捕获（Vue errorHandler + unhandledrejection） |
-| `App.vue` | 根组件，页面路由（基于 `useNavigation` 的 Screen 状态机），键盘事件处理 |
+| `App.vue` | 根组件，页面路由（基于 `useNavigation` 的 Screen 状态机），键盘事件处理；监听 `VNScene` 的 **`ui-result`** → 调用 **`useEngine.submitUiResult`** |
 
 ### composables（状态管理层）
 
 | composable | 说明 |
 |------------|------|
 | `useBackend` | 统一后端调用入口：Tauri 模式走 `invoke()`，浏览器模式走 HTTP fetch（debug server） |
-| `useEngine` | **模块级单例**（共享 `renderState` / 游戏循环）：`startGame`、`handleClick`、`handleChoose`、`stop`、存档 `saveGame`/`loadGame`/`listSaves`/`deleteSave`、`getConfig`；另暴露 `continueGame`、`returnToTitle`、`setPlaybackMode`、`backspace`、`frontendConnected`、`finishCutscene`、`getHistory`、`quitGame` |
+| `useEngine` | **模块级单例**（共享 `renderState` / 游戏循环）：`startGame`、`handleClick`、`handleChoose`、`stop`、存档 `saveGame`/`loadGame`/`listSaves`/`deleteSave`、`getConfig`；另暴露 `continueGame`、`returnToTitle`、`setPlaybackMode`、`backspace`、`frontendConnected`、`finishCutscene`、`getHistory`、`quitGame`、`submitUiResult`（UI 模式结束后将结果回传后端） |
 | `useConfirmDialog` | 模块级确认框：`ask(title, message)` 返回 `Promise<boolean>`，与 `ConfirmDialog.vue` 配合 |
 | `useAssets` | 资源 URL 管理：`assetUrl(logicalPath)` 通过 `ring-asset` 自定义协议（Tauri）或 debug HTTP server（浏览器）生成可访问 URL |
 | `useSettings` | 用户设置管理（单例）：load/save/update 与后端同步 |
@@ -32,7 +32,7 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 
 | 组件 | 说明 |
 |------|------|
-| `VNScene` | VN 场景容器：组合背景、角色、对话、选择等子组件 |
+| `VNScene` | VN 场景容器：组合背景、角色、对话、选择等子组件；挂载 `MapOverlay`、`MiniGameOverlay`；**emit** `ui-result`（key + value），由根组件调用 `submitUiResult` |
 | `BackgroundLayer` | 背景图渲染，处理 dissolve 过渡 |
 | `CharacterLayer` | 角色立绘层；使用后端下发的 `pos_x`、`pos_y`、`anchor_x`、`anchor_y`、`render_scale`（manifest 解析结果）做 CSS 定位与缩放，不再使用前端硬编码的 `positionMap` |
 | `DialogueBox` | 对话框，显示打字机效果文本（ADV/NVL 模式） |
@@ -41,6 +41,8 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | `TitleCard` | 字卡全屏文字显示 |
 | `ChapterMark` | 章节标记淡入淡出 |
 | `VideoOverlay` | 视频过场播放；**纯 emit**（如完成/跳过）由父组件接 `useEngine.finishCutscene` |
+| `MapOverlay` | 地图 UI 模式（`active_ui_mode` 为地图类 mode 时展示） |
+| `MiniGameOverlay` | iframe 小游戏容器（`active_ui_mode` 为小游戏 mode 时展示；与 `public/engine-sdk.js` 的 postMessage 协议配合） |
 
 ### 系统 UI 组件 (`screens/`)
 
@@ -59,6 +61,12 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | `Toast` | 全局消息提示 |
 | `ConfirmDialog` | 确认对话框（Promise 风格） |
 | `SkipAutoIndicator` | Skip/Auto 模式指示器 |
+
+### 静态资源 (`public/`)
+
+| 文件 | 说明 |
+|------|------|
+| `engine-sdk.js` | 小游戏 JS SDK：与宿主页面 `postMessage` 协议交互（供 iframe 内嵌游戏调用以向 Ring 宿主回传结果等） |
 
 ## 数据流
 
@@ -82,7 +90,8 @@ useEngine.startGame()
             ├─ TransitionOverlay ← scene_transition
             ├─ TitleCard ← title_card
             ├─ ChapterMark ← chapter_mark
-            └─ VideoOverlay ← cutscene → @finished → 父组件 useEngine.finishCutscene
+            ├─ VideoOverlay ← cutscene → @finished → 父组件 useEngine.finishCutscene
+            └─ MapOverlay / MiniGameOverlay ← active_ui_mode → @ui-result → App.vue submitUiResult
 ```
 
 ### 资源 URL 解析

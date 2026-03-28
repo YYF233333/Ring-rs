@@ -6,6 +6,8 @@ import ChapterMark from "./ChapterMark.vue";
 import CharacterLayer from "./CharacterLayer.vue";
 import ChoicePanel from "./ChoicePanel.vue";
 import DialogueBox from "./DialogueBox.vue";
+import MapOverlay from "./MapOverlay.vue";
+import MiniGameOverlay from "./MiniGameOverlay.vue";
 import NvlPanel from "./NvlPanel.vue";
 import QuickMenu from "./QuickMenu.vue";
 import TitleCard from "./TitleCard.vue";
@@ -20,6 +22,7 @@ const emit = defineEmits<{
   choose: [index: number];
   "cutscene-finished": [];
   "quick-action": [action: string];
+  "ui-result": [key: string, value: unknown];
 }>();
 
 const sceneLayerStyle = computed(() => {
@@ -88,6 +91,19 @@ const sceneLayerStyle = computed(() => {
       v-if="renderState.cutscene"
       :cutscene="renderState.cutscene"
       @finished="emit('cutscene-finished')"
+    />
+
+    <MapOverlay
+      v-if="renderState.active_ui_mode?.mode === 'show_map'"
+      :request="renderState.active_ui_mode"
+      @complete="(value: unknown) => { if (renderState.active_ui_mode) emit('ui-result', renderState.active_ui_mode.key, value) }"
+      @cancel="() => { if (renderState.active_ui_mode) emit('ui-result', renderState.active_ui_mode.key, '') }"
+    />
+
+    <MiniGameOverlay
+      v-if="renderState.active_ui_mode?.mode === 'call_game'"
+      :request="renderState.active_ui_mode"
+      @complete="(value: unknown) => { if (renderState.active_ui_mode) emit('ui-result', renderState.active_ui_mode.key, value) }"
     />
   </div>
 </template>

@@ -218,6 +218,10 @@ pub enum WaitingFor {
     Cutscene,
     /// 等待 Host 侧事件完成（场景过渡、标题卡片等），对应 Runtime 的 WaitForSignal
     Signal(String),
+    /// 等待 UI 交互结果（`requestUI` / `callGame` / `showMap`），对应 Runtime 的 WaitForUIResult
+    UIResult {
+        key: String,
+    },
 }
 
 impl AppStateInner {
@@ -674,6 +678,7 @@ impl AppStateInner {
             rt.restore_state(snapshot.runtime_state);
         }
         self.render_state = snapshot.render_state;
+        self.render_state.active_ui_mode = None;
         self.history.truncate(snapshot.history_len);
         self.waiting = WaitingFor::Click;
         self.typewriter_timer = 0.0;
@@ -687,6 +692,42 @@ impl AppStateInner {
         if self.waiting == WaitingFor::Cutscene {
             self.waiting = WaitingFor::Nothing;
         }
+    }
+
+    /// 处理前端回传的 UI 交互结果
+    pub fn handle_ui_result(
+        &mut self,
+        key: String,
+        value: serde_json::Value,
+    ) -> Result<(), String> {
+        let expected_key = match &self.waiting {
+            WaitingFor::UIResult { key } => key.clone(),
+            _ => return Err("当前未在等待 UI 结果".to_string()),
+        };
+        if key != expected_key {
+            return Err(format!(
+                "UIResult key 不匹配：期望 '{expected_key}'，收到 '{key}'"
+            ));
+        }
+
+        let var_value = crate::render_state::json_to_var_value(&value);
+
+        if let Some(rt) = self.runtime.as_mut() {
+            let input = RuntimeInput::UIResult {
+                key,
+                value: var_value,
+            };
+            let _ = rt.tick(Some(input));
+        }
+
+        self.render_state.active_ui_mode = None;
+        self.waiting = WaitingFor::Nothing;
+
+        if !self.script_finished {
+            self.run_script_tick();
+        }
+
+        Ok(())
     }
 
     /// 处理用户选择
@@ -747,19 +788,19 @@ impl AppStateInner {
                     return;
                 }
 
-                if let ExecuteResult::RequestUI { key, mode } = &result {
-                    warn!(
-                        key = %key, mode = %mode,
-                        "RequestUI 暂不支持，回传空字符串降级"
-                    );
-                    if let Some(rt) = self.runtime.as_mut() {
-                        let input = RuntimeInput::UIResult {
-                            key: key.clone(),
-                            value: VarValue::String(String::new()),
-                        };
-                        let _ = rt.tick(Some(input));
-                    }
-                    return;
+                if let ExecuteResult::RequestUI {
+                    key, mode, params, ..
+                } = &result
+                {
+                    let json_params = params
+                        .iter()
+                        .map(|(k, v)| (k.clone(), crate::render_state::var_value_to_json(v)))
+                        .collect();
+                    self.render_state.active_ui_mode = Some(crate::render_state::UiModeRequest {
+                        mode: mode.clone(),
+                        key: key.clone(),
+                        params: json_params,
+                    });
                 }
 
                 if let ExecuteResult::WaitForCutscene { video_path } = &result {
@@ -787,17 +828,7 @@ impl AppStateInner {
                         self.waiting = WaitingFor::Signal(signal_id.as_str().to_string());
                     }
                     WaitingReason::WaitForUIResult { key, .. } => {
-                        warn!(
-                            key = %key,
-                            "WaitForUIResult 暂不支持，回传空字符串降级"
-                        );
-                        if let Some(rt) = self.runtime.as_mut() {
-                            let input = RuntimeInput::UIResult {
-                                key: key.clone(),
-                                value: VarValue::String(String::new()),
-                            };
-                            let _ = rt.tick(Some(input));
-                        }
+                        self.waiting = WaitingFor::UIResult { key: key.clone() };
                     }
                 }
 

@@ -14,6 +14,13 @@ export interface RenderState {
   cutscene: Readonly<CutsceneState> | null;
   playback_mode: PlaybackMode;
   audio: Readonly<AudioRenderState>;
+  active_ui_mode: Readonly<UiModeRequest> | null;
+}
+
+export interface UiModeRequest {
+  mode: string;
+  key: string;
+  params: Readonly<Record<string, unknown>>;
 }
 
 export interface CharacterSprite {

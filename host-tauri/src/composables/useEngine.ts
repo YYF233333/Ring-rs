@@ -128,6 +128,19 @@ export function useEngine() {
     renderState.value = state;
   }
 
+  async function submitUiResult(key: string, value: unknown) {
+    try {
+      log.info(`submitUiResult: key=${key}, value=${JSON.stringify(value)}`);
+      const state = await callBackend<RenderState>("submit_ui_result", {
+        key,
+        value: value ?? "",
+      });
+      renderState.value = state;
+    } catch (err) {
+      log.error("submitUiResult failed", err);
+    }
+  }
+
   async function getHistory(): Promise<HistoryEntry[]> {
     return await callBackend<HistoryEntry[]>("get_history");
   }
@@ -200,6 +213,7 @@ export function useEngine() {
     backspace,
     frontendConnected,
     finishCutscene,
+    submitUiResult,
     getHistory,
     quitGame,
   };
