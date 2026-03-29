@@ -7,19 +7,17 @@
 //! `commands.rs`. This is acceptable because commands are trivial (lock →
 //! call method → serialize) and the debug server is not shipped in release.
 
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
 use axum::extract::{Path, State as AxState};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::post;
+use axum::routing::{get, post};
 use base64::Engine as _;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 
-use crate::render_state::PlaybackMode;
+use crate::render_state::{HostScreen, PlaybackMode};
 use crate::state::{AppStateInner, UserSettings};
 
 type SharedState = Arc<Mutex<AppStateInner>>;
@@ -29,8 +27,20 @@ struct ServerCtx {
     state: SharedState,
 }
 
+fn parse_host_screen(screen: &str) -> HostScreen {
+    match screen {
+        "ingame" => HostScreen::InGame,
+        "ingame_menu" => HostScreen::InGameMenu,
+        "save" => HostScreen::Save,
+        "load" => HostScreen::Load,
+        "settings" => HostScreen::Settings,
+        "history" => HostScreen::History,
+        _ => HostScreen::Title,
+    }
+}
+
 /// 在独立线程启动 debug HTTP server（端口 9528）。
-pub fn start(state: SharedState, assets_root: PathBuf) {
+pub fn start(state: SharedState) {
     let ctx = ServerCtx { state };
 
     std::thread::spawn(move || {
@@ -42,7 +52,7 @@ pub fn start(state: SharedState, assets_root: PathBuf) {
         rt.block_on(async {
             let app = Router::new()
                 .route("/api/{command}", post(handle_command))
-                .nest_service("/assets", ServeDir::new(&assets_root))
+                .route("/assets/{*path}", get(handle_asset))
                 .layer(CorsLayer::permissive())
                 .with_state(ctx);
 
@@ -77,6 +87,35 @@ async fn handle_command(
     }
 }
 
+async fn handle_asset(
+    Path(path): Path<String>,
+    AxState(ctx): AxState<ServerCtx>,
+) -> impl IntoResponse {
+    let logical = crate::resources::LogicalPath::new(&path);
+    let mime = crate::resources::guess_mime_type(logical.as_str());
+    let inner = match ctx.state.lock() {
+        Ok(inner) => inner,
+        Err(error) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("state lock failed: {error}"),
+            )
+                .into_response();
+        }
+    };
+
+    let bytes = inner
+        .services()
+        .resources
+        .read_bytes(&logical)
+        .map_err(|e| e.to_string());
+
+    match bytes {
+        Ok(bytes) => (StatusCode::OK, [("Content-Type", mime)], bytes).into_response(),
+        Err(error) => (StatusCode::NOT_FOUND, error).into_response(),
+    }
+}
+
 fn dispatch(
     command: &str,
     state: &SharedState,
@@ -84,11 +123,17 @@ fn dispatch(
 ) -> Result<serde_json::Value, String> {
     match command {
         "init_game" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let script_path = args["scriptPath"]
                 .as_str()
                 .ok_or("missing scriptPath")?
                 .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
+            inner.delete_continue()?;
             if inner.services.is_some() {
                 inner.init_game_from_resource(&script_path)?;
             } else {
@@ -99,22 +144,54 @@ fn dispatch(
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
+        "init_game_at_label" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
+            let script_path = args["scriptPath"]
+                .as_str()
+                .ok_or("missing scriptPath")?
+                .to_string();
+            let label = args["label"].as_str().ok_or("missing label")?.to_string();
+            let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
+            inner.delete_continue()?;
+            inner.init_game_from_resource_at_label(&script_path, &label)?;
+            Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
+        }
+
         "tick" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let dt = args["dt"].as_f64().unwrap_or(0.016) as f32;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             inner.process_tick(dt);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "click" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             inner.process_click();
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "choose" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let index = args["index"].as_u64().ok_or("missing index")? as usize;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             inner.process_choose(index);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -125,27 +202,25 @@ fn dispatch(
         }
 
         "save_game" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
-            let inner = state.lock().map_err(|e| e.to_string())?;
-            let svc = inner.services();
-            let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
-            let runtime_state = rt.state().clone();
-            let mut save_data =
-                vn_runtime::SaveData::new(slot, runtime_state).with_history(rt.history().clone());
-            if let Some(ref cm) = inner.render_state.chapter_mark {
-                save_data = save_data.with_chapter(&cm.title);
-            }
-            save_data = save_data.with_audio(vn_runtime::AudioState {
-                current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
-                bgm_looping: true,
-            });
-            svc.saves.save(&save_data).map_err(|e| e.to_string())?;
+            let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
+            inner.save_to_slot(slot)?;
             Ok(serde_json::Value::Null)
         }
 
         "load_game" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             let save_data = inner
                 .services()
                 .saves
@@ -167,28 +242,20 @@ fn dispatch(
         }
 
         "save_game_with_thumbnail" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let thumbnail_base64 = args["thumbnail_base64"]
                 .as_str()
                 .ok_or("missing thumbnail_base64")?;
-            let inner = state.lock().map_err(|e| e.to_string())?;
-            let svc = inner.services();
-            let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
-            let runtime_state = rt.state().clone();
-            let mut save_data =
-                vn_runtime::SaveData::new(slot, runtime_state).with_history(rt.history().clone());
-            if let Some(ref cm) = inner.render_state.chapter_mark {
-                save_data = save_data.with_chapter(&cm.title);
-            }
-            save_data = save_data.with_audio(vn_runtime::AudioState {
-                current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
-                bgm_looping: true,
-            });
+            let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             let png_bytes = base64::engine::general_purpose::STANDARD
                 .decode(thumbnail_base64)
                 .map_err(|e| format!("base64 decode: {e}"))?;
-            svc.saves.save_thumbnail_png(slot, &png_bytes)?;
-            svc.saves.save(&save_data).map_err(|e| e.to_string())?;
+            inner.save_to_slot_with_thumbnail(slot, &png_bytes)?;
             Ok(serde_json::Value::Null)
         }
 
@@ -251,13 +318,24 @@ fn dispatch(
         }
 
         "return_to_title" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
+            let save_continue = args["saveContinue"].as_bool().unwrap_or(false);
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.return_to_title();
-            Ok(serde_json::Value::Null)
+            inner.assert_owner(&client_token)?;
+            inner.return_to_title(save_continue);
+            Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "continue_game" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             let svc = inner.services();
             if !svc.saves.has_continue() {
                 return Err("没有 continue 存档".to_string());
@@ -270,21 +348,36 @@ fn dispatch(
         "quit_game" => Ok(serde_json::Value::Null),
 
         "finish_cutscene" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             inner.finish_cutscene();
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "submit_ui_result" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let key = args["key"].as_str().ok_or("missing key")?.to_string();
             let value = args["value"].clone();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             inner.handle_ui_result(key, value)?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "backspace" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             if inner.restore_snapshot() {
                 Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
             } else {
@@ -293,16 +386,19 @@ fn dispatch(
         }
 
         "set_playback_mode" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let mode_str = args["mode"].as_str().unwrap_or("normal");
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.playback_mode = match mode_str {
+            inner.assert_owner(&client_token)?;
+            inner.set_playback_mode(match mode_str {
                 "auto" => PlaybackMode::Auto,
                 "skip" => PlaybackMode::Skip,
                 _ => PlaybackMode::Normal,
-            };
-            inner.auto_timer = 0.0;
-            inner.render_state.playback_mode = inner.playback_mode.clone();
-            Ok(serde_json::Value::Null)
+            });
+            Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "get_playback_mode" => {
@@ -337,8 +433,21 @@ fn dispatch(
 
         "frontend_connected" => {
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.return_to_title();
-            Ok(serde_json::Value::Null)
+            let client_label = args["clientLabel"].as_str().map(|s| s.to_string());
+            let session = inner.frontend_connected(client_label);
+            Ok(serde_json::to_value(&session).unwrap_or_default())
+        }
+
+        "set_host_screen" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
+            let screen = args["screen"].as_str().unwrap_or("title");
+            let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
+            inner.set_host_screen(parse_host_screen(screen));
+            Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "get_screen_definitions" => {
@@ -358,9 +467,17 @@ fn dispatch(
             let text = rm.read_text(&path).map_err(|e| e.to_string())?;
             let full: serde_json::Value =
                 serde_json::from_str(&text).map_err(|e| format!("layout.json parse: {e}"))?;
+            let assets = full
+                .get("assets")
+                .cloned()
+                .ok_or("layout.json missing assets")?;
+            let colors = full
+                .get("colors")
+                .cloned()
+                .ok_or("layout.json missing colors")?;
             Ok(serde_json::json!({
-                "assets": full.get("assets").cloned().unwrap_or_default(),
-                "colors": full.get("colors").cloned().unwrap_or_default(),
+                "assets": assets,
+                "colors": colors,
             }))
         }
 
@@ -398,11 +515,28 @@ fn dispatch(
                 "script_finished": inner.script_finished,
                 "render_state": inner.render_state,
                 "playback_mode": format!("{:?}", inner.playback_mode),
+                "host_screen": format!("{:?}", inner.host_screen),
                 "history_count": inner.history.len(),
                 "has_audio": inner.services.is_some(),
                 "current_bgm": inner.services().audio.current_bgm_path().map(String::from),
                 "user_settings": inner.user_settings,
             }))
+        }
+
+        "debug_run_until" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
+            let dt = args["dt"].as_f64().unwrap_or(1.0 / 60.0) as f32;
+            let max_steps = args["maxSteps"].as_u64().unwrap_or(600) as usize;
+            let stop_on_wait = args["stopOnWait"].as_bool().unwrap_or(true);
+            let stop_on_script_finished = args["stopOnScriptFinished"].as_bool().unwrap_or(true);
+            let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
+            let bundle =
+                inner.debug_run_until(dt, max_steps, stop_on_wait, stop_on_script_finished);
+            Ok(serde_json::to_value(&bundle).unwrap_or_default())
         }
 
         _ => Err(format!("Unknown command: {command}")),

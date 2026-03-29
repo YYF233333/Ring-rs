@@ -1,7 +1,7 @@
 # host-tauri/resources
 
-> LastVerified: 2026-03-28
-> Owner: Claude
+> LastVerified: 2026-03-30
+> Owner: GPT-5.4
 
 ## 职责
 
@@ -40,7 +40,7 @@
 | 方法 | 说明 |
 |------|------|
 | `new(base_path)` | 创建资源管理器（内部使用 `FsSource`） |
-| `with_source(source, base_path)` | 使用指定 `ResourceSource` 创建；`base_path` 仍用于开发期 debug server 静态文件服务 |
+| `with_source(source, base_path)` | 使用指定 `ResourceSource` 创建；`base_path` 仅保留文件系统基准信息，debug server 不再直接旁路它读取静态文件 |
 | `read_text(path)` | 读取文本资源（经 `source`） |
 | `read_bytes(path)` | 读取二进制资源（经 `source`） |
 | `resolve_fs_path(path)` | 返回逻辑路径对应的文件系统绝对路径（用于 asset 协议） |
@@ -75,7 +75,8 @@ ResourceSource trait（FsSource 或 ZipSource）→ 实际读取，而非在 Res
 - 支持 **FS** 与 **ZIP** 两种后端来源，由构造时注入的 `ResourceSource` 决定。
 - 所有资源路径必须通过 `LogicalPath` 类型约束，禁止裸字符串调用 `ResourceManager`。
 - 前端通过 `ring-asset://` 协议访问资源，协议 handler 内部委托 `ResourceManager` 读取，FS/ZIP 对前端透明。
-- `base_path` 始终为文件系统上的 assets 根，用于开发期 debug server 静态文件服务；与 ZIP 后端并存，不因 ZIP 而省略。
+- Debug HTTP server 的 `/assets/*` 现在也通过同一 `ResourceManager::read_bytes()` 路径服务资源，因此浏览器调试与正式运行共享同一资源解析口径。
+- `base_path` 始终为文件系统上的 assets 根；即使 ZIP 模式也保留该字段，但不再让 debug server 直接 `ServeDir` 旁路资源抽象。
 - 路径规范化是幂等的。
 
 ## 与其他模块的关系
@@ -91,7 +92,7 @@ ResourceSource trait（FsSource 或 ZipSource）→ 实际读取，而非在 Res
 
 ## 附录：Manifest
 
-`manifest.rs` 提供立绘元数据管理。`Manifest` 在应用初始化时加载并存入 `Services`；`CommandExecutor` 在处理 `ShowCharacter` 时读取它，将脚本中的 `Position` 解析为写入 `CharacterSprite` 的归一化坐标与缩放。
+`manifest.rs` 提供立绘元数据管理。`Manifest` 在应用初始化时通过 `parse_and_validate()` 加载并存入 `Services`；解析失败会中止启动，结构性问题以 `ManifestWarning` 形式记录告警。`CommandExecutor` 在处理 `ShowCharacter` 时读取它，将脚本中的 `Position` 解析为写入 `CharacterSprite` 的归一化坐标与缩放。
 
 | 类型 | 说明 |
 |------|------|

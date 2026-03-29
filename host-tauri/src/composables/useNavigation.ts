@@ -1,4 +1,5 @@
 import { readonly, ref } from "vue";
+import type { HostScreen } from "../types/render-state";
 
 export type Screen = "title" | "ingame" | "save" | "load" | "settings" | "history";
 
@@ -41,6 +42,30 @@ export function useNavigation() {
     screenStack.value = [];
   }
 
+  function syncFromHostScreen(hostScreen: HostScreen) {
+    switch (hostScreen) {
+      case "Title":
+        resetToTitle();
+        break;
+      case "InGame":
+      case "InGameMenu":
+        resetToIngame();
+        break;
+      case "Save":
+        currentScreen.value = "save";
+        break;
+      case "Load":
+        currentScreen.value = "load";
+        break;
+      case "Settings":
+        currentScreen.value = "settings";
+        break;
+      case "History":
+        currentScreen.value = "history";
+        break;
+    }
+  }
+
   /** 当前是否处于 game_menu 框架页面 */
   function isInGameMenu(): boolean {
     return GAME_MENU_PAGES.has(currentScreen.value);
@@ -53,6 +78,7 @@ export function useNavigation() {
     goBack,
     resetToTitle,
     resetToIngame,
+    syncFromHostScreen,
     isInGameMenu,
   };
 }

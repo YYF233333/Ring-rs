@@ -8,9 +8,11 @@
     "check:write": "biome check --write .",
     "typecheck": "vue-tsc --noEmit",
     "dev": "vite",
+    "dev:browser": "node scripts/dev-browser.mjs",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "harness:smoke": "node scripts/harness-smoke.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",

@@ -12,6 +12,26 @@ pub struct UiModeRequest {
     pub params: HashMap<String, serde_json::Value>,
 }
 
+/// 宿主当前屏幕/模式投影。
+///
+/// 前端页面状态不再是 authority，后端通过该字段声明当前宿主模式。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum HostScreen {
+    Title,
+    InGame,
+    InGameMenu,
+    Save,
+    Load,
+    Settings,
+    History,
+}
+
+impl HostScreen {
+    pub fn allows_progression(&self) -> bool {
+        matches!(self, Self::InGame)
+    }
+}
+
 /// 将 `VarValue` 转换为 JSON 友好的 `serde_json::Value`
 pub fn var_value_to_json(v: &VarValue) -> serde_json::Value {
     match v {
@@ -80,6 +100,8 @@ pub struct RenderState {
     pub audio: AudioRenderState,
     /// 活跃的 UI 模式请求（`requestUI` 触发时有值，前端据此展示对应 UI 组件）
     pub active_ui_mode: Option<UiModeRequest>,
+    /// 后端 authoritative 的宿主模式投影
+    pub host_screen: HostScreen,
 }
 
 /// 角色立绘在场景中的显示状态
@@ -327,6 +349,7 @@ impl RenderState {
             playback_mode: PlaybackMode::Normal,
             audio: AudioRenderState::silent(),
             active_ui_mode: None,
+            host_screen: HostScreen::Title,
         }
     }
 

@@ -1,7 +1,7 @@
 # host-tauri/frontend
 
-> LastVerified: 2026-03-28
-> Owner: Claude
+> LastVerified: 2026-03-30
+> Owner: GPT-5.4
 
 ## 职责
 
@@ -14,14 +14,14 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | 文件 | 说明 |
 |------|------|
 | `main.ts` | 应用入口，全局错误捕获（Vue errorHandler + unhandledrejection） |
-| `App.vue` | 根组件，页面路由（基于 `useNavigation` 的 Screen 状态机），键盘事件处理；监听 `VNScene` 的 **`ui-result`** → 调用 **`useEngine.submitUiResult`** |
+| `App.vue` | 根组件，页面状态投影（本地 `Screen` / `showInGameMenu` 与后端 `host_screen` 双向同步）、键盘事件处理；监听 `VNScene` 的 **`ui-result`** → 调用 **`useEngine.submitUiResult`** |
 
 ### composables（状态管理层）
 
 | composable | 说明 |
 |------------|------|
 | `useBackend` | 统一后端调用入口：Tauri 模式走 `invoke()`，浏览器模式走 HTTP fetch（debug server） |
-| `useEngine` | **模块级单例**（共享 `renderState` / 游戏循环）：`startGame`、`handleClick`、`handleChoose`、`stop`、存档 `saveGame`/`loadGame`/`listSaves`/`deleteSave`、`getConfig`；另暴露 `continueGame`、`returnToTitle`、`setPlaybackMode`、`backspace`、`frontendConnected`、`finishCutscene`、`getHistory`、`quitGame`、`submitUiResult`（UI 模式结束后将结果回传后端） |
+| `useEngine` | **模块级单例**（共享 `renderState` / 游戏循环 / `clientToken`）：`frontendConnected` 先领取 owner token；随后 `startGame`、`startGameAtLabel`、`tick`、`setHostScreen`、`setPlaybackMode` 等推进类调用都会自动携带 token；`playbackMode` 完全以后端 `RenderState` 为真源 |
 | `useConfirmDialog` | 模块级确认框：`ask(title, message)` 返回 `Promise<boolean>`，与 `ConfirmDialog.vue` 配合 |
 | `useAssets` | 资源 URL 管理：`assetUrl(logicalPath)` 通过 `ring-asset` 自定义协议（Tauri）或 debug HTTP server（浏览器）生成可访问 URL |
 | `useSettings` | 用户设置管理（单例）：load/save/update 与后端同步 |
@@ -71,12 +71,16 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 ## 数据流
 
 ```
+frontendConnected()
+  └─ callBackend("frontend_connected") → { client_token, render_state }
+       │
+       ▼
 useEngine.startGame()
-  └─（内部）callBackend("init_game") → 模块级 renderState = response
+  └─（内部）callBackend("init_game", { clientToken, scriptPath }) → 模块级 renderState = response
        │
        ▼
      gameLoop() [requestAnimationFrame 驱动]
-       └─ callBackend("tick", {dt}) → 更新同一模块级 renderState
+      └─ callBackend("tick", { clientToken, dt }) → 更新同一模块级 renderState
             │
             ▼
           App.vue 将 renderState 作为 prop 传入 VNScene
@@ -118,6 +122,8 @@ Screen 类型: "title" | "ingame" | "save" | "load" | "settings" | "history"
   goBack() → pop → 恢复
   resetToTitle() → 清栈 → "title"
   resetToIngame() → 清栈 → "ingame"
+
+注意：上述 `Screen` 只负责 UI 编排；真正决定后端能否推进的是 `RenderState.host_screen`。`App.vue` 通过 watcher 将二者保持同步。
 ```
 
 ### 键盘快捷键 (ingame 模式)
@@ -132,8 +138,10 @@ Screen 类型: "title" | "ingame" | "save" | "load" | "settings" | "history"
 
 ## 关键不变量
 
-- 前端**不持有**独立游戏逻辑状态——RenderState 是唯一数据源（由 `useEngine` 模块单例持有 ref）
-- 游戏循环由前端 `requestAnimationFrame` 驱动，每帧经 `useEngine` 内 `callBackend("tick")` 推进
+- 前端**不持有**独立游戏逻辑状态——`RenderState` 是唯一数据源（由 `useEngine` 模块单例持有 ref）
+- 游戏循环由前端 `requestAnimationFrame` 驱动，但每帧必须携带 `clientToken`；owner 被抢占后旧客户端会收到显式错误并停止 loop
+- `playbackMode` 完全以后端 `render_state.playback_mode` 为真源，本地不再维护独立 authoritative 副本
+- `currentScreen` / `showInGameMenu` 只是后端 `host_screen` 的 UI 投影；非 `InGame` 屏幕下不会继续推进剧情
 - **业务侧后端调用经 `useEngine` 聚合**；`App.vue` 与 VN/系统 UI 组件不直接 `callBackend`（底层仍由 `useEngine` / `useBackend` 统一走 IPC 或 Debug HTTP）
 - `callBackend` 透明切换 Tauri IPC / Debug HTTP，`useBackend` 使用者无需关心运行环境
 - `useAssets` 的 `assetUrl()` 确保逻辑路径到可访问 URL 的统一转换

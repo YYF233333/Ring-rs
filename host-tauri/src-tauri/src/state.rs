@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
+use vn_runtime::command::Position;
+use vn_runtime::history::HistoryEvent;
 use vn_runtime::state::{VarValue, WaitingReason};
 use vn_runtime::{Parser, RuntimeInput, Script, ScriptNode, VNRuntime};
 
@@ -12,7 +14,9 @@ use crate::command_executor::{
     AudioCommand, BatchOutput, CommandExecutor, ExecuteResult, SceneEffectKind, SceneEffectRequest,
 };
 use crate::config::AppConfig;
-use crate::render_state::{CutsceneState, PlaybackMode, RenderState, SceneTransitionPhaseState};
+use crate::render_state::{
+    CutsceneState, HostScreen, PlaybackMode, RenderState, SceneTransitionPhaseState,
+};
 use crate::resources::{LogicalPath, ResourceManager};
 use crate::save_manager::SaveManager;
 
@@ -48,6 +52,57 @@ pub struct HistoryEntry {
 /// Tauri 托管的全局应用状态
 pub struct AppState {
     pub inner: std::sync::Arc<std::sync::Mutex<AppStateInner>>,
+}
+
+/// 当前会话的前端 owner。
+#[derive(Debug, Clone)]
+struct SessionOwner {
+    token: String,
+    label: String,
+}
+
+/// 前端连接后返回的会话信息。
+#[derive(Debug, Clone, Serialize)]
+pub struct FrontendSession {
+    pub client_token: String,
+    pub render_state: RenderState,
+}
+
+/// 机读 harness 结束态快照。
+#[derive(Debug, Clone, Serialize)]
+pub struct HarnessSnapshot {
+    pub render_state: RenderState,
+    pub waiting: WaitingFor,
+    pub script_finished: bool,
+    pub playback_mode: PlaybackMode,
+    pub host_screen: HostScreen,
+    pub history_count: usize,
+}
+
+/// trace 中的单条事件。
+#[derive(Debug, Clone, Serialize)]
+pub struct HarnessTraceEvent {
+    pub seq: u64,
+    pub logical_time_ms: u64,
+    pub kind: String,
+    pub data: serde_json::Value,
+}
+
+/// trace bundle 元信息。
+#[derive(Debug, Clone, Serialize)]
+pub struct HarnessTraceMetadata {
+    pub dt_seconds: f32,
+    pub steps_run: usize,
+    pub stop_reason: String,
+    pub owner_label: Option<String>,
+}
+
+/// deterministic harness 的机读产物。
+#[derive(Debug, Clone, Serialize)]
+pub struct HarnessTraceBundle {
+    pub metadata: HarnessTraceMetadata,
+    pub events: Vec<HarnessTraceEvent>,
+    pub final_snapshot: HarnessSnapshot,
 }
 
 // ── 持久化存储 ──────────────────────────────────────────────────────────────
@@ -169,6 +224,7 @@ pub struct AppStateInner {
     pub runtime: Option<VNRuntime>,
     pub command_executor: CommandExecutor,
     pub render_state: RenderState,
+    pub host_screen: HostScreen,
     pub waiting: WaitingFor,
     pub typewriter_timer: f32,
     /// 打字机基础速度（字符/秒）
@@ -196,6 +252,16 @@ pub struct AppStateInner {
     active_shake: Option<ShakeAnimation>,
     /// 是否有活跃的场景效果（用于 signal 解析）
     scene_effect_active: bool,
+    /// 当前持有 session authority 的客户端。
+    client_owner: Option<SessionOwner>,
+    /// client token 单调递增计数器。
+    next_client_id: u64,
+    /// deterministic harness 的逻辑时间。
+    logical_time_ms: u64,
+    /// 机读 trace 事件缓冲区。
+    trace_events: Vec<HarnessTraceEvent>,
+    /// trace 事件序号。
+    trace_seq: u64,
 }
 
 /// Shake 动画的运行时状态
@@ -230,6 +296,7 @@ impl AppStateInner {
             runtime: None,
             command_executor: CommandExecutor::new(),
             render_state: RenderState::new(),
+            host_screen: HostScreen::Title,
             waiting: WaitingFor::Nothing,
             typewriter_timer: 0.0,
             text_speed: 30.0,
@@ -245,6 +312,11 @@ impl AppStateInner {
             scene_transition_elapsed: 0.0,
             active_shake: None,
             scene_effect_active: false,
+            client_owner: None,
+            next_client_id: 0,
+            logical_time_ms: 0,
+            trace_events: Vec::new(),
+            trace_seq: 0,
         }
     }
 
@@ -261,6 +333,275 @@ impl AppStateInner {
         self.services
             .as_mut()
             .expect("invariant: services initialized in setup()")
+    }
+
+    fn project_render_state(&mut self) {
+        self.render_state.playback_mode = self.playback_mode.clone();
+        self.render_state.host_screen = self.host_screen.clone();
+    }
+
+    fn snapshot_for_trace(&self) -> HarnessSnapshot {
+        HarnessSnapshot {
+            render_state: self.render_state.clone(),
+            waiting: self.waiting.clone(),
+            script_finished: self.script_finished,
+            playback_mode: self.playback_mode.clone(),
+            host_screen: self.host_screen.clone(),
+            history_count: self.history.len(),
+        }
+    }
+
+    fn clear_trace(&mut self) {
+        self.trace_events.clear();
+        self.trace_seq = 0;
+        self.logical_time_ms = 0;
+    }
+
+    fn record_trace(&mut self, kind: &str, data: serde_json::Value) {
+        self.trace_events.push(HarnessTraceEvent {
+            seq: self.trace_seq,
+            logical_time_ms: self.logical_time_ms,
+            kind: kind.to_string(),
+            data,
+        });
+        self.trace_seq += 1;
+    }
+
+    fn build_trace_bundle(
+        &self,
+        dt_seconds: f32,
+        steps_run: usize,
+        stop_reason: impl Into<String>,
+    ) -> HarnessTraceBundle {
+        HarnessTraceBundle {
+            metadata: HarnessTraceMetadata {
+                dt_seconds,
+                steps_run,
+                stop_reason: stop_reason.into(),
+                owner_label: self.client_owner.as_ref().map(|owner| owner.label.clone()),
+            },
+            events: self.trace_events.clone(),
+            final_snapshot: self.snapshot_for_trace(),
+        }
+    }
+
+    pub fn frontend_connected(&mut self, label: Option<String>) -> FrontendSession {
+        self.next_client_id += 1;
+        let token = format!("client-{}", self.next_client_id);
+        let label = label.unwrap_or_else(|| "frontend".to_string());
+        self.client_owner = Some(SessionOwner {
+            token: token.clone(),
+            label: label.clone(),
+        });
+
+        if self.runtime.is_none() {
+            self.host_screen = HostScreen::Title;
+        }
+        self.project_render_state();
+        self.record_trace(
+            "client_claimed",
+            serde_json::json!({
+                "label": label,
+                "token": token,
+                "host_screen": format!("{:?}", self.host_screen),
+            }),
+        );
+
+        FrontendSession {
+            client_token: token,
+            render_state: self.render_state.clone(),
+        }
+    }
+
+    pub fn assert_owner(&self, client_token: &str) -> Result<(), String> {
+        let owner = self
+            .client_owner
+            .as_ref()
+            .ok_or("当前没有已连接的前端 owner，请先调用 frontend_connected")?;
+        if owner.token == client_token {
+            Ok(())
+        } else {
+            Err(format!(
+                "当前会话已被其他客户端接管（owner={}），拒绝推进请求",
+                owner.label
+            ))
+        }
+    }
+
+    pub fn set_host_screen(&mut self, screen: HostScreen) {
+        if self.host_screen == screen {
+            self.project_render_state();
+            return;
+        }
+
+        let previous = format!("{:?}", self.host_screen);
+        self.host_screen = screen;
+
+        if !self.host_screen.allows_progression() && self.playback_mode != PlaybackMode::Normal {
+            self.playback_mode = PlaybackMode::Normal;
+            self.auto_timer = 0.0;
+        }
+
+        self.project_render_state();
+        self.record_trace(
+            "host_screen_changed",
+            serde_json::json!({
+                "from": previous,
+                "to": format!("{:?}", self.host_screen),
+            }),
+        );
+    }
+
+    pub fn set_playback_mode(&mut self, mode: PlaybackMode) {
+        let next_mode = if self.host_screen.allows_progression() {
+            mode
+        } else {
+            PlaybackMode::Normal
+        };
+        if self.playback_mode == next_mode {
+            self.project_render_state();
+            return;
+        }
+
+        let previous = format!("{:?}", self.playback_mode);
+        self.playback_mode = next_mode;
+        self.auto_timer = 0.0;
+        self.project_render_state();
+        self.record_trace(
+            "playback_mode_changed",
+            serde_json::json!({
+                "from": previous,
+                "to": format!("{:?}", self.playback_mode),
+            }),
+        );
+    }
+
+    fn build_save_data(&self, slot: u32) -> Result<vn_runtime::SaveData, String> {
+        let runtime = self.runtime.as_ref().ok_or("游戏未启动")?;
+        let svc = self.services();
+
+        let mut save_data = vn_runtime::SaveData::new(slot, runtime.state().clone())
+            .with_history(runtime.history().clone())
+            .with_render(vn_runtime::RenderSnapshot {
+                background: self.render_state.current_background.clone(),
+                characters: self
+                    .render_state
+                    .visible_characters
+                    .iter()
+                    .map(|(alias, sprite)| vn_runtime::CharacterSnapshot {
+                        alias: alias.clone(),
+                        texture_path: sprite.texture_path.clone(),
+                        position: format!("{:?}", sprite.position),
+                    })
+                    .collect(),
+            })
+            .with_audio(vn_runtime::AudioState {
+                current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
+                bgm_looping: true,
+            });
+
+        if let Some(ref chapter) = self.render_state.chapter_mark {
+            save_data = save_data.with_chapter(&chapter.title);
+        }
+
+        Ok(save_data)
+    }
+
+    pub fn save_to_slot(&mut self, slot: u32) -> Result<(), String> {
+        let save_data = self.build_save_data(slot)?;
+        self.services()
+            .saves
+            .save(&save_data)
+            .map_err(|e| e.to_string())?;
+        self.record_trace("save_slot_written", serde_json::json!({ "slot": slot }));
+        Ok(())
+    }
+
+    pub fn save_to_slot_with_thumbnail(
+        &mut self,
+        slot: u32,
+        thumbnail_png: &[u8],
+    ) -> Result<(), String> {
+        let save_data = self.build_save_data(slot)?;
+        self.services()
+            .saves
+            .save_thumbnail_png(slot, thumbnail_png)
+            .map_err(|e| format!("缩略图保存失败: {e}"))?;
+        self.services()
+            .saves
+            .save(&save_data)
+            .map_err(|e| e.to_string())?;
+        self.record_trace(
+            "save_slot_written",
+            serde_json::json!({ "slot": slot, "thumbnail": true }),
+        );
+        Ok(())
+    }
+
+    pub fn save_continue(&mut self) -> Result<(), String> {
+        let save_data = self.build_save_data(0)?;
+        self.services()
+            .saves
+            .save_continue(&save_data)
+            .map_err(|e| e.to_string())?;
+        self.record_trace("continue_written", serde_json::json!({}));
+        Ok(())
+    }
+
+    pub fn delete_continue(&mut self) -> Result<(), String> {
+        self.services()
+            .saves
+            .delete_continue()
+            .map_err(|e| e.to_string())?;
+        self.record_trace("continue_deleted", serde_json::json!({}));
+        Ok(())
+    }
+
+    fn host_history_from_runtime(history: &vn_runtime::history::History) -> Vec<HistoryEntry> {
+        history
+            .events()
+            .iter()
+            .filter_map(|event| match event {
+                HistoryEvent::Dialogue {
+                    speaker, content, ..
+                } => Some(HistoryEntry {
+                    speaker: speaker.clone(),
+                    text: content.clone(),
+                }),
+                _ => None,
+            })
+            .rev()
+            .collect()
+    }
+
+    fn map_runtime_waiting(waiting_reason: &WaitingReason) -> WaitingFor {
+        match waiting_reason {
+            WaitingReason::None => WaitingFor::Nothing,
+            WaitingReason::WaitForClick => WaitingFor::Click,
+            WaitingReason::WaitForChoice { .. } => WaitingFor::Choice,
+            WaitingReason::WaitForTime(duration) => WaitingFor::Time {
+                remaining_ms: duration.as_millis() as u64,
+            },
+            WaitingReason::WaitForSignal(signal_id) => {
+                WaitingFor::Signal(signal_id.as_str().to_string())
+            }
+            WaitingReason::WaitForUIResult { key, .. } => WaitingFor::UIResult { key: key.clone() },
+        }
+    }
+
+    fn parse_saved_position(name: &str) -> Position {
+        match name {
+            "Left" => Position::Left,
+            "Right" => Position::Right,
+            "Center" => Position::Center,
+            "NearLeft" => Position::NearLeft,
+            "NearRight" => Position::NearRight,
+            "NearMiddle" => Position::NearMiddle,
+            "FarLeft" => Position::FarLeft,
+            "FarRight" => Position::FarRight,
+            "FarMiddle" => Position::FarMiddle,
+            _ => Position::Center,
+        }
     }
 
     /// 将 PersistentStore 中的变量注入到当前 runtime。
@@ -285,6 +626,7 @@ impl AppStateInner {
         }
         self.runtime = None;
         self.render_state = RenderState::new();
+        self.host_screen = HostScreen::Title;
         self.waiting = WaitingFor::Nothing;
         self.typewriter_timer = 0.0;
         self.script_finished = false;
@@ -296,28 +638,31 @@ impl AppStateInner {
         self.scene_transition_elapsed = 0.0;
         self.active_shake = None;
         self.scene_effect_active = false;
+        self.logical_time_ms = 0;
+        self.project_render_state();
     }
 
     /// 解析脚本并初始化运行时
     pub fn init_game(&mut self, script_content: &str) -> Result<(), String> {
-        self.reset_session();
-
         let mut parser = Parser::new();
         let script = parser
             .parse("main", script_content)
             .map_err(|e| format!("脚本解析失败: {e}"))?;
+        self.reset_session();
+        self.clear_trace();
         self.runtime = Some(VNRuntime::new(script));
-
         self.inject_persistent_vars();
+        self.set_host_screen(HostScreen::InGame);
+        self.record_trace(
+            "game_started",
+            serde_json::json!({ "script_path": "inline" }),
+        );
         self.run_script_tick();
         Ok(())
     }
 
-    /// 通过 ResourceManager 读取脚本并初始化运行时
-    ///
-    /// 除入口脚本外，递归预加载所有 `callScript` 引用的子脚本，
-    /// 保证运行时执行到跨文件调用时不会因脚本未注册而失败。
-    pub fn init_game_from_resource(&mut self, script_path: &str) -> Result<(), String> {
+    /// 通过 ResourceManager 构建运行时，但不执行首帧。
+    fn build_runtime_from_resource(&self, script_path: &str) -> Result<VNRuntime, String> {
         let rm = &self.services().resources;
 
         let logical = LogicalPath::new(script_path);
@@ -346,12 +691,54 @@ impl AppStateInner {
         visited.insert(normalized);
         Self::preload_called_scripts(&mut runtime, rm, &script, &mut visited);
 
-        self.reset_session();
-        self.runtime = Some(runtime);
+        Ok(runtime)
+    }
 
+    fn start_runtime(
+        &mut self,
+        mut runtime: VNRuntime,
+        script_path: &str,
+        start_label: Option<&str>,
+    ) -> Result<(), String> {
+        if let Some(label) = start_label {
+            let target = runtime
+                .find_label(label)
+                .ok_or_else(|| format!("标签未找到: {label}"))?;
+            runtime.state_mut().position.jump_to(target);
+        }
+
+        self.reset_session();
+        self.clear_trace();
+        self.runtime = Some(runtime);
         self.inject_persistent_vars();
+        self.set_host_screen(HostScreen::InGame);
+        self.record_trace(
+            "game_started",
+            serde_json::json!({
+                "script_path": script_path,
+                "start_label": start_label,
+            }),
+        );
         self.run_script_tick();
         Ok(())
+    }
+
+    /// 通过 ResourceManager 读取脚本并初始化运行时
+    ///
+    /// 除入口脚本外，递归预加载所有 `callScript` 引用的子脚本，
+    /// 保证运行时执行到跨文件调用时不会因脚本未注册而失败。
+    pub fn init_game_from_resource(&mut self, script_path: &str) -> Result<(), String> {
+        let runtime = self.build_runtime_from_resource(script_path)?;
+        self.start_runtime(runtime, script_path, None)
+    }
+
+    pub fn init_game_from_resource_at_label(
+        &mut self,
+        script_path: &str,
+        label: &str,
+    ) -> Result<(), String> {
+        let runtime = self.build_runtime_from_resource(script_path)?;
+        self.start_runtime(runtime, script_path, Some(label))
     }
 
     /// 递归预加载 `callScript` 引用的所有子脚本
@@ -415,6 +802,13 @@ impl AppStateInner {
 
     /// 每帧调用，推进打字机和计时器
     pub fn process_tick(&mut self, dt: f32) {
+        if !self.host_screen.allows_progression() {
+            self.project_render_state();
+            return;
+        }
+
+        self.logical_time_ms += (dt * 1000.0).round() as u64;
+        let waiting_before = format!("{:?}", self.waiting);
         self.advance_playback_mode(dt);
         self.update_animations(dt);
         self.resolve_waits(dt);
@@ -425,14 +819,43 @@ impl AppStateInner {
 
         self.advance_typewriter(dt);
         self.sync_audio(dt);
-        self.render_state.playback_mode = self.playback_mode.clone();
+        self.project_render_state();
+        self.record_trace(
+            "tick",
+            serde_json::json!({
+                "dt_seconds": dt,
+                "waiting_before": waiting_before,
+                "waiting_after": format!("{:?}", self.waiting),
+                "script_finished": self.script_finished,
+            }),
+        );
     }
 
     /// Skip 模式立即推进 + Auto 模式计时推进
     fn advance_playback_mode(&mut self, dt: f32) {
-        if self.playback_mode == PlaybackMode::Skip && self.waiting == WaitingFor::Click {
-            self.render_state.complete_typewriter();
-            self.clear_click_wait();
+        if self.playback_mode == PlaybackMode::Skip {
+            if !self.render_state.is_dialogue_complete() {
+                self.render_state.complete_typewriter();
+            }
+
+            match self.waiting.clone() {
+                WaitingFor::Click => {
+                    self.clear_click_wait();
+                }
+                WaitingFor::Time { .. } => {
+                    if let Some(rt) = self.runtime.as_mut() {
+                        rt.state_mut().clear_wait();
+                    }
+                    self.waiting = WaitingFor::Nothing;
+                }
+                WaitingFor::Signal(signal_id) => {
+                    self.complete_signal_wait(&signal_id);
+                }
+                WaitingFor::Cutscene => {
+                    self.finish_cutscene();
+                }
+                _ => {}
+            }
         }
 
         if self.playback_mode == PlaybackMode::Auto
@@ -445,6 +868,34 @@ impl AppStateInner {
                 self.clear_click_wait();
             }
         }
+    }
+
+    fn complete_signal_wait(&mut self, signal_id: &str) {
+        match signal_id {
+            "scene_transition" => {
+                if let Some(st) = self.render_state.scene_transition.as_mut() {
+                    if let Some(bg) = st.pending_background.take() {
+                        self.render_state.current_background = Some(bg);
+                    }
+                    st.phase = SceneTransitionPhaseState::Completed;
+                }
+            }
+            "title_card" => {
+                self.render_state.title_card = None;
+            }
+            "scene_effect" => {
+                self.scene_effect_active = false;
+            }
+            "cutscene" => {
+                self.render_state.cutscene = None;
+            }
+            _ => {}
+        }
+
+        if let Some(rt) = self.runtime.as_mut() {
+            rt.state_mut().clear_wait();
+        }
+        self.waiting = WaitingFor::Nothing;
     }
 
     /// 推进 chapter_mark / title_card / background_transition / scene_transition / 角色 alpha
@@ -621,7 +1072,17 @@ impl AppStateInner {
 
     /// 处理用户点击
     pub fn process_click(&mut self) {
+        if !self.host_screen.allows_progression() {
+            return;
+        }
         self.auto_timer = 0.0;
+        self.record_trace(
+            "click",
+            serde_json::json!({
+                "waiting": format!("{:?}", self.waiting),
+                "dialogue_complete": self.render_state.is_dialogue_complete(),
+            }),
+        );
 
         if !self.render_state.is_dialogue_complete() {
             self.render_state.complete_typewriter();
@@ -683,6 +1144,10 @@ impl AppStateInner {
         self.waiting = WaitingFor::Click;
         self.typewriter_timer = 0.0;
         self.auto_timer = 0.0;
+        self.playback_mode = PlaybackMode::Normal;
+        self.set_host_screen(HostScreen::InGame);
+        self.project_render_state();
+        self.record_trace("snapshot_restored", serde_json::json!({}));
         true
     }
 
@@ -692,6 +1157,7 @@ impl AppStateInner {
         if self.waiting == WaitingFor::Cutscene {
             self.waiting = WaitingFor::Nothing;
         }
+        self.record_trace("cutscene_finished", serde_json::json!({}));
     }
 
     /// 处理前端回传的 UI 交互结果
@@ -727,11 +1193,16 @@ impl AppStateInner {
             self.run_script_tick();
         }
 
+        self.record_trace("ui_result_submitted", serde_json::json!({}));
+
         Ok(())
     }
 
     /// 处理用户选择
     pub fn process_choose(&mut self, index: usize) {
+        if !self.host_screen.allows_progression() {
+            return;
+        }
         if self.waiting != WaitingFor::Choice {
             return;
         }
@@ -741,6 +1212,7 @@ impl AppStateInner {
         }
         self.render_state.clear_choices();
         self.waiting = WaitingFor::Nothing;
+        self.record_trace("choice_selected", serde_json::json!({ "index": index }));
     }
 
     /// 调用 runtime.tick() 并执行产出的 commands
@@ -784,7 +1256,7 @@ impl AppStateInner {
                 }
 
                 if result == ExecuteResult::FullRestart {
-                    self.return_to_title();
+                    self.return_to_title(false);
                     return;
                 }
 
@@ -811,26 +1283,7 @@ impl AppStateInner {
                 }
 
                 // 用 Runtime 的 waiting_reason（权威来源）映射 Host 等待状态
-                match &waiting_reason {
-                    WaitingReason::None => {}
-                    WaitingReason::WaitForClick => {
-                        self.waiting = WaitingFor::Click;
-                    }
-                    WaitingReason::WaitForChoice { .. } => {
-                        self.waiting = WaitingFor::Choice;
-                    }
-                    WaitingReason::WaitForTime(duration) => {
-                        self.waiting = WaitingFor::Time {
-                            remaining_ms: duration.as_millis() as u64,
-                        };
-                    }
-                    WaitingReason::WaitForSignal(signal_id) => {
-                        self.waiting = WaitingFor::Signal(signal_id.as_str().to_string());
-                    }
-                    WaitingReason::WaitForUIResult { key, .. } => {
-                        self.waiting = WaitingFor::UIResult { key: key.clone() };
-                    }
-                }
+                self.waiting = Self::map_runtime_waiting(&waiting_reason);
 
                 // 同步 runtime persistent 变量到 PersistentStore
                 if let Some(rt) = self.runtime.as_ref() {
@@ -842,10 +1295,25 @@ impl AppStateInner {
 
                 if waiting_reason == WaitingReason::None && commands.is_empty() {
                     self.script_finished = true;
+                    if let Err(error) = self.delete_continue() {
+                        warn!(%error, "脚本结束后清理 continue 失败");
+                    }
                 }
+
+                self.project_render_state();
+                self.record_trace(
+                    "script_tick",
+                    serde_json::json!({
+                        "commands_count": commands.len(),
+                        "waiting": format!("{:?}", self.waiting),
+                        "execute_result": format!("{:?}", result),
+                        "script_finished": self.script_finished,
+                    }),
+                );
             }
             Err(_) => {
                 self.script_finished = true;
+                self.record_trace("script_tick_error", serde_json::json!({}));
             }
         }
     }
@@ -855,64 +1323,160 @@ impl AppStateInner {
         self.history.insert(0, HistoryEntry { speaker, text });
     }
 
-    /// 从存档恢复游戏状态
-    ///
-    /// 统一处理 `load_game` 和 `continue_game` 的恢复逻辑：
-    /// 若 runtime 尚未初始化，根据存档中的 `script_path` 加载入口脚本并预加载子脚本。
-    pub fn restore_from_save(&mut self, save_data: vn_runtime::SaveData) -> Result<(), String> {
-        if self.runtime.is_none() {
-            let path = if !save_data.runtime_state.position.script_path.is_empty() {
-                &save_data.runtime_state.position.script_path
-            } else {
-                &save_data.runtime_state.position.script_id
-            };
-            self.init_game_from_resource(path)?;
-        }
-
-        let rt = self.runtime.as_mut().ok_or("游戏未启动")?;
-        let svc = self
-            .services
-            .as_ref()
-            .expect("invariant: services initialized in setup()");
-
-        // 恢复 call_stack 中引用的脚本到 registry
-        for frame in &save_data.runtime_state.call_stack {
+    fn load_call_stack_scripts(
+        runtime: &mut VNRuntime,
+        resources: &ResourceManager,
+        runtime_state: &vn_runtime::state::RuntimeState,
+    ) {
+        for frame in &runtime_state.call_stack {
             let frame_path = if !frame.script_path.is_empty() {
                 &frame.script_path
             } else {
                 &frame.script_id
             };
             let logical = LogicalPath::new(frame_path);
-            if let Ok(content) = svc.resources.read_text(&logical) {
+            if let Ok(content) = resources.read_text(&logical) {
                 let fid = logical.file_stem().to_string();
                 let fbase = logical.parent_dir().to_string();
                 let mut parser = Parser::new();
-                if let Ok(s) = parser.parse_with_base_path(&fid, &content, &fbase) {
-                    rt.register_script(frame_path, s);
+                if let Ok(script) = parser.parse_with_base_path(&fid, &content, &fbase) {
+                    runtime.register_script(frame_path, script);
                 }
             }
         }
+    }
 
-        rt.restore_state(save_data.runtime_state);
-        rt.restore_history(save_data.history);
-
+    fn apply_render_snapshot(&mut self, render: &vn_runtime::RenderSnapshot) {
         self.render_state = RenderState::new();
-        if let Some(bg) = save_data.render.background {
-            self.render_state.set_background(bg);
+        if let Some(background) = &render.background {
+            self.render_state.set_background(background.clone());
         }
-        self.waiting = WaitingFor::Nothing;
-        self.typewriter_timer = 0.0;
+
+        let manifest = self.services().manifest.clone();
+        for character in &render.characters {
+            self.render_state.show_character(
+                character.alias.clone(),
+                character.texture_path.clone(),
+                Self::parse_saved_position(&character.position),
+                &manifest,
+            );
+            if let Some(sprite) = self
+                .render_state
+                .visible_characters
+                .get_mut(&character.alias)
+            {
+                sprite.alpha = 1.0;
+                sprite.target_alpha = 1.0;
+                sprite.transition_duration = None;
+            }
+        }
+    }
+
+    fn apply_audio_state(&mut self, audio: &vn_runtime::AudioState) {
+        let manager = &mut self.services_mut().audio;
+        match &audio.current_bgm {
+            Some(path) => manager.play_bgm(path, audio.bgm_looping, None),
+            None => manager.stop_bgm(None),
+        }
+        self.sync_audio(0.0);
+    }
+
+    /// 从存档恢复游戏状态
+    ///
+    /// 统一处理 `load_game` 和 `continue_game` 的恢复逻辑：
+    /// 若 runtime 尚未初始化，根据存档中的 `script_path` 加载入口脚本并预加载子脚本。
+    pub fn restore_from_save(&mut self, save_data: vn_runtime::SaveData) -> Result<(), String> {
+        let runtime_state = save_data.runtime_state.clone();
+        let history = save_data.history.clone();
+        let render = save_data.render.clone();
+        let audio = save_data.audio.clone();
+
+        let path = if !runtime_state.position.script_path.is_empty() {
+            runtime_state.position.script_path.clone()
+        } else {
+            runtime_state.position.script_id.clone()
+        };
+
+        let mut runtime = self.build_runtime_from_resource(&path)?;
+        Self::load_call_stack_scripts(&mut runtime, &self.services().resources, &runtime_state);
+        runtime.restore_state(runtime_state.clone());
+        runtime.restore_history(history.clone());
+        runtime.state_mut().persistent_variables = self.persistent_store.variables.clone();
+
+        self.reset_session();
+        self.clear_trace();
+        self.runtime = Some(runtime);
+        self.apply_render_snapshot(&render);
+        self.apply_audio_state(&audio);
+        self.history = Self::host_history_from_runtime(&history);
+        self.waiting = Self::map_runtime_waiting(&runtime_state.waiting);
         self.script_finished = false;
-        self.run_script_tick();
+        self.typewriter_timer = 0.0;
+        self.auto_timer = 0.0;
+        self.playback_mode = PlaybackMode::Normal;
+        self.snapshot_stack.clear();
+        self.set_host_screen(HostScreen::InGame);
+        self.project_render_state();
+        self.record_trace(
+            "save_restored",
+            serde_json::json!({
+                "script_path": path,
+                "waiting": format!("{:?}", self.waiting),
+                "history_count": self.history.len(),
+            }),
+        );
         Ok(())
     }
 
     /// 重置到标题画面状态
-    pub fn return_to_title(&mut self) {
+    pub fn return_to_title(&mut self, save_continue: bool) {
+        if save_continue && let Err(error) = self.save_continue() {
+            warn!(%error, "返回标题时保存 continue 失败");
+        }
+        if !save_continue && let Err(error) = self.delete_continue() {
+            warn!(%error, "返回标题时删除 continue 失败");
+        }
         if let Err(e) = self.persistent_store.save() {
             warn!("返回标题时持久化变量保存失败: {e}");
         }
         self.reset_session();
+        self.set_host_screen(HostScreen::Title);
+        self.record_trace(
+            "returned_to_title",
+            serde_json::json!({ "save_continue": save_continue }),
+        );
+    }
+
+    pub fn debug_run_until(
+        &mut self,
+        dt: f32,
+        max_steps: usize,
+        stop_on_wait: bool,
+        stop_on_script_finished: bool,
+    ) -> HarnessTraceBundle {
+        self.clear_trace();
+        let mut steps = 0usize;
+
+        let stop_reason = loop {
+            if steps >= max_steps {
+                break "max_steps";
+            }
+            if !self.host_screen.allows_progression() {
+                break "host_screen_blocked";
+            }
+
+            self.process_tick(dt);
+            steps += 1;
+
+            if stop_on_script_finished && self.script_finished {
+                break "script_finished";
+            }
+            if stop_on_wait && self.waiting != WaitingFor::Nothing {
+                break "waiting";
+            }
+        };
+
+        self.build_trace_bundle(dt, steps, stop_reason)
     }
 
     /// 分派音频命令到 AudioManager（headless 状态追踪）
@@ -994,5 +1558,119 @@ impl AppStateInner {
             self.render_state.scene_effect.shake_offset_x = shake.amplitude_x * decay * phase.sin();
             self.render_state.scene_effect.shake_offset_y = shake.amplitude_y * decay * phase.cos();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("ring_host_tauri_{name}_{suffix}"))
+    }
+
+    fn make_state_with_services(
+        script_path: &str,
+        script_content: &str,
+    ) -> (AppStateInner, PathBuf) {
+        let root = unique_temp_dir("state");
+        let assets_dir = root.join("assets");
+        let saves_dir = root.join("saves");
+        std::fs::create_dir_all(assets_dir.join("scripts")).unwrap();
+        std::fs::create_dir_all(&saves_dir).unwrap();
+        std::fs::write(assets_dir.join(script_path), script_content).unwrap();
+
+        let mut config = AppConfig::default();
+        config.assets_root = assets_dir.clone();
+        config.saves_dir = saves_dir.clone();
+        config.start_script_path = script_path.to_string();
+
+        let mut inner = AppStateInner::new();
+        inner.persistent_store = PersistentStore::load(&saves_dir);
+        inner.services = Some(Services {
+            audio: AudioManager::new(),
+            resources: ResourceManager::new(&assets_dir),
+            saves: SaveManager::new(&saves_dir),
+            config,
+            manifest: crate::manifest::Manifest::with_defaults(),
+        });
+        (inner, root)
+    }
+
+    #[test]
+    fn frontend_owner_reclaim_invalidates_stale_token() {
+        let mut inner = AppStateInner::new();
+        let first = inner.frontend_connected(Some("first".to_string()));
+        assert!(inner.assert_owner(&first.client_token).is_ok());
+
+        let second = inner.frontend_connected(Some("second".to_string()));
+        assert!(inner.assert_owner(&first.client_token).is_err());
+        assert!(inner.assert_owner(&second.client_token).is_ok());
+    }
+
+    #[test]
+    fn overlay_screen_blocks_progression_and_resets_playback() {
+        let mut inner = AppStateInner::new();
+        inner.set_host_screen(HostScreen::InGame);
+        inner.set_playback_mode(PlaybackMode::Auto);
+        inner.waiting = WaitingFor::Time {
+            remaining_ms: 1_000,
+        };
+
+        inner.set_host_screen(HostScreen::Save);
+        inner.process_tick(1.0);
+
+        assert_eq!(inner.playback_mode, PlaybackMode::Normal);
+        assert_eq!(
+            inner.waiting,
+            WaitingFor::Time {
+                remaining_ms: 1_000
+            }
+        );
+    }
+
+    #[test]
+    fn return_to_title_with_save_continue_writes_continue_file() {
+        let script = "changeBG <img src=\"../backgrounds/entry.png\" />\n";
+        let (mut inner, root) = make_state_with_services("scripts/scene.md", script);
+
+        inner.init_game_from_resource("scripts/scene.md").unwrap();
+        inner.return_to_title(true);
+
+        assert!(inner.services().saves.has_continue());
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn restore_from_save_keeps_saved_render_snapshot_without_entry_tick() {
+        let script = "changeBG <img src=\"../backgrounds/entry.png\" />\n";
+        let (mut inner, root) = make_state_with_services("scripts/scene.md", script);
+
+        let mut runtime_state = vn_runtime::state::RuntimeState::new("scene");
+        runtime_state.position.set_path("scripts/scene.md");
+
+        let save_data = vn_runtime::SaveData::new(1, runtime_state)
+            .with_render(vn_runtime::RenderSnapshot {
+                background: Some("backgrounds/saved.png".to_string()),
+                characters: Vec::new(),
+            })
+            .with_history(vn_runtime::History::new());
+
+        inner.restore_from_save(save_data).unwrap();
+
+        assert_eq!(
+            inner.render_state.current_background.as_deref(),
+            Some("backgrounds/saved.png")
+        );
+        assert_eq!(inner.host_screen, HostScreen::InGame);
+
+        std::fs::remove_dir_all(root).ok();
     }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import SkipAutoIndicator from "./components/SkipAutoIndicator.vue";
 import Toast from "./components/Toast.vue";
@@ -16,7 +16,7 @@ import InGameMenu from "./screens/InGameMenu.vue";
 import SaveLoadScreen from "./screens/SaveLoadScreen.vue";
 import SettingsScreen from "./screens/SettingsScreen.vue";
 import TitleScreen from "./screens/TitleScreen.vue";
-import type { SaveInfo } from "./types/render-state";
+import type { HostScreen, SaveInfo } from "./types/render-state";
 import VNScene from "./vn/VNScene.vue";
 
 type ToastHandle = {
@@ -27,6 +27,7 @@ const {
   renderState,
   playbackMode,
   startGame,
+  startGameAtLabel,
   handleClick,
   handleChoose,
   saveGame,
@@ -36,6 +37,7 @@ const {
   getConfig,
   returnToTitle,
   setPlaybackMode,
+  setHostScreen,
   backspace,
   frontendConnected,
   finishCutscene,
@@ -46,15 +48,8 @@ const {
 const audioState = computed(() => renderState.value?.audio);
 const { dispose: disposeAudio } = useAudio(audioState);
 
-const {
-  currentScreen,
-  navigateTo,
-  replaceGameMenuPage,
-  goBack,
-  resetToTitle,
-  resetToIngame,
-  isInGameMenu,
-} = useNavigation();
+const { currentScreen, navigateTo, replaceGameMenuPage, goBack, syncFromHostScreen, isInGameMenu } =
+  useNavigation();
 
 const { init: initAssets } = useAssets();
 const { init: initScreens, refreshConditions } = useScreens();
@@ -63,6 +58,33 @@ const { init: initTheme } = useTheme();
 const showInGameMenu = ref(false);
 const toast = ref<ToastHandle | null>(null);
 const saves = ref<SaveInfo[]>([]);
+
+function applyBackendHostScreen(hostScreen: HostScreen) {
+  showInGameMenu.value = hostScreen === "InGameMenu";
+  syncFromHostScreen(hostScreen);
+  if (hostScreen === "Save" || hostScreen === "Load") {
+    void refreshSaves();
+  }
+}
+
+const desiredHostScreen = computed<HostScreen>(() => {
+  if (showInGameMenu.value) return "InGameMenu";
+  switch (currentScreen.value) {
+    case "ingame":
+      return "InGame";
+    case "save":
+      return "Save";
+    case "load":
+      return "Load";
+    case "settings":
+      return "Settings";
+    case "history":
+      return "History";
+    case "title":
+    default:
+      return "Title";
+  }
+});
 
 const {
   visible: confirmVisible,
@@ -80,9 +102,9 @@ async function refreshSaves() {
 async function onNewGame() {
   try {
     const config = await getConfig();
-    const scriptPath = config?.start_script_path || "scripts/main.md";
+    if (!config) throw new Error("config missing");
+    const scriptPath = config.start_script_path;
     await startGame(scriptPath);
-    resetToIngame();
   } catch {
     toast.value?.show("启动失败", "error");
   }
@@ -91,7 +113,6 @@ async function onNewGame() {
 async function onContinue() {
   try {
     await continueGame();
-    resetToIngame();
   } catch {
     toast.value?.show("没有可继续的存档", "info");
   }
@@ -120,7 +141,6 @@ async function onSave(slot: number) {
 async function onLoad(slot: number) {
   try {
     await loadGame(slot);
-    resetToIngame();
     showInGameMenu.value = false;
     toast.value?.show("读取成功", "success");
   } catch {
@@ -138,7 +158,6 @@ async function onReturnToTitle() {
   } catch {
     /* best-effort */
   }
-  resetToTitle();
   await refreshConditions();
 }
 
@@ -156,9 +175,10 @@ async function handleTitleAction(action: string) {
   } else if (action.startsWith("start_at_label:")) {
     try {
       const config = await getConfig();
-      const scriptPath = config?.start_script_path || "scripts/main.md";
-      await startGame(scriptPath);
-      resetToIngame();
+      if (!config) throw new Error("config missing");
+      const scriptPath = config.start_script_path;
+      const label = action.slice("start_at_label:".length);
+      await startGameAtLabel(scriptPath, label);
     } catch {
       toast.value?.show("启动失败", "error");
     }
@@ -298,6 +318,23 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);
   window.removeEventListener("keyup", onKeyUp);
   disposeAudio();
+});
+
+watch(
+  () => renderState.value?.host_screen,
+  (hostScreen) => {
+    if (!hostScreen) return;
+    applyBackendHostScreen(hostScreen);
+  },
+  { immediate: true },
+);
+
+watch(desiredHostScreen, (hostScreen) => {
+  if (!renderState.value) return;
+  if (renderState.value.host_screen === hostScreen) return;
+  void setHostScreen(hostScreen).catch(() => {
+    /* owner may have switched during teardown */
+  });
 });
 </script>
 

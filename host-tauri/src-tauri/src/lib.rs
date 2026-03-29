@@ -24,12 +24,14 @@ fn percent_decode(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len()
-            && let Ok(byte) = u8::from_str_radix(&input[i + 1..i + 3], 16) {
-                out.push(byte);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(byte) = u8::from_str_radix(&input[i + 1..i + 3], 16)
+        {
+            out.push(byte);
+            i += 3;
+            continue;
+        }
         out.push(bytes[i]);
         i += 1;
     }
@@ -61,11 +63,11 @@ fn create_resource_manager(
     cfg: &config::AppConfig,
     assets_root: &Path,
     project_root: &Path,
-) -> resources::ResourceManager {
+) -> Result<resources::ResourceManager, String> {
     match cfg.asset_source {
         config::AssetSourceType::Fs => {
             info!("资源来源: 文件系统");
-            resources::ResourceManager::new(assets_root)
+            Ok(resources::ResourceManager::new(assets_root))
         }
         config::AssetSourceType::Zip => {
             let zip_rel = cfg.zip_path.as_deref().unwrap_or("assets.zip");
@@ -75,8 +77,12 @@ fn create_resource_manager(
                 PathBuf::from(zip_rel)
             };
             info!(path = %zip_path.display(), "资源来源: ZIP");
-            let source = resources::ZipSource::open(&zip_path).expect("ZIP 资源文件打开失败");
-            resources::ResourceManager::with_source(Box::new(source), assets_root)
+            let source = resources::ZipSource::open(&zip_path)
+                .map_err(|e| format!("ZIP 资源文件打开失败: {e}"))?;
+            Ok(resources::ResourceManager::with_source(
+                Box::new(source),
+                assets_root,
+            ))
         }
     }
 }
@@ -137,12 +143,11 @@ pub fn run() {
                 let project_root = find_project_root();
                 info!(root = %project_root.display(), "项目根目录");
 
-                // 尝试加载配置（config.json 不存在时使用默认值）
                 let cfg_path = project_root.join("config.json");
-                let cfg = config::AppConfig::load(&cfg_path).unwrap_or_else(|e| {
-                    info!("使用默认配置 ({e})");
-                    config::AppConfig::default()
-                });
+                let cfg = config::AppConfig::load(&cfg_path)
+                    .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
+                cfg.validate(&project_root)
+                    .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
 
                 // assets_root 相对于项目根目录解析
                 let assets_root = if cfg.assets_root.is_relative() {
@@ -152,7 +157,25 @@ pub fn run() {
                 };
                 info!(assets = %assets_root.display(), "资源根目录");
 
-                let rm = create_resource_manager(&cfg, &assets_root, &project_root);
+                let rm = create_resource_manager(&cfg, &assets_root, &project_root)
+                    .map_err(|e| std::io::Error::other(format!("资源管理器创建失败: {e}")))?;
+
+                let manifest_logical = resources::LogicalPath::new(&cfg.manifest_path);
+                if !rm.resource_exists(&manifest_logical) {
+                    return Err(std::io::Error::other(format!(
+                        "manifest 不存在: {}",
+                        manifest_logical
+                    ))
+                    .into());
+                }
+                let start_script_logical = resources::LogicalPath::new(&cfg.start_script_path);
+                if !rm.resource_exists(&start_script_logical) {
+                    return Err(std::io::Error::other(format!(
+                        "入口脚本不存在: {}",
+                        start_script_logical
+                    ))
+                    .into());
+                }
 
                 // saves_dir 也相对于项目根目录解析
                 let saves_dir = if cfg.saves_dir.is_relative() {
@@ -163,18 +186,15 @@ pub fn run() {
                 let sm = save_manager::SaveManager::new(&saves_dir);
 
                 // 加载 manifest（立绘元数据）——通过 ResourceManager 统一读取（FS/ZIP 透明）
-                let manifest_logical = resources::LogicalPath::new(&cfg.manifest_path);
-                let manifest = match rm.read_text(&manifest_logical) {
-                    Ok(content) => serde_json::from_str::<manifest::Manifest>(&content)
-                        .unwrap_or_else(|e| {
-                            info!("manifest JSON 解析失败，使用默认 ({e})");
-                            manifest::Manifest::with_defaults()
-                        }),
-                    Err(e) => {
-                        info!("manifest 加载失败，使用默认 ({e})");
-                        manifest::Manifest::with_defaults()
-                    }
-                };
+                let manifest_content = rm
+                    .read_text(&manifest_logical)
+                    .map_err(|e| std::io::Error::other(format!("manifest 加载失败: {e}")))?;
+                let (manifest, manifest_warnings) =
+                    manifest::Manifest::parse_and_validate(&manifest_content)
+                        .map_err(|e| std::io::Error::other(format!("manifest 解析失败: {e}")))?;
+                for warning in &manifest_warnings {
+                    warn!(warning = ?warning, "manifest 校验告警");
+                }
                 info!(presets = manifest.presets.len(), "Manifest 加载完成");
 
                 // 初始化 AudioManager（headless 状态追踪，无设备依赖）
@@ -199,7 +219,7 @@ pub fn run() {
 
                 #[cfg(debug_assertions)]
                 {
-                    debug_server::start(shared_inner, assets_root);
+                    debug_server::start(shared_inner);
 
                     if std::env::var("RING_HEADLESS").is_ok() {
                         info!("Headless 模式：Tauri 窗口已隐藏，请使用浏览器 http://localhost:5173 调试");
@@ -214,6 +234,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::init_game,
+            commands::init_game_at_label,
             commands::tick,
             commands::click,
             commands::choose,
@@ -238,11 +259,13 @@ pub fn run() {
             commands::set_playback_mode,
             commands::get_playback_mode,
             commands::frontend_connected,
+            commands::set_host_screen,
             commands::log_frontend,
             commands::get_screen_definitions,
             commands::get_ui_assets,
             commands::get_ui_condition_context,
             commands::debug_snapshot,
+            commands::debug_run_until,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

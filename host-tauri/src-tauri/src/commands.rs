@@ -1,19 +1,35 @@
 use tauri::{AppHandle, State, command};
-use vn_runtime::{AudioState, SaveData};
 
 use crate::config::AppConfig;
-use crate::render_state::PlaybackMode;
-use crate::render_state::RenderState;
+use crate::render_state::{HostScreen, PlaybackMode, RenderState};
 use crate::save_manager::SaveInfo;
-use crate::state::{AppState, HistoryEntry, UserSettings};
+use crate::state::{AppState, FrontendSession, HarnessTraceBundle, HistoryEntry, UserSettings};
+
+fn parse_host_screen(screen: &str) -> HostScreen {
+    match screen {
+        "ingame" => HostScreen::InGame,
+        "ingame_menu" => HostScreen::InGameMenu,
+        "save" => HostScreen::Save,
+        "load" => HostScreen::Load,
+        "settings" => HostScreen::Settings,
+        "history" => HostScreen::History,
+        _ => HostScreen::Title,
+    }
+}
 
 /// 初始化游戏——解析脚本并返回初始渲染状态
 ///
 /// `script_path` 优先通过 ResourceManager 解析（相对于 assets_root），
 /// 回退为直接文件系统路径。
 #[command]
-pub fn init_game(state: State<AppState>, script_path: String) -> Result<RenderState, String> {
+pub fn init_game(
+    state: State<AppState>,
+    client_token: String,
+    script_path: String,
+) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
+    inner.delete_continue()?;
 
     if inner.services.is_some() {
         inner.init_game_from_resource(&script_path)?;
@@ -25,26 +41,47 @@ pub fn init_game(state: State<AppState>, script_path: String) -> Result<RenderSt
     Ok(inner.render_state.clone())
 }
 
+#[command]
+pub fn init_game_at_label(
+    state: State<AppState>,
+    client_token: String,
+    script_path: String,
+    label: String,
+) -> Result<RenderState, String> {
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
+    inner.delete_continue()?;
+    inner.init_game_from_resource_at_label(&script_path, &label)?;
+    Ok(inner.render_state.clone())
+}
+
 /// 每帧 tick——推进打字机和计时器，返回最新渲染状态
 #[command]
-pub fn tick(state: State<AppState>, dt: f32) -> Result<RenderState, String> {
+pub fn tick(state: State<AppState>, client_token: String, dt: f32) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
     inner.process_tick(dt);
     Ok(inner.render_state.clone())
 }
 
 /// 处理用户点击
 #[command]
-pub fn click(state: State<AppState>) -> Result<RenderState, String> {
+pub fn click(state: State<AppState>, client_token: String) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
     inner.process_click();
     Ok(inner.render_state.clone())
 }
 
 /// 处理用户选择
 #[command]
-pub fn choose(state: State<AppState>, index: usize) -> Result<RenderState, String> {
+pub fn choose(
+    state: State<AppState>,
+    client_token: String,
+    index: usize,
+) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
     inner.process_choose(index);
     Ok(inner.render_state.clone())
 }
@@ -60,29 +97,21 @@ pub fn get_render_state(state: State<AppState>) -> Result<RenderState, String> {
 
 /// 保存游戏到指定槽位
 #[command]
-pub fn save_game(state: State<AppState>, slot: u32) -> Result<(), String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
-
-    let svc = inner.services();
-    let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
-    let runtime_state = rt.state().clone();
-    let mut save_data = SaveData::new(slot, runtime_state).with_history(rt.history().clone());
-
-    if let Some(ref cm) = inner.render_state.chapter_mark {
-        save_data = save_data.with_chapter(&cm.title);
-    }
-    save_data = save_data.with_audio(AudioState {
-        current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
-        bgm_looping: true,
-    });
-
-    svc.saves.save(&save_data).map_err(|e| e.to_string())
+pub fn save_game(state: State<AppState>, client_token: String, slot: u32) -> Result<(), String> {
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
+    inner.save_to_slot(slot)
 }
 
 /// 加载指定槽位的存档
 #[command]
-pub fn load_game(state: State<AppState>, slot: u32) -> Result<RenderState, String> {
+pub fn load_game(
+    state: State<AppState>,
+    client_token: String,
+    slot: u32,
+) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
 
     let save_data = inner
         .services()
@@ -112,33 +141,18 @@ pub fn list_saves(state: State<AppState>) -> Result<Vec<SaveInfo>, String> {
 #[command]
 pub fn save_game_with_thumbnail(
     state: State<AppState>,
+    client_token: String,
     slot: u32,
     thumbnail_base64: String,
 ) -> Result<(), String> {
     use base64::Engine as _;
 
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
-    let svc = inner.services();
-    let rt = inner.runtime.as_ref().ok_or("游戏未启动")?;
-    let runtime_state = rt.state().clone();
-    let mut save_data = SaveData::new(slot, runtime_state).with_history(rt.history().clone());
-
-    if let Some(ref cm) = inner.render_state.chapter_mark {
-        save_data = save_data.with_chapter(&cm.title);
-    }
-    save_data = save_data.with_audio(AudioState {
-        current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
-        bgm_looping: true,
-    });
-
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
     let png_bytes = base64::engine::general_purpose::STANDARD
         .decode(&thumbnail_base64)
         .map_err(|e| format!("base64 解码失败: {e}"))?;
-    svc.saves
-        .save_thumbnail_png(slot, &png_bytes)
-        .map_err(|e| format!("缩略图保存失败: {e}"))?;
-
-    svc.saves.save(&save_data).map_err(|e| e.to_string())
+    inner.save_to_slot_with_thumbnail(slot, &png_bytes)
 }
 
 /// 获取指定槽位的缩略图（base64 编码的 PNG）
@@ -217,16 +231,22 @@ pub fn get_history(state: State<AppState>) -> Result<Vec<HistoryEntry>, String> 
 
 /// 返回标题画面
 #[command]
-pub fn return_to_title(state: State<AppState>) -> Result<(), String> {
+pub fn return_to_title(
+    state: State<AppState>,
+    client_token: String,
+    save_continue: Option<bool>,
+) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.return_to_title();
-    Ok(())
+    inner.assert_owner(&client_token)?;
+    inner.return_to_title(save_continue.unwrap_or(false));
+    Ok(inner.render_state.clone())
 }
 
 /// 继续游戏（加载 continue 存档）
 #[command]
-pub fn continue_game(state: State<AppState>) -> Result<RenderState, String> {
+pub fn continue_game(state: State<AppState>, client_token: String) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
 
     let svc = inner.services();
     if !svc.saves.has_continue() {
@@ -249,8 +269,12 @@ pub fn quit_game(app: AppHandle) -> Result<(), String> {
 
 /// 前端视频播放完成（或被跳过）后调用
 #[command]
-pub fn finish_cutscene(state: State<AppState>) -> Result<RenderState, String> {
+pub fn finish_cutscene(
+    state: State<AppState>,
+    client_token: String,
+) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
     inner.finish_cutscene();
     Ok(inner.render_state.clone())
 }
@@ -261,10 +285,12 @@ pub fn finish_cutscene(state: State<AppState>) -> Result<RenderState, String> {
 #[command]
 pub fn submit_ui_result(
     state: State<AppState>,
+    client_token: String,
     key: String,
     value: serde_json::Value,
 ) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
     inner.handle_ui_result(key, value)?;
     Ok(inner.render_state.clone())
 }
@@ -273,8 +299,9 @@ pub fn submit_ui_result(
 
 /// 回退到上一个快照（Backspace）
 #[command]
-pub fn backspace(state: State<AppState>) -> Result<RenderState, String> {
+pub fn backspace(state: State<AppState>, client_token: String) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
     if inner.restore_snapshot() {
         Ok(inner.render_state.clone())
     } else {
@@ -286,16 +313,19 @@ pub fn backspace(state: State<AppState>) -> Result<RenderState, String> {
 
 /// 设置播放模式
 #[command]
-pub fn set_playback_mode(state: State<AppState>, mode: String) -> Result<(), String> {
+pub fn set_playback_mode(
+    state: State<AppState>,
+    client_token: String,
+    mode: String,
+) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.playback_mode = match mode.as_str() {
+    inner.assert_owner(&client_token)?;
+    inner.set_playback_mode(match mode.as_str() {
         "auto" => PlaybackMode::Auto,
         "skip" => PlaybackMode::Skip,
         _ => PlaybackMode::Normal,
-    };
-    inner.auto_timer = 0.0;
-    inner.render_state.playback_mode = inner.playback_mode.clone();
-    Ok(())
+    });
+    Ok(inner.render_state.clone())
 }
 
 /// 获取当前播放模式
@@ -316,10 +346,24 @@ pub fn get_playback_mode(state: State<AppState>) -> Result<String, String> {
 ///
 /// 前端 mount 时调用。覆盖浏览器刷新、WebView 重建、HMR 热重载等场景。
 #[command]
-pub fn frontend_connected(state: State<AppState>) -> Result<(), String> {
+pub fn frontend_connected(
+    state: State<AppState>,
+    client_label: Option<String>,
+) -> Result<FrontendSession, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.return_to_title();
-    Ok(())
+    Ok(inner.frontend_connected(client_label))
+}
+
+#[command]
+pub fn set_host_screen(
+    state: State<AppState>,
+    client_token: String,
+    screen: String,
+) -> Result<RenderState, String> {
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
+    inner.set_host_screen(parse_host_screen(&screen));
+    Ok(inner.render_state.clone())
 }
 
 // ── 前端日志转发 ─────────────────────────────────────────────────────────────
@@ -357,9 +401,17 @@ pub fn get_ui_assets(state: State<AppState>) -> Result<serde_json::Value, String
     let text = rm.read_text(&path).map_err(|e| e.to_string())?;
     let full: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("layout.json 解析失败: {e}"))?;
+    let assets = full
+        .get("assets")
+        .cloned()
+        .ok_or("layout.json 缺少 assets 字段")?;
+    let colors = full
+        .get("colors")
+        .cloned()
+        .ok_or("layout.json 缺少 colors 字段")?;
     Ok(serde_json::json!({
-        "assets": full.get("assets").cloned().unwrap_or(serde_json::Value::Object(Default::default())),
-        "colors": full.get("colors").cloned().unwrap_or(serde_json::Value::Object(Default::default())),
+        "assets": assets,
+        "colors": colors,
     }))
 }
 
@@ -401,9 +453,29 @@ pub fn debug_snapshot(state: State<AppState>) -> Result<serde_json::Value, Strin
         "script_finished": inner.script_finished,
         "render_state": inner.render_state,
         "playback_mode": format!("{:?}", inner.playback_mode),
+        "host_screen": format!("{:?}", inner.host_screen),
         "history_count": inner.history.len(),
         "has_audio": inner.services.is_some(),
         "current_bgm": inner.services().audio.current_bgm_path().map(String::from),
         "user_settings": inner.user_settings,
     }))
+}
+
+#[command]
+pub fn debug_run_until(
+    state: State<AppState>,
+    client_token: String,
+    dt: f32,
+    max_steps: usize,
+    stop_on_wait: Option<bool>,
+    stop_on_script_finished: Option<bool>,
+) -> Result<HarnessTraceBundle, String> {
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
+    Ok(inner.debug_run_until(
+        dt,
+        max_steps,
+        stop_on_wait.unwrap_or(true),
+        stop_on_script_finished.unwrap_or(true),
+    ))
 }

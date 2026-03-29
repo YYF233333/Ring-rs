@@ -15,6 +15,48 @@ export interface RenderState {
   playback_mode: PlaybackMode;
   audio: Readonly<AudioRenderState>;
   active_ui_mode: Readonly<UiModeRequest> | null;
+  host_screen: HostScreen;
+}
+
+export type HostScreen =
+  | "Title"
+  | "InGame"
+  | "InGameMenu"
+  | "Save"
+  | "Load"
+  | "Settings"
+  | "History";
+
+export interface FrontendSession {
+  client_token: string;
+  render_state: Readonly<RenderState>;
+}
+
+export interface HarnessSnapshot {
+  render_state: Readonly<RenderState>;
+  waiting: unknown;
+  script_finished: boolean;
+  playback_mode: PlaybackMode;
+  host_screen: HostScreen;
+  history_count: number;
+}
+
+export interface HarnessTraceEvent {
+  seq: number;
+  logical_time_ms: number;
+  kind: string;
+  data: unknown;
+}
+
+export interface HarnessTraceBundle {
+  metadata: {
+    dt_seconds: number;
+    steps_run: number;
+    stop_reason: string;
+    owner_label: string | null;
+  };
+  events: readonly HarnessTraceEvent[];
+  final_snapshot: Readonly<HarnessSnapshot>;
 }
 
 export interface UiModeRequest {

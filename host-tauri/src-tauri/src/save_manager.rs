@@ -213,6 +213,17 @@ impl SaveManager {
     pub fn has_continue(&self) -> bool {
         self.continue_path().exists()
     }
+
+    /// 删除 Continue 存档
+    pub fn delete_continue(&self) -> Result<(), SaveError> {
+        let path = self.continue_path();
+        if path.exists() {
+            fs::remove_file(&path)
+                .map_err(|e| SaveError::IoError(format!("无法删除 Continue 存档: {}", e)))?;
+            info!(path = %path.display(), "Continue 存档删除成功");
+        }
+        Ok(())
+    }
 }
 
 /// 存档信息（用于前端列表展示）

@@ -54,3 +54,4 @@
 | RFC-029 | 前端媒体统一——动画模型收敛与音频前端化 | `rfc-frontend-media-unification.md` | Accepted |
 | RFC-030 | Tauri 前端 UI 主题与客制化架构 | `rfc-tauri-ui-theming.md` | Proposed |
 | RFC-031 | ZIP 资源自定义协议 | `rfc-zip-asset-protocol.md` | Active |
+| RFC-032 | host-tauri Harness 能力对齐 | `rfc-host-tauri-harness-parity.md` | Proposed |

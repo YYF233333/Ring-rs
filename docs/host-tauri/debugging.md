@@ -32,17 +32,17 @@ INFO ring_engine_frontend: 项目根目录 root="F:\\Code\\Ring-rs"
 INFO ring_engine_frontend: Debug HTTP server: http://127.0.0.1:9528
 ```
 
-### 3. 浏览器调试（Headless 模式）
+### 3. 浏览器调试（推荐）
 
-通过 browser MCP 在外部浏览器中进行可视化调试。**必须使用 Headless 模式**以避免 Tauri 窗口和浏览器双客户端竞争状态。
+通过 browser MCP 在外部浏览器中进行可视化调试。推荐使用浏览器单客户端模式：
 
 **启动方式：**
 
 ```powershell
-cd host-tauri; $env:RING_HEADLESS="1"; pnpm tauri dev
+cd host-tauri; pnpm dev:browser
 ```
 
-设置 `RING_HEADLESS` 环境变量后，Tauri 窗口会自动隐藏，仅保留 Rust 后端和 Debug HTTP Server。外部浏览器成为唯一的游戏客户端。
+该脚本会设置 `RING_HEADLESS=1` 并启动 `pnpm tauri dev`；Tauri 窗口会自动隐藏，仅保留 Rust 后端和 Debug HTTP Server。
 
 **调试操作：**
 
@@ -57,7 +57,7 @@ cd host-tauri; $env:RING_HEADLESS="1"; pnpm tauri dev
 await fetch('http://localhost:9528/api/debug_snapshot', { method: 'POST' }).then(r => r.json())
 ```
 
-> **警告**：不设置 `RING_HEADLESS` 直接在浏览器打开 `localhost:5173` 会导致 Tauri 窗口和浏览器各自运行独立的游戏循环，竞争同一个 `AppStateInner`，产生状态不同步、打字机效果碎裂、游戏双倍速推进等问题。
+> 当前实现已经为推进类命令加入了 `client_token` ownership 校验：第二个客户端接管后，旧客户端会收到显式 owner 错误，不再继续推进同一会话。但调试时仍推荐使用 `pnpm dev:browser`，避免同时维护两份 UI 视图造成困惑。
 
 ### 4. 状态快照
 
@@ -76,6 +76,7 @@ curl http://localhost:9528/api/debug_snapshot -X POST
 | `has_runtime` | bool | 是否已初始化 VN Runtime |
 | `render_state` | object | 当前完整渲染状态（对话、立绘、背景等） |
 | `playback_mode` | string | 播放模式（`Normal` / `Auto` / `Skip`） |
+| `host_screen` | string | 后端 authoritative 的宿主模式（`Title` / `InGame` / `Save` 等） |
 | `history_count` | number | 历史记录条数 |
 | `has_audio` | bool | AudioManager 是否可用 |
 | `current_bgm` | string? | 当前播放的 BGM 路径（null 表示无 BGM） |
@@ -89,6 +90,24 @@ curl http://localhost:9528/api/debug_snapshot -X POST
 | 对话不推进 | 检查 `playback_mode`；通过 `render_state` 查看当前指令 |
 | 没有声音 | 检查 `has_audio`；查看 `current_bgm` 和终端音频相关日志 |
 | 资源加载失败 | 浏览器访问 `http://localhost:9528/assets/{path}` 验证资源是否存在 |
+
+### 6. Deterministic Smoke
+
+当需要快速验证“某个入口能否稳定推进到下一个等待点”时，可在 debug server 已启动后运行：
+
+```bash
+pnpm -C host-tauri harness:smoke
+```
+
+可选环境变量：
+
+- `RING_HARNESS_SCRIPT`：覆盖入口脚本
+- `RING_HARNESS_LABEL`：从指定 label 起步
+- `RING_HARNESS_DT`：fixed-step 步长
+- `RING_HARNESS_MAX_STEPS`：最大步数
+- `RING_HARNESS_OUTPUT`：输出 bundle 路径
+
+该脚本会调用 `frontend_connected` → `init_game` / `init_game_at_label` → `debug_run_until`，并把机读 trace bundle 写到 `artifacts/host-tauri/`。
 
 ---
 

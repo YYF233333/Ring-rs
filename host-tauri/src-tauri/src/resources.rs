@@ -414,9 +414,14 @@ mod tests {
     mod zip_tests {
         use super::*;
         use std::io::Write;
+        use std::time::{SystemTime, UNIX_EPOCH};
 
         fn create_test_zip(entries: &[(&str, &[u8])]) -> std::path::PathBuf {
-            let dir = std::env::temp_dir().join("ring_test_zip");
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let dir = std::env::temp_dir().join(format!("ring_test_zip_{unique}"));
             let _ = std::fs::create_dir_all(&dir);
             let zip_path = dir.join("test_assets.zip");
 

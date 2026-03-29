@@ -56,6 +56,16 @@ cd host-tauri; pnpm tauri dev
 2. **Rust 后端编译 & 运行** — Cargo build + 启动原生窗口
 3. **Tauri WebView 窗口** — 加载 Vite dev server 页面
 
+常用替代入口：
+
+```bash
+# 浏览器单客户端调试（自动设置 RING_HEADLESS=1）
+pnpm -C host-tauri dev:browser
+
+# 生成 deterministic smoke trace bundle（需先启动 debug server）
+pnpm -C host-tauri harness:smoke
+```
+
 ### 热更新
 
 | 修改内容 | 行为 |
@@ -83,12 +93,18 @@ cargo fe-check
 ```typescript
 import { callBackend } from "@/composables/useBackend";
 
-const state = await callBackend<RenderState>("tick", { dt: 0.016 });
+const state = await callBackend<RenderState>("tick", { clientToken, dt: 0.016 });
 ```
 
 `callBackend` 自动选择通道：
 - **Tauri WebView 内** → `@tauri-apps/api/core` 的 `invoke()`
 - **普通浏览器** → HTTP POST 到 `http://localhost:9528/api/{command}`（回退到 Debug Server）
+
+### client_token 约定
+
+- 前端 mount 时必须先调用 `frontend_connected()`，领取 `client_token`
+- 所有会推进或修改会话状态的命令都必须携带 `clientToken`
+- 第二个客户端接管会话后，旧客户端会收到明确的 owner 错误，不再继续推进状态
 
 ### 新增 IPC 命令
 
@@ -121,7 +137,7 @@ const state = await callBackend<RenderState>("tick", { dt: 0.016 });
    }
    ```
 
-> **注意**：`commands.rs` 只做薄代理，业务逻辑实现在 `state.rs` 的 `AppStateInner` 方法中。
+> **注意**：`commands.rs` 只做薄代理，业务逻辑实现在 `state.rs` 的 `AppStateInner` 方法中。若命令会推进会话，记得在命令层加 `inner.assert_owner(client_token)`。
 
 ## Debug HTTP Server
 
@@ -135,7 +151,7 @@ http://127.0.0.1:9528
 
 ### 使用方式
 
-1. 正常启动 `pnpm tauri dev`
+1. 推荐启动 `pnpm -C host-tauri dev:browser`
 2. 在浏览器打开 `http://localhost:5173`
 3. 前端自动检测到非 Tauri 环境，`callBackend` 回退到 HTTP API
 
@@ -144,7 +160,7 @@ http://127.0.0.1:9528
 | 路径 | 方法 | 说明 |
 |------|------|------|
 | `/api/{command}` | POST | 命令端点，与 IPC 命令一一对应 |
-| `/assets/{path}` | GET | 静态资源代理（映射到 `assets_root`） |
+| `/assets/{path}` | GET | 资源代理（经 `ResourceManager` 读取，FS/ZIP 透明） |
 
 ## 常见问题
 

@@ -1,7 +1,10 @@
 import { readonly, ref } from "vue";
 import type {
   AppConfig,
+  FrontendSession,
+  HarnessTraceBundle,
   HistoryEntry,
+  HostScreen,
   PlaybackMode,
   RenderState,
   SaveInfo,
@@ -18,11 +21,51 @@ const log = createLogger("engine");
 const renderState = ref<RenderState | null>(null);
 const isRunning = ref(false);
 const playbackMode = ref<PlaybackMode>("Normal");
+const clientToken = ref<string | null>(null);
 let animFrameId: number | null = null;
 let lastTime = 0;
 let tickCount = 0;
 
 export function useEngine() {
+  function applyRenderState(state: RenderState) {
+    renderState.value = state;
+    playbackMode.value = state.playback_mode;
+  }
+
+  function requireClientToken(): string {
+    if (!clientToken.value) {
+      throw new Error("frontend client token missing; call frontendConnected first");
+    }
+    return clientToken.value;
+  }
+
+  function sessionArgs(args?: Record<string, unknown>) {
+    return {
+      clientToken: requireClientToken(),
+      ...(args ?? {}),
+    };
+  }
+
+  function hostScreenArg(screen: HostScreen): string {
+    switch (screen) {
+      case "InGame":
+        return "ingame";
+      case "InGameMenu":
+        return "ingame_menu";
+      case "Save":
+        return "save";
+      case "Load":
+        return "load";
+      case "Settings":
+        return "settings";
+      case "History":
+        return "history";
+      case "Title":
+      default:
+        return "title";
+    }
+  }
+
   // ── 游戏循环 ────────────────────────────────────────────────────────────
 
   function gameLoop() {
@@ -35,9 +78,9 @@ export function useEngine() {
     const dt = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
 
-    callBackend<RenderState>("tick", { dt })
+    callBackend<RenderState>("tick", sessionArgs({ dt }))
       .then((state) => {
-        renderState.value = state;
+        applyRenderState(state);
         tickCount++;
         if (tickCount <= 5 || tickCount % 300 === 0) {
           log.debug(
@@ -46,9 +89,8 @@ export function useEngine() {
         }
       })
       .catch((err) => {
-        if (tickCount <= 5) {
-          log.error("tick error", err);
-        }
+        log.error("tick error", err);
+        stop();
       })
       .finally(() => {
         if (isRunning.value) {
@@ -60,10 +102,24 @@ export function useEngine() {
   // ── 生命周期 ────────────────────────────────────────────────────────────
 
   async function startGame(scriptPath: string) {
+    stop();
     log.info("startGame", scriptPath);
-    const state = await callBackend<RenderState>("init_game", { scriptPath });
+    const state = await callBackend<RenderState>("init_game", sessionArgs({ scriptPath }));
     log.debug("init_game returned", JSON.stringify(state).slice(0, 500));
-    renderState.value = state;
+    applyRenderState(state);
+    isRunning.value = true;
+    lastTime = performance.now();
+    gameLoop();
+  }
+
+  async function startGameAtLabel(scriptPath: string, label: string) {
+    stop();
+    log.info("startGameAtLabel", `${scriptPath}#${label}`);
+    const state = await callBackend<RenderState>(
+      "init_game_at_label",
+      sessionArgs({ scriptPath, label }),
+    );
+    applyRenderState(state);
     isRunning.value = true;
     lastTime = performance.now();
     gameLoop();
@@ -79,20 +135,20 @@ export function useEngine() {
 
   async function handleClick() {
     if (!isRunning.value) return;
-    const state = await callBackend<RenderState>("click");
-    renderState.value = state;
+    const state = await callBackend<RenderState>("click", sessionArgs());
+    applyRenderState(state);
   }
 
   async function handleChoose(index: number) {
     if (!isRunning.value) return;
-    const state = await callBackend<RenderState>("choose", { index });
-    renderState.value = state;
+    const state = await callBackend<RenderState>("choose", sessionArgs({ index }));
+    applyRenderState(state);
   }
 
   async function continueGame(): Promise<RenderState> {
     stop();
-    const state = await callBackend<RenderState>("continue_game");
-    renderState.value = state;
+    const state = await callBackend<RenderState>("continue_game", sessionArgs());
+    applyRenderState(state);
     isRunning.value = true;
     lastTime = performance.now();
     gameLoop();
@@ -101,41 +157,62 @@ export function useEngine() {
 
   async function returnToTitle() {
     stop();
-    await callBackend("return_to_title");
+    const state = await callBackend<RenderState>(
+      "return_to_title",
+      sessionArgs({ saveContinue: true }),
+    );
+    applyRenderState(state);
   }
 
   async function setPlaybackMode(mode: PlaybackMode) {
-    playbackMode.value = mode;
-    await callBackend("set_playback_mode", { mode: mode.toLowerCase() });
+    const state = await callBackend<RenderState>(
+      "set_playback_mode",
+      sessionArgs({ mode: mode.toLowerCase() }),
+    );
+    applyRenderState(state);
+  }
+
+  async function setHostScreen(screen: HostScreen) {
+    const state = await callBackend<RenderState>(
+      "set_host_screen",
+      sessionArgs({ screen: hostScreenArg(screen) }),
+    );
+    applyRenderState(state);
   }
 
   async function backspace() {
     if (!isRunning.value) return;
     try {
-      const state = await callBackend<RenderState>("backspace");
-      renderState.value = state;
+      const state = await callBackend<RenderState>("backspace", sessionArgs());
+      applyRenderState(state);
     } catch {
       // no snapshot available
     }
   }
 
   async function frontendConnected() {
-    await callBackend("frontend_connected").catch(() => {});
+    const session = await callBackend<FrontendSession>("frontend_connected", {
+      clientLabel: "ui",
+    });
+    clientToken.value = session.client_token;
+    applyRenderState(session.render_state);
+    return session.render_state;
   }
 
   async function finishCutscene() {
-    const state = await callBackend<RenderState>("finish_cutscene");
-    renderState.value = state;
+    const state = await callBackend<RenderState>("finish_cutscene", sessionArgs());
+    applyRenderState(state);
   }
 
   async function submitUiResult(key: string, value: unknown) {
     try {
       log.info(`submitUiResult: key=${key}, value=${JSON.stringify(value)}`);
       const state = await callBackend<RenderState>("submit_ui_result", {
+        ...sessionArgs(),
         key,
         value: value ?? "",
       });
-      renderState.value = state;
+      applyRenderState(state);
     } catch (err) {
       log.error("submitUiResult failed", err);
     }
@@ -161,17 +238,17 @@ export function useEngine() {
     if (rs) {
       const thumbnail_base64 = await captureScene(rs, assetUrl);
       if (thumbnail_base64) {
-        await callBackend("save_game_with_thumbnail", { slot, thumbnail_base64 });
+        await callBackend("save_game_with_thumbnail", sessionArgs({ slot, thumbnail_base64 }));
         return;
       }
     }
-    await callBackend("save_game", { slot });
+    await callBackend("save_game", sessionArgs({ slot }));
   }
 
   async function loadGame(slot: number) {
     stop();
-    const state = await callBackend<RenderState>("load_game", { slot });
-    renderState.value = state;
+    const state = await callBackend<RenderState>("load_game", sessionArgs({ slot }));
+    applyRenderState(state);
     isRunning.value = true;
     lastTime = performance.now();
     gameLoop();
@@ -193,11 +270,24 @@ export function useEngine() {
     return await callBackend<AppConfig>("get_config");
   }
 
+  async function debugRunUntil(
+    dt: number,
+    maxSteps: number,
+    stopOnWait = true,
+    stopOnScriptFinished = true,
+  ): Promise<HarnessTraceBundle> {
+    return await callBackend<HarnessTraceBundle>(
+      "debug_run_until",
+      sessionArgs({ dt, maxSteps, stopOnWait, stopOnScriptFinished }),
+    );
+  }
+
   return {
     renderState: readonly(renderState),
     isRunning: readonly(isRunning),
     playbackMode: readonly(playbackMode),
     startGame,
+    startGameAtLabel,
     handleClick,
     handleChoose,
     stop,
@@ -210,11 +300,13 @@ export function useEngine() {
     getConfig,
     returnToTitle,
     setPlaybackMode,
+    setHostScreen,
     backspace,
     frontendConnected,
     finishCutscene,
     submitUiResult,
     getHistory,
     quitGame,
+    debugRunUntil,
   };
 }
