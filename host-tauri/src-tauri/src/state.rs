@@ -14,6 +14,7 @@ use crate::command_executor::{
     AudioCommand, BatchOutput, CommandExecutor, ExecuteResult, SceneEffectKind, SceneEffectRequest,
 };
 use crate::config::AppConfig;
+use crate::error::{HostError, HostResult};
 use crate::render_state::{
     CutsceneState, HostScreen, PlaybackMode, RenderState, SceneTransitionPhaseState,
 };
@@ -148,14 +149,14 @@ impl PersistentStore {
     }
 
     /// 写入磁盘
-    pub fn save(&self) -> Result<(), String> {
+    pub fn save(&self) -> HostResult<()> {
         if !self.saves_dir.exists() {
-            fs::create_dir_all(&self.saves_dir).map_err(|e| format!("无法创建存档目录: {e}"))?;
+            fs::create_dir_all(&self.saves_dir)?;
         }
         let path = self.saves_dir.join(PERSISTENT_FILE);
         let content = serde_json::to_string_pretty(&self.variables)
-            .map_err(|e| format!("持久化变量序列化失败: {e}"))?;
-        fs::write(&path, content).map_err(|e| format!("持久化变量写入失败: {e}"))?;
+            .map_err(|e| HostError::Internal(format!("持久化变量序列化失败: {e}")))?;
+        fs::write(&path, content)?;
         info!(path = %path.display(), count = self.variables.len(), "持久化变量保存成功");
         Ok(())
     }
@@ -277,6 +278,19 @@ struct ShakeAnimation {
     elapsed: f32,
 }
 
+/// Host 侧 Signal 等待的具体种类。
+///
+/// 与 `vn_runtime::command::SIGNAL_*` 常量一一对应，
+/// 编译期保证穷举，消除字符串拼写错误风险。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SignalKind {
+    SceneTransition,
+    TitleCard,
+    SceneEffect,
+    Cutscene,
+}
+
 /// Host 侧的等待状态
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum WaitingFor {
@@ -287,8 +301,7 @@ pub enum WaitingFor {
         remaining_ms: u64,
     },
     Cutscene,
-    /// 等待 Host 侧事件完成（场景过渡、标题卡片等），对应 Runtime 的 WaitForSignal
-    Signal(String),
+    Signal(SignalKind),
     /// 等待 UI 交互结果（`requestUI` / `callGame` / `showMap`），对应 Runtime 的 WaitForUIResult
     UIResult {
         key: String,
@@ -418,18 +431,19 @@ impl AppStateInner {
         }
     }
 
-    pub fn assert_owner(&self, client_token: &str) -> Result<(), String> {
-        let owner = self
-            .client_owner
-            .as_ref()
-            .ok_or("当前没有已连接的前端 owner，请先调用 frontend_connected")?;
+    pub fn assert_owner(&self, client_token: &str) -> HostResult<()> {
+        let owner = self.client_owner.as_ref().ok_or_else(|| {
+            HostError::Session(
+                "当前没有已连接的前端 owner，请先调用 frontend_connected".to_string(),
+            )
+        })?;
         if owner.token == client_token {
             Ok(())
         } else {
-            Err(format!(
+            Err(HostError::Session(format!(
                 "当前会话已被其他客户端接管（owner={}），拒绝推进请求",
                 owner.label
-            ))
+            )))
         }
     }
 
@@ -481,14 +495,14 @@ impl AppStateInner {
         );
     }
 
-    fn build_save_data(&self, slot: u32) -> Result<vn_runtime::SaveData, String> {
+    fn build_save_data(&self, slot: u32) -> HostResult<vn_runtime::SaveData> {
         let (runtime_state, runtime_history, render_state, current_bgm) =
-            if Self::waiting_requires_snapshot_fallback(&self.waiting) {
+            if waiting_requires_snapshot_fallback(&self.waiting) {
                 let snapshot = self.snapshot_stack.last().ok_or_else(|| {
-                    format!(
+                    HostError::Internal(format!(
                         "当前处于 {:?} 中间态，且没有可回退快照，无法安全保存",
                         self.waiting
-                    )
+                    ))
                 })?;
                 warn!(
                     waiting = ?self.waiting,
@@ -501,7 +515,10 @@ impl AppStateInner {
                     snapshot.current_bgm.clone(),
                 )
             } else {
-                let runtime = self.runtime.as_ref().ok_or("游戏未启动")?;
+                let runtime = self
+                .runtime
+                .as_ref()
+                .ok_or_else(|| HostError::Internal("游戏未启动".to_string()))?;
                 (
                     runtime.state().clone(),
                     runtime.history().clone(),
@@ -539,12 +556,9 @@ impl AppStateInner {
         Ok(save_data)
     }
 
-    pub fn save_to_slot(&mut self, slot: u32) -> Result<(), String> {
+    pub fn save_to_slot(&mut self, slot: u32) -> HostResult<()> {
         let save_data = self.build_save_data(slot)?;
-        self.services()
-            .saves
-            .save(&save_data)
-            .map_err(|e| e.to_string())?;
+        self.services().saves.save(&save_data)?;
         self.record_trace("save_slot_written", serde_json::json!({ "slot": slot }));
         Ok(())
     }
@@ -553,16 +567,12 @@ impl AppStateInner {
         &mut self,
         slot: u32,
         thumbnail_png: &[u8],
-    ) -> Result<(), String> {
+    ) -> HostResult<()> {
         let save_data = self.build_save_data(slot)?;
         self.services()
             .saves
-            .save_thumbnail_png(slot, thumbnail_png)
-            .map_err(|e| format!("缩略图保存失败: {e}"))?;
-        self.services()
-            .saves
-            .save(&save_data)
-            .map_err(|e| e.to_string())?;
+            .save_thumbnail_png(slot, thumbnail_png)?;
+        self.services().saves.save(&save_data)?;
         self.record_trace(
             "save_slot_written",
             serde_json::json!({ "slot": slot, "thumbnail": true }),
@@ -570,80 +580,17 @@ impl AppStateInner {
         Ok(())
     }
 
-    pub fn save_continue(&mut self) -> Result<(), String> {
+    pub fn save_continue(&mut self) -> HostResult<()> {
         let save_data = self.build_save_data(0)?;
-        self.services()
-            .saves
-            .save_continue(&save_data)
-            .map_err(|e| e.to_string())?;
+        self.services().saves.save_continue(&save_data)?;
         self.record_trace("continue_written", serde_json::json!({}));
         Ok(())
     }
 
-    pub fn delete_continue(&mut self) -> Result<(), String> {
-        self.services()
-            .saves
-            .delete_continue()
-            .map_err(|e| e.to_string())?;
+    pub fn delete_continue(&mut self) -> HostResult<()> {
+        self.services().saves.delete_continue()?;
         self.record_trace("continue_deleted", serde_json::json!({}));
         Ok(())
-    }
-
-    fn host_history_from_runtime(history: &vn_runtime::history::History) -> Vec<HistoryEntry> {
-        history
-            .events()
-            .iter()
-            .filter_map(|event| match event {
-                HistoryEvent::Dialogue {
-                    speaker, content, ..
-                } => Some(HistoryEntry {
-                    speaker: speaker.clone(),
-                    text: content.clone(),
-                }),
-                _ => None,
-            })
-            .rev()
-            .collect()
-    }
-
-    fn waiting_requires_snapshot_fallback(waiting: &WaitingFor) -> bool {
-        matches!(
-            waiting,
-            WaitingFor::Choice
-                | WaitingFor::Cutscene
-                | WaitingFor::Signal(_)
-                | WaitingFor::UIResult { .. }
-        )
-    }
-
-    fn map_runtime_waiting(waiting_reason: &WaitingReason) -> WaitingFor {
-        match waiting_reason {
-            WaitingReason::None => WaitingFor::Nothing,
-            WaitingReason::WaitForClick => WaitingFor::Click,
-            WaitingReason::WaitForChoice { .. } => WaitingFor::Choice,
-            WaitingReason::WaitForTime(duration) => WaitingFor::Time {
-                remaining_ms: duration.as_millis() as u64,
-            },
-            WaitingReason::WaitForSignal(signal_id) => {
-                WaitingFor::Signal(signal_id.as_str().to_string())
-            }
-            WaitingReason::WaitForUIResult { key, .. } => WaitingFor::UIResult { key: key.clone() },
-        }
-    }
-
-    fn parse_saved_position(name: &str) -> Position {
-        match name {
-            "Left" => Position::Left,
-            "Right" => Position::Right,
-            "Center" => Position::Center,
-            "NearLeft" => Position::NearLeft,
-            "NearRight" => Position::NearRight,
-            "NearMiddle" => Position::NearMiddle,
-            "FarLeft" => Position::FarLeft,
-            "FarRight" => Position::FarRight,
-            "FarMiddle" => Position::FarMiddle,
-            _ => Position::Center,
-        }
     }
 
     /// 将 PersistentStore 中的变量注入到当前 runtime。
@@ -685,11 +632,9 @@ impl AppStateInner {
     }
 
     /// 解析脚本并初始化运行时
-    pub fn init_game(&mut self, script_content: &str) -> Result<(), String> {
+    pub fn init_game(&mut self, script_content: &str) -> HostResult<()> {
         let mut parser = Parser::new();
-        let script = parser
-            .parse("main", script_content)
-            .map_err(|e| format!("脚本解析失败: {e}"))?;
+        let script = parser.parse("main", script_content)?;
         self.reset_session();
         self.clear_trace();
         self.runtime = Some(VNRuntime::new(script));
@@ -704,21 +649,17 @@ impl AppStateInner {
     }
 
     /// 通过 ResourceManager 构建运行时，但不执行首帧。
-    fn build_runtime_from_resource(&self, script_path: &str) -> Result<VNRuntime, String> {
+    fn build_runtime_from_resource(&self, script_path: &str) -> HostResult<VNRuntime> {
         let rm = &self.services().resources;
 
         let logical = LogicalPath::new(script_path);
-        let content = rm
-            .read_text(&logical)
-            .map_err(|e| format!("读取脚本失败: {e}"))?;
+        let content = rm.read_text(&logical)?;
 
         let script_id = logical.file_stem().to_string();
         let base_dir = logical.parent_dir().to_string();
 
         let mut parser = Parser::new();
-        let script = parser
-            .parse_with_base_path(&script_id, &content, &base_dir)
-            .map_err(|e| format!("脚本解析失败: {e}"))?;
+        let script = parser.parse_with_base_path(&script_id, &content, &base_dir)?;
 
         for w in parser.warnings() {
             warn!(warning = %w, "脚本解析警告");
@@ -731,7 +672,7 @@ impl AppStateInner {
 
         let mut visited = HashSet::new();
         visited.insert(normalized);
-        Self::preload_called_scripts(&mut runtime, rm, &script, &mut visited);
+        preload_called_scripts(&mut runtime, rm, &script, &mut visited);
 
         Ok(runtime)
     }
@@ -741,11 +682,11 @@ impl AppStateInner {
         mut runtime: VNRuntime,
         script_path: &str,
         start_label: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> HostResult<()> {
         if let Some(label) = start_label {
-            let target = runtime
-                .find_label(label)
-                .ok_or_else(|| format!("标签未找到: {label}"))?;
+            let target = runtime.find_label(label).ok_or_else(|| {
+                HostError::InvalidInput(format!("标签未找到: {label}"))
+            })?;
             runtime.state_mut().position.jump_to(target);
         }
 
@@ -769,7 +710,7 @@ impl AppStateInner {
     ///
     /// 除入口脚本外，递归预加载所有 `callScript` 引用的子脚本，
     /// 保证运行时执行到跨文件调用时不会因脚本未注册而失败。
-    pub fn init_game_from_resource(&mut self, script_path: &str) -> Result<(), String> {
+    pub fn init_game_from_resource(&mut self, script_path: &str) -> HostResult<()> {
         let runtime = self.build_runtime_from_resource(script_path)?;
         self.start_runtime(runtime, script_path, None)
     }
@@ -778,70 +719,12 @@ impl AppStateInner {
         &mut self,
         script_path: &str,
         label: &str,
-    ) -> Result<(), String> {
+    ) -> HostResult<()> {
         let runtime = self.build_runtime_from_resource(script_path)?;
         self.start_runtime(runtime, script_path, Some(label))
     }
 
     /// 递归预加载 `callScript` 引用的所有子脚本
-    fn preload_called_scripts(
-        runtime: &mut VNRuntime,
-        rm: &ResourceManager,
-        script: &Script,
-        visited: &mut HashSet<String>,
-    ) {
-        for node in Self::collect_call_nodes(&script.nodes) {
-            let ScriptNode::CallScript { path, .. } = node else {
-                continue;
-            };
-
-            let resolved = script.resolve_path(path);
-            if !visited.insert(resolved.clone()) {
-                continue;
-            }
-
-            let logical = LogicalPath::new(&resolved);
-            let content = match rm.read_text(&logical) {
-                Ok(text) => text,
-                Err(e) => {
-                    warn!(path = %resolved, error = %e, "callScript 目标脚本预加载失败");
-                    continue;
-                }
-            };
-
-            let child_id = logical.file_stem().to_string();
-            let child_base = logical.parent_dir().to_string();
-            let mut parser = Parser::new();
-            let child_script = match parser.parse_with_base_path(&child_id, &content, &child_base) {
-                Ok(s) => s,
-                Err(e) => {
-                    warn!(path = %resolved, error = %e, "callScript 目标脚本解析失败");
-                    continue;
-                }
-            };
-
-            runtime.register_script(&resolved, child_script.clone());
-            Self::preload_called_scripts(runtime, rm, &child_script, visited);
-        }
-    }
-
-    /// 从 AST 中收集所有 CallScript 节点（包括条件分支内部的）
-    fn collect_call_nodes(nodes: &[ScriptNode]) -> Vec<&ScriptNode> {
-        let mut result = Vec::new();
-        for node in nodes {
-            match node {
-                ScriptNode::CallScript { .. } => result.push(node),
-                ScriptNode::Conditional { branches } => {
-                    for branch in branches {
-                        result.extend(Self::collect_call_nodes(&branch.body));
-                    }
-                }
-                _ => {}
-            }
-        }
-        result
-    }
-
     /// 每帧调用，推进打字机和计时器
     pub fn process_tick(&mut self, dt: f32) {
         if !self.host_screen.allows_progression() {
@@ -885,13 +768,10 @@ impl AppStateInner {
                     self.clear_click_wait();
                 }
                 WaitingFor::Time { .. } => {
-                    if let Some(rt) = self.runtime.as_mut() {
-                        rt.state_mut().clear_wait();
-                    }
-                    self.waiting = WaitingFor::Nothing;
+                    self.clear_wait();
                 }
-                WaitingFor::Signal(signal_id) => {
-                    self.complete_signal_wait(&signal_id);
+                WaitingFor::Signal(signal_kind) => {
+                    self.complete_signal_wait(signal_kind);
                 }
                 WaitingFor::Cutscene => {
                     self.finish_cutscene();
@@ -912,9 +792,9 @@ impl AppStateInner {
         }
     }
 
-    fn complete_signal_wait(&mut self, signal_id: &str) {
-        match signal_id {
-            "scene_transition" => {
+    fn complete_signal_wait(&mut self, signal_kind: SignalKind) {
+        match signal_kind {
+            SignalKind::SceneTransition => {
                 if let Some(st) = self.render_state.scene_transition.as_mut() {
                     if let Some(bg) = st.pending_background.take() {
                         self.render_state.current_background = Some(bg);
@@ -922,22 +802,18 @@ impl AppStateInner {
                     st.phase = SceneTransitionPhaseState::Completed;
                 }
             }
-            "title_card" => {
+            SignalKind::TitleCard => {
                 self.render_state.title_card = None;
             }
-            "scene_effect" => {
+            SignalKind::SceneEffect => {
                 self.scene_effect_active = false;
             }
-            "cutscene" => {
+            SignalKind::Cutscene => {
                 self.finish_cutscene();
             }
-            _ => {}
         }
 
-        if let Some(rt) = self.runtime.as_mut() {
-            rt.state_mut().clear_wait();
-        }
-        self.waiting = WaitingFor::Nothing;
+        self.clear_wait();
     }
 
     /// 推进 chapter_mark / title_card / background_transition / scene_transition / 角色 alpha
@@ -983,33 +859,26 @@ impl AppStateInner {
 
     /// 解析 Signal 等待 + Time 等待
     fn resolve_waits(&mut self, dt: f32) {
-        if let WaitingFor::Signal(ref signal_id) = self.waiting {
-            let resolved = match signal_id.as_str() {
-                "scene_transition" => self
+        if let WaitingFor::Signal(signal_kind) = self.waiting {
+            let resolved = match signal_kind {
+                SignalKind::SceneTransition => self
                     .render_state
                     .scene_transition
                     .as_ref()
                     .is_none_or(|st| st.phase == SceneTransitionPhaseState::Completed),
-                "title_card" => self.render_state.title_card.is_none(),
-                "scene_effect" => !self.scene_effect_active,
-                "cutscene" => self.render_state.cutscene.is_none(),
-                _ => false,
+                SignalKind::TitleCard => self.render_state.title_card.is_none(),
+                SignalKind::SceneEffect => !self.scene_effect_active,
+                SignalKind::Cutscene => self.render_state.cutscene.is_none(),
             };
             if resolved {
-                if let Some(rt) = self.runtime.as_mut() {
-                    rt.state_mut().clear_wait();
-                }
-                self.waiting = WaitingFor::Nothing;
+                self.clear_wait();
             }
         }
 
         if let WaitingFor::Time { remaining_ms } = &self.waiting {
             let elapsed_ms = (dt * 1000.0) as u64;
             if elapsed_ms >= *remaining_ms {
-                if let Some(rt) = self.runtime.as_mut() {
-                    rt.state_mut().clear_wait();
-                }
-                self.waiting = WaitingFor::Nothing;
+                self.clear_wait();
             } else {
                 let decrement = elapsed_ms;
                 if let WaitingFor::Time { remaining_ms } = &mut self.waiting {
@@ -1151,12 +1020,26 @@ impl AppStateInner {
         }
     }
 
-    /// 清除 Click 等待——同时清除 host 侧和 runtime 侧的等待状态
-    fn clear_click_wait(&mut self) {
+    /// 同时清除 host 侧和 runtime 侧的等待状态
+    fn clear_wait(&mut self) {
         if let Some(rt) = self.runtime.as_mut() {
             rt.state_mut().clear_wait();
         }
         self.waiting = WaitingFor::Nothing;
+    }
+
+    fn clear_click_wait(&mut self) {
+        self.clear_wait();
+    }
+
+    /// 恢复操作（restore_from_save / restore_snapshot）的公共收尾逻辑
+    fn finish_restore(&mut self) {
+        self.script_finished = false;
+        self.typewriter_timer = 0.0;
+        self.auto_timer = 0.0;
+        self.playback_mode = PlaybackMode::Normal;
+        self.set_host_screen(HostScreen::InGame);
+        self.project_render_state();
     }
 
     /// 捕获当前状态快照（用于 Backspace 回退）
@@ -1187,12 +1070,8 @@ impl AppStateInner {
             rt.restore_history(snapshot.runtime_history.clone());
         }
         self.render_state = snapshot.render_state;
-        self.history = Self::host_history_from_runtime(&snapshot.runtime_history);
-        self.waiting = Self::map_runtime_waiting(&snapshot.runtime_state.waiting);
-        self.typewriter_timer = 0.0;
-        self.auto_timer = 0.0;
-        self.playback_mode = PlaybackMode::Normal;
-        self.set_host_screen(HostScreen::InGame);
+        self.history = host_history_from_runtime(&snapshot.runtime_history);
+        self.waiting = map_runtime_waiting(&snapshot.runtime_state.waiting);
         {
             let audio = &mut self.services_mut().audio;
             match target_bgm {
@@ -1201,7 +1080,7 @@ impl AppStateInner {
             }
         }
         self.sync_audio(0.0);
-        self.project_render_state();
+        self.finish_restore();
         self.record_trace("snapshot_restored", serde_json::json!({}));
         true
     }
@@ -1224,15 +1103,19 @@ impl AppStateInner {
         &mut self,
         key: String,
         value: serde_json::Value,
-    ) -> Result<(), String> {
+    ) -> HostResult<()> {
         let expected_key = match &self.waiting {
             WaitingFor::UIResult { key } => key.clone(),
-            _ => return Err("当前未在等待 UI 结果".to_string()),
+            _ => {
+                return Err(HostError::InvalidInput(
+                    "当前未在等待 UI 结果".to_string(),
+                ))
+            }
         };
         if key != expected_key {
-            return Err(format!(
+            return Err(HostError::InvalidInput(format!(
                 "UIResult key 不匹配：期望 '{expected_key}'，收到 '{key}'"
-            ));
+            )));
         }
 
         let var_value = crate::render_state::json_to_var_value(&value);
@@ -1245,8 +1128,7 @@ impl AppStateInner {
             .runtime
             .as_mut()
             .expect("invariant: UIResult requires loaded runtime")
-            .tick(Some(input))
-            .map_err(|error| error.to_string())?;
+            .tick(Some(input))?;
         self.render_state.active_ui_mode = None;
         self.waiting = WaitingFor::Nothing;
         self.apply_runtime_tick_output(tick_result.0, tick_result.1);
@@ -1344,7 +1226,7 @@ impl AppStateInner {
         }
 
         // 用 Runtime 的 waiting_reason（权威来源）映射 Host 等待状态
-        self.waiting = Self::map_runtime_waiting(&waiting_reason);
+        self.waiting = map_runtime_waiting(&waiting_reason);
 
         // 同步 runtime persistent 变量到 PersistentStore
         if let Some(rt) = self.runtime.as_ref() {
@@ -1383,9 +1265,13 @@ impl AppStateInner {
             Ok((commands, waiting_reason)) => {
                 self.apply_runtime_tick_output(commands, waiting_reason)
             }
-            Err(_) => {
+            Err(error) => {
+                warn!(%error, "脚本 tick 执行失败");
                 self.script_finished = true;
-                self.record_trace("script_tick_error", serde_json::json!({}));
+                self.record_trace(
+                    "script_tick_error",
+                    serde_json::json!({ "error": error.to_string() }),
+                );
             }
         }
     }
@@ -1393,29 +1279,6 @@ impl AppStateInner {
     /// 追加对话历史
     pub fn push_history(&mut self, speaker: Option<String>, text: String) {
         self.history.insert(0, HistoryEntry { speaker, text });
-    }
-
-    fn load_call_stack_scripts(
-        runtime: &mut VNRuntime,
-        resources: &ResourceManager,
-        runtime_state: &vn_runtime::state::RuntimeState,
-    ) {
-        for frame in &runtime_state.call_stack {
-            let frame_path = if !frame.script_path.is_empty() {
-                &frame.script_path
-            } else {
-                &frame.script_id
-            };
-            let logical = LogicalPath::new(frame_path);
-            if let Ok(content) = resources.read_text(&logical) {
-                let fid = logical.file_stem().to_string();
-                let fbase = logical.parent_dir().to_string();
-                let mut parser = Parser::new();
-                if let Ok(script) = parser.parse_with_base_path(&fid, &content, &fbase) {
-                    runtime.register_script(frame_path, script);
-                }
-            }
-        }
     }
 
     fn apply_render_snapshot(&mut self, render: &vn_runtime::RenderSnapshot) {
@@ -1429,7 +1292,7 @@ impl AppStateInner {
             self.render_state.show_character(
                 character.alias.clone(),
                 character.texture_path.clone(),
-                Self::parse_saved_position(&character.position),
+                parse_saved_position(&character.position),
                 &manifest,
             );
             if let Some(sprite) = self
@@ -1454,7 +1317,7 @@ impl AppStateInner {
     }
 
     fn normalize_restored_waiting(&mut self) {
-        if !Self::waiting_requires_snapshot_fallback(&self.waiting) {
+        if !waiting_requires_snapshot_fallback(&self.waiting) {
             return;
         }
 
@@ -1477,7 +1340,7 @@ impl AppStateInner {
     ///
     /// 统一处理 `load_game` 和 `continue_game` 的恢复逻辑：
     /// 若 runtime 尚未初始化，根据存档中的 `script_path` 加载入口脚本并预加载子脚本。
-    pub fn restore_from_save(&mut self, save_data: vn_runtime::SaveData) -> Result<(), String> {
+    pub fn restore_from_save(&mut self, save_data: vn_runtime::SaveData) -> HostResult<()> {
         let runtime_state = save_data.runtime_state.clone();
         let history = save_data.history.clone();
         let render = save_data.render.clone();
@@ -1490,7 +1353,7 @@ impl AppStateInner {
         };
 
         let mut runtime = self.build_runtime_from_resource(&path)?;
-        Self::load_call_stack_scripts(&mut runtime, &self.services().resources, &runtime_state);
+        load_call_stack_scripts(&mut runtime, &self.services().resources, &runtime_state);
         runtime.restore_state(runtime_state.clone());
         runtime.restore_history(history.clone());
         runtime.state_mut().persistent_variables = self.persistent_store.variables.clone();
@@ -1500,16 +1363,11 @@ impl AppStateInner {
         self.runtime = Some(runtime);
         self.apply_render_snapshot(&render);
         self.apply_audio_state(&audio);
-        self.history = Self::host_history_from_runtime(&history);
-        self.waiting = Self::map_runtime_waiting(&runtime_state.waiting);
+        self.history = host_history_from_runtime(&history);
+        self.waiting = map_runtime_waiting(&runtime_state.waiting);
         self.normalize_restored_waiting();
-        self.script_finished = false;
-        self.typewriter_timer = 0.0;
-        self.auto_timer = 0.0;
-        self.playback_mode = PlaybackMode::Normal;
         self.snapshot_stack.clear();
-        self.set_host_screen(HostScreen::InGame);
-        self.project_render_state();
+        self.finish_restore();
         self.record_trace(
             "save_restored",
             serde_json::json!({
@@ -1651,6 +1509,154 @@ impl AppStateInner {
             self.render_state.scene_effect.shake_offset_x = shake.amplitude_x * decay * phase.sin();
             self.render_state.scene_effect.shake_offset_y = shake.amplitude_y * decay * phase.cos();
         }
+    }
+}
+
+fn preload_called_scripts(
+    runtime: &mut VNRuntime,
+    rm: &ResourceManager,
+    script: &Script,
+    visited: &mut HashSet<String>,
+) {
+    for node in collect_call_nodes(&script.nodes) {
+        let ScriptNode::CallScript { path, .. } = node else {
+            continue;
+        };
+
+        let resolved = script.resolve_path(path);
+        if !visited.insert(resolved.clone()) {
+            continue;
+        }
+
+        let logical = LogicalPath::new(&resolved);
+        let content = match rm.read_text(&logical) {
+            Ok(text) => text,
+            Err(e) => {
+                warn!(path = %resolved, error = %e, "callScript 目标脚本预加载失败");
+                continue;
+            }
+        };
+
+        let child_id = logical.file_stem().to_string();
+        let child_base = logical.parent_dir().to_string();
+        let mut parser = Parser::new();
+        let child_script = match parser.parse_with_base_path(&child_id, &content, &child_base) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(path = %resolved, error = %e, "callScript 目标脚本解析失败");
+                continue;
+            }
+        };
+
+        runtime.register_script(&resolved, child_script.clone());
+        preload_called_scripts(runtime, rm, &child_script, visited);
+    }
+}
+
+/// 从 AST 中收集所有 CallScript 节点（包括条件分支内部的）
+fn collect_call_nodes(nodes: &[ScriptNode]) -> Vec<&ScriptNode> {
+    let mut result = Vec::new();
+    for node in nodes {
+        match node {
+            ScriptNode::CallScript { .. } => result.push(node),
+            ScriptNode::Conditional { branches } => {
+                for branch in branches {
+                    result.extend(collect_call_nodes(&branch.body));
+                }
+            }
+            _ => {}
+        }
+    }
+    result
+}
+
+fn load_call_stack_scripts(
+    runtime: &mut VNRuntime,
+    resources: &ResourceManager,
+    runtime_state: &vn_runtime::state::RuntimeState,
+) {
+    for frame in &runtime_state.call_stack {
+        let frame_path = if !frame.script_path.is_empty() {
+            &frame.script_path
+        } else {
+            &frame.script_id
+        };
+        let logical = LogicalPath::new(frame_path);
+        if let Ok(content) = resources.read_text(&logical) {
+            let fid = logical.file_stem().to_string();
+            let fbase = logical.parent_dir().to_string();
+            let mut parser = Parser::new();
+            if let Ok(script) = parser.parse_with_base_path(&fid, &content, &fbase) {
+                runtime.register_script(frame_path, script);
+            }
+        }
+    }
+}
+
+fn host_history_from_runtime(history: &vn_runtime::history::History) -> Vec<HistoryEntry> {
+    history
+        .events()
+        .iter()
+        .filter_map(|event| match event {
+            HistoryEvent::Dialogue {
+                speaker, content, ..
+            } => Some(HistoryEntry {
+                speaker: speaker.clone(),
+                text: content.clone(),
+            }),
+            _ => None,
+        })
+        .rev()
+        .collect()
+}
+
+fn waiting_requires_snapshot_fallback(waiting: &WaitingFor) -> bool {
+    matches!(
+        waiting,
+        WaitingFor::Choice
+            | WaitingFor::Cutscene
+            | WaitingFor::Signal(_)
+            | WaitingFor::UIResult { .. }
+    )
+}
+
+fn map_runtime_waiting(waiting_reason: &WaitingReason) -> WaitingFor {
+    match waiting_reason {
+        WaitingReason::None => WaitingFor::Nothing,
+        WaitingReason::WaitForClick => WaitingFor::Click,
+        WaitingReason::WaitForChoice { .. } => WaitingFor::Choice,
+        WaitingReason::WaitForTime(duration) => WaitingFor::Time {
+            remaining_ms: duration.as_millis() as u64,
+        },
+        WaitingReason::WaitForSignal(signal_id) => {
+            let kind = match signal_id.as_str() {
+                vn_runtime::command::SIGNAL_SCENE_TRANSITION => SignalKind::SceneTransition,
+                vn_runtime::command::SIGNAL_TITLE_CARD => SignalKind::TitleCard,
+                vn_runtime::command::SIGNAL_SCENE_EFFECT => SignalKind::SceneEffect,
+                vn_runtime::command::SIGNAL_CUTSCENE => SignalKind::Cutscene,
+                other => {
+                    warn!(signal = other, "未知 signal ID，回退为 SceneEffect");
+                    SignalKind::SceneEffect
+                }
+            };
+            WaitingFor::Signal(kind)
+        }
+        WaitingReason::WaitForUIResult { key, .. } => WaitingFor::UIResult { key: key.clone() },
+    }
+}
+
+fn parse_saved_position(name: &str) -> Position {
+    match name {
+        "Left" => Position::Left,
+        "Right" => Position::Right,
+        "Center" => Position::Center,
+        "NearLeft" => Position::NearLeft,
+        "NearRight" => Position::NearRight,
+        "NearMiddle" => Position::NearMiddle,
+        "FarLeft" => Position::FarLeft,
+        "FarRight" => Position::FarRight,
+        "FarMiddle" => Position::FarMiddle,
+        _ => Position::Center,
     }
 }
 

@@ -1,10 +1,26 @@
 use tauri::{AppHandle, Manager, State, command};
 
 use crate::config::AppConfig;
-use crate::protocol::{parse_host_screen, parse_playback_mode};
-use crate::render_state::{PlaybackMode, RenderState};
-use crate::save_manager::SaveInfo;
-use crate::state::{AppState, FrontendSession, HarnessTraceBundle, HistoryEntry, UserSettings};
+use crate::render_state::{HostScreen, PlaybackMode, RenderState};
+use crate::save_manager::{MAX_SAVE_SLOTS, SaveInfo};
+use crate::state::{
+    AppState, AppStateInner, FrontendSession, HarnessTraceBundle, HistoryEntry, UserSettings,
+};
+
+/// 获取锁并校验 owner，返回 MutexGuard。
+fn lock_with_owner<'a>(
+    state: &'a AppState,
+    client_token: &str,
+) -> Result<std::sync::MutexGuard<'a, AppStateInner>, String> {
+    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(client_token).map_err(|e| e.to_string())?;
+    Ok(inner)
+}
+
+/// 获取只读锁（不校验 owner，用于 get_* 命令）。
+fn lock_readonly(state: &AppState) -> Result<std::sync::MutexGuard<'_, AppStateInner>, String> {
+    state.inner.lock().map_err(|e| e.to_string())
+}
 
 /// 初始化游戏——解析脚本并返回初始渲染状态
 ///
@@ -16,16 +32,17 @@ pub fn init_game(
     client_token: String,
     script_path: String,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
-    inner.delete_continue()?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
+    inner.delete_continue().map_err(|e| e.to_string())?;
 
     if inner.services.is_some() {
-        inner.init_game_from_resource(&script_path)?;
+        inner
+            .init_game_from_resource(&script_path)
+            .map_err(|e| e.to_string())?;
     } else {
         let content = std::fs::read_to_string(&script_path)
             .map_err(|e| format!("读取脚本文件失败 '{script_path}': {e}"))?;
-        inner.init_game(&content)?;
+        inner.init_game(&content).map_err(|e| e.to_string())?;
     }
     Ok(inner.render_state.clone())
 }
@@ -37,18 +54,21 @@ pub fn init_game_at_label(
     script_path: String,
     label: String,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
-    inner.delete_continue()?;
-    inner.init_game_from_resource_at_label(&script_path, &label)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
+    inner.delete_continue().map_err(|e| e.to_string())?;
+    inner
+        .init_game_from_resource_at_label(&script_path, &label)
+        .map_err(|e| e.to_string())?;
     Ok(inner.render_state.clone())
 }
 
 /// 每帧 tick——推进打字机和计时器，返回最新渲染状态
 #[command]
 pub fn tick(state: State<AppState>, client_token: String, dt: f32) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    if !(dt >= 0.0 && dt.is_finite()) {
+        return Err(format!("参数校验失败: dt 必须为非负有限数，实际为 {dt}"));
+    }
+    let mut inner = lock_with_owner(&state, &client_token)?;
     inner.process_tick(dt);
     Ok(inner.render_state.clone())
 }
@@ -56,8 +76,7 @@ pub fn tick(state: State<AppState>, client_token: String, dt: f32) -> Result<Ren
 /// 处理用户点击
 #[command]
 pub fn click(state: State<AppState>, client_token: String) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
     inner.process_click();
     Ok(inner.render_state.clone())
 }
@@ -69,8 +88,7 @@ pub fn choose(
     client_token: String,
     index: usize,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
     inner.process_choose(index);
     Ok(inner.render_state.clone())
 }
@@ -78,7 +96,7 @@ pub fn choose(
 /// 获取当前渲染状态快照
 #[command]
 pub fn get_render_state(state: State<AppState>) -> Result<RenderState, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     Ok(inner.render_state.clone())
 }
 
@@ -87,9 +105,13 @@ pub fn get_render_state(state: State<AppState>) -> Result<RenderState, String> {
 /// 保存游戏到指定槽位
 #[command]
 pub fn save_game(state: State<AppState>, client_token: String, slot: u32) -> Result<(), String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
-    inner.save_to_slot(slot)
+    if !(1..=MAX_SAVE_SLOTS).contains(&slot) {
+        return Err(format!(
+            "参数校验失败: slot 必须在 1..={MAX_SAVE_SLOTS} 范围内，实际为 {slot}"
+        ));
+    }
+    let mut inner = lock_with_owner(&state, &client_token)?;
+    inner.save_to_slot(slot).map_err(|e| e.to_string())
 }
 
 /// 加载指定槽位的存档
@@ -99,8 +121,7 @@ pub fn load_game(
     client_token: String,
     slot: u32,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
 
     let save_data = inner
         .services()
@@ -108,14 +129,16 @@ pub fn load_game(
         .load(slot)
         .map_err(|e| e.to_string())?;
 
-    inner.restore_from_save(save_data)?;
+    inner
+        .restore_from_save(save_data)
+        .map_err(|e| e.to_string())?;
     Ok(inner.render_state.clone())
 }
 
 /// 列出所有存档信息
 #[command]
 pub fn list_saves(state: State<AppState>) -> Result<Vec<SaveInfo>, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
 
     let svc = inner.services();
     let saves = svc.saves.list_saves();
@@ -136,26 +159,36 @@ pub fn save_game_with_thumbnail(
 ) -> Result<(), String> {
     use base64::Engine as _;
 
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    if !(1..=MAX_SAVE_SLOTS).contains(&slot) {
+        return Err(format!(
+            "参数校验失败: slot 必须在 1..={MAX_SAVE_SLOTS} 范围内，实际为 {slot}"
+        ));
+    }
+    let mut inner = lock_with_owner(&state, &client_token)?;
     let png_bytes = base64::engine::general_purpose::STANDARD
         .decode(&thumbnail_base64)
         .map_err(|e| format!("base64 解码失败: {e}"))?;
-    inner.save_to_slot_with_thumbnail(slot, &png_bytes)
+    inner
+        .save_to_slot_with_thumbnail(slot, &png_bytes)
+        .map_err(|e| e.to_string())
 }
 
 /// 获取指定槽位的缩略图（base64 编码的 PNG）
 #[command]
 pub fn get_thumbnail(state: State<AppState>, slot: u32) -> Result<Option<String>, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     Ok(inner.services().saves.load_thumbnail_base64(slot))
 }
 
 /// 删除指定槽位的存档
 #[command]
 pub fn delete_save(state: State<AppState>, client_token: String, slot: u32) -> Result<(), String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    if !(1..=MAX_SAVE_SLOTS).contains(&slot) {
+        return Err(format!(
+            "参数校验失败: slot 必须在 1..={MAX_SAVE_SLOTS} 范围内，实际为 {slot}"
+        ));
+    }
+    let inner = lock_with_owner(&state, &client_token)?;
     inner
         .services()
         .saves
@@ -168,7 +201,7 @@ pub fn delete_save(state: State<AppState>, client_token: String, slot: u32) -> R
 /// 获取资源根目录的绝对路径（前端用 convertFileSrc 转换为可访问 URL）
 #[command]
 pub fn get_assets_root(state: State<AppState>) -> Result<String, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     Ok(inner
         .services()
         .resources
@@ -180,7 +213,7 @@ pub fn get_assets_root(state: State<AppState>) -> Result<String, String> {
 /// 获取当前配置
 #[command]
 pub fn get_config(state: State<AppState>) -> Result<AppConfig, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     Ok(inner.services().config.clone())
 }
 
@@ -189,7 +222,7 @@ pub fn get_config(state: State<AppState>) -> Result<AppConfig, String> {
 /// 获取用户设置
 #[command]
 pub fn get_user_settings(state: State<AppState>) -> Result<UserSettings, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     Ok(inner.user_settings.clone())
 }
 
@@ -201,8 +234,31 @@ pub fn update_settings(
     client_token: String,
     settings: UserSettings,
 ) -> Result<(), String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    if !(0.0..=100.0).contains(&settings.bgm_volume) {
+        return Err(format!(
+            "参数校验失败: bgm_volume 必须在 0.0..=100.0 范围内，实际为 {}",
+            settings.bgm_volume
+        ));
+    }
+    if !(0.0..=100.0).contains(&settings.sfx_volume) {
+        return Err(format!(
+            "参数校验失败: sfx_volume 必须在 0.0..=100.0 范围内，实际为 {}",
+            settings.sfx_volume
+        ));
+    }
+    if !(1.0..=200.0).contains(&settings.text_speed) {
+        return Err(format!(
+            "参数校验失败: text_speed 必须在 1.0..=200.0 范围内，实际为 {}",
+            settings.text_speed
+        ));
+    }
+    if !(settings.auto_delay >= 0.0 && settings.auto_delay.is_finite()) {
+        return Err(format!(
+            "参数校验失败: auto_delay 必须为非负有限数，实际为 {}",
+            settings.auto_delay
+        ));
+    }
+    let mut inner = lock_with_owner(&state, &client_token)?;
 
     inner.text_speed = settings.text_speed;
 
@@ -224,7 +280,7 @@ pub fn update_settings(
 /// 获取对话历史
 #[command]
 pub fn get_history(state: State<AppState>) -> Result<Vec<HistoryEntry>, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     Ok(inner.history.clone())
 }
 
@@ -237,8 +293,7 @@ pub fn return_to_title(
     client_token: String,
     save_continue: Option<bool>,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
     inner.return_to_title(save_continue.unwrap_or(false));
     Ok(inner.render_state.clone())
 }
@@ -246,8 +301,7 @@ pub fn return_to_title(
 /// 继续游戏（加载 continue 存档）
 #[command]
 pub fn continue_game(state: State<AppState>, client_token: String) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
 
     let svc = inner.services();
     if !svc.saves.has_continue() {
@@ -255,7 +309,9 @@ pub fn continue_game(state: State<AppState>, client_token: String) -> Result<Ren
     }
     let save_data = svc.saves.load_continue().map_err(|e| e.to_string())?;
 
-    inner.restore_from_save(save_data)?;
+    inner
+        .restore_from_save(save_data)
+        .map_err(|e| e.to_string())?;
     Ok(inner.render_state.clone())
 }
 
@@ -274,8 +330,7 @@ pub fn finish_cutscene(
     state: State<AppState>,
     client_token: String,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
     inner.finish_cutscene();
     Ok(inner.render_state.clone())
 }
@@ -290,9 +345,10 @@ pub fn submit_ui_result(
     key: String,
     value: serde_json::Value,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
-    inner.handle_ui_result(key, value)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
+    inner
+        .handle_ui_result(key, value)
+        .map_err(|e| e.to_string())?;
     Ok(inner.render_state.clone())
 }
 
@@ -301,8 +357,7 @@ pub fn submit_ui_result(
 /// 回退到上一个快照（Backspace）
 #[command]
 pub fn backspace(state: State<AppState>, client_token: String) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    let mut inner = lock_with_owner(&state, &client_token)?;
     if inner.restore_snapshot() {
         Ok(inner.render_state.clone())
     } else {
@@ -317,24 +372,18 @@ pub fn backspace(state: State<AppState>, client_token: String) -> Result<RenderS
 pub fn set_playback_mode(
     state: State<AppState>,
     client_token: String,
-    mode: String,
+    mode: PlaybackMode,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
-    inner.set_playback_mode(parse_playback_mode(&mode)?);
+    let mut inner = lock_with_owner(&state, &client_token)?;
+    inner.set_playback_mode(mode);
     Ok(inner.render_state.clone())
 }
 
 /// 获取当前播放模式
 #[command]
-pub fn get_playback_mode(state: State<AppState>) -> Result<String, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
-    let mode = match inner.playback_mode {
-        PlaybackMode::Normal => "normal",
-        PlaybackMode::Auto => "auto",
-        PlaybackMode::Skip => "skip",
-    };
-    Ok(mode.to_string())
+pub fn get_playback_mode(state: State<AppState>) -> Result<PlaybackMode, String> {
+    let inner = lock_readonly(&state)?;
+    Ok(inner.playback_mode.clone())
 }
 
 // ── 前端生命周期 ─────────────────────────────────────────────────────────────
@@ -347,7 +396,7 @@ pub fn frontend_connected(
     state: State<AppState>,
     client_label: Option<String>,
 ) -> Result<FrontendSession, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let mut inner = lock_readonly(&state)?;
     Ok(inner.frontend_connected(client_label))
 }
 
@@ -355,11 +404,10 @@ pub fn frontend_connected(
 pub fn set_host_screen(
     state: State<AppState>,
     client_token: String,
-    screen: String,
+    screen: HostScreen,
 ) -> Result<RenderState, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
-    inner.set_host_screen(parse_host_screen(&screen)?);
+    let mut inner = lock_with_owner(&state, &client_token)?;
+    inner.set_host_screen(screen);
     Ok(inner.render_state.clone())
 }
 
@@ -382,7 +430,7 @@ pub fn log_frontend(level: String, module: String, message: String, data: Option
 /// 返回 screens.json 全文（按钮/动作/条件可见性定义）
 #[command]
 pub fn get_screen_definitions(state: State<AppState>) -> Result<serde_json::Value, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     let rm = &inner.services().resources;
     let path = crate::resources::LogicalPath::new("ui/screens.json");
     let text = rm.read_text(&path).map_err(|e| e.to_string())?;
@@ -392,7 +440,7 @@ pub fn get_screen_definitions(state: State<AppState>) -> Result<serde_json::Valu
 /// 返回 layout.json 中的 assets（素材 key → 逻辑路径）和 colors 部分
 #[command]
 pub fn get_ui_assets(state: State<AppState>) -> Result<serde_json::Value, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     let rm = &inner.services().resources;
     let path = crate::resources::LogicalPath::new("ui/layout.json");
     let text = rm.read_text(&path).map_err(|e| e.to_string())?;
@@ -415,7 +463,7 @@ pub fn get_ui_assets(state: State<AppState>) -> Result<serde_json::Value, String
 /// 返回 UI 条件求值上下文（screens.json 的 visible 条件所需）
 #[command]
 pub fn get_ui_condition_context(state: State<AppState>) -> Result<serde_json::Value, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     let svc = inner.services();
     let has_continue = svc.saves.has_continue();
     let persistent: serde_json::Map<String, serde_json::Value> = inner
@@ -443,7 +491,7 @@ pub fn get_ui_condition_context(state: State<AppState>) -> Result<serde_json::Va
 /// 返回完整的内部状态快照（供 Agent 调试用）
 #[command]
 pub fn debug_snapshot(state: State<AppState>) -> Result<serde_json::Value, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let inner = lock_readonly(&state)?;
     Ok(serde_json::json!({
         "has_runtime": inner.runtime.is_some(),
         "waiting": inner.waiting,
@@ -467,8 +515,15 @@ pub fn debug_run_until(
     stop_on_wait: Option<bool>,
     stop_on_script_finished: Option<bool>,
 ) -> Result<HarnessTraceBundle, String> {
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-    inner.assert_owner(&client_token)?;
+    if !(dt >= 0.0 && dt.is_finite()) {
+        return Err(format!("参数校验失败: dt 必须为非负有限数，实际为 {dt}"));
+    }
+    if max_steps > 100_000 {
+        return Err(format!(
+            "参数校验失败: max_steps 不能超过 100000，实际为 {max_steps}"
+        ));
+    }
+    let mut inner = lock_with_owner(&state, &client_token)?;
     Ok(inner.debug_run_until(
         dt,
         max_steps,

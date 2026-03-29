@@ -160,3 +160,200 @@ impl AudioManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn new_manager() -> AudioManager {
+        AudioManager::new()
+    }
+
+    // ── play_bgm 同曲判定 ──────────────────────────────────────────────────
+
+    #[test]
+    fn play_bgm_same_path_no_transition() {
+        let mut am = new_manager();
+        am.play_bgm("bgm/track1.ogg", true, None);
+        am.drain_audio_state(); // consume first transition
+
+        am.play_bgm("bgm/track1.ogg", true, None);
+        let state = am.drain_audio_state();
+        assert!(
+            state.bgm_transition.is_none(),
+            "same BGM should not produce a transition"
+        );
+    }
+
+    // ── play_bgm crossfade vs fade_in ──────────────────────────────────────
+
+    #[test]
+    fn play_bgm_first_time_uses_fade_in() {
+        let mut am = new_manager();
+        am.play_bgm("bgm/track1.ogg", true, None);
+
+        let state = am.drain_audio_state();
+        let t = state.bgm_transition.expect("should have transition");
+        assert_eq!(t.duration, AudioManager::FADE_IN_DURATION);
+    }
+
+    #[test]
+    fn play_bgm_switch_uses_crossfade() {
+        let mut am = new_manager();
+        am.play_bgm("bgm/track1.ogg", true, None);
+        am.drain_audio_state();
+
+        am.play_bgm("bgm/track2.ogg", true, None);
+        let state = am.drain_audio_state();
+        let t = state.bgm_transition.expect("should have transition");
+        assert_eq!(t.duration, AudioManager::CROSSFADE_DURATION);
+    }
+
+    // ── stop_bgm ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn stop_bgm_with_fade_out() {
+        let mut am = new_manager();
+        am.play_bgm("bgm/track1.ogg", true, None);
+        am.drain_audio_state();
+
+        am.stop_bgm(Some(2.0));
+        let state = am.drain_audio_state();
+        assert_eq!(
+            state.bgm_transition.expect("should have transition").duration,
+            2.0
+        );
+        assert!(state.bgm.is_none(), "BGM should be cleared after stop");
+    }
+
+    #[test]
+    fn stop_bgm_no_bgm_does_not_panic() {
+        let mut am = new_manager();
+        am.stop_bgm(Some(1.0));
+        let state = am.drain_audio_state();
+        assert!(state.bgm.is_none());
+        assert!(state.bgm_transition.is_none());
+    }
+
+    // ── play_sfx + drain ───────────────────────────────────────────────────
+
+    #[test]
+    fn play_sfx_enqueue_and_drain() {
+        let mut am = new_manager();
+        am.play_sfx("sfx/click.ogg");
+
+        let state = am.drain_audio_state();
+        assert_eq!(state.sfx_queue.len(), 1);
+        assert_eq!(state.sfx_queue[0].path, "sfx/click.ogg");
+        assert_eq!(state.sfx_queue[0].volume, 1.0);
+
+        let state2 = am.drain_audio_state();
+        assert!(state2.sfx_queue.is_empty(), "SFX queue should be drained");
+    }
+
+    // ── drain 消费语义 ─────────────────────────────────────────────────────
+
+    #[test]
+    fn drain_consumes_pending_transition() {
+        let mut am = new_manager();
+        am.play_bgm("bgm/track1.ogg", true, None);
+
+        let first = am.drain_audio_state();
+        assert!(first.bgm_transition.is_some());
+
+        let second = am.drain_audio_state();
+        assert!(
+            second.bgm_transition.is_none(),
+            "transition should be consumed after first drain"
+        );
+    }
+
+    // ── duck / unduck 平滑收敛 ─────────────────────────────────────────────
+
+    #[test]
+    fn duck_converges_toward_target() {
+        let mut am = new_manager();
+        am.duck();
+
+        for _ in 0..100 {
+            am.update(1.0 / 60.0);
+        }
+
+        let state = am.drain_audio_state();
+        // duck_multiplier 不直接暴露，但通过 bgm volume 间接验证
+        // 需要有 BGM 才能观测
+        drop(state);
+
+        am.play_bgm("bgm/track1.ogg", true, None);
+        let state = am.drain_audio_state();
+        let bgm = state.bgm.expect("BGM should be present");
+        let expected = AudioManager::DUCK_VOLUME_RATIO;
+        assert!(
+            (bgm.volume - expected).abs() < 0.01,
+            "duck_multiplier should converge to {expected}, got volume {}",
+            bgm.volume
+        );
+    }
+
+    #[test]
+    fn unduck_restores_volume() {
+        let mut am = new_manager();
+        am.play_bgm("bgm/track1.ogg", true, None);
+        am.duck();
+        for _ in 0..100 {
+            am.update(1.0 / 60.0);
+        }
+
+        am.unduck();
+        for _ in 0..100 {
+            am.update(1.0 / 60.0);
+        }
+
+        am.drain_audio_state(); // consume transition
+        let state = am.drain_audio_state();
+        let bgm = state.bgm.expect("BGM should be present");
+        assert!(
+            (bgm.volume - 1.0).abs() < 0.01,
+            "volume should restore to 1.0 after unduck, got {}",
+            bgm.volume
+        );
+    }
+
+    // ── set_bgm_volume / set_sfx_volume ────────────────────────────────────
+
+    #[test]
+    fn set_bgm_volume_clamps_and_applies() {
+        let mut am = new_manager();
+        am.play_bgm("bgm/track1.ogg", true, None);
+
+        am.set_bgm_volume(0.5);
+        let state = am.drain_audio_state();
+        let bgm = state.bgm.expect("BGM should be present");
+        assert_eq!(bgm.volume, 0.5);
+
+        am.set_bgm_volume(2.0);
+        let state = am.drain_audio_state();
+        let bgm = state.bgm.expect("BGM should be present");
+        assert_eq!(bgm.volume, 1.0, "volume should be clamped to 1.0");
+
+        am.set_bgm_volume(-1.0);
+        let state = am.drain_audio_state();
+        let bgm = state.bgm.expect("BGM should be present");
+        assert_eq!(bgm.volume, 0.0, "volume should be clamped to 0.0");
+    }
+
+    #[test]
+    fn set_sfx_volume_clamps_and_applies() {
+        let mut am = new_manager();
+
+        am.set_sfx_volume(0.7);
+        am.play_sfx("sfx/click.ogg");
+        let state = am.drain_audio_state();
+        assert_eq!(state.sfx_queue[0].volume, 0.7);
+
+        am.set_sfx_volume(5.0);
+        am.play_sfx("sfx/click.ogg");
+        let state = am.drain_audio_state();
+        assert_eq!(state.sfx_queue[0].volume, 1.0, "should clamp to 1.0");
+    }
+}

@@ -4,6 +4,7 @@ mod commands;
 mod config;
 #[cfg(debug_assertions)]
 mod debug_server;
+mod error;
 mod headless_cli;
 mod manifest;
 mod protocol;
@@ -12,6 +13,7 @@ mod resources;
 mod save_manager;
 mod state;
 
+use error::HostError;
 use state::{AppState, AppStateInner, Services};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -65,7 +67,7 @@ fn create_resource_manager(
     cfg: &config::AppConfig,
     assets_root: &Path,
     project_root: &Path,
-) -> Result<resources::ResourceManager, String> {
+) -> Result<resources::ResourceManager, HostError> {
     match cfg.asset_source {
         config::AssetSourceType::Fs => {
             info!("资源来源: 文件系统");
@@ -79,8 +81,7 @@ fn create_resource_manager(
                 PathBuf::from(zip_rel)
             };
             info!(path = %zip_path.display(), "资源来源: ZIP");
-            let source = resources::ZipSource::open(&zip_path)
-                .map_err(|e| format!("ZIP 资源文件打开失败: {e}"))?;
+            let source = resources::ZipSource::open(&zip_path)?;
             Ok(resources::ResourceManager::with_source(
                 Box::new(source),
                 assets_root,
@@ -94,10 +95,8 @@ fn initialize_inner(inner: &mut AppStateInner) -> Result<(), Box<dyn std::error:
     info!(root = %project_root.display(), "项目根目录");
 
     let cfg_path = project_root.join("config.json");
-    let cfg = config::AppConfig::load(&cfg_path)
-        .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
-    cfg.validate(&project_root)
-        .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
+    let cfg = config::AppConfig::load(&cfg_path)?;
+    cfg.validate(&project_root)?;
 
     let assets_root = if cfg.assets_root.is_relative() {
         project_root.join(&cfg.assets_root)
@@ -106,18 +105,23 @@ fn initialize_inner(inner: &mut AppStateInner) -> Result<(), Box<dyn std::error:
     };
     info!(assets = %assets_root.display(), "资源根目录");
 
-    let rm = create_resource_manager(&cfg, &assets_root, &project_root)
-        .map_err(|e| std::io::Error::other(format!("资源管理器创建失败: {e}")))?;
+    let rm = create_resource_manager(&cfg, &assets_root, &project_root)?;
 
     let manifest_logical = resources::LogicalPath::new(&cfg.manifest_path);
     if !rm.resource_exists(&manifest_logical) {
-        return Err(std::io::Error::other(format!("manifest 不存在: {}", manifest_logical)).into());
+        return Err(HostError::InvalidInput(format!(
+            "manifest 不存在: {}",
+            manifest_logical
+        ))
+        .into());
     }
     let start_script_logical = resources::LogicalPath::new(&cfg.start_script_path);
     if !rm.resource_exists(&start_script_logical) {
-        return Err(
-            std::io::Error::other(format!("入口脚本不存在: {}", start_script_logical)).into(),
-        );
+        return Err(HostError::InvalidInput(format!(
+            "入口脚本不存在: {}",
+            start_script_logical
+        ))
+        .into());
     }
 
     let saves_dir = if cfg.saves_dir.is_relative() {
@@ -127,12 +131,9 @@ fn initialize_inner(inner: &mut AppStateInner) -> Result<(), Box<dyn std::error:
     };
     let sm = save_manager::SaveManager::new(&saves_dir);
 
-    let manifest_content = rm
-        .read_text(&manifest_logical)
-        .map_err(|e| std::io::Error::other(format!("manifest 加载失败: {e}")))?;
+    let manifest_content = rm.read_text(&manifest_logical)?;
     let (manifest, manifest_warnings) =
-        manifest::Manifest::parse_and_validate(&manifest_content)
-            .map_err(|e| std::io::Error::other(format!("manifest 解析失败: {e}")))?;
+        manifest::Manifest::parse_and_validate(&manifest_content)?;
     for warning in &manifest_warnings {
         warn!(warning = ?warning, "manifest 校验告警");
     }

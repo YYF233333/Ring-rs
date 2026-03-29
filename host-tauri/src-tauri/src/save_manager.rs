@@ -16,13 +16,11 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use tracing::info;
 use vn_runtime::{SaveData, SaveError};
 
 /// 最大存档槽位数
-#[allow(dead_code)]
 pub const MAX_SAVE_SLOTS: u32 = 99;
 
 const CONTINUE_SAVE_NAME: &str = "continue.json";
@@ -108,12 +106,13 @@ impl SaveManager {
     }
 
     /// 保存已编码的 PNG 字节为缩略图文件
-    pub fn save_thumbnail_png(&self, slot: u32, png_bytes: &[u8]) -> Result<(), String> {
-        self.ensure_dir().map_err(|e| e.to_string())?;
+    pub fn save_thumbnail_png(&self, slot: u32, png_bytes: &[u8]) -> Result<(), SaveError> {
+        self.ensure_dir()?;
         let path = self.thumbnail_path(slot);
-        let mut file = File::create(&path).map_err(|e| format!("创建缩略图文件失败: {e}"))?;
+        let mut file = File::create(&path)
+            .map_err(|e| SaveError::IoError(format!("创建缩略图文件失败: {e}")))?;
         file.write_all(png_bytes)
-            .map_err(|e| format!("写入缩略图失败: {e}"))?;
+            .map_err(|e| SaveError::IoError(format!("写入缩略图失败: {e}")))?;
         info!(path = %path.display(), "缩略图保存成功");
         Ok(())
     }
@@ -123,12 +122,6 @@ impl SaveManager {
         let path = self.thumbnail_path(slot);
         let bytes = fs::read(&path).ok()?;
         Some(base64::engine::general_purpose::STANDARD.encode(&bytes))
-    }
-
-    /// 检查存档是否存在
-    #[allow(dead_code)]
-    pub fn exists(&self, slot: u32) -> bool {
-        self.slot_path(slot).exists()
     }
 
     /// 列出所有存档
@@ -176,7 +169,6 @@ impl SaveManager {
     }
 
     /// 保存 Continue 存档
-    #[allow(dead_code)]
     pub fn save_continue(&self, data: &SaveData) -> Result<(), SaveError> {
         self.ensure_dir()?;
         let path = self.continue_path();
@@ -236,15 +228,3 @@ pub struct SaveInfo {
     pub play_time_secs: u64,
 }
 
-impl SaveInfo {
-    /// 格式化时间戳为可读格式
-    #[allow(dead_code)]
-    pub fn formatted_timestamp(&self) -> String {
-        if let Ok(secs) = self.timestamp.parse::<u64>()
-            && let Some(dt) = DateTime::<Utc>::from_timestamp(secs as i64, 0)
-        {
-            return dt.format("%Y-%m-%d %H:%M").to_string();
-        }
-        self.timestamp.clone()
-    }
-}

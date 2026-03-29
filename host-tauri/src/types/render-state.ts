@@ -104,10 +104,14 @@ export interface DialogueState {
   visible_chars: number;
   is_complete: boolean;
   no_wait: boolean;
-  inline_wait: { remaining: number | null } | null;
+  inline_wait: InlineWait | null;
   effective_cps: { Absolute: number } | { Relative: number } | null;
   inline_effects: readonly InlineEffect[];
 }
+
+export type InlineWait =
+  | { type: "click" }
+  | { type: "timed"; remaining: number };
 
 export interface InlineEffect {
   position: number;

@@ -123,31 +123,18 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// 从文件加载（初始化已改为通过 ResourceManager，此方法保留供直接使用）
-    #[allow(dead_code)]
-    pub fn load(path: &str) -> Result<Self, String> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| format!("无法读取 manifest 文件: {} - {}", path, e))?;
-        serde_json::from_str(&content).map_err(|e| format!("无法解析 manifest JSON: {}", e))
-    }
-
-    /// 从字节数据加载
-    #[allow(dead_code)]
-    pub fn load_from_bytes(bytes: &[u8]) -> Result<Self, String> {
-        let content = String::from_utf8(bytes.to_vec())
-            .map_err(|e| format!("无法将字节转换为 UTF-8 字符串: {}", e))?;
-        serde_json::from_str(&content).map_err(|e| format!("无法解析 manifest JSON: {}", e))
-    }
-
-    pub fn parse_and_validate(content: &str) -> Result<(Self, Vec<ManifestWarning>), String> {
-        let manifest: Self =
-            serde_json::from_str(content).map_err(|e| format!("无法解析 manifest JSON: {}", e))?;
+    pub fn parse_and_validate(
+        content: &str,
+    ) -> Result<(Self, Vec<ManifestWarning>), crate::error::HostError> {
+        let manifest: Self = serde_json::from_str(content).map_err(|e| {
+            crate::error::HostError::Internal(format!("无法解析 manifest JSON: {}", e))
+        })?;
         let warnings = manifest.validate();
         Ok((manifest, warnings))
     }
 
-    /// 创建带默认预设的空 Manifest
-    #[allow(dead_code)]
+    /// 创建带默认预设的空 Manifest（测试用）
+    #[cfg(test)]
     pub fn with_defaults() -> Self {
         let mut presets = HashMap::new();
         for (name, x, y, scale) in [

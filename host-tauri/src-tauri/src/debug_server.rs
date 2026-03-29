@@ -17,8 +17,7 @@ use axum::routing::{get, post};
 use base64::Engine as _;
 use tower_http::cors::CorsLayer;
 
-use crate::protocol::{parse_host_screen, parse_playback_mode};
-use crate::render_state::PlaybackMode;
+use crate::render_state::{HostScreen, PlaybackMode};
 use crate::state::{AppStateInner, UserSettings};
 
 type SharedState = Arc<Mutex<AppStateInner>>;
@@ -121,14 +120,14 @@ fn dispatch(
                 .ok_or("missing scriptPath")?
                 .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
-            inner.delete_continue()?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
+            inner.delete_continue().map_err(|e| e.to_string())?;
             if inner.services.is_some() {
-                inner.init_game_from_resource(&script_path)?;
+                inner.init_game_from_resource(&script_path).map_err(|e| e.to_string())?;
             } else {
                 let content = std::fs::read_to_string(&script_path)
                     .map_err(|e| format!("读取脚本文件失败 '{script_path}': {e}"))?;
-                inner.init_game(&content)?;
+                inner.init_game(&content).map_err(|e| e.to_string())?;
             }
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -144,9 +143,9 @@ fn dispatch(
                 .to_string();
             let label = args["label"].as_str().ok_or("missing label")?.to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
-            inner.delete_continue()?;
-            inner.init_game_from_resource_at_label(&script_path, &label)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
+            inner.delete_continue().map_err(|e| e.to_string())?;
+            inner.init_game_from_resource_at_label(&script_path, &label).map_err(|e| e.to_string())?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
@@ -156,8 +155,11 @@ fn dispatch(
                 .ok_or("missing clientToken")?
                 .to_string();
             let dt = args["dt"].as_f64().unwrap_or(0.016) as f32;
+            if !(dt >= 0.0 && dt.is_finite()) {
+                return Err(format!("参数校验失败: dt 必须为非负有限数，实际为 {dt}"));
+            }
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             inner.process_tick(dt);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -168,7 +170,7 @@ fn dispatch(
                 .ok_or("missing clientToken")?
                 .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             inner.process_click();
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -180,7 +182,7 @@ fn dispatch(
                 .to_string();
             let index = args["index"].as_u64().ok_or("missing index")? as usize;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             inner.process_choose(index);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -197,8 +199,8 @@ fn dispatch(
                 .to_string();
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
-            inner.save_to_slot(slot)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
+            inner.save_to_slot(slot).map_err(|e| e.to_string())?;
             Ok(serde_json::Value::Null)
         }
 
@@ -209,13 +211,13 @@ fn dispatch(
                 .to_string();
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             let save_data = inner
                 .services()
                 .saves
                 .load(slot)
                 .map_err(|e| e.to_string())?;
-            inner.restore_from_save(save_data)?;
+            inner.restore_from_save(save_data).map_err(|e| e.to_string())?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
@@ -240,11 +242,11 @@ fn dispatch(
                 .as_str()
                 .ok_or("missing thumbnail_base64")?;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             let png_bytes = base64::engine::general_purpose::STANDARD
                 .decode(thumbnail_base64)
                 .map_err(|e| format!("base64 decode: {e}"))?;
-            inner.save_to_slot_with_thumbnail(slot, &png_bytes)?;
+            inner.save_to_slot_with_thumbnail(slot, &png_bytes).map_err(|e| e.to_string())?;
             Ok(serde_json::Value::Null)
         }
 
@@ -262,7 +264,7 @@ fn dispatch(
                 .to_string();
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             inner
                 .services()
                 .saves
@@ -302,7 +304,7 @@ fn dispatch(
             let settings: UserSettings = serde_json::from_value(args["settings"].clone())
                 .map_err(|e| format!("Invalid settings: {e}"))?;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             inner.text_speed = settings.text_speed;
             let svc = inner.services_mut();
             svc.audio.set_bgm_volume(settings.bgm_volume / 100.0);
@@ -323,7 +325,7 @@ fn dispatch(
                 .to_string();
             let save_continue = args["saveContinue"].as_bool().unwrap_or(false);
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             inner.return_to_title(save_continue);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -334,13 +336,13 @@ fn dispatch(
                 .ok_or("missing clientToken")?
                 .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             let svc = inner.services();
             if !svc.saves.has_continue() {
                 return Err("没有 continue 存档".to_string());
             }
             let save_data = svc.saves.load_continue().map_err(|e| e.to_string())?;
-            inner.restore_from_save(save_data)?;
+            inner.restore_from_save(save_data).map_err(|e| e.to_string())?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
@@ -352,7 +354,7 @@ fn dispatch(
                 .ok_or("missing clientToken")?
                 .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             inner.finish_cutscene();
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
@@ -365,8 +367,8 @@ fn dispatch(
             let key = args["key"].as_str().ok_or("missing key")?.to_string();
             let value = args["value"].clone();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
-            inner.handle_ui_result(key, value)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
+            inner.handle_ui_result(key, value).map_err(|e| e.to_string())?;
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
@@ -376,7 +378,7 @@ fn dispatch(
                 .ok_or("missing clientToken")?
                 .to_string();
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             if inner.restore_snapshot() {
                 Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
             } else {
@@ -389,21 +391,17 @@ fn dispatch(
                 .as_str()
                 .ok_or("missing clientToken")?
                 .to_string();
-            let mode_str = args["mode"].as_str().ok_or("missing mode")?;
+            let mode: PlaybackMode = serde_json::from_value(args["mode"].clone())
+                .map_err(|e| format!("invalid mode: {e}"))?;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
-            inner.set_playback_mode(parse_playback_mode(mode_str)?);
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
+            inner.set_playback_mode(mode);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
         "get_playback_mode" => {
             let inner = state.lock().map_err(|e| e.to_string())?;
-            let mode = match inner.playback_mode {
-                PlaybackMode::Normal => "normal",
-                PlaybackMode::Auto => "auto",
-                PlaybackMode::Skip => "skip",
-            };
-            Ok(serde_json::Value::String(mode.to_string()))
+            Ok(serde_json::to_value(&inner.playback_mode).unwrap_or_default())
         }
 
         "log_frontend" => {
@@ -438,10 +436,11 @@ fn dispatch(
                 .as_str()
                 .ok_or("missing clientToken")?
                 .to_string();
-            let screen = args["screen"].as_str().ok_or("missing screen")?;
+            let screen: HostScreen = serde_json::from_value(args["screen"].clone())
+                .map_err(|e| format!("invalid screen: {e}"))?;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
-            inner.set_host_screen(parse_host_screen(screen)?);
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
+            inner.set_host_screen(screen);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
@@ -525,10 +524,18 @@ fn dispatch(
                 .to_string();
             let dt = args["dt"].as_f64().unwrap_or(1.0 / 60.0) as f32;
             let max_steps = args["maxSteps"].as_u64().unwrap_or(600) as usize;
+            if !(dt >= 0.0 && dt.is_finite()) {
+                return Err(format!("参数校验失败: dt 必须为非负有限数，实际为 {dt}"));
+            }
+            if max_steps > 100_000 {
+                return Err(format!(
+                    "参数校验失败: max_steps 不能超过 100000，实际为 {max_steps}"
+                ));
+            }
             let stop_on_wait = args["stopOnWait"].as_bool().unwrap_or(true);
             let stop_on_script_finished = args["stopOnScriptFinished"].as_bool().unwrap_or(true);
             let mut inner = state.lock().map_err(|e| e.to_string())?;
-            inner.assert_owner(&client_token)?;
+            inner.assert_owner(&client_token).map_err(|e| e.to_string())?;
             let bundle =
                 inner.debug_run_until(dt, max_steps, stop_on_wait, stop_on_script_finished);
             Ok(serde_json::to_value(&bundle).unwrap_or_default())

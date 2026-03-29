@@ -548,3 +548,286 @@ impl CommandExecutor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::manifest::Manifest;
+    use crate::render_state::RenderState;
+    use vn_runtime::command::{Choice, Command, Position, Transition};
+
+    fn setup() -> (CommandExecutor, RenderState, Manifest) {
+        (
+            CommandExecutor::new(),
+            RenderState::new(),
+            Manifest::with_defaults(),
+        )
+    }
+
+    #[test]
+    fn show_text_sets_dialogue() {
+        let (mut exec, mut rs, manifest) = setup();
+        let cmd = Command::ShowText {
+            speaker: Some("Alice".to_string()),
+            content: "Hello world".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
+        };
+
+        let result = exec.execute(&cmd, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::WaitForClick);
+        let dialogue = rs.dialogue.expect("dialogue should be set");
+        assert_eq!(dialogue.speaker.as_deref(), Some("Alice"));
+        assert_eq!(dialogue.content, "Hello world");
+        assert!(!dialogue.no_wait);
+    }
+
+    #[test]
+    fn show_text_narrator_has_no_speaker() {
+        let (mut exec, mut rs, manifest) = setup();
+        let cmd = Command::ShowText {
+            speaker: None,
+            content: "Narration".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
+        };
+
+        exec.execute(&cmd, &mut rs, &manifest);
+
+        let dialogue = rs.dialogue.expect("dialogue should be set");
+        assert!(dialogue.speaker.is_none());
+        assert_eq!(dialogue.content, "Narration");
+    }
+
+    #[test]
+    fn extend_text_appends_content() {
+        let (mut exec, mut rs, manifest) = setup();
+        let show = Command::ShowText {
+            speaker: Some("Bob".to_string()),
+            content: "First part".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
+        };
+        exec.execute(&show, &mut rs, &manifest);
+
+        let extend = Command::ExtendText {
+            content: " and second part".to_string(),
+            inline_effects: vec![],
+            no_wait: false,
+        };
+        let result = exec.execute(&extend, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::WaitForClick);
+        let dialogue = rs.dialogue.expect("dialogue should be set");
+        assert_eq!(dialogue.content, "First part and second part");
+    }
+
+    #[test]
+    fn show_background_without_transition() {
+        let (mut exec, mut rs, manifest) = setup();
+        let cmd = Command::ShowBackground {
+            path: "bg/sunset.png".to_string(),
+            transition: None,
+        };
+
+        let result = exec.execute(&cmd, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::Ok);
+        assert_eq!(rs.current_background.as_deref(), Some("bg/sunset.png"));
+        assert!(rs.background_transition.is_none());
+    }
+
+    #[test]
+    fn show_background_with_dissolve_sets_transition() {
+        let (mut exec, mut rs, manifest) = setup();
+        rs.set_background("bg/old.png".to_string());
+
+        let cmd = Command::ShowBackground {
+            path: "bg/new.png".to_string(),
+            transition: Some(Transition::simple("dissolve")),
+        };
+
+        let result = exec.execute(&cmd, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::Ok);
+        assert_eq!(rs.current_background.as_deref(), Some("bg/new.png"));
+        let bt = rs
+            .background_transition
+            .expect("background_transition should be set");
+        assert_eq!(bt.old_background.as_deref(), Some("bg/old.png"));
+        assert_eq!(bt.new_background, "bg/new.png");
+        assert!((bt.duration - 0.3).abs() < 0.01);
+    }
+
+    #[test]
+    fn show_character_adds_to_visible() {
+        let (mut exec, mut rs, manifest) = setup();
+        let cmd = Command::ShowCharacter {
+            path: "char/alice/normal.png".to_string(),
+            alias: "alice".to_string(),
+            position: Position::Center,
+            transition: None,
+        };
+
+        let result = exec.execute(&cmd, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::Ok);
+        assert!(rs.visible_characters.contains_key("alice"));
+        let sprite = &rs.visible_characters["alice"];
+        assert_eq!(sprite.texture_path, "char/alice/normal.png");
+        assert_eq!(sprite.position, Position::Center);
+        assert!(!sprite.fading_out);
+    }
+
+    #[test]
+    fn hide_character_with_transition_marks_fading_out() {
+        let (mut exec, mut rs, manifest) = setup();
+        let show = Command::ShowCharacter {
+            path: "char/bob/smile.png".to_string(),
+            alias: "bob".to_string(),
+            position: Position::Left,
+            transition: None,
+        };
+        exec.execute(&show, &mut rs, &manifest);
+        assert!(rs.visible_characters.contains_key("bob"));
+
+        let hide = Command::HideCharacter {
+            alias: "bob".to_string(),
+            transition: Some(Transition::simple("dissolve")),
+        };
+        let result = exec.execute(&hide, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::Ok);
+        let sprite = &rs.visible_characters["bob"];
+        assert!(sprite.fading_out);
+        assert!((sprite.target_alpha - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn hide_character_without_transition_removes() {
+        let (mut exec, mut rs, manifest) = setup();
+        let show = Command::ShowCharacter {
+            path: "char/bob/smile.png".to_string(),
+            alias: "bob".to_string(),
+            position: Position::Left,
+            transition: None,
+        };
+        exec.execute(&show, &mut rs, &manifest);
+
+        let hide = Command::HideCharacter {
+            alias: "bob".to_string(),
+            transition: None,
+        };
+        exec.execute(&hide, &mut rs, &manifest);
+
+        assert!(!rs.visible_characters.contains_key("bob"));
+    }
+
+    #[test]
+    fn play_bgm_produces_audio_command() {
+        let (mut exec, mut rs, manifest) = setup();
+        let cmd = Command::PlayBgm {
+            path: "bgm/theme.ogg".to_string(),
+            looping: true,
+        };
+
+        let result = exec.execute(&cmd, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::Ok);
+        let audio = exec
+            .last_output
+            .audio_command
+            .as_ref()
+            .expect("audio_command should be set");
+        match audio {
+            AudioCommand::PlayBgm {
+                path,
+                looping,
+                fade_in,
+            } => {
+                assert_eq!(path, "bgm/theme.ogg");
+                assert!(looping);
+                assert!(fade_in.is_none());
+            }
+            other => panic!("expected PlayBgm, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn stop_bgm_produces_audio_command() {
+        let (mut exec, mut rs, manifest) = setup();
+        let cmd = Command::StopBgm {
+            fade_out: Some(2.0),
+        };
+
+        let result = exec.execute(&cmd, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::Ok);
+        let audio = exec
+            .last_output
+            .audio_command
+            .as_ref()
+            .expect("audio_command should be set");
+        match audio {
+            AudioCommand::StopBgm { fade_out } => {
+                assert!((fade_out.unwrap() - 2.0).abs() < f32::EPSILON);
+            }
+            other => panic!("expected StopBgm, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn play_sfx_produces_audio_command() {
+        let (mut exec, mut rs, manifest) = setup();
+        let cmd = Command::PlaySfx {
+            path: "sfx/click.wav".to_string(),
+        };
+
+        let result = exec.execute(&cmd, &mut rs, &manifest);
+
+        assert_eq!(result, ExecuteResult::Ok);
+        let audio = exec
+            .last_output
+            .audio_command
+            .as_ref()
+            .expect("audio_command should be set");
+        match audio {
+            AudioCommand::PlaySfx { path } => {
+                assert_eq!(path, "sfx/click.wav");
+            }
+            other => panic!("expected PlaySfx, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn present_choices_sets_choices() {
+        let (mut exec, mut rs, manifest) = setup();
+        let cmd = Command::PresentChoices {
+            style: Some("compact".to_string()),
+            choices: vec![
+                Choice {
+                    text: "Go left".to_string(),
+                    target_label: "left_path".to_string(),
+                },
+                Choice {
+                    text: "Go right".to_string(),
+                    target_label: "right_path".to_string(),
+                },
+            ],
+        };
+
+        let result = exec.execute(&cmd, &mut rs, &manifest);
+
+        assert_eq!(
+            result,
+            ExecuteResult::WaitForChoice { choice_count: 2 }
+        );
+        let choices_state = rs.choices.expect("choices should be set");
+        assert_eq!(choices_state.choices.len(), 2);
+        assert_eq!(choices_state.choices[0].text, "Go left");
+        assert_eq!(choices_state.choices[0].target_label, "left_path");
+        assert_eq!(choices_state.choices[1].text, "Go right");
+        assert_eq!(choices_state.style.as_deref(), Some("compact"));
+    }
+}

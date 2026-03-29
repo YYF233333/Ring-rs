@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use vn_runtime::command::{InlineEffect, InlineEffectKind, Position, TextMode};
 use vn_runtime::state::VarValue;
 
@@ -15,9 +15,11 @@ pub struct UiModeRequest {
 /// 宿主当前屏幕/模式投影。
 ///
 /// 前端页面状态不再是 authority，后端通过该字段声明当前宿主模式。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum HostScreen {
     Title,
+    #[serde(rename = "ingame")]
     InGame,
     InGameMenu,
     Save,
@@ -78,27 +80,36 @@ pub(crate) fn position_to_preset_name(position: Position) -> &'static str {
 /// 通过 Tauri IPC 序列化后推送给 Vue 前端。
 #[derive(Debug, Clone, Serialize)]
 pub struct RenderState {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub current_background: Option<String>,
     pub visible_characters: HashMap<String, CharacterSprite>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dialogue: Option<DialogueState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub chapter_mark: Option<ChapterMarkState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub choices: Option<ChoicesState>,
     pub ui_visible: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title_card: Option<TitleCardState>,
     pub scene_effect: SceneEffectState,
     pub text_mode: TextMode,
     pub nvl_entries: Vec<NvlEntry>,
     /// 背景过渡状态（dissolve 时有值）
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub background_transition: Option<BackgroundTransition>,
     /// 场景过渡状态（changeScene fade/fadewhite/rule 时有值）
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scene_transition: Option<SceneTransition>,
     /// 视频过场状态
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cutscene: Option<CutsceneState>,
     /// 当前播放模式
     pub playback_mode: PlaybackMode,
     /// 音频声明式状态
     pub audio: AudioRenderState,
     /// 活跃的 UI 模式请求（`requestUI` 触发时有值，前端据此展示对应 UI 组件）
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub active_ui_mode: Option<UiModeRequest>,
     /// 后端 authoritative 的宿主模式投影
     pub host_screen: HostScreen,
@@ -117,6 +128,7 @@ pub struct CharacterSprite {
     pub scale_x: f32,
     pub scale_y: f32,
     /// 过渡时长（秒），有值时前端用 CSS transition
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub transition_duration: Option<f32>,
     /// 目标 alpha（前端用 CSS transition 动画到此值）
     pub target_alpha: f32,
@@ -136,6 +148,7 @@ pub struct CharacterSprite {
 #[derive(Debug, Clone, Serialize)]
 pub struct BackgroundTransition {
     /// 旧背景路径
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub old_background: Option<String>,
     /// 新背景路径
     pub new_background: String,
@@ -153,6 +166,7 @@ pub struct SceneTransition {
     /// 每阶段时长（秒）
     pub duration: f32,
     /// 待切换背景
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pending_background: Option<String>,
 }
 
@@ -180,20 +194,25 @@ pub enum SceneTransitionPhaseState {
 /// 当前对话框的打字机状态
 #[derive(Debug, Clone, Serialize)]
 pub struct DialogueState {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker: Option<String>,
     pub content: String,
     pub visible_chars: usize,
     pub is_complete: bool,
     pub inline_effects: Vec<InlineEffect>,
     pub no_wait: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub inline_wait: Option<InlineWait>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub effective_cps: Option<EffectiveCps>,
 }
 
-/// 内联等待标记（`{wait}` / `{wait Ns}`）的剩余时间
+/// 内联等待标记（`{wait}` / `{wait Ns}`）
 #[derive(Debug, Clone, Serialize)]
-pub struct InlineWait {
-    pub remaining: Option<f64>,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum InlineWait {
+    Click,
+    Timed { remaining: f64 },
 }
 
 /// 当前生效的文字速度覆盖
@@ -206,6 +225,7 @@ pub enum EffectiveCps {
 /// NVL 模式下的累积文本条目
 #[derive(Debug, Clone, Serialize)]
 pub struct NvlEntry {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker: Option<String>,
     pub content: String,
     pub visible_chars: usize,
@@ -258,8 +278,10 @@ pub struct ChoiceItem {
 #[derive(Debug, Clone, Serialize)]
 pub struct ChoicesState {
     pub choices: Vec<ChoiceItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<String>,
     pub selected_index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hovered_index: Option<usize>,
 }
 
@@ -271,7 +293,8 @@ pub struct CutsceneState {
 }
 
 /// 播放模式
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PlaybackMode {
     Normal,
     Auto,
@@ -282,6 +305,7 @@ pub enum PlaybackMode {
 #[derive(Debug, Clone, Serialize)]
 pub struct AudioRenderState {
     /// 当前应播放的 BGM（None 表示静音）
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bgm: Option<BgmState>,
     /// 本帧需要播放的一次性音效（前端播放后忽略，下帧清空）
     pub sfx_queue: Vec<SfxRequest>,
@@ -291,6 +315,7 @@ pub struct AudioRenderState {
     /// - Some → None：fade out
     /// - None → Some：fade in
     /// - Some(A) → Some(B)：crossfade
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bgm_transition: Option<BgmTransition>,
 }
 
@@ -359,11 +384,6 @@ impl RenderState {
         self.current_background = Some(path);
     }
 
-    #[allow(dead_code)]
-    pub fn clear_background(&mut self) {
-        self.current_background = None;
-    }
-
     // ── 角色 ──
 
     /// 添加角色立绘
@@ -404,30 +424,6 @@ impl RenderState {
 
     pub fn hide_all_characters(&mut self) {
         self.visible_characters.clear();
-    }
-
-    #[allow(dead_code)]
-    pub fn mark_character_fading_out(&mut self, alias: &str) {
-        if let Some(c) = self.visible_characters.get_mut(alias) {
-            c.fading_out = true;
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn remove_fading_out_characters(&mut self) {
-        self.visible_characters.retain(|_, c| !c.fading_out);
-    }
-
-    #[allow(dead_code)]
-    pub fn get_character_alpha(&self, alias: &str) -> Option<f32> {
-        self.visible_characters.get(alias).map(|c| c.alpha)
-    }
-
-    #[allow(dead_code)]
-    pub fn set_character_alpha(&mut self, alias: &str, alpha: f32) {
-        if let Some(c) = self.visible_characters.get_mut(alias) {
-            c.alpha = alpha;
-        }
     }
 
     // ── 对话 / 打字机 ──
@@ -479,8 +475,9 @@ impl RenderState {
             if effect.position == d.visible_chars {
                 match &effect.kind {
                     InlineEffectKind::Wait(duration) => {
-                        d.inline_wait = Some(InlineWait {
-                            remaining: *duration,
+                        d.inline_wait = Some(match *duration {
+                            Some(t) => InlineWait::Timed { remaining: t },
+                            None => InlineWait::Click,
                         });
                     }
                     InlineEffectKind::SetCpsAbsolute(cps) => {
@@ -570,9 +567,7 @@ impl RenderState {
     /// 是否为点击等待型的 inline wait（`{wait}` 无时间参数）
     pub fn is_inline_click_wait(&self) -> bool {
         self.dialogue.as_ref().is_some_and(|d| {
-            d.inline_wait
-                .as_ref()
-                .is_some_and(|w| w.remaining.is_none())
+            matches!(d.inline_wait, Some(InlineWait::Click))
         })
     }
 
@@ -587,18 +582,18 @@ impl RenderState {
         let Some(d) = self.dialogue.as_mut() else {
             return true;
         };
-        let Some(w) = d.inline_wait.as_mut() else {
-            return true;
-        };
-        let Some(remaining) = w.remaining.as_mut() else {
-            return false;
-        };
-        *remaining -= dt;
-        if *remaining <= 0.0 {
-            d.inline_wait = None;
-            true
-        } else {
-            false
+        match &mut d.inline_wait {
+            Some(InlineWait::Timed { remaining }) => {
+                *remaining -= dt;
+                if *remaining <= 0.0 {
+                    d.inline_wait = None;
+                    true
+                } else {
+                    false
+                }
+            }
+            Some(InlineWait::Click) => false,
+            None => true,
         }
     }
 
@@ -624,11 +619,6 @@ impl RenderState {
             timer: 0.0,
             phase: ChapterMarkPhase::FadeIn,
         });
-    }
-
-    #[allow(dead_code)]
-    pub fn clear_chapter_mark(&mut self) {
-        self.chapter_mark = None;
     }
 
     /// 推进章节标记动画，返回 `true` 表示动画结束
