@@ -13,7 +13,7 @@
 |------|------|
 | `AppState` | Tauri managed state，内含 `Arc<Mutex<AppStateInner>>` |
 | `AppStateInner` | 所有游戏状态的聚合体（核心逻辑） |
-| `Services` | setup 一次性注入：`AudioManager`、`ResourceManager`、`SaveManager`、`AppConfig`；经 `services()` / `services_mut()` 访问 |
+| `Services` | setup 一次性注入：`AudioManager`、`ResourceManager`、`SaveManager`、`AppConfig`、`Manifest`；经 `services()` / `services_mut()` 访问 |
 | `WaitingFor` | Host 侧等待状态枚举：Nothing / Click / Choice / Time / Cutscene / Signal / UIResult { key: String } |
 | `FrontendSession` | `frontend_connected()` 返回的 owner token + 当前 `RenderState` |
 | `HarnessTraceBundle` | `debug_run_until()` 的机读 trace bundle |
@@ -103,8 +103,14 @@ process_tick(dt)
 | 点击 | `process_click()` | 打字中→完成打字；inline_wait→清除；等待点击→捕获快照→清除等待 |
 | 选择 | `process_choose(index)` | 注入 `RuntimeInput::choice` → 清除旧选项 → 立即消费该 tick 产出的 `Command` / `WaitingReason`，避免分支后首句文本被吞 |
 | UI结果 | `handle_ui_result(key, value)` | 校验 `key` 与当前 `UIResult` 等待一致 → 注入 `RuntimeInput::UIResult` → 立即消费该 tick 产出的 `Command` / `WaitingReason` → 清除旧 `active_ui_mode` 并渲染下一帧 |
-| 回退 | `restore_snapshot()` | 弹出快照栈 → 恢复 render_state + runtime_state + history 截断；**额外**清除 `active_ui_mode`、把 `playback_mode` 归一到 `Normal` |
-| 结束过场 | `finish_cutscene()` | 清除 cutscene 状态 + 清除 Cutscene 等待 |
+| 回退 | `restore_snapshot()` | 弹出快照栈 → 恢复 render_state + runtime_state + runtime history；同步恢复 BGM，随后把 `playback_mode` 归一到 `Normal` |
+| 结束过场 | `finish_cutscene()` | 清除 cutscene 状态；恢复 BGM duck；等待态在下一次 tick / signal 归一 |
+
+### 存档恢复边界（当前实现）
+
+- `build_save_data()` 默认保存当前 `runtime_state + history + RenderSnapshot + AudioState`
+- 若当前等待态属于 `Choice / UIResult / Signal / Cutscene` 这类宿主中间态，则改为**从最近一次 snapshot 边界生成 slot/continue**，避免把当前宿主无法直接重建的中间态直接写入存档
+- `restore_from_save()` 对旧存档中残留的 `Choice / UIResult / Signal / Cutscene` 等待态做保护性归一：若命中了当前宿主无法直接重建的等待态，则把 runtime/host waiting 一并收敛到 `WaitForClick`
 
 ### Owner / harness
 
@@ -123,6 +129,7 @@ process_tick(dt)
 - 会话级清理（停止音频、清空 runtime / render_state / history / snapshot_stack / playback_mode 等）统一由私有方法 `reset_session()` 承担；`init_game`、`init_game_from_resource` 开局前调用，`return_to_title` 内部亦调用（再额外做持久化变量保存与写盘），避免散落重复重置
 - `init_game_from_resource` 会递归预加载所有子脚本，包括条件分支内的 `CallScript`
 - `restore_from_save` 会重新加载 call_stack 中引用的所有脚本到 registry，并且**不再**额外执行入口首 tick
+- 当前 `restore_from_save` 的渲染恢复边界仍是“背景 + 角色 + 音频 + history + waiting”；不会重建存档瞬间的 `dialogue` / `choices` / `active_ui_mode`，但 `build_save_data` 已避免把这些宿主中间态直接落盘
 - `services` 在 Tauri `setup()` 中整包注入；凡需访问 audio/resources/saves/config 的业务路径使用 `services()` / `services_mut()`，以 `expect("invariant: services initialized in setup()")` 断言已初始化（与原先四处 `Option` 解包语义一致，但聚合为单点不变量）
 
 ## 与其他模块的关系

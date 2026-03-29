@@ -1,7 +1,7 @@
 # host-tauri/audio
 
-> LastVerified: 2026-03-28
-> Owner: Claude
+> LastVerified: 2026-03-30
+> Owner: GPT-5.4
 
 ## 职责
 
@@ -75,7 +75,7 @@ JSON RenderState ──→ 前端 ──→ Web Audio API 按 bgm、sfx_queue、
 
 | 模块 | 关系 |
 |------|------|
-| `state.rs` | 被持有：`AppStateInner.audio_manager`；`process_tick` 末尾 `drain_audio_state()` 写入 `render_state.audio` |
+| `state.rs` | 经 `Services.audio` 持有；`process_tick` 末尾 `drain_audio_state()` 写入 `render_state.audio` |
 | `command_executor.rs` | 间接输入：通过 `AudioCommand` 由 `dispatch_audio_command` 应用 |
 | `render_state.rs` | 输出目标：`AudioRenderState` / `BgmState` / `BgmTransition` / `SfxRequest` 定义 |
 | `commands.rs` | 使用：save_game 读取 `current_bgm_path`，update_settings 同步音量 |

@@ -83,7 +83,7 @@ ResourceSource trait（FsSource 或 ZipSource）→ 实际读取，而非在 Res
 
 | 模块 | 关系 |
 |------|------|
-| `state.rs` | 被持有：`AppStateInner.resource_manager`，用于脚本加载等 |
+| `state.rs` | 经 `Services.resources` 持有，用于脚本加载、restore 与调试资源访问 |
 | `audio.rs` | 使用：`normalize_logical_path` 规范化音频路径 |
 | `manifest.rs` | 使用：`normalize_logical_path` 规范化立绘路径 |
 | `commands.rs` | 使用：`get_assets_root` 返回 base_path（已弱化，前端不再依赖） |

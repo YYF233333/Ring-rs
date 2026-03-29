@@ -16,7 +16,8 @@ import InGameMenu from "./screens/InGameMenu.vue";
 import SaveLoadScreen from "./screens/SaveLoadScreen.vue";
 import SettingsScreen from "./screens/SettingsScreen.vue";
 import TitleScreen from "./screens/TitleScreen.vue";
-import type { HostScreen, SaveInfo } from "./types/render-state";
+import type { HistoryEntry, HostScreen, SaveInfo } from "./types/render-state";
+import type { ButtonDef } from "./types/screens";
 import VNScene from "./vn/VNScene.vue";
 
 type ToastHandle = {
@@ -33,7 +34,9 @@ const {
   saveGame,
   loadGame,
   continueGame,
+  deleteSave,
   listSaves,
+  getHistory,
   getConfig,
   returnToTitle,
   setPlaybackMode,
@@ -52,12 +55,13 @@ const { currentScreen, navigateTo, replaceGameMenuPage, goBack, syncFromHostScre
   useNavigation();
 
 const { init: initAssets } = useAssets();
-const { init: initScreens, refreshConditions } = useScreens();
+const { screens, init: initScreens, refreshConditions, actionId } = useScreens();
 const { init: initTheme } = useTheme();
 
 const showInGameMenu = ref(false);
 const toast = ref<ToastHandle | null>(null);
 const saves = ref<SaveInfo[]>([]);
+const historyEntries = ref<HistoryEntry[]>([]);
 
 function applyBackendHostScreen(hostScreen: HostScreen) {
   showInGameMenu.value = hostScreen === "InGameMenu";
@@ -97,6 +101,30 @@ const {
 
 async function refreshSaves() {
   saves.value = await listSaves();
+}
+
+async function refreshHistory() {
+  historyEntries.value = await getHistory();
+}
+
+function confirmMessageForAction(action: string): string | undefined {
+  const defs = screens.value;
+  if (!defs) return undefined;
+
+  const candidates: ButtonDef[] = [
+    ...defs.title.buttons,
+    ...defs.ingame_menu.buttons,
+    ...defs.game_menu.nav_buttons,
+    defs.game_menu.return_button,
+  ];
+
+  return candidates.find((btn) => actionId(btn.action) === action)?.confirm;
+}
+
+async function confirmActionIfNeeded(action: string): Promise<boolean> {
+  const message = confirmMessageForAction(action);
+  if (!message) return true;
+  return askConfirm("确认", message);
 }
 
 async function onNewGame() {
@@ -149,9 +177,6 @@ async function onLoad(slot: number) {
 }
 
 async function onReturnToTitle() {
-  const confirmed = await askConfirm("返回标题", "确定要返回标题画面吗？未保存的进度将丢失。");
-  if (!confirmed) return;
-
   showInGameMenu.value = false;
   try {
     await returnToTitle();
@@ -162,6 +187,8 @@ async function onReturnToTitle() {
 }
 
 async function handleTitleAction(action: string) {
+  if (!(await confirmActionIfNeeded(action))) return;
+
   if (action === "start_game") {
     await onNewGame();
   } else if (action === "continue_game") {
@@ -186,13 +213,19 @@ async function handleTitleAction(action: string) {
 }
 
 async function handleInGameMenuAction(action: string) {
+  if (action === "go_back") {
+    showInGameMenu.value = false;
+    return;
+  }
+  if (!(await confirmActionIfNeeded(action))) return;
+
   showInGameMenu.value = false;
-  if (action === "go_back") return;
   if (action === "open_save") {
     await onNavigateSave();
   } else if (action === "open_load") {
     await onNavigateLoad();
   } else if (action === "navigate_history") {
+    await refreshHistory();
     navigateTo("history");
   } else if (action === "navigate_settings") {
     navigateTo("settings");
@@ -205,6 +238,7 @@ async function handleInGameMenuAction(action: string) {
 
 async function handleGameMenuAction(action: string) {
   if (action === "replace_history") {
+    await refreshHistory();
     replaceGameMenuPage("history");
   } else if (action === "open_save") {
     await refreshSaves();
@@ -215,10 +249,12 @@ async function handleGameMenuAction(action: string) {
   } else if (action === "replace_settings") {
     replaceGameMenuPage("settings");
   } else if (action === "return_to_title") {
+    if (!(await confirmActionIfNeeded(action))) return;
     await onReturnToTitle();
   } else if (action === "return_to_game") {
     goBack();
   } else if (action === "exit") {
+    if (!(await confirmActionIfNeeded(action))) return;
     await quitGame();
   }
 }
@@ -235,6 +271,7 @@ const activeGameMenuNav = computed(() => {
 
 async function handleQuickAction(action: string) {
   if (action === "navigate_history") {
+    await refreshHistory();
     navigateTo("history");
   } else if (action === "toggle_skip") {
     await setPlaybackMode(playbackMode.value === "Skip" ? "Normal" : "Skip");
@@ -261,6 +298,16 @@ async function handleQuickAction(action: string) {
   }
 }
 
+async function onDeleteSave(slot: number) {
+  try {
+    await deleteSave(slot);
+    await refreshSaves();
+    toast.value?.show("删除成功", "success");
+  } catch {
+    toast.value?.show("删除失败", "error");
+  }
+}
+
 function onSceneClick() {
   if (showInGameMenu.value) return;
   if (renderState.value?.active_ui_mode) return;
@@ -268,18 +315,23 @@ function onSceneClick() {
 }
 
 function onRightClick() {
-  if (currentScreen.value === "ingame") {
+  if (currentScreen.value === "ingame" && !renderState.value?.active_ui_mode) {
     showInGameMenu.value = !showInGameMenu.value;
   }
 }
 
 function onKeyDown(e: KeyboardEvent) {
+  if (currentScreen.value !== "ingame") return;
+
+  if (renderState.value?.active_ui_mode) {
+    return;
+  }
+
   if (e.key === "Escape" && currentScreen.value === "ingame") {
     showInGameMenu.value = !showInGameMenu.value;
     return;
   }
-  if (currentScreen.value !== "ingame" || showInGameMenu.value) return;
-  if (renderState.value?.active_ui_mode) return;
+  if (showInGameMenu.value) return;
 
   if (e.key === "Control") {
     setPlaybackMode("Skip");
@@ -379,18 +431,21 @@ watch(desiredHostScreen, (hostScreen) => {
         mode="save"
         :saves="saves"
         @save="onSave"
+        @delete="onDeleteSave"
       />
       <SaveLoadScreen
         v-else-if="currentScreen === 'load'"
         mode="load"
         :saves="saves"
         @load="onLoad"
+        @delete="onDeleteSave"
       />
       <SettingsScreen
         v-else-if="currentScreen === 'settings'"
       />
       <HistoryScreen
         v-else-if="currentScreen === 'history'"
+        :entries="historyEntries"
       />
     </GameMenuFrame>
 

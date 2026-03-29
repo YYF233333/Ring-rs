@@ -1,4 +1,4 @@
-import { readonly, ref } from "vue";
+import { computed, readonly, ref } from "vue";
 import type {
   AppConfig,
   FrontendSession,
@@ -20,7 +20,7 @@ const log = createLogger("engine");
 
 const renderState = ref<RenderState | null>(null);
 const isRunning = ref(false);
-const playbackMode = ref<PlaybackMode>("Normal");
+const playbackMode = computed<PlaybackMode>(() => renderState.value?.playback_mode ?? "Normal");
 const clientToken = ref<string | null>(null);
 let animFrameId: number | null = null;
 let lastTime = 0;
@@ -29,7 +29,6 @@ let tickCount = 0;
 export function useEngine() {
   function applyRenderState(state: RenderState) {
     renderState.value = state;
-    playbackMode.value = state.playback_mode;
   }
 
   function requireClientToken(): string {
@@ -259,7 +258,7 @@ export function useEngine() {
   }
 
   async function deleteSave(slot: number) {
-    await callBackend("delete_save", { slot });
+    await callBackend("delete_save", sessionArgs({ slot }));
   }
 
   async function getThumbnail(slot: number): Promise<string | null> {
@@ -308,5 +307,6 @@ export function useEngine() {
     getHistory,
     quitGame,
     debugRunUntil,
+    getClientToken: requireClientToken,
   };
 }

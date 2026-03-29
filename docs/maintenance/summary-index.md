@@ -52,7 +52,7 @@
    - [audio](../engine/architecture/module-summaries/host-tauri/audio.md)
    - [resources](../engine/architecture/module-summaries/host-tauri/resources.md)
    - [frontend](../engine/architecture/module-summaries/host-tauri/frontend.md)
-- [符号索引（Symbol Index）](../engine/symbol-index.md)（pub 符号速查：名称/类型/行号/enum 变体/trait 方法）
+- [符号索引（Symbol Index）](../engine/symbol-index.md)（当前完整覆盖 `vn-runtime` / `host`；`host-tauri` 仍以模块摘要为主，必要时再落源码）
 - [仓库导航地图](../engine/architecture/navigation-map.md)
 - [经验沉淀（Lessons Learned）](lessons-learned.md)
 - 仅当需要实现细节时再读源码

@@ -1,7 +1,7 @@
 # host-tauri/command_executor
 
-> LastVerified: 2026-03-28
-> Owner: Claude
+> LastVerified: 2026-03-30
+> Owner: GPT-5.4
 
 ## 职责
 
@@ -63,7 +63,7 @@ CommandExecutor::execute(cmd, &mut render_state, manifest)
 - 执行器只做状态翻译，不直接播放音频——AudioCommand 由 `state.rs` 的 `dispatch_audio_command` 消费
 - `execute_batch()` 顺序执行所有命令，返回最后一个非 Ok 的 ExecuteResult
 - `Cutscene` 命令直接返回 `WaitForCutscene`，不修改 RenderState（由 state.rs 设置 cutscene 字段）
-- `FullRestart` 返回 `ExecuteResult::FullRestart`（Tauri 宿主暂不处理）
+- `FullRestart` 返回 `ExecuteResult::FullRestart`，由 `state.rs` 收敛为 `return_to_title(false)`
 - `RequestUI` 由 `state.rs` 完整处理：`run_script_tick` 根据该结果设置 `render_state.active_ui_mode` 并等待前端回传，见 `state.md`（执行器仍返回 `ExecuteResult::RequestUI` 供上层分支）
 
 ## 与其他模块的关系

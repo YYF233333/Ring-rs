@@ -1,19 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { useEngine } from "../composables/useEngine";
 import type { HistoryEntry } from "../types/render-state";
 
-const { getHistory } = useEngine();
-
-const entries = ref<HistoryEntry[]>([]);
-
-onMounted(async () => {
-  try {
-    entries.value = await getHistory();
-  } catch {
-    entries.value = [];
-  }
-});
+defineProps<{
+  entries: HistoryEntry[];
+}>();
 </script>
 
 <template>

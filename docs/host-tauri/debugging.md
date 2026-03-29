@@ -109,6 +109,26 @@ pnpm -C host-tauri harness:smoke
 
 该脚本会调用 `frontend_connected` → `init_game` / `init_game_at_label` → `debug_run_until`，并把机读 trace bundle 写到 `artifacts/host-tauri/`。
 
+### 7. Headless CLI Harness
+
+当你不想依赖浏览器或 debug server，而是直接从命令行跑一条固定步长 harness 时，可运行：
+
+```bash
+pnpm -C host-tauri harness:cli
+```
+
+它会调用 Rust 二进制的 `--headless-harness` 入口，直接复用 `host-tauri` 的 bootstrap 与 `debug_run_until()`，并默认把 bundle 写到 `artifacts/host-tauri/harness-cli-bundle.json`。
+
+支持与 `harness:smoke` 相同的一组环境变量：
+
+- `RING_HARNESS_SCRIPT`
+- `RING_HARNESS_LABEL`
+- `RING_HARNESS_DT`
+- `RING_HARNESS_MAX_STEPS`
+- `RING_HARNESS_OUTPUT`
+- `RING_HARNESS_STOP_ON_WAIT`
+- `RING_HARNESS_STOP_ON_SCRIPT_FINISHED`
+
 ---
 
 ## 人类 Bug 反馈流程

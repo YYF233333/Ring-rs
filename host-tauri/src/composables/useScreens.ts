@@ -25,7 +25,8 @@ function evaluateCondition(expr: string): boolean {
     const val = conditionCtx.value.persistent[key];
     result = !!val;
   } else {
-    result = true;
+    log.warn(`unknown screen condition: ${expr}`);
+    result = false;
   }
 
   return negated ? !result : result;

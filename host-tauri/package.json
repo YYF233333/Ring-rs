@@ -12,7 +12,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "harness:smoke": "node scripts/harness-smoke.mjs"
+    "harness:smoke": "node scripts/harness-smoke.mjs",
+    "harness:cli": "cargo run --manifest-path src-tauri/Cargo.toml -- --headless-harness"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",

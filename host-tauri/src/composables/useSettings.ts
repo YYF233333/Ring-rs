@@ -1,5 +1,6 @@
 import { readonly, ref } from "vue";
 import { callBackend } from "./useBackend";
+import { useEngine } from "./useEngine";
 import { createLogger } from "./useLogger";
 
 const log = createLogger("settings");
@@ -24,6 +25,8 @@ const settings = ref<UserSettings>({ ...DEFAULT_SETTINGS });
 
 /** 用户设置管理（单例） */
 export function useSettings() {
+  const { getClientToken } = useEngine();
+
   async function loadSettings() {
     try {
       const s = await callBackend<UserSettings>("get_user_settings");
@@ -35,7 +38,10 @@ export function useSettings() {
 
   async function saveSettings() {
     try {
-      await callBackend("update_settings", { settings: settings.value });
+      await callBackend("update_settings", {
+        clientToken: getClientToken(),
+        settings: settings.value,
+      });
     } catch (e) {
       log.error("保存设置失败", e);
     }

@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-032
-- 状态：Proposed
+- 状态：Active
 - 作者：GPT-5.4
 - 日期：2026-03-30
 - 相关范围：`host-tauri/src-tauri/src/{lib.rs,state.rs,commands.rs,render_state.rs,debug_server.rs,resources.rs,config.rs,manifest.rs,save_manager.rs}`、`host-tauri/src/{App.vue,composables/useEngine.ts,composables/useNavigation.ts,composables/useBackend.ts}`、`host-tauri/package.json`、`docs/host-tauri/*`、`docs/maintenance/host-migration-gap-analysis.md`
@@ -15,7 +15,7 @@
 
 `host-tauri` 已经完成了基础宿主闭环：`vn-runtime -> CommandExecutor -> RenderState -> Vue`、手动存读档、缩略图、FS/ZIP 资源访问、基础音频、`RequestUI`、浏览器调试都能工作。
 
-当前迁移的主要问题不再是“有没有这个模块”，而是“宿主 harness 是否足够 authoritative、可重复、可验证”。这直接导致多个高频 bug 源：
+当前迁移的主要问题不再是“有没有这个模块”，而是“宿主 harness 是否足够 authoritative、可重复、可验证”。RFC 提出时的高频 bug 源如下：
 
 1. 页面/菜单切换只存在于前端路由层，后端不知道当前是否应暂停推进，导致非 `ingame` 屏幕下脚本、等待态、播放模式仍可能继续前进。
 2. `Continue` 只剩读取能力，缺少维护生命周期，快速回到问题现场的链路不完整。
@@ -29,11 +29,18 @@
 
 | 能力 | 旧 `host` | 当前 `host-tauri` | 问题性质 |
 |------|-----------|-------------------|----------|
-| authoritative 宿主模式 | 有 | 弱 | 页面切换不等于暂停推进 |
-| `Continue` / 重入 | 完整 | 残缺 | 只有读，没有生命周期维护 |
-| deterministic harness | 有 | 无 | 难自动化复现与回归 |
-| 机读诊断产物 | 有 | 弱 | 主要依赖交互式调试与手工日志 |
-| strict bootstrap / 资源透明性 | 有 | 部分 | 配置静默回退、debug 资源旁路 |
+| authoritative 宿主模式 | 有 | 有（主干已落地） | 剩余主要是前端桥接复杂度与 `active_ui_mode` 非严格 modal |
+| `Continue` / 重入 | 完整 | 部分 | 生命周期与 `start_at_label` 已齐，但恢复边界仍缺 |
+| deterministic harness | 有 | 部分 | `debug_run_until` 已落地，但仍不是独立 runner |
+| 机读诊断产物 | 有 | 部分 | 已有 trace bundle，但无 EventStream / CLI parity |
+| strict bootstrap / 资源透明性 | 有 | 有（主干已落地） | strict config/manifest + ResourceManager parity 已补齐 |
+
+## 实施快照（2026-03-30）
+
+- 已完成：后端 authoritative 的 `host_screen` / `client_token` ownership、`playback_mode` 单一真源、`start_game_at_label`、`Continue` 生命周期、strict `config` / `manifest` bootstrap、`ResourceManager` 统一资源路径、`debug_run_until + trace bundle` 基线，以及 `--headless-harness` 薄 CLI wrapper。
+- 部分完成：`save/load/continue` 已按旧 host 的粗粒度恢复口径收敛到稳定边界，但仍不会重建存档瞬间的 `dialogue` / `choices` / `active_ui_mode`；自动化侧仍缺 `EventStream` / replay / timeout 等更完整工具链。
+- 仍未完成：旧 `host` 级的 automation parity、输入回放链路，以及部分演出等价性（如 skip-all-active-effects、地图 hit-mask、部分转场/scene effect fidelity）。
+- 当前 RFC 的重点已从“把 authority 拉回后端”转为“收敛恢复边界与自动化入口”，因此状态应从 `Proposed` 调整为 `Active`。
 
 ---
 
@@ -179,6 +186,7 @@
 - `dev:tauri`：Tauri WebView 开发
 - `dev:browser`：浏览器单客户端调试
 - `harness:smoke`：跑一条 deterministic smoke path 并产出 `trace bundle`
+- `--headless-harness`：不依赖浏览器/debug server 的薄 CLI harness
 
 这些入口复用同一 harness core，只在驱动层不同。文档只负责说明场景与命令，不再承担维护关键不变量。
 
@@ -235,14 +243,14 @@
 
 ## 验收标准
 
-- [ ] 非 `InGame` 页面或菜单打开时，脚本、等待计时、`Auto/Skip`、场景 signal 不再继续推进。
-- [ ] 同一会话不能被两个客户端同时驱动；非 owner 的推进请求会被明确拒绝。
-- [ ] `playback_mode` 以后端为唯一真源，菜单/系统页打开时统一回到 `Normal`。
-- [ ] `start_game_at_label` 可作为正式开发重入入口使用。
-- [ ] `Continue` 具备完整生命周期：写入、清理、恢复、失败处理均有明确语义。
+- [x] 非 `InGame` 页面或菜单打开时，脚本、等待计时、`Auto/Skip`、场景 signal 不再继续推进。
+- [x] 同一会话不能被两个客户端同时驱动；非 owner 的推进请求会被明确拒绝。
+- [x] `playback_mode` 以后端为唯一真源，菜单/系统页打开时统一回到 `Normal`。
+- [x] `start_game_at_label` 可作为正式开发重入入口使用。
+- [x] `Continue` 具备完整生命周期：写入、清理、恢复、失败处理均有明确语义。
 - [ ] `save/load/continue` 恢复不会额外执行入口首帧副作用；`runtime/render/history/audio/playback` 能一致恢复。
-- [ ] 至少存在一条 deterministic 驱动入口，可 fixed-step 运行、限定退出条件并导出机读 `trace bundle`。
-- [ ] 浏览器调试与正式运行都通过统一资源访问路径验证 FS/ZIP 资源来源，不再存在 debug-only 文件系统旁路。
-- [ ] `config` 对缺失字段、未知字段、非法路径和非法范围值均 fail-fast；关键启动配置不再静默回退默认值。
-- [ ] `docs/host-tauri/debugging.md`、`docs/host-tauri/dev-guide.md`、`docs/maintenance/host-migration-gap-analysis.md` 与相关摘要已同步更新。
-- [ ] `cargo check-all` 通过，并新增覆盖宿主模式暂停、`Continue` 生命周期、strict bootstrap、resource parity 的高价值测试。
+- [x] 至少存在一条 deterministic 驱动入口，可 fixed-step 运行、限定退出条件并导出机读 `trace bundle`。
+- [x] 浏览器调试与正式运行都通过统一资源访问路径验证 FS/ZIP 资源来源，不再存在 debug-only 文件系统旁路。
+- [x] `config` 对缺失字段、未知字段、非法路径和非法范围值均 fail-fast；关键启动配置不再静默回退默认值。
+- [x] `docs/host-tauri/debugging.md`、`docs/host-tauri/dev-guide.md`、`docs/maintenance/host-migration-gap-analysis.md` 与相关摘要已同步更新。
+- [x] `cargo check-all` 通过，并新增覆盖宿主模式暂停、`Continue` 生命周期、strict bootstrap、resource parity 的高价值测试。

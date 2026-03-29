@@ -95,6 +95,12 @@
 - **原因**：新字段未设置 `#[serde(default)]`，旧 JSON 中缺少该字段。
 - **正确做法**：`RuntimeState` / `SaveData` 新增字段必须加 `#[serde(default)]`。修改存档结构须在 `docs/engine/reference/save-format.md` 中记录迁移方案。
 
+### slot save 不等于 full-frame restore
+
+- **现象**：想把 `save/load/continue` 修成“恢复到当前屏幕的每一个细节”，于是直觉上准备扩 `vn-runtime::SaveData` 去存 `dialogue`、`choices`、`active_ui_mode` 等 host 字段。
+- **原因**：混淆了两条能力边界。旧 `host` 的 slot/continue 本来就是粗粒度恢复；真正的完整帧恢复来自 host 侧 snapshot/backspace 机制，而不是 runtime 公共存档格式。
+- **正确做法**：先确认问题到底属于“runtime 存档格式”还是“host 侧快照/恢复边界”。若目标只是宿主迁移等价，优先在 host 层收敛保存边界（例如退回最近 snapshot），不要贸然把 host 侧瞬时 UI 状态塞进 `vn-runtime` 公共模型。
+
 ---
 
 ## 测试

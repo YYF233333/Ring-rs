@@ -5,7 +5,7 @@
 
 ## 职责
 
-Tauri 2 宿主应用——将 vn-runtime 的 Command 通过 IPC 序列化为 JSON `RenderState` 发送到 Vue 3 前端渲染，并通过后端 authoritative 的 `host_screen + client_token + deterministic trace bundle` 形成完整 harness。
+Tauri 2 宿主应用——将 vn-runtime 的 Command 通过 IPC 序列化为 JSON `RenderState` 发送到 Vue 3 前端渲染，并通过后端 authoritative 的 `host_screen + client_token + deterministic trace bundle` 形成 harness 基线。
 
 ## 架构概览
 
@@ -31,7 +31,7 @@ Tauri 2 宿主应用——将 vn-runtime 的 Command 通过 IPC 序列化为 JSO
 │  │  ├─ CommandExecutor                    │                      │
 │  │  ├─ RenderState                        │                      │
 │  │  ├─ Services (Audio/Resource/Save/     │                      │
-│  │  │   Config，services())               │                      │
+│  │  │   Config/Manifest，services())      │                      │
 │  │  └─ HostScreen / ClientOwner / Trace   │                      │
 │  └────────────────────────────────────────┘                      │
 └──────────────────────────────────────────────────────────────────┘
@@ -44,7 +44,7 @@ Tauri 2 宿主应用——将 vn-runtime 的 Command 通过 IPC 序列化为 JSO
 3. **游戏循环**：前端 `requestAnimationFrame` → `useEngine` 内 `tick(client_token, dt)` → `AppStateInner::process_tick()`；仅 `host_screen == InGame` 时允许推进脚本、等待态和播放模式
 4. **用户交互**：click/choose/backspace / set_host_screen / set_playback_mode → 对应 IPC command 先校验 owner，再修改 `AppStateInner`
 5. **脚本执行**：`run_script_tick()` → `VNRuntime::tick()` → 产出 `Vec<Command>` → `CommandExecutor::execute_batch()` 翻译为 RenderState 变更 + AudioCommand 副作用
-6. **自动化**：`debug_run_until` 复用同一 `process_tick()` 核心，产出 `HarnessTraceBundle`
+6. **自动化**：`debug_run_until` 复用同一 `process_tick()` 核心；debug server 和 `--headless-harness` CLI 都基于这条路径产出 `HarnessTraceBundle`
 
 ## 文件结构
 
@@ -55,12 +55,13 @@ Tauri 2 宿主应用——将 vn-runtime 的 Command 通过 IPC 序列化为 JSO
 | `commands.rs` | IPC 命令层 | [commands.md](host-tauri/commands.md) |
 | `command_executor.rs` | Command → RenderState 翻译 | [command-executor.md](host-tauri/command-executor.md) |
 | `render_state.rs` | 可序列化渲染状态 | [render-state.md](host-tauri/render-state.md) |
-| `audio.rs` | rodio 音频管理 | [audio.md](host-tauri/audio.md) |
+| `audio.rs` | headless 音频状态追踪与 `RenderState.audio` 快照生成 | [audio.md](host-tauri/audio.md) |
 | `resources.rs` | 资源路径管理 | [resources.md](host-tauri/resources.md) |
 | `save_manager.rs` | 存档读写 | [state.md](host-tauri/state.md) 附录 |
 | `config.rs` | 应用配置 | [state.md](host-tauri/state.md) 附录 |
 | `manifest.rs` | 立绘元数据；由 `Services` 持有，命令执行器通过它把脚本中的 `Position` 解析为角色站位 | [resources.md](host-tauri/resources.md) 附录 |
 | `debug_server.rs` | Debug HTTP 镜像 + deterministic harness 入口 | 仅 debug build |
+| `headless_cli.rs` | 薄 CLI harness：从环境变量读取脚本/步长/输出路径，直接调用 `debug_run_until` 产出 bundle | [无独立摘要] |
 | `src/` (前端) | Vue 3 渲染层；`composables/useEngine` 模块单例驱动 tick 与 IPC，`useConfirmDialog` 确认框；业务组件经 emit + 根组件接 `useEngine`，不直接 `callBackend` | [frontend.md](host-tauri/frontend.md) |
 
 ## UI 配置桥接（RFC-030）
@@ -100,6 +101,7 @@ Tauri 前端通过三个 IPC 命令消费共享 UI 配置：
 - `host_screen` 是后端 authoritative 的推进边界：非 `InGame` 时脚本/等待态/Auto/Skip 不推进
 - 音频由 Rust 侧 `AudioManager` 做 headless 状态追踪，每帧通过 `RenderState.audio` 推送声明式快照，前端 Web Audio API 实际播放
 - Debug HTTP server 仅 `#[cfg(debug_assertions)]` 编译，镜像所有 IPC command，并通过同一 `ResourceManager` 提供 FS/ZIP 一致的 `/assets/*` 访问
+- CLI harness 复用与 Tauri/debug server 相同的 bootstrap 与 `debug_run_until` 核心，不再依赖浏览器侧 HTTP 编排
 
 ## 与其他模块的关系
 

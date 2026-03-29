@@ -24,6 +24,7 @@ function onAutoDelay(e: Event) {
 
 function toggleFullscreen() {
   updateSetting("fullscreen", !settings.value.fullscreen);
+  void saveSettings();
 }
 </script>
 

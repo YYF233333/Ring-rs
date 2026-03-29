@@ -24,8 +24,10 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | `useEngine` | **模块级单例**（共享 `renderState` / 游戏循环 / `clientToken`）：`frontendConnected` 先领取 owner token；随后 `startGame`、`startGameAtLabel`、`tick`、`setHostScreen`、`setPlaybackMode` 等推进类调用都会自动携带 token；`playbackMode` 完全以后端 `RenderState` 为真源 |
 | `useConfirmDialog` | 模块级确认框：`ask(title, message)` 返回 `Promise<boolean>`，与 `ConfirmDialog.vue` 配合 |
 | `useAssets` | 资源 URL 管理：`assetUrl(logicalPath)` 通过 `ring-asset` 自定义协议（Tauri）或 debug HTTP server（浏览器）生成可访问 URL |
-| `useSettings` | 用户设置管理（单例）：load/save/update 与后端同步 |
+| `useSettings` | 用户设置管理（单例）：load/save/update 与后端同步；保存时经 `useEngine` 暴露的 `clientToken` 走 owner 校验 |
 | `useNavigation` | 页面导航状态机（单例）：Screen 枚举 + 栈式导航 |
+| `useScreens` | UI 定义加载：读取 `screens.json`，提供按钮可见性、动作归一化与条件求值 |
+| `useTheme` | 主题加载：读取 `layout.json` 的 `assets/colors`，初始化 CSS 变量并提供素材 key → URL 映射 |
 | `useLogger` | 模块级日志：同时输出到 browser console 和 Rust tracing（通过 IPC 转发） |
 
 ### VN 渲染组件 (`vn/`)
@@ -41,7 +43,7 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | `TitleCard` | 字卡全屏文字显示 |
 | `ChapterMark` | 章节标记淡入淡出 |
 | `VideoOverlay` | 视频过场播放；**纯 emit**（如完成/跳过）由父组件接 `useEngine.finishCutscene` |
-| `MapOverlay` | 地图 UI 模式（`active_ui_mode` 为地图类 mode 时展示） |
+| `MapOverlay` | 地图 UI 模式（`active_ui_mode` 为地图类 mode 时展示；当前按 `1920x1080` 设计坐标渲染按钮热点，尚未消费 `hit_mask`） |
 | `MiniGameOverlay` | iframe 小游戏容器（`active_ui_mode` 为小游戏 mode 时展示；先读取游戏 HTML、注入 `base href` 后用 `srcdoc` 加载，保证 `ring-asset` 下的相对资源路径稳定） |
 
 ### 系统 UI 组件 (`screens/`)
@@ -49,9 +51,9 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | 组件 | 说明 |
 |------|------|
 | `TitleScreen` | 标题画面（新游戏/继续/读取/设置/退出）；**纯 emit**，由 `App.vue` 调用 `useEngine` |
-| `SaveLoadScreen` | 存档/读取界面（复用，通过 mode prop 区分） |
+| `SaveLoadScreen` | 存档/读取界面（复用，通过 mode prop 区分；父层传入 `saves` 列表并处理删除/刷新，组件内部负责分页与缩略图加载） |
 | `SettingsScreen` | 设置界面（音量/文字速度/Auto 延迟等） |
-| `HistoryScreen` | 对话历史回看；**纯 emit** 请求数据，由父组件 `useEngine.getHistory` 拉取并传入 |
+| `HistoryScreen` | 对话历史回看；纯展示组件，由父层拉取并传入 `entries` |
 | `InGameMenu` | 游戏内菜单（右键/ESC 呼出） |
 
 ### 通用 UI 组件 (`components/`)
@@ -135,6 +137,9 @@ Screen 类型: "title" | "ingame" | "save" | "load" | "settings" | "history"
 | Ctrl (按住) | 进入 Skip 模式，松开恢复 Normal |
 | A | 切换 Auto 模式 |
 | Backspace | 回退快照 |
+| Space / Enter | 等同点击推进 |
+
+注：`active_ui_mode` 现在作为严格 modal 阻断 `App.vue` 里的 `Escape` / 右键菜单切换；地图类 UI 仍由 `MapOverlay` 自己消费 `Escape` 作为取消输入。
 
 ## 关键不变量
 
@@ -146,6 +151,7 @@ Screen 类型: "title" | "ingame" | "save" | "load" | "settings" | "history"
 - `callBackend` 透明切换 Tauri IPC / Debug HTTP，`useBackend` 使用者无需关心运行环境
 - `useAssets` 的 `assetUrl()` 确保逻辑路径到可访问 URL 的统一转换
 - `useLogger` 同时输出到 console 和 Rust tracing，调试时两端日志统一
+- 系统页数据所有权已部分收拢：`HistoryScreen` 由父层供数，`SaveLoadScreen` 的删除/刷新由父层统一处理；缩略图缓存仍保留在组件内
 
 ## 与其他模块的关系
 

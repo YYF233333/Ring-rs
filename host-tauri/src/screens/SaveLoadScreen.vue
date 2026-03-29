@@ -11,9 +11,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [slot: number];
   load: [slot: number];
+  delete: [slot: number];
 }>();
 
-const { deleteSave, getThumbnail } = useEngine();
+const { getThumbnail } = useEngine();
 
 const SLOTS_PER_PAGE = 6;
 const currentPage = ref(0);
@@ -61,7 +62,7 @@ function onSlotClick(slot: number) {
 async function onDelete(slot: number, ev: Event) {
   ev.stopPropagation();
   delete thumbnails[slot];
-  await deleteSave(slot);
+  emit("delete", slot);
 }
 
 function formatTimestamp(ts: string): string {

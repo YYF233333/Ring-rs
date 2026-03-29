@@ -174,7 +174,8 @@ impl PersistentStore {
 pub struct Snapshot {
     pub render_state: RenderState,
     pub runtime_state: vn_runtime::state::RuntimeState,
-    pub history_len: usize,
+    pub runtime_history: vn_runtime::History,
+    pub current_bgm: Option<String>,
 }
 
 /// 快照栈
@@ -200,6 +201,10 @@ impl SnapshotStack {
 
     pub fn pop(&mut self) -> Option<Snapshot> {
         self.snapshots.pop()
+    }
+
+    pub fn last(&self) -> Option<&Snapshot> {
+        self.snapshots.last()
     }
 
     pub fn clear(&mut self) {
@@ -477,15 +482,42 @@ impl AppStateInner {
     }
 
     fn build_save_data(&self, slot: u32) -> Result<vn_runtime::SaveData, String> {
-        let runtime = self.runtime.as_ref().ok_or("游戏未启动")?;
-        let svc = self.services();
+        let (runtime_state, runtime_history, render_state, current_bgm) =
+            if Self::waiting_requires_snapshot_fallback(&self.waiting) {
+                let snapshot = self.snapshot_stack.last().ok_or_else(|| {
+                    format!(
+                        "当前处于 {:?} 中间态，且没有可回退快照，无法安全保存",
+                        self.waiting
+                    )
+                })?;
+                warn!(
+                    waiting = ?self.waiting,
+                    "保存时使用最近快照作为稳定边界，避免写入宿主无法直接恢复的中间态"
+                );
+                (
+                    snapshot.runtime_state.clone(),
+                    snapshot.runtime_history.clone(),
+                    &snapshot.render_state,
+                    snapshot.current_bgm.clone(),
+                )
+            } else {
+                let runtime = self.runtime.as_ref().ok_or("游戏未启动")?;
+                (
+                    runtime.state().clone(),
+                    runtime.history().clone(),
+                    &self.render_state,
+                    self.services()
+                        .audio
+                        .current_bgm_path()
+                        .map(|s| s.to_string()),
+                )
+            };
 
-        let mut save_data = vn_runtime::SaveData::new(slot, runtime.state().clone())
-            .with_history(runtime.history().clone())
+        let mut save_data = vn_runtime::SaveData::new(slot, runtime_state)
+            .with_history(runtime_history)
             .with_render(vn_runtime::RenderSnapshot {
-                background: self.render_state.current_background.clone(),
-                characters: self
-                    .render_state
+                background: render_state.current_background.clone(),
+                characters: render_state
                     .visible_characters
                     .iter()
                     .map(|(alias, sprite)| vn_runtime::CharacterSnapshot {
@@ -496,11 +528,11 @@ impl AppStateInner {
                     .collect(),
             })
             .with_audio(vn_runtime::AudioState {
-                current_bgm: svc.audio.current_bgm_path().map(|s| s.to_string()),
+                current_bgm,
                 bgm_looping: true,
             });
 
-        if let Some(ref chapter) = self.render_state.chapter_mark {
+        if let Some(ref chapter) = render_state.chapter_mark {
             save_data = save_data.with_chapter(&chapter.title);
         }
 
@@ -572,6 +604,16 @@ impl AppStateInner {
             })
             .rev()
             .collect()
+    }
+
+    fn waiting_requires_snapshot_fallback(waiting: &WaitingFor) -> bool {
+        matches!(
+            waiting,
+            WaitingFor::Choice
+                | WaitingFor::Cutscene
+                | WaitingFor::Signal(_)
+                | WaitingFor::UIResult { .. }
+        )
     }
 
     fn map_runtime_waiting(waiting_reason: &WaitingReason) -> WaitingFor {
@@ -887,7 +929,7 @@ impl AppStateInner {
                 self.scene_effect_active = false;
             }
             "cutscene" => {
-                self.render_state.cutscene = None;
+                self.finish_cutscene();
             }
             _ => {}
         }
@@ -1125,7 +1167,11 @@ impl AppStateInner {
         let snapshot = Snapshot {
             render_state: self.render_state.clone(),
             runtime_state: rt.state().clone(),
-            history_len: self.history.len(),
+            runtime_history: rt.history().clone(),
+            current_bgm: self
+                .services
+                .as_ref()
+                .and_then(|svc| svc.audio.current_bgm_path().map(|s| s.to_string())),
         };
         self.snapshot_stack.push(snapshot);
     }
@@ -1135,17 +1181,26 @@ impl AppStateInner {
         let Some(snapshot) = self.snapshot_stack.pop() else {
             return false;
         };
+        let target_bgm = snapshot.current_bgm.clone();
         if let Some(rt) = self.runtime.as_mut() {
-            rt.restore_state(snapshot.runtime_state);
+            rt.restore_state(snapshot.runtime_state.clone());
+            rt.restore_history(snapshot.runtime_history.clone());
         }
         self.render_state = snapshot.render_state;
-        self.render_state.active_ui_mode = None;
-        self.history.truncate(snapshot.history_len);
-        self.waiting = WaitingFor::Click;
+        self.history = Self::host_history_from_runtime(&snapshot.runtime_history);
+        self.waiting = Self::map_runtime_waiting(&snapshot.runtime_state.waiting);
         self.typewriter_timer = 0.0;
         self.auto_timer = 0.0;
         self.playback_mode = PlaybackMode::Normal;
         self.set_host_screen(HostScreen::InGame);
+        {
+            let audio = &mut self.services_mut().audio;
+            match target_bgm {
+                Some(path) => audio.play_bgm(&path, true, None),
+                None => audio.stop_bgm(None),
+            }
+        }
+        self.sync_audio(0.0);
         self.project_render_state();
         self.record_trace("snapshot_restored", serde_json::json!({}));
         true
@@ -1157,6 +1212,10 @@ impl AppStateInner {
         if self.waiting == WaitingFor::Cutscene {
             self.waiting = WaitingFor::Nothing;
         }
+        if let Some(svc) = self.services.as_mut() {
+            svc.audio.unduck();
+        }
+        self.sync_audio(0.0);
         self.record_trace("cutscene_finished", serde_json::json!({}));
     }
 
@@ -1178,7 +1237,10 @@ impl AppStateInner {
 
         let var_value = crate::render_state::json_to_var_value(&value);
 
-        let input = RuntimeInput::UIResult { key, value: var_value };
+        let input = RuntimeInput::UIResult {
+            key,
+            value: var_value,
+        };
         let tick_result = self
             .runtime
             .as_mut()
@@ -1211,7 +1273,9 @@ impl AppStateInner {
         self.waiting = WaitingFor::Nothing;
         self.record_trace("choice_selected", serde_json::json!({ "index": index }));
         match tick_result {
-            Ok((commands, waiting_reason)) => self.apply_runtime_tick_output(commands, waiting_reason),
+            Ok((commands, waiting_reason)) => {
+                self.apply_runtime_tick_output(commands, waiting_reason)
+            }
             Err(error) => {
                 warn!(%error, "choice selection tick failed");
                 self.script_finished = true;
@@ -1276,6 +1340,7 @@ impl AppStateInner {
                 video_path: video_path.clone(),
                 is_playing: true,
             });
+            self.services_mut().audio.duck();
         }
 
         // 用 Runtime 的 waiting_reason（权威来源）映射 Host 等待状态
@@ -1315,7 +1380,9 @@ impl AppStateInner {
         };
 
         match rt.tick(None) {
-            Ok((commands, waiting_reason)) => self.apply_runtime_tick_output(commands, waiting_reason),
+            Ok((commands, waiting_reason)) => {
+                self.apply_runtime_tick_output(commands, waiting_reason)
+            }
             Err(_) => {
                 self.script_finished = true;
                 self.record_trace("script_tick_error", serde_json::json!({}));
@@ -1386,6 +1453,26 @@ impl AppStateInner {
         self.sync_audio(0.0);
     }
 
+    fn normalize_restored_waiting(&mut self) {
+        if !Self::waiting_requires_snapshot_fallback(&self.waiting) {
+            return;
+        }
+
+        warn!(
+            waiting = ?self.waiting,
+            "读档命中了宿主无法直接重建的等待态，回退到 WaitForClick 稳定点"
+        );
+        if let Some(rt) = self.runtime.as_mut() {
+            rt.state_mut().wait(WaitingReason::click());
+        }
+        self.render_state.clear_choices();
+        self.render_state.active_ui_mode = None;
+        self.render_state.cutscene = None;
+        self.render_state.scene_transition = None;
+        self.render_state.title_card = None;
+        self.waiting = WaitingFor::Click;
+    }
+
     /// 从存档恢复游戏状态
     ///
     /// 统一处理 `load_game` 和 `continue_game` 的恢复逻辑：
@@ -1415,6 +1502,7 @@ impl AppStateInner {
         self.apply_audio_state(&audio);
         self.history = Self::host_history_from_runtime(&history);
         self.waiting = Self::map_runtime_waiting(&runtime_state.waiting);
+        self.normalize_restored_waiting();
         self.script_finished = false;
         self.typewriter_timer = 0.0;
         self.auto_timer = 0.0;
@@ -1680,6 +1768,159 @@ mod tests {
     }
 
     #[test]
+    fn build_save_data_uses_snapshot_boundary_while_waiting_for_choice() {
+        let script = r#"
+："选择前。"
+| 选择 |        |
+| ---- | ------ |
+| 选项A | label_a |
+| 选项B | label_b |
+**label_a**
+："选了A。"
+**label_b**
+："选了B。"
+"#;
+        let (mut inner, root) = make_state_with_services("scripts/choice.md", script);
+
+        inner.init_game_from_resource("scripts/choice.md").unwrap();
+        inner.render_state.complete_typewriter();
+        inner.process_click();
+        inner.process_tick(0.0);
+
+        assert_eq!(inner.waiting, WaitingFor::Choice);
+        assert!(inner.render_state.choices.is_some());
+        assert!(inner.snapshot_stack.last().is_some());
+
+        let save_data = inner.build_save_data(1).unwrap();
+        assert!(matches!(
+            save_data.runtime_state.waiting,
+            WaitingReason::WaitForClick
+        ));
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn build_save_data_uses_snapshot_boundary_while_waiting_for_ui_result() {
+        let script = r#"
+："第二部分：测试地图语法糖 showMap。"
+showMap "demo_world" as $destination
+
+if $destination == "town"
+  ："你通过 showMap 选择了小镇。"
+else
+  ："你通过 showMap 选择了其他地点。"
+endif
+"#;
+        let (mut inner, root) = make_state_with_services("scripts/ui_save.md", script);
+
+        inner.init_game_from_resource("scripts/ui_save.md").unwrap();
+        inner.render_state.complete_typewriter();
+        inner.process_click();
+        inner.run_script_tick();
+
+        assert_eq!(
+            inner.waiting,
+            WaitingFor::UIResult {
+                key: "show_map".to_string()
+            }
+        );
+        assert!(inner.render_state.active_ui_mode.is_some());
+        assert!(inner.snapshot_stack.last().is_some());
+
+        let save_data = inner.build_save_data(1).unwrap();
+        assert!(matches!(
+            save_data.runtime_state.waiting,
+            WaitingReason::WaitForClick
+        ));
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn restore_from_save_normalizes_legacy_ui_wait_to_click() {
+        let script = "：\"恢复等待态。\"\n";
+        let (mut inner, root) = make_state_with_services("scripts/restore.md", script);
+
+        let mut runtime_state = vn_runtime::state::RuntimeState::new("restore");
+        runtime_state.position.set_path("scripts/restore.md");
+        runtime_state.wait(WaitingReason::ui_result("show_map", "destination"));
+
+        let save_data = vn_runtime::SaveData::new(1, runtime_state)
+            .with_render(vn_runtime::RenderSnapshot {
+                background: Some("backgrounds/saved.png".to_string()),
+                characters: Vec::new(),
+            })
+            .with_history(vn_runtime::History::new());
+
+        inner.restore_from_save(save_data).unwrap();
+
+        assert_eq!(inner.waiting, WaitingFor::Click);
+        assert!(matches!(
+            inner
+                .runtime
+                .as_ref()
+                .expect("runtime should be restored")
+                .waiting(),
+            WaitingReason::WaitForClick
+        ));
+        assert!(inner.render_state.active_ui_mode.is_none());
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn cutscene_ducks_and_finish_restores_bgm_volume() {
+        let (mut inner, root) = make_state_with_services("scripts/cutscene.md", "");
+
+        inner
+            .services_mut()
+            .audio
+            .play_bgm("audio/theme.ogg", true, None);
+        inner.sync_audio(0.0);
+        let base_volume = inner
+            .render_state
+            .audio
+            .bgm
+            .as_ref()
+            .expect("bgm should exist before cutscene")
+            .volume;
+
+        inner.apply_runtime_tick_output(
+            vec![Command::Cutscene {
+                path: "video/opening.webm".to_string(),
+            }],
+            WaitingReason::signal("cutscene"),
+        );
+        inner.sync_audio(0.5);
+
+        let ducked_volume = inner
+            .render_state
+            .audio
+            .bgm
+            .as_ref()
+            .expect("bgm should still exist during cutscene")
+            .volume;
+        assert!(inner.render_state.cutscene.is_some());
+        assert!(ducked_volume < base_volume);
+
+        inner.finish_cutscene();
+        inner.sync_audio(0.5);
+
+        let restored_volume = inner
+            .render_state
+            .audio
+            .bgm
+            .as_ref()
+            .expect("bgm should remain after cutscene")
+            .volume;
+        assert!(inner.render_state.cutscene.is_none());
+        assert!((restored_volume - base_volume).abs() < f32::EPSILON);
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
     fn handle_ui_result_applies_follow_up_dialogue_without_skipping() {
         let script = r#"
 ："第二部分：测试地图语法糖 showMap。"
@@ -1706,7 +1947,12 @@ endif
             .as_ref()
             .expect("showMap should activate a UI mode");
         assert_eq!(active_mode.mode, "show_map");
-        assert_eq!(inner.waiting, WaitingFor::UIResult { key: "show_map".to_string() });
+        assert_eq!(
+            inner.waiting,
+            WaitingFor::UIResult {
+                key: "show_map".to_string()
+            }
+        );
 
         inner
             .handle_ui_result(

@@ -1,21 +1,10 @@
-use tauri::{AppHandle, State, command};
+use tauri::{AppHandle, Manager, State, command};
 
 use crate::config::AppConfig;
-use crate::render_state::{HostScreen, PlaybackMode, RenderState};
+use crate::protocol::{parse_host_screen, parse_playback_mode};
+use crate::render_state::{PlaybackMode, RenderState};
 use crate::save_manager::SaveInfo;
 use crate::state::{AppState, FrontendSession, HarnessTraceBundle, HistoryEntry, UserSettings};
-
-fn parse_host_screen(screen: &str) -> HostScreen {
-    match screen {
-        "ingame" => HostScreen::InGame,
-        "ingame_menu" => HostScreen::InGameMenu,
-        "save" => HostScreen::Save,
-        "load" => HostScreen::Load,
-        "settings" => HostScreen::Settings,
-        "history" => HostScreen::History,
-        _ => HostScreen::Title,
-    }
-}
 
 /// 初始化游戏——解析脚本并返回初始渲染状态
 ///
@@ -164,8 +153,9 @@ pub fn get_thumbnail(state: State<AppState>, slot: u32) -> Result<Option<String>
 
 /// 删除指定槽位的存档
 #[command]
-pub fn delete_save(state: State<AppState>, slot: u32) -> Result<(), String> {
+pub fn delete_save(state: State<AppState>, client_token: String, slot: u32) -> Result<(), String> {
     let inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
     inner
         .services()
         .saves
@@ -205,14 +195,25 @@ pub fn get_user_settings(state: State<AppState>) -> Result<UserSettings, String>
 
 /// 更新用户设置
 #[command]
-pub fn update_settings(state: State<AppState>, settings: UserSettings) -> Result<(), String> {
+pub fn update_settings(
+    app: AppHandle,
+    state: State<AppState>,
+    client_token: String,
+    settings: UserSettings,
+) -> Result<(), String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.assert_owner(&client_token)?;
 
     inner.text_speed = settings.text_speed;
 
     let svc = inner.services_mut();
     svc.audio.set_bgm_volume(settings.bgm_volume / 100.0);
     svc.audio.set_sfx_volume(settings.sfx_volume / 100.0);
+
+    let window = app.get_webview_window("main").ok_or("主窗口不存在")?;
+    window
+        .set_fullscreen(settings.fullscreen)
+        .map_err(|e| format!("设置全屏失败: {e}"))?;
 
     inner.user_settings = settings;
     Ok(())
@@ -320,11 +321,7 @@ pub fn set_playback_mode(
 ) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
     inner.assert_owner(&client_token)?;
-    inner.set_playback_mode(match mode.as_str() {
-        "auto" => PlaybackMode::Auto,
-        "skip" => PlaybackMode::Skip,
-        _ => PlaybackMode::Normal,
-    });
+    inner.set_playback_mode(parse_playback_mode(&mode)?);
     Ok(inner.render_state.clone())
 }
 
@@ -342,7 +339,7 @@ pub fn get_playback_mode(state: State<AppState>) -> Result<String, String> {
 
 // ── 前端生命周期 ─────────────────────────────────────────────────────────────
 
-/// 前端（重新）连接通知——重置后端会话状态，确保无残留音频或游戏状态。
+/// 前端（重新）连接通知——领取 / 抢占当前会话 owner，并返回当前渲染投影。
 ///
 /// 前端 mount 时调用。覆盖浏览器刷新、WebView 重建、HMR 热重载等场景。
 #[command]
@@ -362,7 +359,7 @@ pub fn set_host_screen(
 ) -> Result<RenderState, String> {
     let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
     inner.assert_owner(&client_token)?;
-    inner.set_host_screen(parse_host_screen(&screen));
+    inner.set_host_screen(parse_host_screen(&screen)?);
     Ok(inner.render_state.clone())
 }
 

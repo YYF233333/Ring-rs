@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useConfirmDialog } from "../composables/useConfirmDialog";
 import { useScreens } from "../composables/useScreens";
 
 const emit = defineEmits<{
@@ -8,7 +7,6 @@ const emit = defineEmits<{
 }>();
 
 const { screens, isButtonVisible, actionId } = useScreens();
-const { ask: askConfirm } = useConfirmDialog();
 
 const buttons = computed(() => {
   if (!screens.value) return fallbackButtons;
@@ -21,23 +19,11 @@ const fallbackButtons = [
   { label: "读取", action: "open_load" as string | { start_at_label: string } },
   { label: "设置", action: "navigate_settings" as string | { start_at_label: string } },
   { label: "历史", action: "navigate_history" as string | { start_at_label: string } },
-  {
-    label: "返回标题",
-    action: "return_to_title" as string | { start_at_label: string },
-    confirm: "确定返回标题画面？",
-  },
-  {
-    label: "退出",
-    action: "exit" as string | { start_at_label: string },
-    confirm: "确定退出游戏？",
-  },
+  { label: "返回标题", action: "return_to_title" as string | { start_at_label: string } },
+  { label: "退出", action: "exit" as string | { start_at_label: string } },
 ];
 
-async function onButtonClick(btn: (typeof fallbackButtons)[number]) {
-  if ("confirm" in btn && btn.confirm) {
-    const confirmed = await askConfirm("确认", btn.confirm);
-    if (!confirmed) return;
-  }
+function onButtonClick(btn: (typeof fallbackButtons)[number]) {
   emit("action", actionId(btn.action));
 }
 </script>

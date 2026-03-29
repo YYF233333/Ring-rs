@@ -64,6 +64,9 @@ pnpm -C host-tauri dev:browser
 
 # 生成 deterministic smoke trace bundle（需先启动 debug server）
 pnpm -C host-tauri harness:smoke
+
+# 直接运行不依赖浏览器/debug server 的薄 CLI harness
+pnpm -C host-tauri harness:cli
 ```
 
 ### 热更新
@@ -104,6 +107,7 @@ const state = await callBackend<RenderState>("tick", { clientToken, dt: 0.016 })
 
 - 前端 mount 时必须先调用 `frontend_connected()`，领取 `client_token`
 - 所有会推进或修改会话状态的命令都必须携带 `clientToken`
+- 现在连 `delete_save`、`update_settings` 这类“会改持久化或宿主状态”的命令也统一要求 `clientToken`
 - 第二个客户端接管会话后，旧客户端会收到明确的 owner 错误，不再继续推进状态
 
 ### 新增 IPC 命令

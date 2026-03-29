@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useConfirmDialog } from "../composables/useConfirmDialog";
 import { useScreens } from "../composables/useScreens";
 import { useTheme } from "../composables/useTheme";
 
@@ -10,7 +9,6 @@ const emit = defineEmits<{
 
 const { screens, isButtonVisible, resolveConditionalAsset, actionId } = useScreens();
 const { asset } = useTheme();
-const { ask: askConfirm } = useConfirmDialog();
 
 const titleDef = computed(() => screens.value?.title);
 
@@ -35,18 +33,10 @@ const fallbackButtons = [
   { label: "继续游戏", action: "continue_game" as string | { start_at_label: string } },
   { label: "读取存档", action: "open_load" as string | { start_at_label: string } },
   { label: "设置", action: "navigate_settings" as string | { start_at_label: string } },
-  {
-    label: "退出",
-    action: "exit" as string | { start_at_label: string },
-    confirm: "确定退出游戏？",
-  },
+  { label: "退出", action: "exit" as string | { start_at_label: string } },
 ];
 
-async function onButtonClick(btn: (typeof fallbackButtons)[number]) {
-  if ("confirm" in btn && btn.confirm) {
-    const confirmed = await askConfirm("确认", btn.confirm);
-    if (!confirmed) return;
-  }
+function onButtonClick(btn: (typeof fallbackButtons)[number]) {
   emit("action", actionId(btn.action));
 }
 </script>

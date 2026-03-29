@@ -17,7 +17,8 @@ use axum::routing::{get, post};
 use base64::Engine as _;
 use tower_http::cors::CorsLayer;
 
-use crate::render_state::{HostScreen, PlaybackMode};
+use crate::protocol::{parse_host_screen, parse_playback_mode};
+use crate::render_state::PlaybackMode;
 use crate::state::{AppStateInner, UserSettings};
 
 type SharedState = Arc<Mutex<AppStateInner>>;
@@ -25,18 +26,6 @@ type SharedState = Arc<Mutex<AppStateInner>>;
 #[derive(Clone)]
 struct ServerCtx {
     state: SharedState,
-}
-
-fn parse_host_screen(screen: &str) -> HostScreen {
-    match screen {
-        "ingame" => HostScreen::InGame,
-        "ingame_menu" => HostScreen::InGameMenu,
-        "save" => HostScreen::Save,
-        "load" => HostScreen::Load,
-        "settings" => HostScreen::Settings,
-        "history" => HostScreen::History,
-        _ => HostScreen::Title,
-    }
 }
 
 /// 在独立线程启动 debug HTTP server（端口 9528）。
@@ -267,8 +256,13 @@ fn dispatch(
         }
 
         "delete_save" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let slot = args["slot"].as_u64().ok_or("missing slot")? as u32;
             let inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             inner
                 .services()
                 .saves
@@ -301,9 +295,14 @@ fn dispatch(
         }
 
         "update_settings" => {
+            let client_token = args["clientToken"]
+                .as_str()
+                .ok_or("missing clientToken")?
+                .to_string();
             let settings: UserSettings = serde_json::from_value(args["settings"].clone())
                 .map_err(|e| format!("Invalid settings: {e}"))?;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
+            inner.assert_owner(&client_token)?;
             inner.text_speed = settings.text_speed;
             let svc = inner.services_mut();
             svc.audio.set_bgm_volume(settings.bgm_volume / 100.0);
@@ -390,14 +389,10 @@ fn dispatch(
                 .as_str()
                 .ok_or("missing clientToken")?
                 .to_string();
-            let mode_str = args["mode"].as_str().unwrap_or("normal");
+            let mode_str = args["mode"].as_str().ok_or("missing mode")?;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
             inner.assert_owner(&client_token)?;
-            inner.set_playback_mode(match mode_str {
-                "auto" => PlaybackMode::Auto,
-                "skip" => PlaybackMode::Skip,
-                _ => PlaybackMode::Normal,
-            });
+            inner.set_playback_mode(parse_playback_mode(mode_str)?);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
@@ -443,10 +438,10 @@ fn dispatch(
                 .as_str()
                 .ok_or("missing clientToken")?
                 .to_string();
-            let screen = args["screen"].as_str().unwrap_or("title");
+            let screen = args["screen"].as_str().ok_or("missing screen")?;
             let mut inner = state.lock().map_err(|e| e.to_string())?;
             inner.assert_owner(&client_token)?;
-            inner.set_host_screen(parse_host_screen(screen));
+            inner.set_host_screen(parse_host_screen(screen)?);
             Ok(serde_json::to_value(&inner.render_state).unwrap_or_default())
         }
 
