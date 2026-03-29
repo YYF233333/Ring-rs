@@ -92,17 +92,17 @@ process_tick(dt)
 4. 分派所有 AudioCommand 到 `dispatch_audio_command`（仅更新 `services().audio` 内存状态，**不** `services().resources.read_bytes`、不 `cache_audio_bytes`）
 5. 根据 Runtime 的 `WaitingReason`（权威来源）设置 `waiting` 状态
 6. 同步 runtime persistent 变量到 PersistentStore
-7. 若无命令且无等待 → 标记 `script_finished` 并清理 `continue`
+7. 若无命令且无等待 → 视为脚本自然结束，统一执行 `return_to_title(false)` 返回标题并清理 `continue`
 
-当 `ExecuteResult::RequestUI` 出现时：将 `mode` / `key` / `params` 写入 `render_state.active_ui_mode`（`UiModeRequest`），并设置 `waiting = UIResult { key }`，**不再**将 UI 结果降级为空字符串；前端通过 `handle_ui_result(key, value)` 回传后解除等待并继续 `run_script_tick`。
+当 `ExecuteResult::RequestUI` 出现时：将 `mode` / `key` / `params` 写入 `render_state.active_ui_mode`（`UiModeRequest`），并设置 `waiting = UIResult { key }`，**不再**将 UI 结果降级为空字符串；前端通过 `handle_ui_result(key, value)` 回传后，Host 会直接消费这次 `runtime.tick(UIResult)` 产出的首批 `Command`，避免首句后续对话被跳过。
 
 ### 用户交互
 
 | 操作 | 方法 | 行为 |
 |------|------|------|
 | 点击 | `process_click()` | 打字中→完成打字；inline_wait→清除；等待点击→捕获快照→清除等待 |
-| 选择 | `process_choose(index)` | 注入 `RuntimeInput::choice` → runtime.tick → 清除选项 → 清除等待 |
-| UI结果 | `handle_ui_result(key, value)` | 校验 `key` 与当前 `UIResult` 等待一致 → 注入 `RuntimeInput::UIResult` → 清除 `active_ui_mode` 与 `waiting` → `run_script_tick` |
+| 选择 | `process_choose(index)` | 注入 `RuntimeInput::choice` → 清除旧选项 → 立即消费该 tick 产出的 `Command` / `WaitingReason`，避免分支后首句文本被吞 |
+| UI结果 | `handle_ui_result(key, value)` | 校验 `key` 与当前 `UIResult` 等待一致 → 注入 `RuntimeInput::UIResult` → 立即消费该 tick 产出的 `Command` / `WaitingReason` → 清除旧 `active_ui_mode` 并渲染下一帧 |
 | 回退 | `restore_snapshot()` | 弹出快照栈 → 恢复 render_state + runtime_state + history 截断；**额外**清除 `active_ui_mode`、把 `playback_mode` 归一到 `Normal` |
 | 结束过场 | `finish_cutscene()` | 清除 cutscene 状态 + 清除 Cutscene 等待 |
 
@@ -118,7 +118,7 @@ process_tick(dt)
 - `host_screen` 是后端 authoritative 的推进边界；前端页面状态只能投影，不能绕过它推进会话
 - 会推进会话的命令必须先通过 `assert_owner(client_token)`，防止多客户端同时驱动同一 `AppStateInner`
 - 快照栈最大 50 条，超出时从底部淘汰
-- `script_finished` 仅在 runtime.tick 返回空命令且无等待时设置
+- 脚本自然结束时不会停留在 `InGame` 空转，而是统一走 `return_to_title(false)` 做会话清理与标题返回
 - 持久化变量在每次 `run_script_tick` 后同步，`return_to_title(save_continue)` 时写盘
 - 会话级清理（停止音频、清空 runtime / render_state / history / snapshot_stack / playback_mode 等）统一由私有方法 `reset_session()` 承担；`init_game`、`init_game_from_resource` 开局前调用，`return_to_title` 内部亦调用（再额外做持久化变量保存与写盘），避免散落重复重置
 - `init_game_from_resource` 会递归预加载所有子脚本，包括条件分支内的 `CallScript`

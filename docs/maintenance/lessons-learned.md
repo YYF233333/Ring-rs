@@ -164,6 +164,24 @@ result.assert_waiting_click();
 - **原因**：`AppStateInner` 通过 `Arc<Mutex<>>` 被 Tauri IPC 和 Debug HTTP Server 共享。Tauri WebView 和外部浏览器各自运行独立的 `requestAnimationFrame` → `tick(dt)` 循环，导致：①两个 tick 交替推进打字机计时器 ②用户在一侧的点击对另一侧不可见 ③游戏以 2x 速度推进。
 - **正确做法**：使用 `RING_HEADLESS=1` 环境变量启动 Tauri dev，隐藏 Tauri 窗口使 WebView 的 rAF 被抑制，外部浏览器成为唯一客户端。前端 `useEngine` 的游戏循环额外检查 `document.hidden` 作为安全网。
 
+### UIResult 后续命令被 Host 吞掉
+
+- **现象**：`showMap` / `callGame` 返回值后，地图或小游戏本身关闭了，但对话框仍停留在旧文本；下一次点击会直接跳过本应立刻出现的那句对话。
+- **原因**：Host 在 `handle_ui_result()` 中调用 `runtime.tick(Some(RuntimeInput::UIResult))` 后，只清除了等待状态，却没有消费这次 tick 立即返回的 `Command` 和 `WaitingReason`。Runtime 已经前进到下一句，但 `RenderState` 仍停留在旧帧。
+- **正确做法**：把“带输入的 runtime tick”与普通 `run_script_tick()` 统一走同一条 `Command`/等待态应用逻辑，确保 UIResult 解除等待时产出的首批命令立即写入 `RenderState`。
+
+### `ring-asset` 下 iframe HTML 的相对资源会丢失目录
+
+- **现象**：小游戏在 Debug HTTP Server 中正常，但在 Tauri WebView 中打开后无法交互；日志里出现 `ring-asset 协议资源未找到 path=game.js` 之类的报错。
+- **原因**：小游戏 `index.html` 直接通过 `ring-asset` 自定义协议加载时，WebView 对相对资源的 base URL 解析不稳定，`./game.js` 之类的引用可能退化成根路径请求。
+- **正确做法**：宿主先读取小游戏 HTML 文本，再注入显式的 `<base href=".../games/<id>/">` 后通过 iframe `srcdoc` 加载，确保脚本、样式和图片的相对路径在 Tauri 与 Debug Server 下表现一致。
+
+### host-tauri 脚本自然结束后仍停在 InGame
+
+- **现象**：脚本跑到最后一个节点后，不再有新对话，但界面仍停留在游戏画面，像是“卡住”。
+- **原因**：Host 仅把 `script_finished` 设为 `true`，并未把“自然结束”收敛到标题态，会话仍保持 `host_screen = InGame`。
+- **正确做法**：当 runtime 返回“无命令且无等待”时，直接执行 `return_to_title(false)`，统一走标题返回路径并清理 continue / 会话状态。
+
 ---
 
 ## 如何贡献新条目

@@ -42,7 +42,7 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 | `ChapterMark` | 章节标记淡入淡出 |
 | `VideoOverlay` | 视频过场播放；**纯 emit**（如完成/跳过）由父组件接 `useEngine.finishCutscene` |
 | `MapOverlay` | 地图 UI 模式（`active_ui_mode` 为地图类 mode 时展示） |
-| `MiniGameOverlay` | iframe 小游戏容器（`active_ui_mode` 为小游戏 mode 时展示；与 `public/engine-sdk.js` 的 postMessage 协议配合） |
+| `MiniGameOverlay` | iframe 小游戏容器（`active_ui_mode` 为小游戏 mode 时展示；先读取游戏 HTML、注入 `base href` 后用 `srcdoc` 加载，保证 `ring-asset` 下的相对资源路径稳定） |
 
 ### 系统 UI 组件 (`screens/`)
 
@@ -66,7 +66,7 @@ Vue 3 前端渲染层——接收 Rust 后端通过 IPC 推送的 `RenderState` 
 
 | 文件 | 说明 |
 |------|------|
-| `engine-sdk.js` | 小游戏 JS SDK：与宿主页面 `postMessage` 协议交互（供 iframe 内嵌游戏调用以向 Ring 宿主回传结果等） |
+| `engine-sdk.js` | 小游戏 JS SDK：与宿主页面 `postMessage` 协议交互（仓库中保留 `public/engine-sdk.js` 源文件，并提供 `assets/engine-sdk.js` 可加载副本供 iframe 小游戏引用） |
 
 ## 数据流
 

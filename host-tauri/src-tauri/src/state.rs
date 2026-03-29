@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
-use vn_runtime::command::Position;
+use vn_runtime::command::{Command, Position};
 use vn_runtime::history::HistoryEvent;
 use vn_runtime::state::{VarValue, WaitingReason};
 use vn_runtime::{Parser, RuntimeInput, Script, ScriptNode, VNRuntime};
@@ -1178,20 +1178,16 @@ impl AppStateInner {
 
         let var_value = crate::render_state::json_to_var_value(&value);
 
-        if let Some(rt) = self.runtime.as_mut() {
-            let input = RuntimeInput::UIResult {
-                key,
-                value: var_value,
-            };
-            let _ = rt.tick(Some(input));
-        }
-
+        let input = RuntimeInput::UIResult { key, value: var_value };
+        let tick_result = self
+            .runtime
+            .as_mut()
+            .expect("invariant: UIResult requires loaded runtime")
+            .tick(Some(input))
+            .map_err(|error| error.to_string())?;
         self.render_state.active_ui_mode = None;
         self.waiting = WaitingFor::Nothing;
-
-        if !self.script_finished {
-            self.run_script_tick();
-        }
+        self.apply_runtime_tick_output(tick_result.0, tick_result.1);
 
         self.record_trace("ui_result_submitted", serde_json::json!({}));
 
@@ -1206,13 +1202,110 @@ impl AppStateInner {
         if self.waiting != WaitingFor::Choice {
             return;
         }
-        if let Some(rt) = self.runtime.as_mut() {
-            let input = RuntimeInput::choice(index);
-            let _ = rt.tick(Some(input));
-        }
+        let tick_result = self
+            .runtime
+            .as_mut()
+            .expect("invariant: choice selection requires loaded runtime")
+            .tick(Some(RuntimeInput::choice(index)));
         self.render_state.clear_choices();
         self.waiting = WaitingFor::Nothing;
         self.record_trace("choice_selected", serde_json::json!({ "index": index }));
+        match tick_result {
+            Ok((commands, waiting_reason)) => self.apply_runtime_tick_output(commands, waiting_reason),
+            Err(error) => {
+                warn!(%error, "choice selection tick failed");
+                self.script_finished = true;
+                self.record_trace("script_tick_error", serde_json::json!({}));
+            }
+        }
+    }
+
+    fn apply_runtime_tick_output(&mut self, commands: Vec<Command>, waiting_reason: WaitingReason) {
+        let manifest = &self
+            .services
+            .as_ref()
+            .expect("invariant: services initialized in setup()")
+            .manifest;
+        let BatchOutput {
+            result,
+            audio_commands,
+            scene_effect_request,
+        } = self
+            .command_executor
+            .execute_batch(&commands, &mut self.render_state, manifest);
+
+        if let Some(ref d) = self.render_state.dialogue
+            && (d.visible_chars == 0 || !d.content.is_empty())
+        {
+            let last_text = self.history.first().map(|h| h.text.as_str());
+            if last_text != Some(&d.content) {
+                self.push_history(d.speaker.clone(), d.content.clone());
+            }
+        }
+
+        for cmd in audio_commands {
+            self.dispatch_audio_command(cmd);
+        }
+
+        if let Some(req) = scene_effect_request {
+            self.apply_scene_effect(req);
+        }
+
+        if result == ExecuteResult::FullRestart {
+            self.return_to_title(false);
+            return;
+        }
+
+        if let ExecuteResult::RequestUI {
+            key, mode, params, ..
+        } = &result
+        {
+            let json_params = params
+                .iter()
+                .map(|(k, v)| (k.clone(), crate::render_state::var_value_to_json(v)))
+                .collect();
+            self.render_state.active_ui_mode = Some(crate::render_state::UiModeRequest {
+                mode: mode.clone(),
+                key: key.clone(),
+                params: json_params,
+            });
+        }
+
+        if let ExecuteResult::WaitForCutscene { video_path } = &result {
+            self.render_state.cutscene = Some(CutsceneState {
+                video_path: video_path.clone(),
+                is_playing: true,
+            });
+        }
+
+        // 用 Runtime 的 waiting_reason（权威来源）映射 Host 等待状态
+        self.waiting = Self::map_runtime_waiting(&waiting_reason);
+
+        // 同步 runtime persistent 变量到 PersistentStore
+        if let Some(rt) = self.runtime.as_ref() {
+            let pv = &rt.state().persistent_variables;
+            if !pv.is_empty() {
+                self.persistent_store.merge_from(pv);
+            }
+        }
+
+        if waiting_reason == WaitingReason::None && commands.is_empty() {
+            self.script_finished = true;
+            self.record_trace("script_finished", serde_json::json!({}));
+            self.return_to_title(false);
+            return;
+        }
+
+        self.project_render_state();
+        self.record_trace(
+            "script_tick",
+            serde_json::json!({
+                "commands_count": commands.len(),
+                "waiting": format!("{:?}", self.waiting),
+                "execute_result": format!("{:?}", result),
+                "script_finished": self.script_finished,
+            }),
+        );
     }
 
     /// 调用 runtime.tick() 并执行产出的 commands
@@ -1222,95 +1315,7 @@ impl AppStateInner {
         };
 
         match rt.tick(None) {
-            Ok((commands, waiting_reason)) => {
-                let manifest = &self
-                    .services
-                    .as_ref()
-                    .expect("invariant: services initialized in setup()")
-                    .manifest;
-                let BatchOutput {
-                    result,
-                    audio_commands,
-                    scene_effect_request,
-                } = self.command_executor.execute_batch(
-                    &commands,
-                    &mut self.render_state,
-                    manifest,
-                );
-
-                if let Some(ref d) = self.render_state.dialogue
-                    && (d.visible_chars == 0 || !d.content.is_empty())
-                {
-                    let last_text = self.history.first().map(|h| h.text.as_str());
-                    if last_text != Some(&d.content) {
-                        self.push_history(d.speaker.clone(), d.content.clone());
-                    }
-                }
-
-                for cmd in audio_commands {
-                    self.dispatch_audio_command(cmd);
-                }
-
-                if let Some(req) = scene_effect_request {
-                    self.apply_scene_effect(req);
-                }
-
-                if result == ExecuteResult::FullRestart {
-                    self.return_to_title(false);
-                    return;
-                }
-
-                if let ExecuteResult::RequestUI {
-                    key, mode, params, ..
-                } = &result
-                {
-                    let json_params = params
-                        .iter()
-                        .map(|(k, v)| (k.clone(), crate::render_state::var_value_to_json(v)))
-                        .collect();
-                    self.render_state.active_ui_mode = Some(crate::render_state::UiModeRequest {
-                        mode: mode.clone(),
-                        key: key.clone(),
-                        params: json_params,
-                    });
-                }
-
-                if let ExecuteResult::WaitForCutscene { video_path } = &result {
-                    self.render_state.cutscene = Some(CutsceneState {
-                        video_path: video_path.clone(),
-                        is_playing: true,
-                    });
-                }
-
-                // 用 Runtime 的 waiting_reason（权威来源）映射 Host 等待状态
-                self.waiting = Self::map_runtime_waiting(&waiting_reason);
-
-                // 同步 runtime persistent 变量到 PersistentStore
-                if let Some(rt) = self.runtime.as_ref() {
-                    let pv = &rt.state().persistent_variables;
-                    if !pv.is_empty() {
-                        self.persistent_store.merge_from(pv);
-                    }
-                }
-
-                if waiting_reason == WaitingReason::None && commands.is_empty() {
-                    self.script_finished = true;
-                    if let Err(error) = self.delete_continue() {
-                        warn!(%error, "脚本结束后清理 continue 失败");
-                    }
-                }
-
-                self.project_render_state();
-                self.record_trace(
-                    "script_tick",
-                    serde_json::json!({
-                        "commands_count": commands.len(),
-                        "waiting": format!("{:?}", self.waiting),
-                        "execute_result": format!("{:?}", result),
-                        "script_finished": self.script_finished,
-                    }),
-                );
-            }
+            Ok((commands, waiting_reason)) => self.apply_runtime_tick_output(commands, waiting_reason),
             Err(_) => {
                 self.script_finished = true;
                 self.record_trace("script_tick_error", serde_json::json!({}));
@@ -1670,6 +1675,75 @@ mod tests {
             Some("backgrounds/saved.png")
         );
         assert_eq!(inner.host_screen, HostScreen::InGame);
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn handle_ui_result_applies_follow_up_dialogue_without_skipping() {
+        let script = r#"
+："第二部分：测试地图语法糖 showMap。"
+showMap "demo_world" as $destination
+
+if $destination == "town"
+  ："你通过 showMap 选择了小镇。"
+else
+  ："你通过 showMap 选择了其他地点。"
+endif
+
+："第三部分：直接测试底层 requestUI。"
+"#;
+        let (mut inner, root) = make_state_with_services("scripts/ui.md", script);
+
+        inner.init_game_from_resource("scripts/ui.md").unwrap();
+        inner.render_state.complete_typewriter();
+        inner.process_click();
+        inner.run_script_tick();
+
+        let active_mode = inner
+            .render_state
+            .active_ui_mode
+            .as_ref()
+            .expect("showMap should activate a UI mode");
+        assert_eq!(active_mode.mode, "show_map");
+        assert_eq!(inner.waiting, WaitingFor::UIResult { key: "show_map".to_string() });
+
+        inner
+            .handle_ui_result(
+                "show_map".to_string(),
+                serde_json::Value::String("town".to_string()),
+            )
+            .unwrap();
+
+        assert!(inner.render_state.active_ui_mode.is_none());
+        assert_eq!(inner.waiting, WaitingFor::Click);
+        assert_eq!(
+            inner
+                .render_state
+                .dialogue
+                .as_ref()
+                .expect("follow-up dialogue should be rendered")
+                .content,
+            "你通过 showMap 选择了小镇。"
+        );
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn script_end_returns_to_title_screen() {
+        let script = "：\"脚本结束测试。\"\n";
+        let (mut inner, root) = make_state_with_services("scripts/end.md", script);
+
+        inner.init_game_from_resource("scripts/end.md").unwrap();
+        inner.render_state.complete_typewriter();
+        inner.process_click();
+        inner.process_tick(0.0);
+
+        assert_eq!(inner.host_screen, HostScreen::Title);
+        assert_eq!(inner.render_state.host_screen, HostScreen::Title);
+        assert!(inner.runtime.is_none());
+        assert!(inner.render_state.dialogue.is_none());
 
         std::fs::remove_dir_all(root).ok();
     }

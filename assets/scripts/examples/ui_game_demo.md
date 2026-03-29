@@ -1,7 +1,7 @@
 # 新功能最小示例
 
 > 说明：本脚本用于手动回归 `textMode` / `showMap` / `requestUI` / `callGame`。
-> 说明：当前 `callGame` 仍处于骨架阶段，会走空字符串降级路径，不会卡住脚本。
+> 说明：当前 `callGame` 使用 `demo_stub` 示例页，成功完成后会返回 `win` / `lose`。
 
 **start**
 
