@@ -3,8 +3,9 @@ resolver = "3"
 
 members = [
     "vn-runtime",
-    "host",
+    # "host",
     "host-tauri/src-tauri",
+    "host-dioxus",
     "tools/asset-packer",
     "tools/xtask",
 ]

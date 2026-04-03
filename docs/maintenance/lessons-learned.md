@@ -190,6 +190,28 @@ result.assert_waiting_click();
 
 ---
 
+## Dioxus Desktop（host-dioxus）
+
+### Windows 自定义协议 URL 格式
+
+- **现象**：`ring-asset://localhost/path` 格式的 URL 在 WebView 中请求时，协议 handler 完全不被调用，图片/视频无法加载。
+- **原因**：wry 在 Windows（WebView2）上将自定义协议注册为 `http://{name}.localhost/` 格式。`{name}://localhost/` 格式不会触发 handler。
+- **正确做法**：所有 `ring-asset` 引用须使用 `http://ring-asset.localhost/path` 格式。
+
+### WebGL eval 桥接的渲染模式
+
+- **现象**：从 Rust 侧逐帧通过 `document::eval()` 调用 WebGL `drawArrays()` 会导致画面闪烁（只闪一帧然后变白/黑）。
+- **原因**：`document::eval()` 的调度延迟不可预测，与 WebView 的渲染帧不同步。逐帧 eval 调用可能堆积或丢失。
+- **正确做法**：JS 侧用 `requestAnimationFrame` 建立自主渲染循环，读取 Rust 通过 eval 设置的全局变量（如 `window.__ruleProgress`）。Rust 只负责写变量，不负责触发绘制。
+
+### CSS 外部文件加载
+
+- **现象**：`with_custom_head('<link rel="stylesheet" href="/assets/poc.css">')` 注入的外部 CSS 在 `cargo run` 模式下不加载，样式不生效。
+- **原因**：Dioxus Desktop 的内部资源服务在 `cargo run`（非 `dx serve`）模式下可能不提供 `/assets/` 路径的静态文件。
+- **正确做法**：使用 `with_custom_head('<style>...</style>')` 内联 CSS，或通过 `ring-asset` 自定义协议加载 CSS 文件。
+
+---
+
 ## 如何贡献新条目
 
 1. 在对应分类下追加。如果不属于现有分类，新建一级标题。

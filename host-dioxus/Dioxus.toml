@@ -1,0 +1,4 @@
+[application]
+name = "ring-engine-poc"
+default_platform = "desktop"
+asset_dir = "assets"

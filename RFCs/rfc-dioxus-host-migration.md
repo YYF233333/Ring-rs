@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-033
-- 状态：Proposed
+- 状态：Active（Phase 0 通过）
 - 作者：claude-4.6-opus
 - 日期：2026-04-02
 - 相关范围：`host/`（功能基线）、`host-tauri/`（参考实现，冻结待废弃）→ `host-dioxus/`（新宿主）、`.cargo/config.toml`、`tools/xtask/`、CI
@@ -486,16 +486,27 @@ default_platform = "desktop"
 ### Phase 0：PoC 验证（1-2 天）
 
 在新分支上创建 `host-dioxus/` 骨架，验证：
-- [ ] Dioxus Desktop 窗口能正常启动（含 Cargo workspace 兼容性）
-- [ ] `dx serve` 在 workspace 中工作正常
-- [ ] `ring-asset` 自定义协议能加载本地图片
-- [ ] CSS transition/animation 在 WebView 中正常工作
-- [ ] WebGL 2.0 shader 可在 WebView 中编译运行（GLSL fragment shader）
-- [ ] RuleTransition 的 WebGL 遮罩过渡可通过 eval 桥接驱动
-- [ ] HTML5 `<video>` 能播放
-- [ ] `AppStateInner` 能通过 Signal 驱动 UI 更新
+- [x] Dioxus Desktop 窗口能正常启动（含 Cargo workspace 兼容性）
+- [ ] `dx serve` 在 workspace 中工作正常（未测试，不影响后续阶段）
+- [x] `ring-asset` 自定义协议能加载本地图片
+- [x] CSS transition/animation 在 WebView 中正常工作
+- [x] WebGL 2.0 shader 可在 WebView 中编译运行（GLSL fragment shader）
+- [x] RuleTransition 的 WebGL 遮罩过渡可通过 eval 桥接驱动
+- [x] HTML5 `<video>` 能播放
+- [x] `AppStateInner` 能通过 Signal 驱动 UI 更新
 
-PoC 通过后再继续后续阶段。**PoC 失败则本 RFC 状态改为 Withdrawn。**
+**PoC 结论：通过（2026-04-04）。** 7/8 项验证通过（`dx serve` 待后续验证），所有关键能力确认可用。
+
+#### PoC 实现记录
+
+实现代码在 `host-dioxus/` 目录，Dioxus 0.7.4 + Desktop mode。
+
+**发现的平台差异（须在后续阶段遵守）：**
+
+1. **自定义协议 URL 格式**：Windows 上 wry 的 custom protocol 使用 `http://{name}.localhost/` 格式，**不是** `{name}://localhost/`。所有 `ring-asset` 引用须用 `http://ring-asset.localhost/path`。
+2. **Workspace 依赖冲突**：`host` crate 依赖 `wry 0.49`（小游戏 WebView），与 `dioxus-desktop` 的 `wry 0.53.5` 在 `kuchikiki` 版本上冲突。PoC 阶段临时注释 `host` 解决。Phase 3 清理时需正式处理（升级 `host` 的 wry 或从 workspace 移除）。
+3. **CSS 加载**：`with_custom_head("<link>")` 引用外部 CSS 文件在 `cargo run` 模式下不可靠。使用 `with_custom_head("<style>...")` 内联 CSS 或通过 `ring-asset` 协议加载。
+4. **WebGL eval 桥接模式**：Rust 侧设置全局变量（`window.__ruleProgress`），JS 侧用 `requestAnimationFrame` 自主渲染循环读取。不要从 Rust 逐帧 eval 绘制调用（延迟导致闪烁）。
 
 ### Phase 1：后端迁移（1 天）
 
