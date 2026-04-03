@@ -14,7 +14,6 @@ target
 **/mutants.out*/
 
 .claude/
-.vscode/
 
 assets/*
 !assets/games/

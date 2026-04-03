@@ -1,0 +1,26 @@
+target/
+dist/
+saves/
+vendor/
+recordings/
+
+# Large binary / build artifacts
+*.zip
+*.pdb
+*.exe
+**/*.profraw
+**/*.profdata
+**/mutants.out*/
+
+# Assets (large media files)
+assets/images/
+assets/audio/
+assets/video/
+assets/fonts/
+
+# Node modules
+host-tauri/node_modules/
+
+# Coverage output (keep html report path readable)
+target/llvm-cov/
+target/doc/
