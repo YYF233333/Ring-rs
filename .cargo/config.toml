@@ -15,12 +15,8 @@ test-runtime = "test -p vn-runtime"
 test-host-lib = "test -p host --lib"
 
 # One-command local gate (cross-platform).
-# Runs: fmt + biome（自动应用）-> clippy（自动 fix）-> typecheck -> test
+# Runs: fmt -> clippy（自动 fix）-> test
 check-all = "run -p xtask -- check-all"
-
-# -------- Frontend checks --------
-# Runs biome (format + lint) and vue-tsc (typecheck) for host-tauri.
-fe-check = "run -p xtask -- fe-check"
 
 # -------- Coverage (local) --------
 # Requires: cargo install cargo-llvm-cov && rustup component add llvm-tools-preview

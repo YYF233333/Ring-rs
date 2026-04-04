@@ -159,7 +159,7 @@ dist/
 
 说明：
 
-- 此命令会先执行 `pnpm tauri build --no-bundle` 构建 Tauri 应用（含前端），再打包游戏资源
+- 此命令会构建宿主应用，再打包游戏资源
 - `dist/config.json` 会被自动改成 ZIP 模式；**不会修改**仓库根目录的 `config.json`
 - 分发时把 `dist/` 内的可执行文件、`game.zip`、`config.json` 交付给玩家即可；不需要再带 `assets/` 目录
 
@@ -181,5 +181,5 @@ cargo pack verify dist/game.zip --input assets
 
 ### Q：发布时为什么不需要 `assets/`？
 
-发布模式下资源来自 `game.zip`（`asset_source: "zip"`），所有 `assets/` 内容都被打进 ZIP 里了。`host-tauri` 通过 `ring-asset` 自定义协议直接从 ZIP 读取资源并提供给 WebView，无需解压到磁盘。
+发布模式下资源来自 `game.zip`（`asset_source: "zip"`），所有 `assets/` 内容都被打进 ZIP 里了。宿主通过自定义协议直接从 ZIP 读取资源，无需解压到磁盘。
 

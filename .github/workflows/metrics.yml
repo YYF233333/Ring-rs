@@ -26,19 +26,6 @@ jobs:
         with:
           components: llvm-tools-preview
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Install frontend dependencies
-        run: pnpm -C host-tauri install --frozen-lockfile
-
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
@@ -106,7 +93,7 @@ jobs:
           $secs = [math]::Round($t.TotalSeconds, 1)
           echo "BUILD_DEBUG_SECS=$secs" >> $env:GITHUB_ENV
 
-      # ── Phase 3: release build time + binary size (clean) ──
+      # ── Phase 3: release build time (clean) ──
 
       - name: "Metric: release build time"
         shell: pwsh
@@ -115,21 +102,6 @@ jobs:
           $t = Measure-Command { cargo build --release 2>&1 }
           $secs = [math]::Round($t.TotalSeconds, 1)
           echo "BUILD_RELEASE_SECS=$secs" >> $env:GITHUB_ENV
-
-      - name: "Metric: binary size"
-        shell: pwsh
-        run: |
-          $exe = "target/release/host-tauri.exe"
-          $size = (Get-Item $exe).Length
-          echo "BIN_RELEASE=$size" >> $env:GITHUB_ENV
-
-      - name: "Metric: frontend bundle size"
-        shell: pwsh
-        run: |
-          pnpm -C host-tauri build
-          $distDir = "host-tauri/dist"
-          $totalSize = (Get-ChildItem -Recurse -File $distDir | Measure-Object -Property Length -Sum).Sum
-          echo "FE_BUNDLE_SIZE=$totalSize" >> $env:GITHUB_ENV
 
       # ── Phase 4: coverage + test count ──
 
@@ -213,7 +185,7 @@ jobs:
           $crates = @{
             "vn_runtime" = @{ code = 0; comments = 0; blanks = 0 }
             "host" = @{ code = 0; comments = 0; blanks = 0 }
-            "host_tauri" = @{ code = 0; comments = 0; blanks = 0 }
+            "host_dioxus" = @{ code = 0; comments = 0; blanks = 0 }
             "xtask" = @{ code = 0; comments = 0; blanks = 0 }
             "asset_packer" = @{ code = 0; comments = 0; blanks = 0 }
           }
@@ -226,10 +198,10 @@ jobs:
               $crates["vn_runtime"].code += $stats.code
               $crates["vn_runtime"].comments += $stats.comments
               $crates["vn_runtime"].blanks += $stats.blanks
-            } elseif ($name -match '^\.?/?host-tauri/src-tauri/') {
-              $crates["host_tauri"].code += $stats.code
-              $crates["host_tauri"].comments += $stats.comments
-              $crates["host_tauri"].blanks += $stats.blanks
+            } elseif ($name -match '^\.?/?host-dioxus/') {
+              $crates["host_dioxus"].code += $stats.code
+              $crates["host_dioxus"].comments += $stats.comments
+              $crates["host_dioxus"].blanks += $stats.blanks
             } elseif ($name -match '^\.?/?host/') {
               $crates["host"].code += $stats.code
               $crates["host"].comments += $stats.comments
@@ -270,8 +242,7 @@ jobs:
                 host = [double]$env:COV_HOST
               }
               binary_size_bytes = @{
-                host_release = [long]$env:BIN_RELEASE
-                frontend_bundle = [long]$env:FE_BUNDLE_SIZE
+                host_release = 0
               }
               build_time_secs = @{
                 release_clean = [double]$env:BUILD_RELEASE_SECS

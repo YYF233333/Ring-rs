@@ -1,6 +1,6 @@
 //! 发行版构建流程
 //!
-//! 将资源打包、编译 Tauri 应用、检测 FFmpeg、组装发行版目录。
+//! 将资源打包、编译宿主应用、检测 FFmpeg、组装发行版目录。
 
 use crate::pack::{pack_assets, pack_directory};
 use crate::utils::{ffmpeg_exe_name, required_file_name, run_command};
@@ -10,13 +10,12 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_GAME_NAME: &str = "Ring";
-const FRONTEND_DIR: &str = "host-tauri";
 
 /// 创建完整发行版
 ///
 /// 步骤：
 /// 1. 打包 assets -> game.zip
-/// 2. `pnpm -C host-tauri tauri build --no-bundle` 编译 Tauri 应用
+/// 2. `cargo build --release -p host-dioxus` 编译宿主应用
 /// 3. 检查 config.json
 /// 4. 检测 FFmpeg 二进制
 /// 5. 组装发行版目录（并可选打包为 ZIP）
@@ -40,14 +39,14 @@ pub fn create_release(
     pack_assets(assets_dir, zip_output)?;
     println!();
 
-    println!("步骤 2/5: 编译 Tauri 应用（release，不生成安装包）...");
+    println!("步骤 2/5: 编译宿主应用（release）...");
     run_command(
-        &format!("执行 pnpm -C {FRONTEND_DIR} tauri build --no-bundle"),
-        "pnpm",
-        &["-C", FRONTEND_DIR, "tauri", "build", "--no-bundle"],
+        "执行 cargo build --release -p host-dioxus",
+        "cargo",
+        &["build", "--release", "-p", "host-dioxus"],
     )?;
 
-    let host_binary = tauri_binary_path();
+    let host_binary = host_binary_path();
     if !host_binary.exists() {
         bail!("找不到编译后的二进制文件: {:?}", host_binary);
     }
@@ -246,12 +245,12 @@ fn detect_ffmpeg() -> Option<PathBuf> {
     None
 }
 
-/// Tauri 二进制产物路径（workspace 共享 target 目录）
-fn tauri_binary_path() -> PathBuf {
+/// 宿主二进制产物路径（workspace 共享 target 目录）
+fn host_binary_path() -> PathBuf {
     if cfg!(target_os = "windows") {
-        PathBuf::from("target/release/host-tauri.exe")
+        PathBuf::from("target/release/host-dioxus.exe")
     } else {
-        PathBuf::from("target/release/host-tauri")
+        PathBuf::from("target/release/host-dioxus")
     }
 }
 

@@ -7,7 +7,7 @@
 - 作者：claude-4.6-opus
 - 日期：2026-04-02
 - 相关范围：`host/`（功能基线）、`host-tauri/`（参考实现，冻结待废弃）→ `host-dioxus/`（新宿主）、`.cargo/config.toml`、`tools/xtask/`、CI
-- 前置：无（独立于 RFC-032；若本 RFC 落地，RFC-032 状态改为 Superseded）
+- 前置：无（独立于 RFC-032；RFC-032 已标记为 Superseded）
 
 ---
 

@@ -4,13 +4,12 @@ resolver = "3"
 members = [
     "vn-runtime",
     # "host",
-    "host-tauri/src-tauri",
     "host-dioxus",
     "tools/asset-packer",
     "tools/xtask",
 ]
 
-default-members = ["host-tauri/src-tauri"]
+default-members = ["host-dioxus"]
 
 [profile.dev.package."*"]
 opt-level = 1

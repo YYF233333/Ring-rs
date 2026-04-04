@@ -4,8 +4,7 @@
 //!
 //! ## 命令
 //!
-//! - `check-all`: fmt（直接应用）、clippy（自动 fix）、前端 lint/typecheck、test
-//! - `fe-check`: 仅运行前端检查（biome + vue-tsc）
+//! - `check-all`: fmt（直接应用）、clippy（自动 fix）、test
 //! - `cov`: 运行 workspace 覆盖率（排除工具 crate 与平台胶水代码）
 //! - `script-check`: 检查脚本文件（语法、label、资源引用）
 //! - `mutants`: 运行变异测试（vn-runtime / host），检测测试质量
@@ -31,7 +30,6 @@ use xshell::Shell;
     arg_required_else_help = true,
     after_help = r#"ALIASES (in .cargo/config.toml):
   cargo check-all          -> cargo run -p xtask -- check-all
-  cargo fe-check           -> cargo run -p xtask -- fe-check
   cargo cov                -> cargo run -p xtask -- cov
   cargo script-check       -> cargo run -p xtask -- script-check
   cargo mutants-check      -> cargo run -p xtask -- mutants
@@ -45,11 +43,8 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum XtaskCommand {
-    /// 运行 fmt + biome（自动应用）、clippy（自动 fix）、typecheck、test
+    /// 运行 fmt、clippy（自动 fix）、test
     CheckAll,
-
-    /// 仅运行前端检查（biome check:write + vue-tsc typecheck）
-    FeCheck,
 
     /// 运行 workspace 覆盖率报告（HTML；排除工具 crate 与平台胶水代码）
     Cov,
@@ -152,75 +147,6 @@ fn run_status(step: &str, program: &str, args: &[&str]) -> anyhow::Result<ExitSt
         .with_context(|| format!("{step} failed to start"))
 }
 
-const FRONTEND_DIR: &str = "host-tauri";
-
-fn pnpm_cmd() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "pnpm.cmd"
-    } else {
-        "pnpm"
-    }
-}
-
-struct FrontendEnv {
-    available: bool,
-}
-
-impl FrontendEnv {
-    fn detect(sh: &Shell) -> Self {
-        let pnpm = pnpm_cmd();
-        let has_pnpm = sh.cmd(pnpm).arg("--version").quiet().run().is_ok();
-        if !has_pnpm {
-            eprintln!("\n[skip] pnpm 不可用，跳过前端检查");
-            return Self { available: false };
-        }
-
-        let node_modules = Path::new(FRONTEND_DIR).join("node_modules");
-        if !node_modules.exists() {
-            eprintln!("\n==> pnpm -C {FRONTEND_DIR} install");
-            if sh
-                .cmd(pnpm)
-                .args(["-C", FRONTEND_DIR, "install"])
-                .run()
-                .is_err()
-            {
-                eprintln!("[skip] pnpm install 失败，跳过前端检查");
-                return Self { available: false };
-            }
-        }
-
-        Self { available: true }
-    }
-
-    fn run_biome_write(&self, sh: &Shell) {
-        if !self.available {
-            return;
-        }
-        if let Err(e) = run(
-            &format!("pnpm -C {FRONTEND_DIR} check:write"),
-            sh,
-            pnpm_cmd(),
-            &["-C", FRONTEND_DIR, "check:write"],
-        ) {
-            eprintln!("[warn] biome check:write 失败: {e:#}");
-        }
-    }
-
-    fn run_typecheck(&self, sh: &Shell) {
-        if !self.available {
-            return;
-        }
-        if let Err(e) = run(
-            &format!("pnpm -C {FRONTEND_DIR} typecheck"),
-            sh,
-            pnpm_cmd(),
-            &["-C", FRONTEND_DIR, "typecheck"],
-        ) {
-            eprintln!("[warn] vue-tsc typecheck 失败: {e:#}");
-        }
-    }
-}
-
 /// 覆盖率排除规则
 ///
 /// 排除不可单元测试的平台/框架胶水代码：
@@ -285,9 +211,6 @@ fn real_main() -> anyhow::Result<()> {
         XtaskCommand::CheckAll => {
             run("cargo fmt --all", &sh, "cargo", &["fmt", "--all"])?;
 
-            let fe = FrontendEnv::detect(&sh);
-            fe.run_biome_write(&sh);
-
             run(
                 "cargo clippy --workspace --fix --allow-dirty",
                 &sh,
@@ -295,25 +218,12 @@ fn real_main() -> anyhow::Result<()> {
                 &["clippy", "--workspace", "--fix", "--allow-dirty"],
             )?;
 
-            fe.run_typecheck(&sh);
-
             run(
                 "cargo test --workspace --quiet",
                 &sh,
                 "cargo",
                 &["test", "--workspace", "--quiet"],
             )?;
-        }
-        XtaskCommand::FeCheck => {
-            let fe = FrontendEnv::detect(&sh);
-            if !fe.available {
-                anyhow::bail!(
-                    "前端工具链不可用。请确保 pnpm 已安装，\
-                     并在 host-tauri/ 目录下运行过 pnpm install。"
-                );
-            }
-            fe.run_biome_write(&sh);
-            fe.run_typecheck(&sh);
         }
         XtaskCommand::Cov => {
             ensure_cargo_llvm_cov_available(&sh)?;

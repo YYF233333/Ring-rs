@@ -1,5 +1,8 @@
 # Host -> host-tauri 迁移差距分析
 
+> **归档声明**：host-tauri 已停止开发，迁移目标改为 host-dioxus（见 RFC-033）。
+> 本文档保留为历史记录，记录了 host-tauri 时期的功能对齐分析。
+
 > LastReviewed: 2026-03-30
 > 审计方式: 摘要优先 + 关键源码抽样复核
 > 范围: `host/`、`host-tauri/`、相关摘要文档与当前实现

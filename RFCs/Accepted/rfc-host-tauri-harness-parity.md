@@ -1,9 +1,11 @@
 # RFC-032: host-tauri Harness 能力对齐
 
+> **Superseded**：host-tauri 已归档，Dioxus 迁移（RFC-033）取代了本 RFC 的目标。保留为历史参考。
+
 ## 元信息
 
 - 编号：RFC-032
-- 状态：Active
+- 状态：Superseded（由 RFC-033 取代）
 - 作者：GPT-5.4
 - 日期：2026-03-30
 - 相关范围：`host-tauri/src-tauri/src/{lib.rs,state.rs,commands.rs,render_state.rs,debug_server.rs,resources.rs,config.rs,manifest.rs,save_manager.rs}`、`host-tauri/src/{App.vue,composables/useEngine.ts,composables/useNavigation.ts,composables/useBackend.ts}`、`host-tauri/package.json`、`docs/host-tauri/*`、`docs/maintenance/host-migration-gap-analysis.md`

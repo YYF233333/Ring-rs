@@ -158,13 +158,13 @@ result.assert_waiting_click();
 - **原因**：录制导出仅在 F8 手动触发。panic hook 只打印信息，不实际导出。FFI abort 场景下析构函数也无法运行。
 - **正确做法**：`AppState` 实现 `Drop`，在 `std::thread::panicking()` 时自动调用 `export_recording`。可覆盖正常 unwind 的 panic；FFI abort 无法覆盖，需从根源避免 FFI 边界 panic。
 
-### host-tauri 未处理 WaitForSignal 导致游戏无法推进
+### host-tauri 未处理 WaitForSignal 导致游戏无法推进（host-tauri 时期，已归档）
 
 - **现象**：New Game 后画面一直黑屏，无法显示对话或推进剧情。
 - **原因**：`run_script_tick()` 使用 `CommandExecutor::execute_batch()` 的返回值（`ExecuteResult`）来设置 Host 等待状态，但 `ChangeScene` 的 `ExecuteResult` 为 `Ok`（仅修改 RenderState），忽略了 Runtime 返回的 `WaitingReason::WaitForSignal`。Runtime 永远等待信号但 Host 不知道需要发送信号，导致脚本在第一个 `changeScene with Fade` 处永久阻塞。
 - **正确做法**：用 Runtime 的 `WaitingReason`（权威来源）映射 Host 等待状态，而非 `ExecuteResult`（派生值）。`process_tick` 中检测过渡/动画完成后，通过 `RuntimeInput::Signal` 解除 Runtime 等待。同理，`WaitForTime` 也需要 Host 在 `process_tick` 中递减并解除。
 
-### Debug HTTP Server 与 Tauri WebView 双客户端竞争
+### Debug HTTP Server 与 Tauri WebView 双客户端竞争（host-tauri 时期，已归档）
 
 - **现象**：MCP 浏览器调试时，外部浏览器画面异常——打字机效果碎裂、游戏速度翻倍、对话推进不同步。直接构造 HTTP 请求（curl）则正常。
 - **原因**：`AppStateInner` 通过 `Arc<Mutex<>>` 被 Tauri IPC 和 Debug HTTP Server 共享。Tauri WebView 和外部浏览器各自运行独立的 `requestAnimationFrame` → `tick(dt)` 循环，导致：①两个 tick 交替推进打字机计时器 ②用户在一侧的点击对另一侧不可见 ③游戏以 2x 速度推进。
@@ -176,13 +176,13 @@ result.assert_waiting_click();
 - **原因**：Host 在 `handle_ui_result()` 中调用 `runtime.tick(Some(RuntimeInput::UIResult))` 后，只清除了等待状态，却没有消费这次 tick 立即返回的 `Command` 和 `WaitingReason`。Runtime 已经前进到下一句，但 `RenderState` 仍停留在旧帧。
 - **正确做法**：把“带输入的 runtime tick”与普通 `run_script_tick()` 统一走同一条 `Command`/等待态应用逻辑，确保 UIResult 解除等待时产出的首批命令立即写入 `RenderState`。
 
-### `ring-asset` 下 iframe HTML 的相对资源会丢失目录
+### `ring-asset` 下 iframe HTML 的相对资源会丢失目录（host-tauri 时期，已归档）
 
 - **现象**：小游戏在 Debug HTTP Server 中正常，但在 Tauri WebView 中打开后无法交互；日志里出现 `ring-asset 协议资源未找到 path=game.js` 之类的报错。
 - **原因**：小游戏 `index.html` 直接通过 `ring-asset` 自定义协议加载时，WebView 对相对资源的 base URL 解析不稳定，`./game.js` 之类的引用可能退化成根路径请求。
 - **正确做法**：宿主先读取小游戏 HTML 文本，再注入显式的 `<base href=".../games/<id>/">` 后通过 iframe `srcdoc` 加载，确保脚本、样式和图片的相对路径在 Tauri 与 Debug Server 下表现一致。
 
-### host-tauri 脚本自然结束后仍停在 InGame
+### host-tauri 脚本自然结束后仍停在 InGame（host-tauri 时期，已归档）
 
 - **现象**：脚本跑到最后一个节点后，不再有新对话，但界面仍停留在游戏画面，像是“卡住”。
 - **原因**：Host 仅把 `script_finished` 设为 `true`，并未把“自然结束”收敛到标题态，会话仍保持 `host_screen = InGame`。

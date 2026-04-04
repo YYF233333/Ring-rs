@@ -1,9 +1,11 @@
 # RFC: Tauri 前端 UI 主题与客制化架构
 
+> **Superseded**：host-tauri 已归档，Dioxus 迁移（RFC-033）取代了本 RFC 的目标。保留为历史参考。
+
 ## 元信息
 
 - 编号：RFC-030
-- 状态：Proposed
+- 状态：Superseded（由 RFC-033 取代）
 - 作者：Ring-rs 开发组
 - 日期：2026-03-25
 - 相关范围：`host-tauri/src/`、`assets/ui/`、`docs/engine/ui/`

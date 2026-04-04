@@ -7,7 +7,7 @@
 
 - **`vn-runtime/`**：纯逻辑 Runtime（脚本解析/执行/状态/存档），**不依赖引擎与 IO**。
 - **`host/`**：winit + wgpu + egui 宿主（旧架构，待删除）。
-- **`host-tauri/`**：Tauri 2 宿主（新架构）。Rust 后端 + Vue 3 前端，把 Runtime 的 `Command` 通过 IPC 序列化为 JSON 渲染状态。
+- **`host-dioxus/`**：Dioxus Desktop 宿主（新架构，开发中）。Rust 全栈，无 IPC 边界。
 - **`tools/xtask/`**：本地自检与 CI 共用的质量门禁、覆盖率和开发辅助命令入口。
 - **`tools/asset-packer/`**：资源打包工具（可选工作流）。
 - **`assets/`**：游戏资源（背景/立绘/脚本/音频/字体/manifest）。
@@ -15,7 +15,7 @@
 
 ## 重要文档（建议阅读顺序）
 
-- **摘要入口（vn-runtime + host + host-tauri）**：[摘要索引](../../maintenance/summary-index.md)
+- **摘要入口（vn-runtime + host）**：[摘要索引](../../maintenance/summary-index.md)
 - **架构硬约束**：[ARCH.md](../../../ARCH.md)（Runtime/Host 分离、显式状态、确定性、Command 驱动）
 - **RFC 计划索引**：[RFC 索引](../../../RFCs/README.md)
 - **内容制作入门**：[Getting Started](../../authoring/getting-started.md)（不改代码写脚本/素材 → 测试 → 打包发布）
@@ -175,39 +175,15 @@
 ## 开发工作流（质量门禁/覆盖率）
 
 - **一键门禁**：`cargo check-all`（本地自检与 CI 共用；由 `tools/xtask` 串行执行 fmt → biome check:write → clippy --fix → vue-tsc typecheck → test）
-- **前端检查**：`cargo fe-check`（仅运行 biome + vue-tsc，不触发 Rust 门禁）
+- **前端检查**：（host-tauri 已归档，前端工具链不再需要）
 - **脚本检查**：`cargo script-check`（检查脚本语法/label/资源引用）
 - **Dev Mode 自动脚本检查**：Host 启动时基于 `config.json` 的 `debug.script_check` 自动运行（debug build 默认开启）
 - **覆盖率**：`cargo cov`，报告：`target/llvm-cov/html/index.html`
 
-## `host-tauri/`：Tauri 2 宿主（新架构）
+## `host-tauri/`：已归档（参考实现）
 
-- **`host-tauri/src-tauri/`**：Rust 后端（Tauri IPC 命令 + vn-runtime 集成 + 音频 + 资源 + 存档）
-- **`host-tauri/src/`**：Vue 3 前端源码（VN 渲染组件 + 系统 UI 页面；前端根目录为 `host-tauri/`，`package.json` 与 Vite 配置在此层）
-
-### 入口与核心文件
-
-- **入口**：`host-tauri/src-tauri/src/lib.rs`（Tauri Builder + 模块注册）
-- **IPC 命令**：`host-tauri/src-tauri/src/commands.rs`
-- **应用状态**：`host-tauri/src-tauri/src/state.rs`（AppState + tick/click/choose 逻辑）
-- **渲染状态**：`host-tauri/src-tauri/src/render_state.rs`（可序列化 → JSON → 前端渲染）
-- **命令执行器**：`host-tauri/src-tauri/src/command_executor.rs`
-- **音频**：`host-tauri/src-tauri/src/audio.rs`（rodio 播放）
-- **资源**：`host-tauri/src-tauri/src/resources.rs`（LogicalPath + 文件系统读取）
-- **存档**：`host-tauri/src-tauri/src/save_manager.rs`
-- **配置**：`host-tauri/src-tauri/src/config.rs`
-- **Vue 前端入口**：`host-tauri/src/App.vue`
-- **VN 渲染组件**：`host-tauri/src/vn/`（BackgroundLayer/CharacterLayer/DialogueBox/ChoicePanel/TransitionOverlay/etc.）
-- **系统 UI 页面**：`host-tauri/src/screens/`（TitleScreen/SaveLoadScreen/SettingsScreen/HistoryScreen/InGameMenu）
-
-### 常见改动：我应该改哪里？
-
-- **想加一个新 IPC 命令** → `host-tauri/src-tauri/src/commands.rs`（添加 #[command] 函数）+ `lib.rs`（注册）+ `debug_server.rs`（添加 dispatch 分支）
-- **想改 VN 渲染逻辑** → `host-tauri/src/vn/` 下的 Vue 组件
-- **想改系统 UI 页面** → `host-tauri/src/screens/` 下的 Vue 组件
-- **想改前端状态管理** → `host-tauri/src/composables/` 下的 composable
-- **想改 Command 执行** → `host-tauri/src-tauri/src/command_executor.rs` + `state.rs`
-- **想改渲染状态结构** → `host-tauri/src-tauri/src/render_state.rs`（Rust）+ `host-tauri/src/types/render-state.ts`（TypeScript 镜像）
+> host-tauri（Tauri 2 + Vue 3）已归档。源码保留为参考，不再参与构建。
+> 详见 [`host-tauri/README.md`](../../../host-tauri/README.md) 和 [`host-tauri/docs/`](../../../host-tauri/docs/)。
 
 ## “不要读/不要改”的目录（常见噪音）
 
@@ -218,8 +194,8 @@
 ## 当你想做 X（快速索引）
 
 - **想加/改脚本语法** → [脚本语法规范](../../authoring/script-syntax.md) + `vn-runtime/src/script/*`
-- **想加一个新 Command** → `vn-runtime/src/command/mod.rs` + `host/src/command_executor/*` + `host-tauri/src-tauri/src/command_executor.rs` + `host-tauri/src-tauri/src/commands.rs`
-- **想改 UI 页面** → `host/src/egui_screens/`（各页面 UI 构建）+ `host/src/ui/*`（主题/Toast）+ `host-tauri/src/screens/`
+- **想加一个新 Command** → `vn-runtime/src/command/mod.rs` + `host/src/command_executor/*` + `host-dioxus` 对应模块
+- **想改 UI 页面** → `host/src/egui_screens/`（各页面 UI 构建）+ `host/src/ui/*`（主题/Toast）+ `host-dioxus` 对应页面
 - **想改资源路径解析/打包/缓存** → `host/src/resources/*` + [资源系统与打包](../../authoring/resources.md)
 - **想改存档/兼容** → `vn-runtime/src/save.rs` + `host/src/app/save.rs` + [save format](../reference/save-format.md)
 

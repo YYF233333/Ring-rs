@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **`vn-runtime`**：纯逻辑——脚本解析/执行、状态管理、等待建模、产出 `Command`。禁止 IO/渲染/真实时间依赖。所有状态在 `RuntimeState` 中显式建模且可序列化。
 - **`host`**（旧宿主）：winit + wgpu + egui 渲染宿主，执行 `Command` 产生画面/音频/UI。禁止脚本逻辑、直接修改 Runtime 内部状态。
-- **`host-tauri`**（新宿主）：Tauri 2 + Vue 3 + TypeScript。Rust 后端持有所有游戏状态，前端只渲染。IPC 命令须是 thin proxy（lock→call→return）。`render_state.rs`（Rust）↔ `render-state.ts`（TS）须保持同步。
+- **`host-dioxus`**（新宿主）：Dioxus 0.7 Desktop，Rust 全栈（RSX 声明式 UI），无 IPC 边界。
 
 ### 核心执行模型
 
@@ -23,28 +23,23 @@ Runtime 通过 `tick(input) -> (Vec<Command>, WaitingReason)` 驱动。确定性
 ```
 vn-runtime/          # 纯逻辑 Runtime
 host/                # 旧宿主（winit/wgpu/egui）
-host-tauri/src-tauri # 新宿主 Rust 后端
-host-tauri/          # 新宿主 Vue 前端
+host-dioxus/         # 新宿主（Dioxus Desktop）
 tools/xtask/         # 门禁/覆盖率/脚本检查
 tools/asset-packer/  # 资源打包
 ```
 
-默认 `cargo run` 执行 `host-tauri/src-tauri`。
+默认 `cargo run` 执行 `host-dioxus`。
 
 ## 常用命令
 
 | 用途 | 命令 |
 |------|------|
-| 一键门禁（CI 同款） | `cargo check-all`（fmt → clippy --fix → biome + vue-tsc → test） |
-| 前端检查 | `cargo fe-check`（仅 biome + vue-tsc） |
+| 一键门禁（CI 同款） | `cargo check-all`（fmt → clippy --fix → test） |
 | 测试 | `cargo test -p vn-runtime --lib` |
 | 单个测试 | `cargo test -p vn-runtime --lib test_name` |
 | 覆盖率 | `cargo cov`（报告：`target/llvm-cov/html/index.html`） |
 | 符号索引 | `cargo gen-symbols` |
 | 脚本静态检查 | `cargo script-check [path]` |
-| Tauri 开发 | `cd host-tauri; pnpm tauri dev` |
-| 前端格式化+lint | `pnpm -C host-tauri check:write` |
-| 前端类型检查 | `pnpm -C host-tauri typecheck` |
 | 变异测试 | `cargo mutants` |
 
 ## 设计决策框架
@@ -104,10 +99,9 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 | 改动 | 须同步的文件 |
 |------|-------------|
-| 新增/修改 Command | `vn-runtime` command 模块 + `host` command_executor + `host-tauri` command_executor + `render_state.rs` + `render-state.ts` |
+| 新增/修改 Command | `vn-runtime` command 模块 + `host` command_executor + `host-dioxus` command_executor |
 | 新增脚本语法 | 先更新语法规范 → parser + AST + executor + round-trip 测试 |
-| 新增 UI 页面 | `host` egui_screens + `host-tauri` screens/*.vue |
-| 修改 RenderState | `host-tauri` render_state.rs（Rust）↔ render-state.ts（TS）双向同步 |
+| 新增 UI 页面 | `host` egui_screens + `host-dioxus` 对应页面 |
 | Typewriter 节奏标签 | parser inline_tags + Command InlineEffect + host-side consumer |
 | 新增/移动 pub 符号 | 完成后运行 `cargo gen-symbols` 刷新符号索引 |
 
@@ -132,10 +126,6 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 ### 渲染与效果
 
 `DrawCommand` 使用 `Arc<dyn Texture>`，后端通过 `as_any()` 下转。效果三级：`EffectKind → ResolvedEffect → EffectRequest`，带 capability fallback。动画基于 `dt` 时间驱动，不基于帧。`NullTexture`/`NullTextureFactory` 用于无 GPU 测试。
-
-### Tauri 前端
-
-所有引擎调用通过 `useEngine()` composable（不直接 `callBackend`）。日志用 `createLogger()`（不用 `console.log`）。URL 通过 `resolveAssetSrc()`/`useAssets()`。VN 组件只 emit 事件，`App.vue` 负责调用后端。
 
 ## 人机协作人体工学
 
