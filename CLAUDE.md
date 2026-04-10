@@ -38,7 +38,7 @@ tools/asset-packer/  # 资源打包
 | 测试 | `cargo test -p vn-runtime --lib` |
 | 单个测试 | `cargo test -p vn-runtime --lib test_name` |
 | 覆盖率 | `cargo cov`（报告：`target/llvm-cov/html/index.html`） |
-| 符号索引 | `cargo gen-symbols` |
+| 符号索引（定期） | `cargo gen-symbols` |
 | 脚本静态检查 | `cargo script-check [path]` |
 | 变异测试 | `cargo mutants` |
 
@@ -103,7 +103,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | 新增脚本语法 | 先更新语法规范 → parser + AST + executor + round-trip 测试 |
 | 新增 UI 页面 | `host` egui_screens + `host-dioxus` 对应页面 |
 | Typewriter 节奏标签 | parser inline_tags + Command InlineEffect + host-side consumer |
-| 新增/移动 pub 符号 | 完成后运行 `cargo gen-symbols` 刷新符号索引 |
+| 大批量新增/移动 pub 符号 | 运行 `cargo gen-symbols` 刷新符号索引 |
 
 ### 常见工作流详细指南
 
@@ -174,19 +174,36 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 所有任务默认"摘要优先、源码兜底"：先按 `docs/maintenance/summary-index.md` 阅读摘要与导航，再决定源码最小读取范围。维护要求见 `docs/maintenance/summary-maintenance.md`。
 
-### 符号索引
+### 符号定位
 
-编码任务开始前，先读 `docs/engine/symbol-index.md`。该文件由 `cargo gen-symbols` 自动生成，列出所有 pub 符号的名称、类型、行号，以及 enum 变体名和 trait 方法名。工作完成后如新增/删除/移动了 pub 符号，须刷新符号索引。
+优先使用 **LSP**（rust-analyzer）进行符号查找、跳转定义、查找引用。`docs/engine/symbol-index.md` 作为离线浏览参考，需要跨模块全局概览时可读取。`cargo gen-symbols` 在大批量 pub API 变更后运行，无需每次编码后刷新。
 
-### 源码读取约束（Token 护栏）
+### 源码读取约束
 
-- \>500 行文件禁止整读。先 `rg` 定位，再 `ReadFile(offset, limit)` 片段读取。
-- 例外：局部读取 2 次以上仍无法定位，或需跨相邻代码块验证不变量，或用户显式授权。
+- \>500 行文件优先局部读取：先 `rg` / LSP 定位，再 `ReadFile(offset, limit)` 片段读取。
 - 仅新增测试时，不读原有测试正文。用 `rg` 定位插入锚点，读 20-60 行上下文即可。
 
-### 超预算保护
+### Commit 规范
 
-出现以下情况须暂停并向用户确认：已整读 >=2 个大文件（>500 行）；累计读取 >2000 行且未进入修改；连续 3 次读取仍无法定位。确认时提供：已读文件清单与目的、当前卡点、下一步最小读取计划。
+格式：`type(scope): summary`。scope 可省略。summary 用英文，祈使语气，不超过 60 字符。
+
+| type | 含义 |
+|------|------|
+| feat | 新功能或新指令 |
+| fix | Bug 修复 |
+| refactor | 重构（不改变行为） |
+| test | 仅测试变更 |
+| docs | 仅文档变更 |
+| chore | 构建/工具/CI 变更 |
+
+Body（可选）：简述 what & why，不超过 3 行。
+
+```
+feat(parser): add titleCard block-level instruction
+
+phase1 recognition, phase2 parsing, executor mapping.
+Includes round-trip parser tests.
+```
 
 ### 经验沉淀（Session 学习）
 
@@ -195,3 +212,5 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 ### RFC 流程
 
 跨模块改造、语法/语义变更、Runtime/Host 协议变更、存档格式变更须走 RFC。详见 `docs/workflows/rfc-workflow.md`。索引：`RFCs/README.md`。
+
+实施 RFC 的 session 须在结束前同步 RFC 状态：实施中标 `Active`；验收标准全部达成后标 `Accepted`，将文件移至 `RFCs/Archived/`，并更新 `RFCs/README.md` 索引。
