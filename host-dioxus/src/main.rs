@@ -1,6 +1,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(non_snake_case)]
 
+// ── 后端模块（Phase 1 迁移自 host-tauri，无 Tauri 依赖） ──
+pub mod audio;
+pub mod command_executor;
+pub mod config;
+pub mod error;
+pub mod headless_cli;
+pub mod init;
+pub mod manifest;
+pub mod render_state;
+pub mod resources;
+pub mod save_manager;
+pub mod state;
+
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -109,13 +122,20 @@ fn ring_asset_handler(
     let assets_root = find_assets_root();
     let full_path = assets_root.join(&path_clean);
 
-    eprintln!("[ring-asset] URI={uri}  path={raw_path}  resolved={}", full_path.display());
+    eprintln!(
+        "[ring-asset] URI={uri}  path={raw_path}  resolved={}",
+        full_path.display()
+    );
 
     let mime = guess_mime(&path_clean);
 
     match std::fs::read(&full_path) {
         Ok(bytes) => {
-            eprintln!("[ring-asset] OK: {} ({} bytes, {mime})", path_clean, bytes.len());
+            eprintln!(
+                "[ring-asset] OK: {} ({} bytes, {mime})",
+                path_clean,
+                bytes.len()
+            );
             http::Response::builder()
                 .status(200)
                 .header("Content-Type", mime)
@@ -139,12 +159,13 @@ fn percent_decode(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(byte) = u8::from_str_radix(&input[i + 1..i + 3], 16) {
-                out.push(byte);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(byte) = u8::from_str_radix(&input[i + 1..i + 3], 16)
+        {
+            out.push(byte);
+            i += 3;
+            continue;
         }
         out.push(bytes[i]);
         i += 1;
@@ -249,7 +270,7 @@ impl PocState {
 // ---------------------------------------------------------------------------
 
 fn App() -> Element {
-    let mut state = use_signal(|| PocState::new());
+    let mut state = use_signal(PocState::new);
 
     // Tick loop ~30fps
     use_hook(|| {
@@ -306,7 +327,11 @@ fn App() -> Element {
 #[component]
 fn CssTransitionDemo() -> Element {
     let mut visible = use_signal(|| true);
-    let class_name = if visible() { "fade-box visible" } else { "fade-box hidden" };
+    let class_name = if visible() {
+        "fade-box visible"
+    } else {
+        "fade-box hidden"
+    };
 
     rsx! {
         div { class: "demo-section",
@@ -334,7 +359,8 @@ fn CssTransitionDemo() -> Element {
 #[component]
 fn WebGlDemo() -> Element {
     use_effect(|| {
-        document::eval(r#"
+        document::eval(
+            r#"
             (function() {
                 const canvas = document.getElementById("webgl-demo");
                 if (!canvas) { console.error("canvas not found"); return; }
@@ -395,7 +421,8 @@ fn WebGlDemo() -> Element {
                 frame();
                 console.log("[PoC] WebGL 2.0 shader OK");
             })();
-        "#);
+        "#,
+        );
     });
 
     rsx! {
@@ -422,7 +449,8 @@ fn RuleTransitionDemo() -> Element {
     use_effect({
         let mask_url = mask_url.clone();
         move || {
-            document::eval(&format!(r#"
+            document::eval(&format!(
+                r#"
                 (function() {{
                     const canvas = document.getElementById("rule-canvas");
                     if (!canvas) return;
@@ -519,7 +547,8 @@ fn RuleTransitionDemo() -> Element {
                     renderLoop();
                     console.log("[PoC] RuleTransition WebGL init OK");
                 }})();
-            "#));
+            "#
+            ));
         }
     });
 

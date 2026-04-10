@@ -9,6 +9,10 @@
 - [测试与调试](testing/README.md)：headless 回放、覆盖率与验证路径。
 - [文档维护者](maintenance/README.md)：摘要索引、摘要维护协议、抽样验收与盘点。
 
+## 工作流指南
+
+- [工作流文档](workflows/README.md)：Command 管线、语法扩展、RFC 流程、领域分区等 step-by-step 指南。
+
 ## 按任务找文档
 
 - 想从零开始做内容：[Getting Started](authoring/getting-started.md)

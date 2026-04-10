@@ -105,6 +105,15 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | Typewriter 节奏标签 | parser inline_tags + Command InlineEffect + host-side consumer |
 | 新增/移动 pub 符号 | 完成后运行 `cargo gen-symbols` 刷新符号索引 |
 
+### 常见工作流详细指南
+
+| 工作流 | 文档 |
+|--------|------|
+| 新增/修改 Command 全管线 | `docs/workflows/cross-module-command-pipeline.md` |
+| 扩展脚本语法 | `docs/workflows/script-syntax-extension.md` |
+| RFC 完整流程 | `docs/workflows/rfc-workflow.md` |
+| 领域分区（大任务拆分） | `docs/workflows/domain-partitions.md` |
+
 ## 仓库导航
 
 | 内容 | 路径 |
@@ -116,6 +125,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | 经验沉淀 | `docs/maintenance/lessons-learned.md` |
 | 架构约束 | `ARCH.md` |
 | RFC 索引 | `RFCs/README.md` |
+| 工作流指南 | `docs/workflows/` |
 
 ## 关键领域约束
 
@@ -126,6 +136,23 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 ### 渲染与效果
 
 `DrawCommand` 使用 `Arc<dyn Texture>`，后端通过 `as_any()` 下转。效果三级：`EffectKind → ResolvedEffect → EffectRequest`，带 capability fallback。动画基于 `dt` 时间驱动，不基于帧。`NullTexture`/`NullTextureFactory` 用于无 GPU 测试。
+
+### 领域不变量速查
+
+详细不变量和 Do/Don't 规则见 `.cursor/rules/`（Cursor 与 CC 共享）：
+
+| 领域 | 规则文件 | 核心约束摘要 |
+|------|----------|-------------|
+| 应用编排层 | `.cursor/rules/domain-host-app.mdc` | CommandExecutor→状态变更+输出事件，command_handlers→驱动外部系统；AppMode 状态机 |
+| 脚本语言 | `.cursor/rules/domain-script-lang.mdc` | 两阶段解析器（Block 识别→语义解析）；AST 无运行时状态 |
+| 媒体与 UI | `.cursor/rules/domain-media-ui.mdc` | AudioManager fade 控制；VideoPlayer 状态机；Extension capability 注册 |
+| 渲染与效果 | `.cursor/rules/domain-renderer.mdc` | Animatable trait 时间驱动动画；SceneTransitionManager |
+| 资源与配置 | `.cursor/rules/domain-resources.mdc` | LogicalPath 强制；Config 加载后不可变 |
+| 运行时引擎 | `.cursor/rules/domain-runtime-engine.mdc` | 确定性执行；显式状态；存档向后兼容 |
+
+### 存档兼容
+
+`SaveData` 序列化结构变更须保持向后兼容（新字段加 `#[serde(default)]`）。不兼容变更须走 RFC。
 
 ## 人机协作人体工学
 
@@ -167,4 +194,4 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 ### RFC 流程
 
-跨模块改造、语法/语义变更、Runtime/Host 协议变更等重大方案须走 RFC。文件放 `RFCs/`，命名 `rfc-<topic>.md`，至少包含：背景、目标/非目标、提案、风险、迁移计划、验收标准。实施前对齐 RFC；偏离时先更新 RFC 再改代码。
+跨模块改造、语法/语义变更、Runtime/Host 协议变更、存档格式变更须走 RFC。详见 `docs/workflows/rfc-workflow.md`。索引：`RFCs/README.md`。

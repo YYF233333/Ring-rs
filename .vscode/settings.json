@@ -14,5 +14,5 @@
     "[typescript][vue]": {
         "editor.defaultFormatter": "biomejs.biome"
     },
-    "editor.formatOnSave": true
+    "editor.formatOnSave": false
 }

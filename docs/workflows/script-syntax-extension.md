@@ -1,14 +1,3 @@
----
-name: script-syntax-extension
-description: >-
-  Guide for extending the VN script language with new syntax, instructions, or
-  inline tags. Covers the two-phase parser architecture, AST design, test
-  strategy, diagnostic integration, and spec documentation. Use when adding new
-  script keywords, block types, inline tags, or modifying parsing behavior.
----
-
-> **Canonical version**: `docs/workflows/script-syntax-extension.md`。本文件为 Cursor 兼容保留。
-
 # Script Syntax Extension
 
 ## When to Use
@@ -24,12 +13,12 @@ description: >-
 The parser is hand-written (no regex, no parser generators) with two phases:
 
 ```
-Raw text ──► phase1 ──► Vec<Block> ──► phase2 ──► Vec<ScriptNode> ──► Script
-                                                        │
-                                                   source_map
+Raw text --> phase1 --> Vec<Block> --> phase2 --> Vec<ScriptNode> --> Script
+                                                       |
+                                                  source_map
 ```
 
-### Phase 1 — Block Recognition
+### Phase 1 -- Block Recognition
 
 File: `vn-runtime/src/script/parser/phase1.rs`
 
@@ -39,7 +28,7 @@ Scans raw lines and groups them into typed blocks:
 |-----------|---------|
 | Chapter | Lines starting with `#` |
 | Label | Lines matching `**name**` |
-| Dialogue | `Name："text"` or `Name: "text"` |
+| Dialogue | `Name:"text"` or `Name: "text"` |
 | Narration | `> text` |
 | Image/resource | `![](path)` |
 | Directive | Single-line instructions (`goto`, `set`, `wait`, etc.) |
@@ -48,7 +37,7 @@ Scans raw lines and groups them into typed blocks:
 
 **To add a new block-level instruction**: add recognition logic in phase1 that produces a `Block::Directive` (or new variant if semantically distinct).
 
-### Phase 2 — Semantic Parsing
+### Phase 2 -- Semantic Parsing
 
 File: `vn-runtime/src/script/parser/phase2.rs`
 
@@ -70,12 +59,12 @@ Returns pure text (tags stripped) plus a list of effects with character-position
 
 ## Step-by-Step: New Block-Level Instruction
 
-### Step 1 — Design the syntax
+### Step 1 -- Design the syntax
 
 Draft in `docs/authoring/script-syntax.md` first. Follow design principles:
 
 - **Human-friendly**: script authors use Typora/Markdown editors.
-- **Tolerant**: ignore trailing spaces, support both `:` and `：`.
+- **Tolerant**: ignore trailing spaces, support both `:` and full-width colon.
 - **Markdown-compatible**: don't break preview rendering.
 - **Unambiguous**: new syntax must not conflict with existing patterns.
 
@@ -91,7 +80,7 @@ instruction_name arg1 (option: value)
 Description of semantics and parameters.
 ```
 
-### Step 2 — AST node
+### Step 2 -- AST node
 
 File: `vn-runtime/src/script/ast/mod.rs`
 
@@ -101,22 +90,22 @@ Add a `ScriptNode` variant. Rules:
 - Use domain types from `command/mod.rs` where they exist (e.g. `Transition`, `Position`).
 - Derive `Debug, Clone, PartialEq` for testability.
 
-### Step 3 — Phase 1 recognition
+### Step 3 -- Phase 1 recognition
 
 File: `vn-runtime/src/script/parser/phase1.rs`
 
 Most new instructions fit the existing `Block::Directive` path. You only need a new `Block` variant if the instruction spans multiple lines or has fundamentally different structure.
 
-### Step 4 — Phase 2 parsing
+### Step 4 -- Phase 2 parsing
 
 File: `vn-runtime/src/script/parser/phase2.rs`
 
 1. Add a match arm in the directive dispatcher.
 2. Parse parameters using helpers from `parser/helpers.rs`.
 3. Produce the `ScriptNode` variant.
-4. Source map entry is typically automatic — the phase2 loop tracks line positions.
+4. Source map entry is typically automatic -- the phase2 loop tracks line positions.
 
-### Step 5 — Parser tests
+### Step 5 -- Parser tests
 
 Location: find the test module with `rg "#\[cfg\(test\)\]" vn-runtime/src/script/parser/`
 
@@ -137,25 +126,25 @@ fn parse_instruction_name_basic() {
 }
 ```
 
-### Step 6 — Connect to executor
+### Step 6 -- Connect to executor
 
 File: `vn-runtime/src/runtime/executor/mod.rs`
 
 Add a match arm: `ScriptNode::InstructionName { .. } => { ... }`.
 
-If this instruction produces a new Command, see the [cross-module-command-pipeline](../cross-module-command-pipeline/SKILL.md) skill for the full host-side flow.
+If this instruction produces a new Command, see [cross-module-command-pipeline.md](cross-module-command-pipeline.md) for the full host-side flow.
 
-### Step 7 — Diagnostics
+### Step 7 -- Diagnostics
 
 File: `vn-runtime/src/diagnostic/mod.rs`
 
 If the new syntax:
 
-- References **resources** (images, audio) → update `extract_resource_references`.
-- References **labels** → update jump target analysis in `analyze_script`.
-- Has **common mistakes** → add a warning-level diagnostic rule.
+- References **resources** (images, audio): update `extract_resource_references`.
+- References **labels**: update jump target analysis in `analyze_script`.
+- Has **common mistakes**: add a warning-level diagnostic rule.
 
-### Step 8 — Verify and document
+### Step 8 -- Verify and document
 
 ```bash
 cargo check-all
@@ -163,17 +152,17 @@ cargo check-all
 
 Update:
 
-1. `docs/authoring/script-syntax.md` — formal syntax entry.
-2. `docs/engine/architecture/module-summaries/vn-runtime/parser.md` — add to KeyFlow list.
-3. `docs/engine/architecture/module-summaries/vn-runtime/script.md` — mention new node.
+1. `docs/authoring/script-syntax.md` -- formal syntax entry.
+2. `docs/engine/architecture/module-summaries/vn-runtime/parser.md` -- add to KeyFlow list.
+3. `docs/engine/architecture/module-summaries/vn-runtime/script.md` -- mention new node.
 
 ## Step-by-Step: New Inline Tag
 
-### Step 1 — Design in spec
+### Step 1 -- Design in spec
 
 Add to the inline tags section of `docs/authoring/script-syntax.md`.
 
-### Step 2 — InlineEffectKind
+### Step 2 -- InlineEffectKind
 
 File: `vn-runtime/src/command/mod.rs`
 
@@ -185,36 +174,36 @@ pub enum InlineEffectKind {
     SetCpsAbsolute(f32),
     SetCpsRelative(f32),
     ResetCps,
-    NewTagName { /* fields */ },  // ← add here
+    NewTagName { /* fields */ },  // <- add here
 }
 ```
 
-### Step 3 — Parse the tag
+### Step 3 -- Parse the tag
 
 File: `vn-runtime/src/script/parser/inline_tags.rs`
 
 Add recognition in the tag dispatcher. The function scans for `{tag_name ...}` patterns and converts them to `InlineEffect` entries with character positions.
 
-### Step 4 — Host consumption
+### Step 4 -- Host consumption
 
 The host processes inline effects in the typewriter system:
 
-- `host/src/renderer/render_state/mod.rs` — `advance_typewriter` checks `InlineEffectKind`.
-- `host/src/app/update/modes.rs` — frame-level effect timers.
+- `host/src/renderer/render_state/mod.rs` -- `advance_typewriter` checks `InlineEffectKind`.
+- `host/src/app/update/modes.rs` -- frame-level effect timers.
 
 Add handling for the new `InlineEffectKind` variant in both locations.
 
-### Step 5 — Tests
+### Step 5 -- Tests
 
 - Parser: `parse_inline_tags` unit test with the new tag.
-- Executor: verify the tag survives the `ScriptNode` → `Command` mapping.
+- Executor: verify the tag survives the `ScriptNode` -> `Command` mapping.
 - Host: if the tag has visible behavior, verify in typewriter state tests.
 
 ## Checklist Template
 
 ```
 New Syntax: [instruction/tag name]
-- [ ] Syntax designed in script_syntax_spec.md
+- [ ] Syntax designed in script-syntax.md
 - [ ] ScriptNode / InlineEffectKind variant added
 - [ ] phase1 recognition (if needed)
 - [ ] phase2 parsing / inline_tags parsing
@@ -229,4 +218,4 @@ New Syntax: [instruction/tag name]
 
 - **Breaking Markdown preview**: New syntax that looks like Markdown formatting (e.g. using `*` or `_`) will confuse Typora. Test in a Markdown editor.
 - Repository-wide parser pitfalls (phase1/phase2 mismatch, source map drift, `base_path` sensitivity, punctuation tolerance gaps) are tracked in `docs/maintenance/lessons-learned.md`.
-- **Tolerance gaps beyond punctuation**: Also verify leading/trailing spaces and missing optional parameters; don't stop at `：` / `:` compatibility.
+- **Tolerance gaps beyond punctuation**: Also verify leading/trailing spaces and missing optional parameters; don't stop at full-width/half-width colon compatibility.

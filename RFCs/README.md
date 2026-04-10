@@ -13,9 +13,10 @@
 
 - 新提案：新增 `rfc-<topic>.md`，状态为 `Proposed`
 - 实施中：标记为 `Active`
-- 已落地：标记为 `Accepted`，移动到 `Accepted/` 子目录
+- 已落地：标记为 `Accepted`，移动到 `Archived/` 子目录
+- 废弃：标记为`Superseded`，移动到 `Archived/` 子目录
 - 「文件」列只填写文件名，不填写路径前缀
-- 状态为 `Accepted` 时，默认到 `RFCs/Accepted/` 查找该文件；其余状态默认在 `RFCs/` 当前目录
+- 状态为 `Accepted`/`Superseded` 时，默认到 `RFCs/Archived/` 查找该文件；其余状态默认在 `RFCs/` 当前目录
 - RFC 文件迁移、重命名或状态变更时，同步更新本文档
 - RFC 编号按“提出顺序”递增分配，格式为 `RFC-XXX`（三位数）
 
