@@ -10,7 +10,10 @@ fn asset_url(path: &str) -> String {
 /// 背景渲染层：双 `<img>` 实现 dissolve 交叉淡化。
 ///
 /// - `current_background`：当前背景，始终以 opacity 1 显示
-/// - `background_transition`：过渡中时，旧背景从 opacity 1 淡化到 0
+/// - `background_transition`：过渡中时，旧背景通过 `@keyframes` 从 opacity 1 淡化到 0
+///
+/// 使用 CSS animation 而非 transition：因为旧背景 `<img>` 是新创建的元素，
+/// CSS transition 没有先前状态可过渡，而 animation 自带起始值。
 #[component]
 pub fn BackgroundLayer(render_state: Signal<RenderState>) -> Element {
     let rs = render_state.read();
@@ -29,7 +32,7 @@ pub fn BackgroundLayer(render_state: Signal<RenderState>) -> Element {
                             img {
                                 class: "vn-background__img vn-background__img--old",
                                 src: "{old_url}",
-                                style: "transition: opacity {duration}s ease; opacity: 0;",
+                                style: "animation: vn-dissolve-out {duration}s ease forwards;",
                             }
                         }
                     }

@@ -22,7 +22,12 @@ pub fn DialogueBox(render_state: Signal<RenderState>) -> Element {
         None => return rsx! {},
     };
 
-    let speaker = dialogue.speaker.clone();
+    // "旁白" 视为旁白，不显示名牌
+    let speaker = dialogue
+        .speaker
+        .as_deref()
+        .filter(|s| !s.is_empty() && *s != "旁白")
+        .map(|s| s.to_string());
     let visible_text: String = dialogue
         .content
         .chars()
@@ -32,7 +37,7 @@ pub fn DialogueBox(render_state: Signal<RenderState>) -> Element {
 
     rsx! {
         div { class: "vn-dialogue",
-            // 说话人名牌
+            // 说话人名牌（旁白不显示）
             if let Some(name) = speaker {
                 div { class: "vn-dialogue__name", "{name}" }
             }

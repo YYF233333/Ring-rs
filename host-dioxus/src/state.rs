@@ -771,10 +771,22 @@ impl AppStateInner {
     }
 
     /// Skip 模式立即推进 + Auto 模式计时推进
+    ///
+    /// Skip 采用两帧策略（与旧 host 一致）：
+    /// - 第一帧：完成打字机，让完整文本显示一帧
+    /// - 第二帧：打字机已完成，推进到下一句
     fn advance_playback_mode(&mut self, dt: f32) {
         if self.playback_mode == PlaybackMode::Skip {
-            if !self.render_state.is_dialogue_complete() {
+            let typewriter_was_incomplete = !self.render_state.is_dialogue_complete();
+
+            // 始终先完成打字机和所有效果
+            if typewriter_was_incomplete {
                 self.render_state.complete_typewriter();
+            }
+
+            // 如果打字机刚完成，让完整文本显示至少一帧再推进
+            if typewriter_was_incomplete {
+                return;
             }
 
             match self.waiting.clone() {

@@ -161,6 +161,7 @@ body {
     font-weight: bold;
     color: var(--ui-accent);
     white-space: nowrap;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5);
     /* NinePatch namebox 背景 */
     border-image-source: url("http://ring-asset.localhost/gui/namebox.png");
     border-image-slice: 5 5 5 5 fill;
@@ -192,6 +193,18 @@ body {
 @keyframes vn-blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.2; }
+}
+
+/* 背景 dissolve 淡出动画（新创建元素无法用 CSS transition，需 @keyframes） */
+@keyframes vn-dissolve-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* 遮罩淡入动画（Fade/FadeWhite FadeIn 阶段） */
+@keyframes vn-overlay-fadein {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 /* === NVL Panel === */
@@ -247,7 +260,6 @@ body {
 
 .vn-characters__sprite {
     position: absolute;
-    max-height: 100%;
     pointer-events: none;
     user-select: none;
 }

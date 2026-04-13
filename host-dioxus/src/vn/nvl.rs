@@ -25,7 +25,10 @@ pub fn NvlPanel(render_state: Signal<RenderState>) -> Element {
                 for (i, entry) in entries.iter().enumerate() {
                     {
                         let visible_text: String = entry.content.chars().take(entry.visible_chars).collect();
-                        let speaker = entry.speaker.clone();
+                        // "旁白" 视为旁白，不显示名称
+                        let speaker = entry.speaker.as_deref()
+                            .filter(|s| !s.is_empty() && *s != "旁白")
+                            .map(|s| s.to_string());
                         rsx! {
                             div { key: "{i}", class: "vn-nvl__entry",
                                 if let Some(name) = speaker {

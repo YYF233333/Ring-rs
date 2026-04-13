@@ -4,7 +4,7 @@
   "saves_dir": "saves",
   "manifest_path": "manifest.json",
   "default_font": "fonts/simhei.ttf",
-  "start_script_path": "scripts/examples/ui_game_demo.md",
+  "start_script_path": "scripts/remake/main.md",
   "asset_source": "fs",
   "zip_path": null,
   "window": {
