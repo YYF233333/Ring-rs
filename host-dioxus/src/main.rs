@@ -81,17 +81,20 @@ body {
     color: var(--ui-interface-text);
     font-family: var(--vn-font-body);
     overflow: hidden;
+    width: 100vw;
+    height: 100vh;
 }
 
-/* === Game Container (1920×1080 基准 + transform 缩放) === */
+/* === Game Container (1920×1080 基准 + transform 缩放，居中对齐) === */
 .game-container {
-    position: relative;
+    position: fixed;
+    left: 50%;
+    top: 50%;
     width: 1920px;
     height: 1080px;
     overflow: hidden;
     background: var(--vn-bg-color);
-    transform-origin: top left;
-    transform: scale(var(--scale-factor));
+    transform: translate(-50%, -50%) scale(var(--scale-factor));
 }
 
 /* === VN Scene === */
@@ -1069,6 +1072,7 @@ fn main() {
                         .with_title("Ring Engine")
                         .with_inner_size(LogicalSize::new(1280, 720)),
                 )
+                .with_menu(None)
                 .with_custom_head(css_head)
                 .with_custom_protocol("ring-asset", ring_asset_handler),
         )

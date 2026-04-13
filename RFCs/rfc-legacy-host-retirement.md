@@ -47,6 +47,13 @@ This RFC tracks the structured retirement of `host/` and the remaining bug-fix w
 | 3 | Dialogue/NVL text is mouse-selectable (blue highlight), breaks immersion | Visual | Fixed |
 | 4 | showMap UI mode not implemented (map overlay missing) | Functional | Fixed |
 | 5 | callGame UI mode not implemented (minigame iframe missing) | Functional | Fixed |
+| 6 | Scene transitions (Dissolve/Fade) flash-cut instead of animating — CSS transition has no prior state on newly created elements | Visual | Fixed |
+| 7 | Character name (speaker) white text invisible on light textbox — namebox.png is fully transparent, no contrast | Visual | Fixed |
+| 8 | Narrator lines (`旁白："..."`) display "旁白" as speaker name — should be hidden | Functional | Fixed |
+| 9 | Character sprite scaling incorrect — CSS `max-height: 100%` clamps image before `scale()` transform | Visual | Fixed |
+| 10 | Skip mode shows only 1 character per line — `complete_typewriter` + `clear_click_wait` in same frame, need two-frame strategy | Functional | Fixed |
+| 11 | Game container not centered — menu bar reduces viewport height, `transform-origin: top left` leaves black bar on right | Visual | Fixed |
+| 12 | BGM/SFX volume nearly inaudible — JS `volume / 100` but Rust sends 0.0–1.0 range (0.8 → 0.008) | Functional | Fixed |
 
 *New bugs discovered during testing should be appended here.*
 

@@ -57,7 +57,7 @@ pub fn AudioBridge(render_state: Signal<RenderState>) -> Element {
                         if (bgmPath === url) {
                             // same track, just update volume
                             if (bgmAudio) {
-                                const v = Math.max(0, Math.min(1, volume / 100));
+                                const v = Math.max(0, Math.min(1, volume));
                                 if (fadeDuration > 0) {
                                     fadeBgmTo(v, fadeDuration);
                                 } else {
@@ -77,7 +77,7 @@ pub fn AudioBridge(render_state: Signal<RenderState>) -> Element {
 
                         newAudio.play().catch(e => console.warn("[audio] BGM play failed:", e));
 
-                        const targetVol = Math.max(0, Math.min(1, volume / 100));
+                        const targetVol = Math.max(0, Math.min(1, volume));
                         const fd = fadeDuration > 0 ? fadeDuration : 0.5;
 
                         // Fade in new
@@ -122,13 +122,13 @@ pub fn AudioBridge(render_state: Signal<RenderState>) -> Element {
 
                     setBgmVolume(volume) {
                         if (bgmAudio) {
-                            bgmAudio.volume = Math.max(0, Math.min(1, volume / 100));
+                            bgmAudio.volume = Math.max(0, Math.min(1, volume));
                         }
                     },
 
                     playSfx(url, volume) {
                         const audio = new Audio(url);
-                        audio.volume = Math.max(0, Math.min(1, volume / 100));
+                        audio.volume = Math.max(0, Math.min(1, volume));
                         audio.play().catch(e => console.warn("[audio] SFX play failed:", e));
                     }
                 };
