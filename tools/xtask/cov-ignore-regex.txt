@@ -4,3 +4,11 @@
 
 src[/\\]lib\.rs$
 vn-runtime[/\\]src[/\\]error\.rs$
+
+# host-dioxus 前端：Dioxus RSX 组件、入口、Debug HTTP server
+# 这些文件含大量渲染/事件处理逻辑，无法通过 Rust 单元测试覆盖。
+host-dioxus[/\\]src[/\\]components[/\\]
+host-dioxus[/\\]src[/\\]screens[/\\]
+host-dioxus[/\\]src[/\\]vn[/\\]
+host-dioxus[/\\]src[/\\]main\.rs$
+host-dioxus[/\\]src[/\\]debug_server\.rs$

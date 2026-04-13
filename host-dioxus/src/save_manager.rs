@@ -178,6 +178,114 @@ impl SaveManager {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use base64::Engine as _;
+    use vn_runtime::{RuntimeState, SaveData, SaveError};
+
+    use super::*;
+
+    fn unique_temp_dir(suffix: &str) -> std::path::PathBuf {
+        let ns = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("ring_save_mgr_{suffix}_{ns}"))
+    }
+
+    fn make_save(slot: u32) -> SaveData {
+        SaveData::new(slot, RuntimeState::new("test_script"))
+    }
+
+    #[test]
+    fn save_and_load_roundtrip() {
+        let dir = unique_temp_dir("roundtrip");
+        let sm = SaveManager::new(&dir);
+        sm.save(&make_save(1)).unwrap();
+        let loaded = sm.load(1).unwrap();
+        assert_eq!(loaded.metadata.slot, 1);
+        assert_eq!(loaded.runtime_state.position.script_id, "test_script");
+    }
+
+    #[test]
+    fn load_nonexistent_slot_returns_not_found() {
+        let dir = unique_temp_dir("notfound");
+        let sm = SaveManager::new(&dir);
+        let err = sm.load(99).unwrap_err();
+        assert!(matches!(err, SaveError::NotFound(_)));
+    }
+
+    #[test]
+    fn delete_removes_slot_and_thumbnail() {
+        let dir = unique_temp_dir("delete");
+        let sm = SaveManager::new(&dir);
+        sm.save(&make_save(2)).unwrap();
+        sm.ensure_dir().unwrap();
+        sm.save_thumbnail_png(2, b"\x89PNG").unwrap();
+        assert!(sm.slot_path(2).exists());
+        assert!(sm.thumbnail_path(2).exists());
+        sm.delete(2).unwrap();
+        assert!(!sm.slot_path(2).exists());
+        assert!(!sm.thumbnail_path(2).exists());
+    }
+
+    #[test]
+    fn list_saves_returns_sorted_slots() {
+        let dir = unique_temp_dir("list");
+        let sm = SaveManager::new(&dir);
+        sm.save(&make_save(5)).unwrap();
+        sm.save(&make_save(1)).unwrap();
+        sm.save(&make_save(3)).unwrap();
+        let slots: Vec<u32> = sm.list_saves().iter().map(|(s, _)| *s).collect();
+        assert_eq!(slots, [1, 3, 5]);
+    }
+
+    #[test]
+    fn list_saves_empty_when_no_dir() {
+        let dir = unique_temp_dir("nodir");
+        // dir is not created — list_saves should return empty
+        let sm = SaveManager::new(&dir);
+        assert!(sm.list_saves().is_empty());
+    }
+
+    #[test]
+    fn continue_save_lifecycle() {
+        let dir = unique_temp_dir("continue");
+        let sm = SaveManager::new(&dir);
+        assert!(!sm.has_continue());
+        sm.save_continue(&make_save(0)).unwrap();
+        assert!(sm.has_continue());
+        let loaded = sm.load_continue().unwrap();
+        assert_eq!(loaded.metadata.slot, 0);
+        sm.delete_continue().unwrap();
+        assert!(!sm.has_continue());
+    }
+
+    #[test]
+    fn load_continue_missing_returns_not_found() {
+        let dir = unique_temp_dir("cont_missing");
+        let sm = SaveManager::new(&dir);
+        let err = sm.load_continue().unwrap_err();
+        assert!(matches!(err, SaveError::NotFound(_)));
+    }
+
+    #[test]
+    fn thumbnail_roundtrip() {
+        let dir = unique_temp_dir("thumb");
+        let sm = SaveManager::new(&dir);
+        sm.ensure_dir().unwrap();
+        let png_bytes: &[u8] = b"\x89PNG\r\n\x1a\n";
+        sm.save_thumbnail_png(4, png_bytes).unwrap();
+        let b64 = sm.load_thumbnail_base64(4).expect("thumbnail should exist");
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap();
+        assert_eq!(&decoded[..], png_bytes);
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SaveInfo {
     pub slot: Option<u32>,

@@ -55,9 +55,11 @@ pub fn MinigameOverlay(render_state: Signal<RenderState>) -> Element {
                         .ok()
                         .and_then(|mut slot| slot.take());
                     if let Some(r) = result {
-                        if let Ok(mut inner) = app.inner.lock() {
-                            let _ =
-                                inner.handle_ui_result(key.clone(), serde_json::Value::String(r));
+                        if let Ok(mut inner) = app.inner.lock()
+                            && let Err(e) =
+                                inner.handle_ui_result(key.clone(), serde_json::Value::String(r))
+                        {
+                            tracing::warn!(error = %e, "handle_ui_result 失败（小游戏完成）");
                         }
                         break;
                     }

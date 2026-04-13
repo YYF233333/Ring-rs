@@ -576,3 +576,268 @@ impl Default for RenderState {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use vn_runtime::command::{InlineEffect, InlineEffectKind};
+    use vn_runtime::state::VarValue;
+
+    use super::*;
+
+    fn make_typewriter(content: &str) -> RenderState {
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, content.to_string(), vec![], false);
+        rs
+    }
+
+    // ── advance_typewriter ─────────────────────────────────────────────────────
+
+    #[test]
+    fn advance_typewriter_increments_visible_chars() {
+        let mut rs = make_typewriter("Hello");
+        let complete = rs.advance_typewriter();
+        assert!(!complete);
+        assert_eq!(rs.dialogue.as_ref().unwrap().visible_chars, 1);
+    }
+
+    #[test]
+    fn advance_typewriter_returns_true_when_all_chars_visible() {
+        let mut rs = make_typewriter("Hi");
+        rs.advance_typewriter(); // 'H'
+        let complete = rs.advance_typewriter(); // 'i' — last char
+        assert!(complete);
+        assert!(rs.dialogue.as_ref().unwrap().is_complete);
+    }
+
+    #[test]
+    fn advance_typewriter_fires_click_wait_at_position() {
+        let effects = vec![InlineEffect {
+            position: 2,
+            kind: InlineEffectKind::Wait(None),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "AB".to_string(), effects, false);
+        rs.advance_typewriter(); // pos 1
+        rs.advance_typewriter(); // pos 2 → fires Wait(None)
+        assert!(rs.is_inline_click_wait());
+    }
+
+    #[test]
+    fn advance_typewriter_fires_timed_wait_at_position() {
+        let effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::Wait(Some(1.5)),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "A".to_string(), effects, false);
+        rs.advance_typewriter(); // pos 1 → fires Wait(Some(1.5))
+        let d = rs.dialogue.as_ref().unwrap();
+        assert!(matches!(d.inline_wait, Some(InlineWait::Timed { remaining }) if remaining > 0.0));
+    }
+
+    #[test]
+    fn advance_typewriter_fires_set_cps_absolute() {
+        let effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::SetCpsAbsolute(20.0),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "A".to_string(), effects, false);
+        rs.advance_typewriter();
+        assert!(matches!(rs.dialogue.as_ref().unwrap().effective_cps,
+                Some(EffectiveCps::Absolute(v)) if (v - 20.0).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn advance_typewriter_fires_set_cps_relative() {
+        let effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::SetCpsRelative(0.5),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "A".to_string(), effects, false);
+        rs.advance_typewriter();
+        assert!(matches!(rs.dialogue.as_ref().unwrap().effective_cps,
+                Some(EffectiveCps::Relative(v)) if (v - 0.5).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn advance_typewriter_resets_cps() {
+        let effects = vec![
+            InlineEffect {
+                position: 1,
+                kind: InlineEffectKind::SetCpsAbsolute(10.0),
+            },
+            InlineEffect {
+                position: 2,
+                kind: InlineEffectKind::ResetCps,
+            },
+        ];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "AB".to_string(), effects, false);
+        rs.advance_typewriter(); // sets Absolute
+        rs.advance_typewriter(); // resets
+        assert!(rs.dialogue.as_ref().unwrap().effective_cps.is_none());
+    }
+
+    // ── complete_typewriter ────────────────────────────────────────────────────
+
+    #[test]
+    fn complete_typewriter_skips_to_end_and_clears_wait() {
+        let effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::Wait(None),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "Hello World".to_string(), effects, false);
+        rs.advance_typewriter(); // triggers click wait at pos 1
+        rs.complete_typewriter();
+        let d = rs.dialogue.as_ref().unwrap();
+        assert!(d.is_complete);
+        assert_eq!(d.visible_chars, "Hello World".chars().count());
+        assert!(d.inline_wait.is_none());
+        assert!(d.effective_cps.is_none());
+    }
+
+    // ── extend_dialogue ────────────────────────────────────────────────────────
+
+    #[test]
+    fn extend_dialogue_appends_content_and_shifts_effect_positions() {
+        let mut rs = make_typewriter("Hello");
+        // advance to completion
+        while !rs.advance_typewriter() {}
+        let ext_effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::Wait(None),
+        }];
+        rs.extend_dialogue(" World".to_string(), ext_effects, false);
+        let d = rs.dialogue.as_ref().unwrap();
+        assert_eq!(d.content, "Hello World");
+        assert!(!d.is_complete);
+        // Effect position shifted by original length ("Hello" = 5 chars): 5 + 1 = 6
+        assert_eq!(d.inline_effects[0].position, 6);
+    }
+
+    // ── effective_text_speed ───────────────────────────────────────────────────
+
+    #[test]
+    fn effective_text_speed_returns_base_when_no_override() {
+        let rs = make_typewriter("test");
+        assert_eq!(rs.effective_text_speed(30.0), 30.0);
+    }
+
+    #[test]
+    fn effective_text_speed_returns_absolute_cps() {
+        let effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::SetCpsAbsolute(100.0),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "A".to_string(), effects, false);
+        rs.advance_typewriter();
+        assert_eq!(rs.effective_text_speed(30.0), 100.0);
+    }
+
+    #[test]
+    fn effective_text_speed_returns_relative_cps() {
+        let effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::SetCpsRelative(2.0),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "A".to_string(), effects, false);
+        rs.advance_typewriter();
+        assert_eq!(rs.effective_text_speed(30.0), 60.0);
+    }
+
+    // ── update_chapter_mark ────────────────────────────────────────────────────
+
+    #[test]
+    fn chapter_mark_transitions_through_three_phases() {
+        let mut rs = RenderState::new();
+        rs.set_chapter_mark("Chapter 1".to_string(), 1);
+
+        // FadeIn phase (0.5 s threshold)
+        assert!(!rs.update_chapter_mark(0.1));
+        assert_eq!(
+            rs.chapter_mark.as_ref().unwrap().phase,
+            ChapterMarkPhase::FadeIn
+        );
+
+        // Advance past FadeIn → transitions to Visible
+        assert!(!rs.update_chapter_mark(0.5));
+        assert_eq!(
+            rs.chapter_mark.as_ref().unwrap().phase,
+            ChapterMarkPhase::Visible
+        );
+        assert_eq!(rs.chapter_mark.as_ref().unwrap().alpha, 1.0);
+
+        // Advance past Visible (2.0 s) → transitions to FadeOut
+        assert!(!rs.update_chapter_mark(2.1));
+        assert_eq!(
+            rs.chapter_mark.as_ref().unwrap().phase,
+            ChapterMarkPhase::FadeOut
+        );
+
+        // Advance past FadeOut (0.5 s) → returns true, chapter_mark removed
+        assert!(rs.update_chapter_mark(0.5));
+        assert!(rs.chapter_mark.is_none());
+    }
+
+    // ── update_inline_wait ────────────────────────────────────────────────────
+
+    #[test]
+    fn update_inline_wait_timed_counts_down_and_clears() {
+        let effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::Wait(Some(1.0)),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "A".to_string(), effects, false);
+        rs.advance_typewriter(); // triggers timed wait 1.0 s
+
+        assert!(!rs.update_inline_wait(0.4));
+        assert!(!rs.update_inline_wait(0.4));
+        // Remaining ≈ 0.2; one more step of 0.3 pushes it below 0
+        assert!(rs.update_inline_wait(0.3));
+        assert!(rs.dialogue.as_ref().unwrap().inline_wait.is_none());
+    }
+
+    #[test]
+    fn update_inline_wait_click_type_never_auto_resolves() {
+        let effects = vec![InlineEffect {
+            position: 1,
+            kind: InlineEffectKind::Wait(None),
+        }];
+        let mut rs = RenderState::new();
+        rs.start_typewriter(None, "A".to_string(), effects, false);
+        rs.advance_typewriter(); // triggers click wait
+
+        // Large dt should NOT resolve a click wait
+        assert!(!rs.update_inline_wait(999.0));
+        assert!(rs.is_inline_click_wait());
+    }
+
+    // ── var_value ↔ json conversion ───────────────────────────────────────────
+
+    #[test]
+    fn var_value_to_json_bool_roundtrip() {
+        let v = VarValue::Bool(true);
+        let json = var_value_to_json(&v);
+        assert_eq!(json_to_var_value(&json), VarValue::Bool(true));
+    }
+
+    #[test]
+    fn var_value_to_json_int_roundtrip() {
+        let v = VarValue::Int(42);
+        let json = var_value_to_json(&v);
+        assert_eq!(json_to_var_value(&json), VarValue::Int(42));
+    }
+
+    #[test]
+    fn var_value_to_json_string_roundtrip() {
+        let v = VarValue::String("hello".into());
+        let json = var_value_to_json(&v);
+        assert_eq!(json_to_var_value(&json), VarValue::String("hello".into()));
+    }
+}

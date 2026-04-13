@@ -221,7 +221,38 @@ impl CommandExecutor {
         manifest: &Manifest,
     ) -> ExecuteResult {
         self.last_output = CommandOutput::default();
+        match cmd {
+            Command::ShowBackground { .. } | Command::ChangeScene { .. } => {
+                self.execute_background(cmd, rs)
+            }
+            Command::ShowCharacter { .. }
+            | Command::HideCharacter { .. }
+            | Command::ClearCharacters => self.execute_character(cmd, rs, manifest),
+            Command::ShowText { .. }
+            | Command::ExtendText { .. }
+            | Command::TextBoxHide
+            | Command::TextBoxShow
+            | Command::TextBoxClear
+            | Command::SetTextMode(_) => self.execute_text(cmd, rs),
+            Command::PresentChoices { .. } => self.execute_choices(cmd, rs),
+            Command::PlayBgm { .. }
+            | Command::StopBgm { .. }
+            | Command::BgmDuck
+            | Command::BgmUnduck
+            | Command::PlaySfx { .. } => self.execute_audio(cmd),
+            Command::ChapterMark { .. } | Command::TitleCard { .. } => {
+                self.execute_effects(cmd, rs)
+            }
+            Command::SceneEffect { .. } => self.execute_scene_effect(cmd),
+            Command::Cutscene { .. } | Command::FullRestart | Command::RequestUI { .. } => {
+                self.execute_control(cmd)
+            }
+        }
+    }
 
+    // ── 背景 / 场景切换 ──────────────────────────────────────────────────────
+
+    fn execute_background(&self, cmd: &Command, rs: &mut RenderState) -> ExecuteResult {
         match cmd {
             Command::ShowBackground {
                 path, transition, ..
@@ -244,7 +275,6 @@ impl CommandExecutor {
                 }
                 ExecuteResult::Ok
             }
-
             Command::ChangeScene {
                 path, transition, ..
             } => {
@@ -298,7 +328,19 @@ impl CommandExecutor {
                 }
                 ExecuteResult::Ok
             }
+            _ => unreachable!("execute_background: unexpected command"),
+        }
+    }
 
+    // ── 立绘 ─────────────────────────────────────────────────────────────────
+
+    fn execute_character(
+        &self,
+        cmd: &Command,
+        rs: &mut RenderState,
+        manifest: &Manifest,
+    ) -> ExecuteResult {
+        match cmd {
             Command::ShowCharacter {
                 path,
                 alias,
@@ -355,7 +397,6 @@ impl CommandExecutor {
                 }
                 ExecuteResult::Ok
             }
-
             Command::HideCharacter { alias, transition } => {
                 if let Some(t) = transition {
                     let (_, duration) = resolve_transition(t);
@@ -369,7 +410,18 @@ impl CommandExecutor {
                 }
                 ExecuteResult::Ok
             }
+            Command::ClearCharacters => {
+                rs.hide_all_characters();
+                ExecuteResult::Ok
+            }
+            _ => unreachable!("execute_character: unexpected command"),
+        }
+    }
 
+    // ── 文本框 ───────────────────────────────────────────────────────────────
+
+    fn execute_text(&self, cmd: &Command, rs: &mut RenderState) -> ExecuteResult {
+        match cmd {
             Command::ShowText {
                 speaker,
                 content,
@@ -392,7 +444,6 @@ impl CommandExecutor {
                 }
                 ExecuteResult::WaitForClick
             }
-
             Command::ExtendText {
                 content,
                 inline_effects,
@@ -401,58 +452,6 @@ impl CommandExecutor {
                 rs.extend_dialogue(content.clone(), inline_effects.clone(), *no_wait);
                 ExecuteResult::WaitForClick
             }
-
-            Command::PresentChoices { choices, style } => {
-                rs.clear_dialogue();
-                let items = choices
-                    .iter()
-                    .map(|c| ChoiceItem {
-                        text: c.text.clone(),
-                        target_label: c.target_label.clone(),
-                    })
-                    .collect();
-                rs.set_choices(items, style.clone());
-                ExecuteResult::WaitForChoice {
-                    choice_count: choices.len(),
-                }
-            }
-
-            Command::ChapterMark { title, level } => {
-                rs.set_chapter_mark(title.clone(), *level);
-                ExecuteResult::Ok
-            }
-
-            Command::PlayBgm { path, looping } => {
-                self.last_output.audio_command = Some(AudioCommand::PlayBgm {
-                    path: path.clone(),
-                    looping: *looping,
-                    fade_in: None,
-                });
-                ExecuteResult::Ok
-            }
-
-            Command::StopBgm { fade_out } => {
-                self.last_output.audio_command = Some(AudioCommand::StopBgm {
-                    fade_out: fade_out.map(|f| f as f32),
-                });
-                ExecuteResult::Ok
-            }
-
-            Command::BgmDuck => {
-                self.last_output.audio_command = Some(AudioCommand::BgmDuck);
-                ExecuteResult::Ok
-            }
-
-            Command::BgmUnduck => {
-                self.last_output.audio_command = Some(AudioCommand::BgmUnduck);
-                ExecuteResult::Ok
-            }
-
-            Command::PlaySfx { path } => {
-                self.last_output.audio_command = Some(AudioCommand::PlaySfx { path: path.clone() });
-                ExecuteResult::Ok
-            }
-
             Command::TextBoxHide => {
                 rs.ui_visible = false;
                 ExecuteResult::Ok
@@ -465,17 +464,65 @@ impl CommandExecutor {
                 rs.clear_dialogue();
                 ExecuteResult::Ok
             }
-            Command::ClearCharacters => {
-                rs.hide_all_characters();
+            Command::SetTextMode(mode) => {
+                if *mode == TextMode::ADV {
+                    rs.nvl_entries.clear();
+                }
+                rs.text_mode = *mode;
                 ExecuteResult::Ok
             }
+            _ => unreachable!("execute_text: unexpected command"),
+        }
+    }
 
-            Command::SceneEffect { name, args } => {
-                self.last_output.scene_effect_request =
-                    Some(SceneEffectRequest::from_command(name, args));
+    // ── 选项 ─────────────────────────────────────────────────────────────────
+
+    fn execute_choices(&self, cmd: &Command, rs: &mut RenderState) -> ExecuteResult {
+        let Command::PresentChoices { choices, style } = cmd else {
+            unreachable!("execute_choices: unexpected command");
+        };
+        rs.clear_dialogue();
+        let items = choices
+            .iter()
+            .map(|c| ChoiceItem {
+                text: c.text.clone(),
+                target_label: c.target_label.clone(),
+            })
+            .collect();
+        rs.set_choices(items, style.clone());
+        ExecuteResult::WaitForChoice {
+            choice_count: choices.len(),
+        }
+    }
+
+    // ── 音频 ─────────────────────────────────────────────────────────────────
+
+    fn execute_audio(&mut self, cmd: &Command) -> ExecuteResult {
+        self.last_output.audio_command = Some(match cmd {
+            Command::PlayBgm { path, looping } => AudioCommand::PlayBgm {
+                path: path.clone(),
+                looping: *looping,
+                fade_in: None,
+            },
+            Command::StopBgm { fade_out } => AudioCommand::StopBgm {
+                fade_out: fade_out.map(|f| f as f32),
+            },
+            Command::BgmDuck => AudioCommand::BgmDuck,
+            Command::BgmUnduck => AudioCommand::BgmUnduck,
+            Command::PlaySfx { path } => AudioCommand::PlaySfx { path: path.clone() },
+            _ => unreachable!("execute_audio: unexpected command"),
+        });
+        ExecuteResult::Ok
+    }
+
+    // ── 演出效果 ─────────────────────────────────────────────────────────────
+
+    fn execute_effects(&self, cmd: &Command, rs: &mut RenderState) -> ExecuteResult {
+        match cmd {
+            Command::ChapterMark { title, level } => {
+                rs.set_chapter_mark(title.clone(), *level);
                 ExecuteResult::Ok
             }
-
             Command::TitleCard { text, duration } => {
                 rs.title_card = Some(crate::render_state::TitleCardState {
                     text: text.clone(),
@@ -484,25 +531,32 @@ impl CommandExecutor {
                 });
                 ExecuteResult::Ok
             }
+            _ => unreachable!("execute_effects: unexpected command"),
+        }
+    }
 
-            Command::SetTextMode(mode) => {
-                if *mode == TextMode::ADV {
-                    rs.nvl_entries.clear();
-                }
-                rs.text_mode = *mode;
-                ExecuteResult::Ok
-            }
+    fn execute_scene_effect(&mut self, cmd: &Command) -> ExecuteResult {
+        let Command::SceneEffect { name, args } = cmd else {
+            unreachable!("execute_scene_effect: unexpected command");
+        };
+        self.last_output.scene_effect_request = Some(SceneEffectRequest::from_command(name, args));
+        ExecuteResult::Ok
+    }
 
+    // ── 流程控制 ─────────────────────────────────────────────────────────────
+
+    fn execute_control(&self, cmd: &Command) -> ExecuteResult {
+        match cmd {
             Command::Cutscene { path } => ExecuteResult::WaitForCutscene {
                 video_path: path.clone(),
             },
             Command::FullRestart => ExecuteResult::FullRestart,
-
             Command::RequestUI { key, mode, params } => ExecuteResult::RequestUI {
                 key: key.clone(),
                 mode: mode.clone(),
                 params: params.clone(),
             },
+            _ => unreachable!("execute_control: unexpected command"),
         }
     }
 

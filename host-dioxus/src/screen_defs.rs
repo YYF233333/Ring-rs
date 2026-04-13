@@ -357,3 +357,203 @@ impl ScreenDefinitions {
         Ok(defs)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use vn_runtime::state::VarValue;
+
+    use crate::state::PersistentStore;
+
+    use super::*;
+
+    fn empty_persistent() -> PersistentStore {
+        PersistentStore::empty()
+    }
+
+    fn persistent_with(key: &str, val: VarValue) -> PersistentStore {
+        let mut store = PersistentStore::empty();
+        store.variables.insert(key.to_string(), val);
+        store
+    }
+
+    // ── parse_condition ────────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_condition_always_variants() {
+        assert_eq!(parse_condition("true"), ConditionDef::Always);
+        assert_eq!(parse_condition(""), ConditionDef::Always);
+    }
+
+    #[test]
+    fn parse_condition_has_continue() {
+        assert_eq!(parse_condition("$has_continue"), ConditionDef::HasContinue);
+    }
+
+    #[test]
+    fn parse_condition_persistent_var() {
+        assert_eq!(
+            parse_condition("$persistent.my_flag"),
+            ConditionDef::PersistentVar("my_flag".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_condition_not_persistent_var() {
+        assert_eq!(
+            parse_condition("!$persistent.my_flag"),
+            ConditionDef::NotPersistentVar("my_flag".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_condition_unknown_defaults_to_always() {
+        assert_eq!(parse_condition("$unknown_syntax"), ConditionDef::Always);
+    }
+
+    // ── ConditionDef::evaluate ────────────────────────────────────────────────
+
+    #[test]
+    fn condition_always_is_true_regardless_of_context() {
+        let store = empty_persistent();
+        let ctx = ConditionContext {
+            has_continue: false,
+            persistent: &store,
+        };
+        assert!(ConditionDef::Always.evaluate(&ctx));
+    }
+
+    #[test]
+    fn condition_has_continue_mirrors_context_flag() {
+        let store = empty_persistent();
+        let ctx_no = ConditionContext {
+            has_continue: false,
+            persistent: &store,
+        };
+        let ctx_yes = ConditionContext {
+            has_continue: true,
+            persistent: &store,
+        };
+        assert!(!ConditionDef::HasContinue.evaluate(&ctx_no));
+        assert!(ConditionDef::HasContinue.evaluate(&ctx_yes));
+    }
+
+    #[test]
+    fn condition_persistent_var_true_when_set() {
+        let store_set = persistent_with("flag", VarValue::Bool(true));
+        let store_unset = empty_persistent();
+        let ctx_set = ConditionContext {
+            has_continue: false,
+            persistent: &store_set,
+        };
+        let ctx_unset = ConditionContext {
+            has_continue: false,
+            persistent: &store_unset,
+        };
+        assert!(ConditionDef::PersistentVar("flag".to_string()).evaluate(&ctx_set));
+        assert!(!ConditionDef::PersistentVar("flag".to_string()).evaluate(&ctx_unset));
+    }
+
+    #[test]
+    fn condition_not_persistent_var_inverts_truthy() {
+        let store_set = persistent_with("flag", VarValue::Bool(true));
+        let ctx = ConditionContext {
+            has_continue: false,
+            persistent: &store_set,
+        };
+        assert!(!ConditionDef::NotPersistentVar("flag".to_string()).evaluate(&ctx));
+
+        let store_unset = empty_persistent();
+        let ctx2 = ConditionContext {
+            has_continue: false,
+            persistent: &store_unset,
+        };
+        assert!(ConditionDef::NotPersistentVar("flag".to_string()).evaluate(&ctx2));
+    }
+
+    // ── ActionDef deserialization ─────────────────────────────────────────────
+
+    #[test]
+    fn action_def_deserialize_string_variants() {
+        let pairs: &[(&str, ActionDef)] = &[
+            (r#""start_game""#, ActionDef::StartGame),
+            (r#""continue_game""#, ActionDef::ContinueGame),
+            (r#""go_back""#, ActionDef::GoBack),
+            (r#""return_to_title""#, ActionDef::ReturnToTitle),
+            (r#""exit""#, ActionDef::Exit),
+            (r#""quick_save""#, ActionDef::QuickSave),
+            (r#""quick_load""#, ActionDef::QuickLoad),
+        ];
+        for (json, expected) in pairs {
+            let got: ActionDef = serde_json::from_str(json).unwrap();
+            assert_eq!(got, *expected, "failed for {json}");
+        }
+    }
+
+    #[test]
+    fn action_def_deserialize_start_at_label_object() {
+        let json = r#"{"start_at_label": "prologue"}"#;
+        let got: ActionDef = serde_json::from_str(json).unwrap();
+        assert_eq!(got, ActionDef::StartAtLabel("prologue".to_string()));
+    }
+
+    #[test]
+    fn action_def_deserialize_unknown_string_errors() {
+        let result = serde_json::from_str::<ActionDef>(r#""not_a_real_action""#);
+        assert!(result.is_err());
+    }
+
+    // ── ConditionalAsset::resolve ──────────────────────────────────────────────
+
+    #[test]
+    fn conditional_asset_resolve_first_matching_condition() {
+        let store = persistent_with("flag", VarValue::Bool(true));
+        let ctx = ConditionContext {
+            has_continue: false,
+            persistent: &store,
+        };
+        let assets = vec![
+            ConditionalAsset {
+                when: Some(ConditionDef::PersistentVar("flag".to_string())),
+                asset: "asset_when_set".to_string(),
+            },
+            ConditionalAsset {
+                when: None,
+                asset: "fallback".to_string(),
+            },
+        ];
+        assert_eq!(
+            ConditionalAsset::resolve(&assets, &ctx),
+            Some("asset_when_set")
+        );
+    }
+
+    #[test]
+    fn conditional_asset_resolve_falls_back_when_condition_unmet() {
+        let store = empty_persistent();
+        let ctx = ConditionContext {
+            has_continue: false,
+            persistent: &store,
+        };
+        let assets = vec![
+            ConditionalAsset {
+                when: Some(ConditionDef::PersistentVar("flag".to_string())),
+                asset: "asset_when_set".to_string(),
+            },
+            ConditionalAsset {
+                when: None,
+                asset: "fallback".to_string(),
+            },
+        ];
+        assert_eq!(ConditionalAsset::resolve(&assets, &ctx), Some("fallback"));
+    }
+
+    #[test]
+    fn conditional_asset_resolve_empty_list_returns_none() {
+        let store = empty_persistent();
+        let ctx = ConditionContext {
+            has_continue: false,
+            persistent: &store,
+        };
+        assert_eq!(ConditionalAsset::resolve(&[], &ctx), None);
+    }
+}

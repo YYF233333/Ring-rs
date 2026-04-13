@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-/// Toast 消息类型
+/// Toast 消息类型（Warning/Info 暂无调用方，保留为完整 API）
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum ToastType {
@@ -25,6 +25,8 @@ pub struct ToastQueue {
     next_id: u64,
 }
 
+// toast 各类型便捷方法：供未来 UI 屏幕调用，暂无调用方但保留为公开 API。
+#[allow(dead_code)]
 impl ToastQueue {
     pub fn push(&mut self, text: impl Into<String>, toast_type: ToastType) {
         self.messages.push(ToastMessage {
@@ -35,17 +37,14 @@ impl ToastQueue {
         self.next_id += 1;
     }
 
-    #[allow(dead_code)]
     pub fn success(&mut self, text: impl Into<String>) {
         self.push(text, ToastType::Success);
     }
 
-    #[allow(dead_code)]
     pub fn error(&mut self, text: impl Into<String>) {
         self.push(text, ToastType::Error);
     }
 
-    #[allow(dead_code)]
     pub fn info(&mut self, text: impl Into<String>) {
         self.push(text, ToastType::Info);
     }

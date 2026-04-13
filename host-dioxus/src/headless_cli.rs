@@ -36,6 +36,103 @@ fn default_output_path() -> PathBuf {
         .join("harness-cli-bundle.json")
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Keys chosen to be unique and clearly test-only; unlikely to be set in any real env.
+    const KEY_F32_ABSENT: &str = "RING_TEST_HC_F32_ABSENT_7A2B";
+    const KEY_F32_VALID: &str = "RING_TEST_HC_F32_VALID_7A2B";
+    const KEY_F32_INVALID: &str = "RING_TEST_HC_F32_INVALID_7A2B";
+    const KEY_USIZE_ABSENT: &str = "RING_TEST_HC_USIZE_ABSENT_7A2B";
+    const KEY_USIZE_VALID: &str = "RING_TEST_HC_USIZE_VALID_7A2B";
+    const KEY_BOOL_ABSENT: &str = "RING_TEST_HC_BOOL_ABSENT_7A2B";
+    const KEY_BOOL_TRUTHY: &str = "RING_TEST_HC_BOOL_TRUTHY_7A2B";
+    const KEY_BOOL_FALSY: &str = "RING_TEST_HC_BOOL_FALSY_7A2B";
+
+    #[test]
+    fn parse_env_f32_returns_default_when_absent() {
+        let result = parse_env_f32(KEY_F32_ABSENT, 42.0);
+        assert_eq!(result.unwrap(), 42.0);
+    }
+
+    #[test]
+    fn parse_env_f32_parses_valid_value() {
+        unsafe {
+            std::env::set_var(KEY_F32_VALID, "3.14");
+        }
+        let result = parse_env_f32(KEY_F32_VALID, 0.0);
+        unsafe {
+            std::env::remove_var(KEY_F32_VALID);
+        }
+        assert!((result.unwrap() - 3.14_f32).abs() < 1e-5);
+    }
+
+    #[test]
+    fn parse_env_f32_errors_on_invalid_value() {
+        unsafe {
+            std::env::set_var(KEY_F32_INVALID, "not_a_number");
+        }
+        let result = parse_env_f32(KEY_F32_INVALID, 0.0);
+        unsafe {
+            std::env::remove_var(KEY_F32_INVALID);
+        }
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_env_usize_returns_default_when_absent() {
+        let result = parse_env_usize(KEY_USIZE_ABSENT, 100);
+        assert_eq!(result.unwrap(), 100);
+    }
+
+    #[test]
+    fn parse_env_usize_parses_valid_value() {
+        unsafe {
+            std::env::set_var(KEY_USIZE_VALID, "256");
+        }
+        let result = parse_env_usize(KEY_USIZE_VALID, 0);
+        unsafe {
+            std::env::remove_var(KEY_USIZE_VALID);
+        }
+        assert_eq!(result.unwrap(), 256);
+    }
+
+    #[test]
+    fn parse_env_bool_returns_default_when_absent() {
+        assert!(!parse_env_bool(KEY_BOOL_ABSENT, false));
+        assert!(parse_env_bool(KEY_BOOL_ABSENT, true));
+    }
+
+    #[test]
+    fn parse_env_bool_recognizes_truthy_values() {
+        for truthy in &["1", "true", "TRUE", "yes", "YES"] {
+            unsafe {
+                std::env::set_var(KEY_BOOL_TRUTHY, truthy);
+            }
+            let result = parse_env_bool(KEY_BOOL_TRUTHY, false);
+            unsafe {
+                std::env::remove_var(KEY_BOOL_TRUTHY);
+            }
+            assert!(result, "expected truthy for '{truthy}'");
+        }
+    }
+
+    #[test]
+    fn parse_env_bool_treats_other_values_as_false() {
+        for falsy in &["0", "false", "FALSE", "no", "NO", "off"] {
+            unsafe {
+                std::env::set_var(KEY_BOOL_FALSY, falsy);
+            }
+            let result = parse_env_bool(KEY_BOOL_FALSY, true);
+            unsafe {
+                std::env::remove_var(KEY_BOOL_FALSY);
+            }
+            assert!(!result, "expected falsy for '{falsy}'");
+        }
+    }
+}
+
 pub fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
     let dt = parse_env_f32("RING_HARNESS_DT", 1.0 / 60.0)?;
     let max_steps = parse_env_usize("RING_HARNESS_MAX_STEPS", 600)?;
@@ -64,12 +161,12 @@ pub fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
     }
     fs::write(&output_path, serde_json::to_string_pretty(&bundle)?)?;
 
-    println!(
-        "Headless harness complete: owner={}, stop_reason={}, steps={}, output={}",
-        session.client_token,
-        bundle.metadata.stop_reason,
-        bundle.metadata.steps_run,
-        output_path.display()
+    tracing::info!(
+        owner = %session.client_token,
+        stop_reason = %bundle.metadata.stop_reason,
+        steps = bundle.metadata.steps_run,
+        output = %output_path.display(),
+        "Headless harness complete"
     );
 
     Ok(())

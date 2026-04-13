@@ -57,12 +57,12 @@ pub fn MapOverlay(render_state: Signal<RenderState>) -> Element {
                 class: "vn-map-overlay",
                 onclick: move |evt: Event<MouseData>| {
                     evt.stop_propagation();
-                    if let Ok(mut inner) = app.inner.lock() {
-                        let _ = inner.handle_ui_result(
-                            key.clone(),
-                            serde_json::Value::String(String::new()),
-                        );
-                    }
+                    if let Ok(mut inner) = app.inner.lock()
+                        && let Err(e) =
+                            inner.handle_ui_result(key.clone(), serde_json::Value::String(String::new()))
+                        {
+                            tracing::warn!(error = %e, "handle_ui_result 失败（地图加载失败路径）");
+                        }
                 },
                 div { class: "vn-map-overlay__title", "地图加载失败" }
             }
@@ -119,12 +119,13 @@ pub fn MapOverlay(render_state: Signal<RenderState>) -> Element {
                             onclick: move |evt: Event<MouseData>| {
                                 evt.stop_propagation();
                                 if enabled
-                                    && let Ok(mut inner) = app.inner.lock() {
-                                        let _ = inner.handle_ui_result(
+                                    && let Ok(mut inner) = app.inner.lock()
+                                        && let Err(e) = inner.handle_ui_result(
                                             key.clone(),
                                             serde_json::Value::String(loc_id.clone()),
-                                        );
-                                    }
+                                        ) {
+                                            tracing::warn!(error = %e, loc_id = %loc_id, "handle_ui_result 失败（地图选择）");
+                                        }
                             },
                             "{loc_label}"
                         }

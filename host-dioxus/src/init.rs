@@ -38,6 +38,36 @@ pub fn percent_decode(input: &str) -> String {
 }
 
 /// 定位项目根目录。
+#[cfg(test)]
+mod tests {
+    use super::percent_decode;
+
+    #[test]
+    fn percent_decode_plain_ascii_passthrough() {
+        assert_eq!(percent_decode("hello/world.png"), "hello/world.png");
+        assert_eq!(percent_decode(""), "");
+    }
+
+    #[test]
+    fn percent_decode_encoded_chars() {
+        // %E4%B8%AD%E6%96%87 = "中文" in UTF-8 percent-encoded
+        assert_eq!(percent_decode("%E4%B8%AD%E6%96%87"), "中文");
+    }
+
+    #[test]
+    fn percent_decode_partial_mixed() {
+        // ASCII mix with encoded space (%20)
+        assert_eq!(percent_decode("hello%20world"), "hello world");
+    }
+
+    #[test]
+    fn percent_decode_incomplete_sequence_left_as_is() {
+        // A lone '%' at end is treated as literal bytes; result is the original string
+        let result = percent_decode("test%");
+        assert_eq!(result, "test%");
+    }
+}
+
 ///
 /// 优先查找 `config.json`，回退查找 `assets/` 子目录。
 pub fn find_project_root() -> PathBuf {

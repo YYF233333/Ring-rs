@@ -181,6 +181,15 @@ pub async fn run(app_state: AppState, port: u16, screenshot_tx: mpsc::Sender<Scr
 
 // ── Handler 辅助 ────────────────────────────────────────────────────────────
 
+/// 获取应用状态锁。Mutex 毒化意味着引擎已 panic（即我们的 bug），此处断言不变量。
+fn lock_inner(state: &ServerState) -> std::sync::MutexGuard<'_, crate::state::AppStateInner> {
+    state
+        .app
+        .inner
+        .lock()
+        .expect("invariant: app state mutex not poisoned")
+}
+
 /// 从 locked inner 提取动作摘要响应。
 fn action_summary(inner: &crate::state::AppStateInner) -> ActionResponse {
     ActionResponse {
@@ -204,7 +213,7 @@ fn err_json(status: StatusCode, msg: impl Into<String>) -> (StatusCode, Json<Err
 // ── GET /api/ping ────────────────────────────────────────────────────────────
 
 async fn handle_ping(State(state): State<ServerState>) -> impl IntoResponse {
-    let inner = state.app.inner.lock().unwrap();
+    let inner = lock_inner(&state);
     Json(PingResponse {
         ok: true,
         waiting: format!("{:?}", inner.waiting),
@@ -216,7 +225,7 @@ async fn handle_ping(State(state): State<ServerState>) -> impl IntoResponse {
 // ── GET /api/state ───────────────────────────────────────────────────────────
 
 async fn handle_state(State(state): State<ServerState>) -> impl IntoResponse {
-    let inner = state.app.inner.lock().unwrap();
+    let inner = lock_inner(&state);
     let resp = FullStateResponse {
         render_state: inner.render_state.clone(),
         waiting: inner.waiting.clone(),
@@ -232,7 +241,7 @@ async fn handle_state(State(state): State<ServerState>) -> impl IntoResponse {
 // ── GET /api/state/dialogue ──────────────────────────────────────────────────
 
 async fn handle_state_dialogue(State(state): State<ServerState>) -> impl IntoResponse {
-    let inner = state.app.inner.lock().unwrap();
+    let inner = lock_inner(&state);
     Json(serde_json::json!({
         "dialogue": inner.render_state.dialogue,
         "text_mode": inner.render_state.text_mode,
@@ -243,7 +252,7 @@ async fn handle_state_dialogue(State(state): State<ServerState>) -> impl IntoRes
 // ── GET /api/state/scene ─────────────────────────────────────────────────────
 
 async fn handle_state_scene(State(state): State<ServerState>) -> impl IntoResponse {
-    let inner = state.app.inner.lock().unwrap();
+    let inner = lock_inner(&state);
     Json(serde_json::json!({
         "current_background": inner.render_state.current_background,
         "visible_characters": inner.render_state.visible_characters,
@@ -258,7 +267,7 @@ async fn handle_state_scene(State(state): State<ServerState>) -> impl IntoRespon
 // ── GET /api/state/choices ───────────────────────────────────────────────────
 
 async fn handle_state_choices(State(state): State<ServerState>) -> impl IntoResponse {
-    let inner = state.app.inner.lock().unwrap();
+    let inner = lock_inner(&state);
     Json(serde_json::json!({
         "waiting_for_choice": inner.waiting == WaitingFor::Choice,
         "choices": inner.render_state.choices,
@@ -268,7 +277,7 @@ async fn handle_state_choices(State(state): State<ServerState>) -> impl IntoResp
 // ── GET /api/state/audio ─────────────────────────────────────────────────────
 
 async fn handle_state_audio(State(state): State<ServerState>) -> impl IntoResponse {
-    let inner = state.app.inner.lock().unwrap();
+    let inner = lock_inner(&state);
     Json(serde_json::json!({
         "audio": inner.render_state.audio,
     }))
@@ -277,7 +286,7 @@ async fn handle_state_audio(State(state): State<ServerState>) -> impl IntoRespon
 // ── POST /api/click ──────────────────────────────────────────────────────────
 
 async fn handle_click(State(state): State<ServerState>) -> impl IntoResponse {
-    let mut inner = state.app.inner.lock().unwrap();
+    let mut inner = lock_inner(&state);
     inner.process_click();
     Json(action_summary(&inner))
 }
@@ -288,7 +297,7 @@ async fn handle_choose(
     State(state): State<ServerState>,
     Json(req): Json<ChooseRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    let mut inner = state.app.inner.lock().unwrap();
+    let mut inner = lock_inner(&state);
     if inner.waiting != WaitingFor::Choice {
         return Err(err_json(
             StatusCode::CONFLICT,
@@ -321,7 +330,7 @@ async fn handle_advance(
     Json(req): Json<AdvanceRequest>,
 ) -> impl IntoResponse {
     let max = req.max_clicks.min(100); // 硬上限防止意外
-    let mut inner = state.app.inner.lock().unwrap();
+    let mut inner = lock_inner(&state);
     let mut clicks = 0;
     let initial_waiting = inner.waiting.clone();
 
@@ -369,7 +378,7 @@ async fn handle_navigate(
             ));
         }
     };
-    let mut inner = state.app.inner.lock().unwrap();
+    let mut inner = lock_inner(&state);
     inner.set_host_screen(screen);
     Ok(Json(action_summary(&inner)))
 }
@@ -380,7 +389,7 @@ async fn handle_start_game(
     State(state): State<ServerState>,
     Json(req): Json<StartGameRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    let mut inner = state.app.inner.lock().unwrap();
+    let mut inner = lock_inner(&state);
 
     let script_path = req
         .script
@@ -424,7 +433,7 @@ async fn handle_playback_mode(
             ));
         }
     };
-    let mut inner = state.app.inner.lock().unwrap();
+    let mut inner = lock_inner(&state);
     inner.set_playback_mode(mode);
     Ok(Json(action_summary(&inner)))
 }
@@ -432,7 +441,7 @@ async fn handle_playback_mode(
 // ── GET /api/diag/transitions ────────────────────────────────────────────────
 
 async fn handle_diag_transitions(State(state): State<ServerState>) -> impl IntoResponse {
-    let inner = state.app.inner.lock().unwrap();
+    let inner = lock_inner(&state);
     Json(serde_json::json!({
         "background_transition_active": inner.render_state.background_transition.is_some(),
         "scene_transition_active": inner.render_state.scene_transition.is_some(),
@@ -446,7 +455,7 @@ async fn handle_diag_transitions(State(state): State<ServerState>) -> impl IntoR
 // ── GET /api/diag/typewriter ─────────────────────────────────────────────────
 
 async fn handle_diag_typewriter(State(state): State<ServerState>) -> impl IntoResponse {
-    let inner = state.app.inner.lock().unwrap();
+    let inner = lock_inner(&state);
     let (visible, total, complete) = if let Some(ref d) = inner.render_state.dialogue {
         let total = d.content.chars().count();
         let visible = d.visible_chars;

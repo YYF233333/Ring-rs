@@ -155,7 +155,7 @@ pub fn SaveLoadScreen(render_state: Signal<RenderState>) -> Element {
                                                     message: format!("覆盖 Slot {slot} 的存档？"),
                                                     on_confirm: ActionDef::GoBack, // placeholder
                                                 }));
-                                                // 直接保存（TODO：确认弹窗后保存）
+                                                // 直接保存（确认弹窗与保存的联动尚未实现，弹窗仅作视觉提示）
                                                 if let Err(e) = inner.save_to_slot(slot) {
                                                     error!(error = %e, slot, "Save failed");
                                                 }

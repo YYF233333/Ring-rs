@@ -46,3 +46,40 @@ pub struct MapLocation {
 fn default_true() -> bool {
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn map_definition_deserializes_full_json() {
+        let json = r##"{
+            "title": "Test Map",
+            "background": "maps/bg.jpg",
+            "hit_mask": "maps/mask.png",
+            "locations": [
+                {"id": "loc1", "label": "Location 1", "x": 100.0, "y": 200.0},
+                {"id": "loc2", "label": "City", "mask_color": "#FF0000",
+                 "x": 300.0, "y": 400.0, "enabled": false}
+            ]
+        }"##;
+        let map: MapDefinition = serde_json::from_str(json).unwrap();
+        assert_eq!(map.title, "Test Map");
+        assert_eq!(map.background.as_deref(), Some("maps/bg.jpg"));
+        assert_eq!(map.locations.len(), 2);
+        assert_eq!(map.locations[0].id, "loc1");
+        assert!(map.locations[0].enabled); // default_true
+        assert!(!map.locations[1].enabled);
+        assert_eq!(map.locations[1].mask_color.as_deref(), Some("#FF0000"));
+    }
+
+    #[test]
+    fn map_definition_deserializes_minimal_json() {
+        let json = r#"{"title": "Mini", "locations": []}"#;
+        let map: MapDefinition = serde_json::from_str(json).unwrap();
+        assert_eq!(map.title, "Mini");
+        assert!(map.background.is_none());
+        assert!(map.hit_mask.is_none());
+        assert!(map.locations.is_empty());
+    }
+}

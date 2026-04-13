@@ -14,6 +14,13 @@
 exclude_globs = [
     # thiserror derive，无手写逻辑
     "vn-runtime/src/error.rs",
+    # host-dioxus 前端（Dioxus RSX 组件 + 入口 + Debug HTTP server）：
+    # 含渲染/事件处理逻辑，无对应单元测试，变异测试无法有效验证。
+    "host-dioxus/src/main.rs",
+    "host-dioxus/src/debug_server.rs",
+    "host-dioxus/src/components/*",
+    "host-dioxus/src/screens/*",
+    "host-dioxus/src/vn/*",
 ]
 
 # ---------------------------------------------------------------------------

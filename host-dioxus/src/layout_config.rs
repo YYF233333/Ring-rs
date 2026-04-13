@@ -453,3 +453,20 @@ impl UiLayoutConfig {
         Ok(config)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 内嵌真实 ui/layout.json，验证 serde 字段映射完整、无漏字段。
+    const LAYOUT_JSON: &str = include_str!("../../assets/ui/layout.json");
+
+    #[test]
+    fn layout_config_parses_real_json() {
+        let config: UiLayoutConfig =
+            serde_json::from_str(LAYOUT_JSON).expect("assets/ui/layout.json 解析失败");
+        assert_eq!(config.base_width, 1920.0);
+        assert_eq!(config.base_height, 1080.0);
+        assert!(!config.assets.textbox.is_empty());
+    }
+}
