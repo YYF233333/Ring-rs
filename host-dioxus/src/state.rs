@@ -51,6 +51,7 @@ pub struct HistoryEntry {
 }
 
 /// Dioxus Desktop 托管的全局应用状态
+#[derive(Clone)]
 pub struct AppState {
     pub inner: std::sync::Arc<std::sync::Mutex<AppStateInner>>,
 }

@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-033
-- 状态：Active（Phase 0 通过）
+- 状态：Active（Phase 0-2 完成，Phase 3 待实施）
 - 作者：claude-4.6-opus
 - 日期：2026-04-02
 - 相关范围：`host/`（功能基线）、`host-tauri/`（参考实现，冻结待废弃）→ `host-dioxus/`（新宿主）、`.cargo/config.toml`、`tools/xtask/`、CI
@@ -508,47 +508,72 @@ default_platform = "desktop"
 3. **CSS 加载**：`with_custom_head("<link>")` 引用外部 CSS 文件在 `cargo run` 模式下不可靠。使用 `with_custom_head("<style>...")` 内联 CSS 或通过 `ring-asset` 协议加载。
 4. **WebGL eval 桥接模式**：Rust 侧设置全局变量（`window.__ruleProgress`），JS 侧用 `requestAnimationFrame` 自主渲染循环读取。不要从 Rust 逐帧 eval 绘制调用（延迟导致闪烁）。
 
-### Phase 1：后端迁移（1 天）
+### Phase 1：后端迁移（1 天）— 完成（2026-04-10）
 
 将后端文件迁移到 `host-dioxus/src/`：
-- `state.rs`、`command_executor.rs`、`render_state.rs`、`audio.rs`、`resources.rs`、`config.rs`、`manifest.rs`、`save_manager.rs`、`error.rs`、`headless_cli.rs`
-- 移除 Tauri 特有依赖（`tauri::State`、`#[command]`），改为普通 Rust 模块接口
-- 不再需要 `commands.rs`（IPC 薄代理）和 `debug_server.rs`
+- [x] `state.rs`、`command_executor.rs`、`render_state.rs`、`audio.rs`、`resources.rs`、`config.rs`、`manifest.rs`、`save_manager.rs`、`error.rs`、`headless_cli.rs`、`init.rs`
+- [x] 移除 Tauri 特有依赖（`tauri::State`、`#[command]`），改为普通 Rust 模块接口
+- [x] 不再需要 `commands.rs`（IPC 薄代理）和 `debug_server.rs`
+- [x] 23 个 Command handler 全部就位
+- [x] `AppState { inner: Arc<Mutex<AppStateInner>> }` 适配 Dioxus `use_context`
 
-### Phase 2：前端重写（3-5 天）
+### Phase 2：前端重写（3-5 天）— 完成（2026-04-13）
 
-按优先级重写为 RSX，**对齐旧 host 的视觉语义**：
+按优先级重写为 RSX，**对齐旧 host 的视觉语义**。
 
-1. **核心渲染层**（先跑通游戏循环）
-   - `BackgroundLayer` → `background.rs`（双层交叉淡化）
-   - `CharacterLayer` → `character.rs`（入场淡入 + z-order）
-   - `DialogueBox` → `dialogue.rs`
-   - `ChoicePanel` → `choice.rs`
-   - `TransitionOverlay` → `transition.rs`（CSS fade）
-   - `RuleTransition` → `rule_transition.rs`（WebGL shader）
-   - `VideoOverlay` → `video.rs`
-   - `VNScene` → `scene.rs`
+#### 实现记录
 
-2. **系统界面**（对齐旧 host 页面功能）
-   - `TitleScreen` → `title.rs`（含季节切换）
-   - `SaveLoadScreen` → `save_load.rs`（含分页/确认）
-   - `SettingsScreen` → `settings.rs`
-   - `InGameMenu` → `in_game_menu.rs`
-   - `HistoryScreen` → `history.rs`
+**架构决策**：
+- 状态接入：`AppState` 通过 `use_context_provider` 注入，tick loop（30 FPS）每帧 clone `RenderState` 到 `Signal`
+- CSS 策略：单一内联 CSS（BEM 命名），动态值走 inline `style` 属性
+- Skip 模式：`.skip-mode` class 零化所有 `transition-duration` / `animation-duration`
+- 音频：headless AudioManager（后端状态跟踪），JS Web Audio 桥接延后实现
+- 窗口关闭：使用 `dioxus::desktop::window().close()` 而非 `std::process::exit()`（Dioxus event handler 不允许 `!` 返回类型）
 
-3. **辅助组件**
-   - `QuickMenu`、`NvlPanel`、`ChapterMark`、`TitleCard`
-   - `ConfirmDialog`、`Toast`、`SkipAutoIndicator`
-   - `MapOverlay`（预留 hit-mask）、`MiniGame`（预留 iframe 容器）
+**新增文件清单（19 个前端源文件）**：
 
-### Phase 3：构建集成与清理（1 天）
+1. **VN 渲染层** (`src/vn/`，13 个文件)
+   - [x] `scene.rs` — VNScene 容器（shake/blur/dim + skip-mode + 点击推进）
+   - [x] `background.rs` — 双层交叉淡化
+   - [x] `character.rs` — 立绘（position/opacity/scale/z-order + CSS transition）
+   - [x] `dialogue.rs` — ADV 对话框（打字机 + 推进指示器）
+   - [x] `nvl.rs` — NVL 全屏文本面板
+   - [x] `choice.rs` — 选项面板
+   - [x] `transition.rs` — Fade/FadeWhite CSS 遮罩过渡
+   - [x] `rule_transition.rs` — WebGL shader 遮罩过渡
+   - [x] `chapter_mark.rs` — 章节标记
+   - [x] `title_card.rs` — 全屏字卡（淡入淡出）
+   - [x] `video.rs` — HTML5 视频 cutscene
+   - [x] `quick_menu.rs` — 底部快捷菜单（Skip/Auto/Save/Load/History/Settings）
 
-- 更新 `.cargo/config.toml` alias
-- 更新 `tools/xtask/` 移除前端工具链调用
-- 更新 CI
-- 迁移 CSS（从旧 host 的视觉设计提取全局 CSS）
-- 删除 `host-tauri/` 目录
-- 更新文档（module summaries、navigation map、lessons-learned）
+2. **系统界面** (`src/screens/`，5 个文件)
+   - [x] `title.rs` — 标题画面（Start/Continue/Load/Settings/Exit）
+   - [x] `in_game_menu.rs` — 游内暂停菜单
+   - [x] `save_load.rs` — 存读档（6 slots/页 × 9 页 + 缩略图）
+   - [x] `settings.rs` — 设置（BGM/SFX 音量滑块、文字速度、Auto 延迟）
+   - [x] `history.rs` — 对话历史
+
+3. **辅助组件** (`src/components/`，1 个文件)
+   - [x] `skip_indicator.rs` — SKIP/AUTO 模式浮动指示器
+
+4. **修改文件**
+   - [x] `main.rs` — 完全重写：App 根组件 + tick loop + Signal 接入 + 全局 CSS + 6 个 HostScreen 路由 + 键盘绑定骨架
+   - [x] `state.rs` — `AppState` 添加 `#[derive(Clone)]`
+
+**延后项**：
+- 音频桥接（JS Web Audio API）— 后端 AudioManager 已就绪，前端 eval 注入待实现
+- 键盘绑定（Escape/Ctrl/Space）— JS 全局队列骨架已搭建，集成到 tick loop 待完成
+- Toast / ConfirmDialog — 按需补充
+- MapOverlay / MiniGame — placeholder 预留
+
+### Phase 3：构建集成与清理（1 天）— 待实施
+
+- [ ] 更新 `.cargo/config.toml` alias
+- [ ] 更新 `tools/xtask/` 移除前端工具链调用
+- [ ] 更新 CI
+- [ ] 迁移 CSS（从旧 host 的视觉设计提取全局 CSS）
+- [ ] 删除 `host-tauri/` 目录
+- [ ] 更新文档（module summaries、navigation map、lessons-learned）
 
 ### 向后兼容
 
