@@ -8,15 +8,6 @@ paths:
 
 # 资源与配置（resources）
 
-## 摘要导航
-
-- [resources](docs/engine/architecture/module-summaries/host/resources.md)
-- [manifest](docs/engine/architecture/module-summaries/host/manifest.md)
-- [config](docs/engine/architecture/module-summaries/host/config.md)
-- [save_manager](docs/engine/architecture/module-summaries/host/save-manager.md)
-- 资源系统：[resource_management.md](docs/authoring/resources.md)
-- 配置指南：[config_guide.md](docs/authoring/config.md)
-
 ## 关键不变量
 
 - 资源路径**必须**使用 `&LogicalPath`，禁止裸 `&str` / `String` / `PathBuf` 拼接。

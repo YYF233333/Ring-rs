@@ -8,15 +8,6 @@ paths:
 
 # 应用编排层（host-app）
 
-## 摘要导航
-
-- [app](docs/engine/architecture/module-summaries/host/app.md)
-- [app_update](docs/engine/architecture/module-summaries/host/app-update.md)
-- [app_command_handlers](docs/engine/architecture/module-summaries/host/app-command-handlers.md)
-- [command_executor](docs/engine/architecture/module-summaries/host/command-executor.md)
-- [host_app](docs/engine/architecture/module-summaries/host/host-app.md)
-- [egui_actions](docs/engine/architecture/module-summaries/host/egui-actions.md)
-
 ## 关键不变量
 
 - `CommandExecutor` 负责"Command → 状态变更 + 输出事件"，`command_handlers` 负责"消费输出事件 → 驱动外部系统"。不要混淆两层职责。

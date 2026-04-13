@@ -6,12 +6,6 @@ alwaysApply: false
 
 # 运行时引擎（runtime-engine）
 
-## 摘要导航
-
-- [runtime](docs/engine/architecture/module-summaries/vn-runtime/runtime.md)
-- [vn-runtime 总览](docs/engine/architecture/module-summaries/vn-runtime.md)
-- 存档格式：[save_format.md](docs/engine/reference/save-format.md)
-
 ## 关键不变量
 
 - **确定性**：相同输入序列 → 相同 Command 输出序列。Engine 内部不依赖时钟/随机数。

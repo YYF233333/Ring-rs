@@ -6,16 +6,6 @@ alwaysApply: false
 
 # 媒体与 UI（media-ui）
 
-## 摘要导航
-
-- [audio](docs/engine/architecture/module-summaries/host/audio.md)
-- [video](docs/engine/architecture/module-summaries/host/video.md)
-- [input](docs/engine/architecture/module-summaries/host/input.md)
-- [ui](docs/engine/architecture/module-summaries/host/ui.md)
-- [egui_screens](docs/engine/architecture/module-summaries/host/egui-screens.md)
-- [extensions](docs/engine/architecture/module-summaries/host/extensions.md)
-- UI 定制：[ui_customization.md](docs/engine/ui/ui-customization.md)
-
 ## 关键不变量
 
 - 音频淡入淡出通过 `AudioManager` 的 fade 参数控制，不在调用方手动 lerp 音量。

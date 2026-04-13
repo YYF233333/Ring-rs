@@ -119,7 +119,6 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | 内容 | 路径 |
 |------|------|
 | 导航地图（"改哪里"） | `docs/engine/architecture/navigation-map.md` |
-| 摘要入口 | `docs/maintenance/summary-index.md` |
 | 符号索引 | `docs/engine/symbol-index.md` |
 | 脚本语法规范 | `docs/authoring/script-syntax.md` |
 | 经验沉淀 | `docs/maintenance/lessons-learned.md` |
@@ -164,24 +163,30 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 连续执行大的多阶段任务时，每完成一个阶段里程碑，须在对话框中向用户简要描述该阶段成果，再执行下一阶段。
 
-### 决策不确定时的引导式确认
+### 决策确认（Proactive Confirmation）
 
-遇到需求不明确、多种技术方案各有取舍、改动范围超预期、或对现有设计意图拿不准时，须主动向用户确认。使用 `AskUserQuestion` 工具发起结构化选择题（2-5 个选项，每个附简要说明），避免开放式提问。
+**默认姿态：有选择时先问，不要替用户做决定。** 不确定时宁可多问一次，也不要自行判断后事后返工。
+
+须主动使用 `AskUserQuestion` 发起结构化选择题（2-5 选项，每选项附简要说明），避免开放式提问。
+
+#### 必须确认的场景
+
+| 场景 | 示例 |
+|------|------|
+| 存在 ≥2 个合理技术方案 | "用 enum 还是 trait object 建模？" |
+| 任务拆分方式有多种合理选择 | "先做 A 再做 B，还是一起做？" |
+| 对现有设计意图拿不准 | "这个 Option 字段是故意的还是遗留的？" |
+
+#### 不需要确认的场景
+
+- 单一明确方案的实现细节
+- 遵循已有模式的机械扩展（如 match 分支补全）
 
 ## 工作协议
-
-### 摘要优先
-
-所有任务默认"摘要优先、源码兜底"：先按 `docs/maintenance/summary-index.md` 阅读摘要与导航，再决定源码最小读取范围。维护要求见 `docs/maintenance/summary-maintenance.md`。
 
 ### 符号定位
 
 优先使用 **LSP**（rust-analyzer）进行符号查找、跳转定义、查找引用。`docs/engine/symbol-index.md` 作为离线浏览参考，需要跨模块全局概览时可读取。`cargo gen-symbols` 在大批量 pub API 变更后运行，无需每次编码后刷新。
-
-### 源码读取约束
-
-- \>500 行文件优先局部读取：先 `rg` / LSP 定位，再 `ReadFile(offset, limit)` 片段读取。
-- 仅新增测试时，不读原有测试正文。用 `rg` 定位插入锚点，读 20-60 行上下文即可。
 
 ### Commit 规范
 

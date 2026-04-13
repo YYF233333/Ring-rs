@@ -7,17 +7,6 @@ paths:
 
 # 渲染与效果（renderer）
 
-## 摘要导航
-
-- [renderer](docs/engine/architecture/module-summaries/host/renderer.md)
-- [renderer_render_state](docs/engine/architecture/module-summaries/host/renderer-render-state.md)
-- [renderer_animation](docs/engine/architecture/module-summaries/host/renderer-animation.md)
-- [renderer_effects](docs/engine/architecture/module-summaries/host/renderer-effects.md)
-- [renderer_scene_transition](docs/engine/architecture/module-summaries/host/renderer-scene-transition.md)
-- [rendering_types](docs/engine/architecture/module-summaries/host/rendering-types.md)
-- [backend](docs/engine/architecture/module-summaries/host/backend.md)
-- 效果 capability：[extension_effects_capability.md](docs/engine/reference/extension-effects-capability.md)
-
 ## 关键不变量
 
 - `DrawCommand` 使用 `Arc<dyn Texture>`，后端通过 `as_any()` downcast 获取具体 GPU 纹理。

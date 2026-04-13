@@ -7,14 +7,6 @@ paths:
 
 # 脚本语言层（script-lang）
 
-## 摘要导航
-
-- [script](docs/engine/architecture/module-summaries/vn-runtime/script.md)
-- [command](docs/engine/architecture/module-summaries/vn-runtime/command.md)
-- [diagnostic](docs/engine/architecture/module-summaries/vn-runtime/diagnostic.md)
-- [parser](docs/engine/architecture/module-summaries/vn-runtime/parser.md)
-- 语法规范：[script_syntax_spec.md](docs/authoring/script-syntax.md)
-
 ## 关键不变量
 
 - Parser 输出必须与 `script_syntax_spec.md` 对齐；新增语法先更新规范再改代码。
