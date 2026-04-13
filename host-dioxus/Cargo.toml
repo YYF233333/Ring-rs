@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 dioxus = { version = "0.7", features = ["desktop"] }
-tokio = { version = "1", features = ["rt", "time"] }
+tokio = { version = "1", features = ["rt", "time", "net", "macros"] }
+axum = "0.8"
 
 # ── 后端核心 ──
 vn-runtime = { path = "../vn-runtime" }

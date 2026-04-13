@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ring-debug": {
+      "command": "node",
+      "args": ["tools/debug-mcp/index.js"],
+      "env": {
+        "RING_DEBUG_PORT": "9876"
+      }
+    }
+  }
+}

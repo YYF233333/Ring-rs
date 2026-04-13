@@ -32,3 +32,6 @@ recordings/
 events.jsonl
 user_settings.json
 *.zip
+
+# Node.js (debug-mcp tool)
+node_modules/

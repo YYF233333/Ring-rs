@@ -16,6 +16,8 @@ pub mod save_manager;
 pub mod screen_defs;
 pub mod state;
 
+pub mod debug_server;
+
 // ── 前端模块（Phase 2） ──
 mod components;
 mod screens;
@@ -1092,6 +1094,50 @@ enum InitPhase {
 }
 
 // ---------------------------------------------------------------------------
+// Screenshot bridge (debug server ↔ WebView)
+// ---------------------------------------------------------------------------
+
+/// 接收来自 debug HTTP server 的截图请求，通过 `document::eval()` 在 WebView 中
+/// 执行 JS 截图代码，将结果通过 oneshot 通道回传。
+async fn screenshot_bridge(mut rx: tokio::sync::mpsc::Receiver<debug_server::ScreenshotRequest>) {
+    while let Some(req) = rx.recv().await {
+        // 每个请求启动独立 eval，避免阻塞后续请求
+        spawn(async move {
+            let mut eval = document::eval(debug_server::SCREENSHOT_JS);
+            match eval.recv().await {
+                Ok(msg) => {
+                    let result: serde_json::Value = msg;
+                    if let Some(err) = result.get("error").and_then(|v| v.as_str()) {
+                        let _ = req.reply.send(Err(err.to_string()));
+                    } else {
+                        let width =
+                            result.get("width").and_then(|v| v.as_u64()).unwrap_or(1920) as u32;
+                        let height = result
+                            .get("height")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(1080) as u32;
+                        let data = result
+                            .get("data")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let _ = req.reply.send(Ok(debug_server::ScreenshotData {
+                            format: "png".to_string(),
+                            width,
+                            height,
+                            data_base64: data,
+                        }));
+                    }
+                }
+                Err(e) => {
+                    let _ = req.reply.send(Err(format!("eval 失败: {e}")));
+                }
+            }
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Root component
 // ---------------------------------------------------------------------------
 
@@ -1125,9 +1171,24 @@ fn App() -> Element {
             };
             match result {
                 Ok(()) => {
-                    {
+                    let debug_port = {
                         let mut inner = app_state_init.inner.lock().unwrap();
                         inner.frontend_connected(Some("dioxus-desktop".to_string()));
+                        inner
+                            .services
+                            .as_ref()
+                            .map(|s| s.config.debug.resolve_debug_server())
+                            .unwrap_or(None)
+                    };
+                    if let Some(port) = debug_port {
+                        let (screenshot_tx, screenshot_rx) = debug_server::screenshot_channel();
+                        // HTTP server
+                        let app_for_debug = app_state_init.clone();
+                        spawn(async move {
+                            debug_server::run(app_for_debug, port, screenshot_tx).await;
+                        });
+                        // 截图桥接：接收 HTTP 请求，通过 document::eval 执行 JS 截图
+                        spawn(screenshot_bridge(screenshot_rx));
                     }
                     info!("后端初始化完成");
                     init_phase.set(InitPhase::Ready);

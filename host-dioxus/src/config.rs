@@ -55,6 +55,14 @@ pub struct DebugConfig {
     pub log_file: Option<String>,
     pub recording_buffer_size_mb: u32,
     pub recording_output_dir: String,
+    /// Debug HTTP server 开关。`None` 表示使用编译默认值（debug=on, release=off）。
+    /// 优先级：环境变量 `RING_DEBUG_SERVER` > 此字段 > 编译默认值。
+    #[serde(default)]
+    pub enable_debug_server: Option<bool>,
+    /// Debug HTTP server 端口。
+    /// 优先级：环境变量 `RING_DEBUG_PORT` > 此字段。
+    #[serde(default = "default_debug_port")]
+    pub debug_server_port: u16,
 }
 
 /// 音频配置
@@ -115,6 +123,10 @@ impl Default for AudioConfig {
     }
 }
 
+fn default_debug_port() -> u16 {
+    9876
+}
+
 impl Default for DebugConfig {
     fn default() -> Self {
         Self {
@@ -123,7 +135,30 @@ impl Default for DebugConfig {
             log_file: None,
             recording_buffer_size_mb: 8,
             recording_output_dir: "recordings".to_string(),
+            enable_debug_server: None,
+            debug_server_port: default_debug_port(),
         }
+    }
+}
+
+impl DebugConfig {
+    /// 解析 debug server 配置。返回 `Some(port)` 表示应启动，`None` 表示跳过。
+    ///
+    /// 优先级：环境变量 > config 字段 > 编译默认值（debug=on, release=off）。
+    pub fn resolve_debug_server(&self) -> Option<u16> {
+        let enabled = match std::env::var("RING_DEBUG_SERVER").ok().as_deref() {
+            Some("1") | Some("true") => true,
+            Some("0") | Some("false") => false,
+            _ => self.enable_debug_server.unwrap_or(cfg!(debug_assertions)),
+        };
+        if !enabled {
+            return None;
+        }
+        let port = std::env::var("RING_DEBUG_PORT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(self.debug_server_port);
+        Some(port)
     }
 }
 

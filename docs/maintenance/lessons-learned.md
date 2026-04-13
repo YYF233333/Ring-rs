@@ -246,6 +246,18 @@ result.assert_waiting_click();
 - **原因**：该模块仅依赖 `vn_runtime::state::VarValue` 和 `PersistentStore`，与 UI 框架无关。
 - **正确做法**：新宿主可直接复用 screen_defs 和 layout_config 的数据结构，只需适配导入路径。screens.json / layout.json 是两个宿主共享的配置源。
 
+### Dioxus host-dioxus Debug Server 不会触发双 tick 竞速
+
+- **现象**：host-tauri 时期，Debug HTTP Server 被外部浏览器连接后游戏速度翻倍、打字机碎裂（见上文"双客户端竞争"条目）。host-dioxus 的 Debug Server 无此问题。
+- **原因**：host-dioxus 的 tick loop 在 Rust 侧（`tokio::time::sleep(33ms)` + `process_tick()`），不依赖 JS `requestAnimationFrame`。Debug HTTP Server 仅调用 `process_click()` / `process_choose()` 等 mutation 方法，与 keyboard handler 同级，绝不调用 `process_tick()`。因此不存在第二个 tick 源。
+- **正确做法**：debug server 的 handler 只做 lock → call mutation method → unlock，不驱动时间推进。截图通过 `mpsc` 通道请求 Dioxus UI 线程执行 `document::eval()` 完成，不引入额外 tick。
+
+### `document::eval` 中 `dioxus.send()` 传递大数据需直接发对象
+
+- **现象**：截图 JS 代码通过 `dioxus.send(JSON.stringify({...}))` 发送 base64 PNG 数据，Rust 侧 `eval.recv()` 收到的是字符串 Value 而非对象，`result.get("data")` 返回 None。
+- **原因**：`dioxus.send()` 接受任意 JS 值并序列化为 `serde_json::Value`。如果传入 `JSON.stringify(obj)`，Rust 侧收到 `Value::String`；如果传入对象，收到 `Value::Object`。键盘 handler 使用后一种模式。
+- **正确做法**：`dioxus.send({ width, height, data: base64 })` 直接传对象，Rust 侧 `recv::<serde_json::Value>()` 后用 `.get("field")` 访问。
+
 ---
 
 ## 如何贡献新条目

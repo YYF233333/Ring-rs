@@ -26,6 +26,7 @@ host/                # 旧宿主（winit/wgpu/egui）
 host-dioxus/         # 新宿主（Dioxus Desktop）
 tools/xtask/         # 门禁/覆盖率/脚本检查
 tools/asset-packer/  # 资源打包
+tools/debug-mcp/     # Debug MCP Server（Node.js，封装 HTTP REST API）
 ```
 
 默认 `cargo run` 执行 `host-dioxus`。
@@ -41,6 +42,25 @@ tools/asset-packer/  # 资源打包
 | 符号索引（定期） | `cargo gen-symbols` |
 | 脚本静态检查 | `cargo script-check [path]` |
 | 变异测试 | `cargo mutants` |
+
+### Debug Server（实时交互调试）
+
+host-dioxus 内嵌 HTTP REST API + MCP 封装，允许 CC 在游戏运行时查询状态、驱动操作、截图。
+
+**启用策略**：debug build 默认启用，release 默认关闭。优先级：`RING_DEBUG_SERVER` env > `config.debug.enable_debug_server` > `cfg!(debug_assertions)`。
+
+| 用途 | 命令/操作 |
+|------|-----------|
+| 启动（debug build 自动） | `cargo run` |
+| 强制启用 | `RING_DEBUG_SERVER=1 cargo run` |
+| 健康检查 | `curl http://127.0.0.1:9876/api/ping` |
+| 查询完整状态 | `curl http://127.0.0.1:9876/api/state` |
+| 推进对话 | `curl -X POST http://127.0.0.1:9876/api/click` |
+| 选择选项 | `curl -X POST http://127.0.0.1:9876/api/choose -d '{"index":0}'` |
+| 批量推进 | `curl -X POST http://127.0.0.1:9876/api/advance -d '{"max_clicks":10}'` |
+| 截图 | `curl http://127.0.0.1:9876/api/screenshot` |
+
+MCP 集成：`.mcp.json` 已配置 `ring-debug` server，重启 CC session 后可直接使用 MCP tools。
 
 ## 设计决策框架
 
@@ -104,6 +124,7 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 | 新增 UI 页面 | `host` egui_screens + `host-dioxus` 对应页面 |
 | Typewriter 节奏标签 | parser inline_tags + Command InlineEffect + host-side consumer |
 | 大批量新增/移动 pub 符号 | 运行 `cargo gen-symbols` 刷新符号索引 |
+| 新增 Debug API 端点 | `host-dioxus/src/debug_server.rs` + `tools/debug-mcp/index.js` MCP tool 映射 |
 
 ### 常见工作流详细指南
 
