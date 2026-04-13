@@ -210,6 +210,24 @@ result.assert_waiting_click();
 - **原因**：Dioxus Desktop 的内部资源服务在 `cargo run`（非 `dx serve`）模式下可能不提供 `/assets/` 路径的静态文件。
 - **正确做法**：使用 `with_custom_head('<style>...</style>')` 内联 CSS，或通过 `ring-asset` 自定义协议加载 CSS 文件。
 
+### Dioxus event handler 不允许 `!` 返回类型
+
+- **现象**：`onclick: move |_| { std::process::exit(0); }` 编译失败，报 `SpawnIfAsync is not implemented for !`。
+- **原因**：Dioxus 的 event handler 闭包必须返回 `()` 或 `Result<(), CapturedError>`，`std::process::exit()` 返回 `!`（never type），导致闭包类型不匹配。
+- **正确做法**：使用 `dioxus::desktop::window().close()` 关闭窗口（返回 `()`），不直接调用 `std::process::exit()`。
+
+### Dioxus eval 双向通信的正确用法
+
+- **现象**：想在 tick loop 中同步读取 JS 键盘事件，但 `document::eval().recv()` 是异步的，无法在同步 Mutex lock 区域使用。
+- **原因**：`eval().recv()` 返回 `Future`，需要在 async context 中 await。同一 eval 实例的 send/recv 通道是长生命周期的。
+- **正确做法**：用独立的 `spawn(async { ... })` 循环持续 `eval.recv()` 接收 JS 推送的事件。JS 侧用 `dioxus.send(data)` 推送，Rust 侧 `await eval.recv::<T>()` 接收。不要尝试在 tick loop 的同步区域处理。
+
+### Dioxus Signal 与 Arc<Mutex> 的配合模式
+
+- **现象**：需要在 Dioxus 组件间共享可变的 AppStateInner，但 Signal 要求 Clone。
+- **原因**：`use_context` 要求类型实现 Clone。`AppStateInner` 包含 VNRuntime 等不可 Clone 的字段。
+- **正确做法**：用 `AppState { inner: Arc<Mutex<AppStateInner>> }` 包装并 `#[derive(Clone)]`。tick loop 每帧 lock → process_tick → clone RenderState 到 Signal。用户交互直接 lock 调方法。Signal 只用于只读的 RenderState 快照。
+
 ---
 
 ## 如何贡献新条目

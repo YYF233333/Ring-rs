@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::render_state::{PlaybackMode, RenderState};
 use crate::state::AppState;
 
+use super::audio_bridge::AudioBridge;
 use super::background::BackgroundLayer;
 use super::chapter_mark::ChapterMark;
 use super::character::CharacterLayer;
@@ -87,6 +88,7 @@ pub fn VNScene(render_state: Signal<RenderState>) -> Element {
             TitleCard { render_state }
             VideoOverlay { render_state }
             QuickMenu { render_state }
+            AudioBridge { render_state }
         }
     }
 }

@@ -1,3 +1,4 @@
+mod audio_bridge;
 mod background;
 mod chapter_mark;
 mod character;

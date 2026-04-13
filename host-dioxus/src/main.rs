@@ -831,23 +831,95 @@ fn App() -> Element {
         });
     });
 
-    // 键盘绑定：通过 JS 全局队列 + Rust 轮询实现
-    use_effect(|| {
-        document::eval(
-            r#"
-            window.__ringKeys = [];
-            document.addEventListener("keydown", function(e) {
-                window.__ringKeys.push({ type: "down", key: e.key, code: e.code });
-            });
-            document.addEventListener("keyup", function(e) {
-                window.__ringKeys.push({ type: "up", key: e.key, code: e.code });
-            });
-        "#,
-        );
-    });
+    // 键盘绑定：JS 监听 → dioxus.send() → Rust recv() 处理
+    let app_state_keys = app_state.clone();
+    use_hook(move || {
+        spawn(async move {
+            let mut eval = document::eval(
+                r#"
+                document.addEventListener("keydown", function(e) {
+                    dioxus.send({ type: "down", key: e.key, code: e.code });
+                    if (["Escape", " ", "Enter", "Control", "Backspace"].includes(e.key)) {
+                        e.preventDefault();
+                    }
+                });
+                document.addEventListener("keyup", function(e) {
+                    dioxus.send({ type: "up", key: e.key, code: e.code });
+                });
+                "#,
+            );
 
-    // 在 tick loop 中轮询键盘队列（已整合到上面的 tick loop 中）
-    // TODO: 后续迭代中将键盘处理集成到 tick loop
+            loop {
+                let msg: Result<serde_json::Value, _> = eval.recv().await;
+                let Ok(msg) = msg else { break };
+
+                let event_type = msg.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                let key = msg.get("key").and_then(|v| v.as_str()).unwrap_or("");
+
+                if let Ok(mut inner) = app_state_keys.inner.lock() {
+                    match (event_type, key) {
+                        ("down", "Escape") => {
+                            let screen = inner.render_state.host_screen.clone();
+                            match screen {
+                                HostScreen::InGame => {
+                                    inner.set_host_screen(HostScreen::InGameMenu);
+                                }
+                                HostScreen::InGameMenu => {
+                                    inner.set_host_screen(HostScreen::InGame);
+                                }
+                                HostScreen::Save
+                                | HostScreen::Load
+                                | HostScreen::Settings
+                                | HostScreen::History => {
+                                    inner.set_host_screen(HostScreen::InGame);
+                                }
+                                _ => {}
+                            }
+                        }
+                        ("down", " ") | ("down", "Enter") => {
+                            if inner.render_state.host_screen == HostScreen::InGame {
+                                inner.process_click();
+                            }
+                        }
+                        ("down", "Control") => {
+                            if inner.render_state.host_screen == HostScreen::InGame {
+                                inner.set_playback_mode(
+                                    render_state::PlaybackMode::Skip,
+                                );
+                            }
+                        }
+                        ("up", "Control") => {
+                            if inner.playback_mode
+                                == render_state::PlaybackMode::Skip
+                            {
+                                inner.set_playback_mode(
+                                    render_state::PlaybackMode::Normal,
+                                );
+                            }
+                        }
+                        ("down", "a") | ("down", "A") => {
+                            if inner.render_state.host_screen == HostScreen::InGame {
+                                let mode = if inner.playback_mode
+                                    == render_state::PlaybackMode::Auto
+                                {
+                                    render_state::PlaybackMode::Normal
+                                } else {
+                                    render_state::PlaybackMode::Auto
+                                };
+                                inner.set_playback_mode(mode);
+                            }
+                        }
+                        ("down", "Backspace") => {
+                            if inner.render_state.host_screen == HostScreen::InGame {
+                                inner.restore_snapshot();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        });
+    });
 
     // 根据初始化阶段和 host_screen 路由渲染
     let phase = init_phase.read().clone();

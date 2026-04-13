@@ -13,6 +13,7 @@ clippy-deny = "clippy --workspace --all-targets -- -D warnings"
 test-all = "test --workspace"
 test-runtime = "test -p vn-runtime"
 test-host-lib = "test -p host --lib"
+test-dioxus = "test -p host-dioxus --lib"
 
 # One-command local gate (cross-platform).
 # Runs: fmt -> clippy（自动 fix）-> test

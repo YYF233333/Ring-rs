@@ -172,18 +172,75 @@
   - `host/src/renderer/scene_transition/mod.rs::SceneTransitionManager::skip_to_end()`
   - `host/src/renderer/scene_effects.rs::Renderer::skip_scene_transition_to_end()`（委托到 `scene_transition`）
 
+## `host-dioxus/`：把 "Command" 变成"画面/音频/UI"（Dioxus Desktop）
+
+> 新宿主，Rust 全栈（RSX 声明式 UI），无 IPC 边界。默认 `cargo run` 执行此 crate。
+
+### 目录结构
+
+```
+host-dioxus/src/
+├── main.rs              # 入口 + App 根组件 + tick loop + CSS + 资源协议
+├── state.rs             # AppStateInner（tick/click/choose/save/load 全部状态逻辑）
+├── command_executor.rs  # 23 个 Command handler → RenderState 更新
+├── render_state.rs      # RenderState：后端→前端的数据契约
+├── audio.rs             # AudioManager（headless 状态跟踪）
+├── config.rs            # 配置加载与校验
+├── manifest.rs          # 角色 manifest 解析
+├── resources.rs         # ResourceManager（FS/ZIP 透明访问）
+├── save_manager.rs      # 存读档管理
+├── init.rs              # 后端初始化
+├── error.rs             # 错误类型
+├── headless_cli.rs      # 无头测试 harness
+├── vn/                  # VN 渲染层（RSX 组件）
+│   ├── scene.rs         # VNScene 容器（shake/blur/dim + skip-mode）
+│   ├── background.rs    # 背景双层交叉淡化
+│   ├── character.rs     # 立绘（CSS transition 驱动位置/透明度）
+│   ├── dialogue.rs      # ADV 对话框（打字机效果）
+│   ├── nvl.rs           # NVL 全屏文本
+│   ├── choice.rs        # 选项面板
+│   ├── transition.rs    # Fade/FadeWhite CSS 遮罩过渡
+│   ├── rule_transition.rs # WebGL shader 遮罩过渡
+│   ├── chapter_mark.rs  # 章节标记
+│   ├── title_card.rs    # 全屏字卡
+│   ├── video.rs         # HTML5 视频 cutscene
+│   ├── quick_menu.rs    # 底部快捷菜单
+│   └── audio_bridge.rs  # JS Web Audio API 桥接
+├── screens/             # 系统 UI 页面（RSX 组件）
+│   ├── title.rs         # 标题画面
+│   ├── in_game_menu.rs  # 游内暂停菜单
+│   ├── save_load.rs     # 存读档（分页 + 缩略图）
+│   ├── settings.rs      # 设置（音量/文速/Auto 延迟）
+│   └── history.rs       # 对话历史
+└── components/          # 通用 UI 组件
+    └── skip_indicator.rs # SKIP/AUTO 模式指示器
+```
+
+### 关键数据流
+
+```
+AppStateInner ──tick loop 30fps──→ clone RenderState ──Signal──→ RSX 组件
+     ↑                                                              │
+     └───── onclick/onkeydown ── lock Mutex ── process_click() ─────┘
+```
+
+### 与旧 host 的对应关系
+
+| 旧 host (egui) | host-dioxus | 说明 |
+|----------------|-------------|------|
+| `egui_screens/*.rs` | `screens/*.rs` | RSX 组件替代 egui 即时模式 |
+| `renderer/` | `vn/*.rs` | CSS/WebGL 替代 wgpu 渲染 |
+| `audio/` | `audio.rs` + `vn/audio_bridge.rs` | headless 状态 + JS Web Audio |
+| `video/` | `vn/video.rs` | HTML5 `<video>` 替代 FFmpeg sidecar |
+| `app/update/` | `state.rs::process_tick()` | 同一逻辑，不同编排方式 |
+
 ## 开发工作流（质量门禁/覆盖率）
 
-- **一键门禁**：`cargo check-all`（本地自检与 CI 共用；由 `tools/xtask` 串行执行 fmt → biome check:write → clippy --fix → vue-tsc typecheck → test）
-- **前端检查**：（host-tauri 已归档，前端工具链不再需要）
+- **一键门禁**：`cargo check-all`（本地自检与 CI 共用；由 `tools/xtask` 串行执行 fmt → clippy --fix → test）
+- **构建工具链**：纯 `cargo`，不再需要 Node.js / pnpm / biome / vue-tsc
 - **脚本检查**：`cargo script-check`（检查脚本语法/label/资源引用）
 - **Dev Mode 自动脚本检查**：Host 启动时基于 `config.json` 的 `debug.script_check` 自动运行（debug build 默认开启）
 - **覆盖率**：`cargo cov`，报告：`target/llvm-cov/html/index.html`
-
-## `host-tauri/`：已归档（参考实现）
-
-> host-tauri（Tauri 2 + Vue 3）已归档。源码保留为参考，不再参与构建。
-> 详见 [`host-tauri/README.md`](../../../host-tauri/README.md) 和 [`host-tauri/docs/`](../../../host-tauri/docs/)。
 
 ## “不要读/不要改”的目录（常见噪音）
 

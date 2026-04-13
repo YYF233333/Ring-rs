@@ -4,7 +4,7 @@
 
 ## 适用范围（当前）
 
-- 覆盖 `vn-runtime` 与 `host`。`host-tauri` 已归档（参考 `host-tauri/docs/`）。
+- 覆盖 `vn-runtime`、`host`、`host-dioxus`。`host-tauri` 已删除（RFC-033 迁移完成）。
 - 任务默认遵循“摘要优先、源码兜底”。
 
 ## 摘要结构
@@ -43,6 +43,7 @@
    - [egui_actions](../engine/architecture/module-summaries/host/egui-actions.md)
    - [egui_screens](../engine/architecture/module-summaries/host/egui-screens.md)
    - [ui_modes](../engine/architecture/module-summaries/host/ui-modes.md)
+- `host-dioxus`：后端模块与旧 host 共享逻辑（state/command_executor/render_state 等），前端为 RSX 组件重写。导航见 [navigation-map.md](../engine/architecture/navigation-map.md) 的 `host-dioxus/` 章节。
 - [符号索引（Symbol Index）](../engine/symbol-index.md)（当前完整覆盖 `vn-runtime` / `host`）
 - [仓库导航地图](../engine/architecture/navigation-map.md)
 - [经验沉淀（Lessons Learned）](lessons-learned.md)

@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-033
-- 状态：Active（Phase 0-2 完成，Phase 3 待实施）
+- 状态：Active（Phase 0-3 核心完成，仅余 CI 调整和 Toast/ConfirmDialog 等非阻塞项）
 - 作者：claude-4.6-opus
 - 日期：2026-04-02
 - 相关范围：`host/`（功能基线）、`host-tauri/`（参考实现，冻结待废弃）→ `host-dioxus/`（新宿主）、`.cargo/config.toml`、`tools/xtask/`、CI
@@ -560,20 +560,22 @@ default_platform = "desktop"
    - [x] `main.rs` — 完全重写：App 根组件 + tick loop + Signal 接入 + 全局 CSS + 6 个 HostScreen 路由 + 键盘绑定骨架
    - [x] `state.rs` — `AppState` 添加 `#[derive(Clone)]`
 
-**延后项**：
-- 音频桥接（JS Web Audio API）— 后端 AudioManager 已就绪，前端 eval 注入待实现
-- 键盘绑定（Escape/Ctrl/Space）— JS 全局队列骨架已搭建，集成到 tick loop 待完成
-- Toast / ConfirmDialog — 按需补充
-- MapOverlay / MiniGame — placeholder 预留
+**Phase 2 延后项状态**：
+- [x] 音频桥接 — `vn/audio_bridge.rs`：JS Web Audio API via eval（BGM crossfade + SFX 一次性播放）
+- [x] 键盘绑定 — `main.rs`：eval send/recv 双向通信（Escape/Ctrl-Skip/Space/Enter/A-Auto/Backspace-rollback）
+- [ ] Toast / ConfirmDialog — 按需补充
+- [ ] MapOverlay / MiniGame — placeholder 预留
 
-### Phase 3：构建集成与清理（1 天）— 待实施
+### Phase 3：构建集成与清理（1 天）— 部分完成（2026-04-13）
 
-- [ ] 更新 `.cargo/config.toml` alias
-- [ ] 更新 `tools/xtask/` 移除前端工具链调用
-- [ ] 更新 CI
-- [ ] 迁移 CSS（从旧 host 的视觉设计提取全局 CSS）
-- [ ] 删除 `host-tauri/` 目录
-- [ ] 更新文档（module summaries、navigation map、lessons-learned）
+- [x] 更新 `.cargo/config.toml` alias（添加 `test-dioxus`；`default-members` 已指向 `host-dioxus`）
+- [x] 确认 `tools/xtask/` 无需修改（check-all 已是纯 Rust：fmt → clippy → test）
+- [x] CSS 已内联于 `main.rs`（BEM 命名全局样式）
+- [x] 更新 `docs/engine/architecture/navigation-map.md`（新增 `host-dioxus/` 章节）
+- [x] 更新 `docs/maintenance/lessons-learned.md`（新增 3 条 Dioxus 经验）
+- [x] 更新 `docs/maintenance/summary-index.md`（添加 `host-dioxus` 条目）
+- [x] 删除 `host-tauri/` 目录（2026-04-13，含 `.claude/rules/domain-host-tauri-*.md` 和 settings pnpm 权限清理）
+- [ ] 更新 CI（当前 CI 已可运行，视需要调整）
 
 ### 向后兼容
 
