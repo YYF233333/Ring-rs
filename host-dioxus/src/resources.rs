@@ -243,6 +243,14 @@ impl ResourceManager {
         self.source.exists(path)
     }
 
+    /// 尝试读取文本资源，不存在时返回 None。
+    pub fn read_text_optional(&self, path: &LogicalPath) -> Option<String> {
+        if !self.source.exists(path) {
+            return None;
+        }
+        self.read_text(path).ok()
+    }
+
     pub fn base_path(&self) -> &Path {
         &self.base_path
     }

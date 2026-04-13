@@ -1,88 +1,106 @@
 use dioxus::prelude::*;
-use tracing::error;
 
-use crate::render_state::{HostScreen, RenderState};
+use crate::components::PendingConfirm;
+use crate::layout_config::UiAssetPaths;
+use crate::render_state::RenderState;
+use crate::screen_defs::{ActionDef, ButtonDef, ConditionalAsset};
 use crate::state::AppState;
 
-/// 标题画面：Start / Continue / Load / Settings / Exit
+/// 标题画面（数据驱动，从 screens.json title 定义渲染）
+///
+/// - 背景图：条件切换（summer/winter）
+/// - Overlay：叠加于背景上方
+/// - 按钮：从 screens.json 加载，支持条件显隐和确认弹窗
 #[component]
 pub fn TitleScreen(render_state: Signal<RenderState>) -> Element {
     let app_state = use_context::<AppState>();
 
-    // 检查是否有 continue 存档
-    let has_continue = {
-        let inner = app_state.inner.lock().unwrap();
-        inner.services().saves.load_continue().is_ok()
-    };
+    // 从 screen_defs 获取标题页定义和条件上下文
+    let (bg_url, overlay_url, buttons) = {
+        let Ok(inner) = app_state.inner.lock() else {
+            return rsx! {};
+        };
+        let Some(svc) = inner.services.as_ref() else {
+            return rsx! {};
+        };
 
-    let app_start = app_state.clone();
-    let app_continue = app_state.clone();
-    let app_load = app_state.clone();
-    let app_settings = app_state.clone();
+        let ctx = inner.condition_context();
+        let title_def = &svc.screen_defs.title;
+
+        // 解析条件背景
+        let bg_key =
+            ConditionalAsset::resolve(&title_def.background, &ctx).unwrap_or("main_summer");
+        let bg_path = svc.layout.assets.resolve_key(bg_key);
+        let bg_url = UiAssetPaths::asset_url(&bg_path);
+
+        // 解析 overlay
+        let overlay_url = title_def.overlay.as_ref().map(|key| {
+            let path = svc.layout.assets.resolve_key(key);
+            UiAssetPaths::asset_url(&path)
+        });
+
+        // 过滤可见按钮
+        let buttons: Vec<ButtonDef> = title_def
+            .buttons
+            .iter()
+            .filter(|btn| btn.visible.as_ref().is_none_or(|cond| cond.evaluate(&ctx)))
+            .cloned()
+            .collect();
+
+        (bg_url, overlay_url, buttons)
+    };
 
     rsx! {
         div { class: "screen-title",
-            h1 { class: "screen-title__heading", "Ring Engine" }
-
-            button {
-                class: "screen-title__btn",
-                onclick: move |_| {
-                    if let Ok(mut inner) = app_start.inner.lock() {
-                        let start_path = inner.services().config.start_script_path.clone();
-                        if let Err(e) = inner.init_game_from_resource(&start_path) {
-                            error!(error = %e, "Start failed");
-                        }
-                    }
-                },
-                "Start"
+            // 背景图
+            img {
+                class: "screen-title__bg",
+                src: "{bg_url}",
             }
 
-            if has_continue {
-                button {
-                    class: "screen-title__btn",
-                    onclick: move |_| {
-                        if let Ok(mut inner) = app_continue.inner.lock() {
-                            match inner.services().saves.load_continue() {
-                                Ok(save) => {
-                                    if let Err(e) = inner.restore_from_save(save) {
-                                        error!(error = %e, "Continue failed");
-                                    }
-                                }
-                                Err(e) => error!(error = %e, "Load continue failed"),
-                            }
-                        }
-                    },
-                    "Continue"
+            // Overlay
+            if let Some(ref url) = overlay_url {
+                img {
+                    class: "screen-title__overlay",
+                    src: "{url}",
                 }
             }
 
-            button {
-                class: "screen-title__btn",
-                onclick: move |_| {
-                    if let Ok(mut inner) = app_load.inner.lock() {
-                        inner.set_host_screen(HostScreen::Load);
-                    }
-                },
-                "Load"
+            // 按钮列表
+            div { class: "screen-title__nav",
+                for btn in &buttons {
+                    { render_button(btn, &app_state) }
+                }
             }
+        }
+    }
+}
 
-            button {
-                class: "screen-title__btn",
-                onclick: move |_| {
-                    if let Ok(mut inner) = app_settings.inner.lock() {
-                        inner.set_host_screen(HostScreen::Settings);
-                    }
-                },
-                "Settings"
-            }
+/// 渲染数据驱动按钮（支持 confirm 弹窗和 Exit 特殊处理）
+fn render_button(btn: &ButtonDef, app_state: &AppState) -> Element {
+    let mut pending_confirm = use_context::<Signal<Option<PendingConfirm>>>();
+    let label = btn.label.clone();
+    let action = btn.action.clone();
+    let confirm_msg = btn.confirm.clone();
+    let app = app_state.clone();
 
-            button {
-                class: "screen-title__btn",
-                onclick: move |_| {
+    rsx! {
+        button {
+            key: "{label}",
+            class: "screen-title__btn",
+            onclick: move |_| {
+                if let Some(ref msg) = confirm_msg {
+                    pending_confirm.set(Some(PendingConfirm {
+                        message: msg.clone(),
+                        on_confirm: action.clone(),
+                    }));
+                } else if matches!(action, ActionDef::Exit) {
                     dioxus::desktop::window().close();
-                },
-                "Exit"
-            }
+                } else if let Ok(mut inner) = app.inner.lock() {
+                    inner.execute_action(&action);
+                }
+            },
+            "{label}"
         }
     }
 }

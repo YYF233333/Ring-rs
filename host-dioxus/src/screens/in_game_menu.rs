@@ -1,95 +1,77 @@
 use dioxus::prelude::*;
 
-use crate::render_state::{HostScreen, RenderState};
+use crate::components::PendingConfirm;
+use crate::render_state::RenderState;
+use crate::screen_defs::ActionDef;
 use crate::state::AppState;
 
-/// 游内暂停菜单：半透明遮罩 + 菜单按钮
+/// 游内暂停菜单（数据驱动，从 screens.json ingame_menu.buttons 渲染）
+///
+/// 半透明遮罩 + 居中按钮列表。点击遮罩关闭。
 #[component]
 pub fn InGameMenu(render_state: Signal<RenderState>) -> Element {
     let app_state = use_context::<AppState>();
+    let mut pending_confirm = use_context::<Signal<Option<PendingConfirm>>>();
 
-    let app_resume = app_state.clone();
-    let app_save = app_state.clone();
-    let app_load = app_state.clone();
-    let app_settings = app_state.clone();
-    let app_history = app_state.clone();
-    let app_title = app_state.clone();
+    // 从 screen_defs 获取按钮列表
+    let buttons = {
+        let Ok(inner) = app_state.inner.lock() else {
+            return rsx! {};
+        };
+        let Some(svc) = inner.services.as_ref() else {
+            return rsx! {};
+        };
+        svc.screen_defs.ingame_menu.buttons.clone()
+    };
+
+    let app_close = app_state.clone();
 
     rsx! {
         div {
             class: "screen-ingame-menu",
-            onclick: move |evt: Event<MouseData>| {
-                // 点击遮罩区域关闭菜单
-                evt.stop_propagation();
+            onclick: {
+                let app = app_state.clone();
+                move |_| {
+                    // 点击遮罩区域关闭菜单
+                    if let Ok(mut inner) = app.inner.lock() {
+                        inner.execute_action(&ActionDef::GoBack);
+                    }
+                }
             },
 
-            div { class: "screen-ingame-menu__panel",
-                button {
-                    class: "screen-ingame-menu__btn",
-                    onclick: move |_| {
-                        if let Ok(mut inner) = app_resume.inner.lock() {
-                            inner.set_host_screen(HostScreen::InGame);
-                        }
-                    },
-                    "Continue"
-                }
+            div {
+                class: "screen-ingame-menu__panel",
+                onclick: move |evt: Event<MouseData>| {
+                    evt.stop_propagation();
+                },
 
-                button {
-                    class: "screen-ingame-menu__btn",
-                    onclick: move |_| {
-                        if let Ok(mut inner) = app_save.inner.lock() {
-                            inner.set_host_screen(HostScreen::Save);
-                        }
-                    },
-                    "Save"
-                }
+                for btn in &buttons {
+                    {
+                        let label = btn.label.clone();
+                        let action = btn.action.clone();
+                        let confirm_msg = btn.confirm.clone();
+                        let app = app_close.clone();
 
-                button {
-                    class: "screen-ingame-menu__btn",
-                    onclick: move |_| {
-                        if let Ok(mut inner) = app_load.inner.lock() {
-                            inner.set_host_screen(HostScreen::Load);
+                        rsx! {
+                            button {
+                                key: "{label}",
+                                class: "screen-ingame-menu__btn",
+                                onclick: move |_| {
+                                    if let Some(ref msg) = confirm_msg {
+                                        pending_confirm.set(Some(PendingConfirm {
+                                            message: msg.clone(),
+                                            on_confirm: action.clone(),
+                                        }));
+                                    } else if matches!(action, ActionDef::Exit) {
+                                        dioxus::desktop::window().close();
+                                    } else if let Ok(mut inner) = app.inner.lock() {
+                                        inner.execute_action(&action);
+                                    }
+                                },
+                                "{label}"
+                            }
                         }
-                    },
-                    "Load"
-                }
-
-                button {
-                    class: "screen-ingame-menu__btn",
-                    onclick: move |_| {
-                        if let Ok(mut inner) = app_history.inner.lock() {
-                            inner.set_host_screen(HostScreen::History);
-                        }
-                    },
-                    "History"
-                }
-
-                button {
-                    class: "screen-ingame-menu__btn",
-                    onclick: move |_| {
-                        if let Ok(mut inner) = app_settings.inner.lock() {
-                            inner.set_host_screen(HostScreen::Settings);
-                        }
-                    },
-                    "Settings"
-                }
-
-                button {
-                    class: "screen-ingame-menu__btn",
-                    onclick: move |_| {
-                        if let Ok(mut inner) = app_title.inner.lock() {
-                            inner.set_host_screen(HostScreen::Title);
-                        }
-                    },
-                    "Return to Title"
-                }
-
-                button {
-                    class: "screen-ingame-menu__btn",
-                    onclick: move |_| {
-                        dioxus::desktop::window().close();
-                    },
-                    "Exit"
+                    }
                 }
             }
         }

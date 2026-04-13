@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use vn_runtime::command::{Command, Position};
 use vn_runtime::history::HistoryEvent;
 use vn_runtime::state::{VarValue, WaitingReason};
@@ -29,6 +29,8 @@ pub struct UserSettings {
     pub text_speed: f32,
     pub auto_delay: f32,
     pub fullscreen: bool,
+    #[serde(default)]
+    pub muted: bool,
 }
 
 impl Default for UserSettings {
@@ -39,6 +41,7 @@ impl Default for UserSettings {
             text_speed: 40.0,
             auto_delay: 2.0,
             fullscreen: false,
+            muted: false,
         }
     }
 }
@@ -224,6 +227,10 @@ pub struct Services {
     pub saves: SaveManager,
     pub config: AppConfig,
     pub manifest: crate::manifest::Manifest,
+    /// UI 布局配置（从 layout.json 加载）
+    pub layout: crate::layout_config::UiLayoutConfig,
+    /// 界面行为定义（从 screens.json 加载）
+    pub screen_defs: crate::screen_defs::ScreenDefinitions,
 }
 
 /// 应用状态内部结构（被 Mutex 保护）
@@ -1397,6 +1404,94 @@ impl AppStateInner {
         );
     }
 
+    /// 执行数据驱动的 ActionDef（从 screens.json 按钮定义映射到应用操作）
+    pub fn execute_action(&mut self, action: &crate::screen_defs::ActionDef) {
+        use crate::screen_defs::ActionDef;
+        match action {
+            ActionDef::StartGame => {
+                let path = self.services().config.start_script_path.clone();
+                if let Err(e) = self.delete_continue() {
+                    warn!("删除 continue 失败: {e}");
+                }
+                if let Err(e) = self.init_game_from_resource(&path) {
+                    error!("开始游戏失败: {e}");
+                }
+            }
+            ActionDef::StartAtLabel(label) => {
+                let path = self.services().config.start_script_path.clone();
+                let label = label.clone();
+                if let Err(e) = self.delete_continue() {
+                    warn!("删除 continue 失败: {e}");
+                }
+                if let Err(e) = self.init_game_from_resource_at_label(&path, &label) {
+                    error!("从标签 {label} 开始游戏失败: {e}");
+                }
+            }
+            ActionDef::ContinueGame => match self.services().saves.load_continue() {
+                Ok(save_data) => {
+                    if let Err(e) = self.restore_from_save(save_data) {
+                        error!("继续游戏失败: {e}");
+                    }
+                }
+                Err(e) => warn!("加载 continue 存档失败: {e}"),
+            },
+            ActionDef::OpenLoad => self.set_host_screen(HostScreen::Load),
+            ActionDef::OpenSave => self.set_host_screen(HostScreen::Save),
+            ActionDef::NavigateSettings => self.set_host_screen(HostScreen::Settings),
+            ActionDef::NavigateHistory => self.set_host_screen(HostScreen::History),
+            ActionDef::ReplaceSettings => self.set_host_screen(HostScreen::Settings),
+            ActionDef::ReplaceHistory => self.set_host_screen(HostScreen::History),
+            ActionDef::QuickSave => {
+                if let Err(e) = self.save_to_slot(55) {
+                    error!("快存失败: {e}");
+                }
+            }
+            ActionDef::QuickLoad => match self.services().saves.load(55) {
+                Ok(save_data) => {
+                    if let Err(e) = self.restore_from_save(save_data) {
+                        error!("快读失败: {e}");
+                    }
+                }
+                Err(e) => warn!("快读加载失败: {e}"),
+            },
+            ActionDef::ToggleSkip => {
+                let mode = if self.playback_mode == PlaybackMode::Skip {
+                    PlaybackMode::Normal
+                } else {
+                    PlaybackMode::Skip
+                };
+                self.set_playback_mode(mode);
+            }
+            ActionDef::ToggleAuto => {
+                let mode = if self.playback_mode == PlaybackMode::Auto {
+                    PlaybackMode::Normal
+                } else {
+                    PlaybackMode::Auto
+                };
+                self.set_playback_mode(mode);
+            }
+            ActionDef::GoBack => self.set_host_screen(HostScreen::InGame),
+            ActionDef::ReturnToTitle => self.return_to_title(true),
+            ActionDef::ReturnToGame => self.set_host_screen(HostScreen::InGame),
+            ActionDef::Exit => {
+                // 由前端层处理窗口关闭
+                info!("Exit action received — 由前端处理窗口关闭");
+            }
+        }
+    }
+
+    /// 构建条件求值上下文
+    pub fn condition_context(&self) -> crate::screen_defs::ConditionContext<'_> {
+        let has_continue = self
+            .services
+            .as_ref()
+            .is_some_and(|svc| svc.saves.has_continue());
+        crate::screen_defs::ConditionContext {
+            has_continue,
+            persistent: &self.persistent_store,
+        }
+    }
+
     pub fn debug_run_until(
         &mut self,
         dt: f32,
@@ -1697,6 +1792,8 @@ mod tests {
             saves: SaveManager::new(&saves_dir),
             config,
             manifest: crate::manifest::Manifest::with_defaults(),
+            layout: crate::layout_config::UiLayoutConfig::default_for_tests(),
+            screen_defs: crate::screen_defs::ScreenDefinitions::default_for_tests(),
         });
         (inner, root)
     }

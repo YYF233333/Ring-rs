@@ -8,10 +8,12 @@ pub mod config;
 pub mod error;
 pub mod headless_cli;
 pub mod init;
+pub mod layout_config;
 pub mod manifest;
 pub mod render_state;
 pub mod resources;
 pub mod save_manager;
+pub mod screen_defs;
 pub mod state;
 
 // ── 前端模块（Phase 2） ──
@@ -31,7 +33,7 @@ use dioxus::desktop::wry::http;
 use dioxus::prelude::*;
 use tracing::{error, info};
 
-use components::SkipIndicator;
+use components::{ConfirmDialog, PendingConfirm, SkipIndicator, ToastLayer, ToastQueue};
 use render_state::{HostScreen, RenderState};
 use screens::{HistoryScreen, InGameMenu, SaveLoadScreen, SettingsScreen, TitleScreen};
 use state::{AppState, AppStateInner};
@@ -45,27 +47,48 @@ const GLOBAL_CSS: &str = r#"
 /* === Reset & Variables === */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-    --vn-width: 1280px;
-    --vn-height: 720px;
+    /* ── 基准分辨率（所有像素值基于此坐标系） ── */
+    --vn-base-w: 1920;
+    --vn-base-h: 1080;
     --vn-bg-color: #000;
-    --vn-text-color: #eee;
     --vn-font-body: "Noto Sans SC", "Microsoft YaHei", sans-serif;
     --vn-ease-scene: ease;
+    --scale-factor: 1;
+
+    /* ── 颜色 token（来自 layout.json colors） ── */
+    --ui-accent: #ffffff;
+    --ui-idle: #888888;
+    --ui-hover: #ff9900;
+    --ui-selected: #ffffff;
+    --ui-insensitive: #7878787f;
+    --ui-text: #000000;
+    --ui-interface-text: #ffffff;
+
+    /* ── 字号 token（来自 layout.json fonts，基准 1920×1080） ── */
+    --font-text: 33px;
+    --font-name: 45px;
+    --font-interface: 33px;
+    --font-label: 36px;
+    --font-notify: 24px;
+    --font-title: 75px;
+    --font-quick: 21px;
 }
 body {
     background: #000;
-    color: var(--vn-text-color);
+    color: var(--ui-interface-text);
     font-family: var(--vn-font-body);
     overflow: hidden;
 }
 
-/* === Game Container === */
+/* === Game Container (1920×1080 基准 + transform 缩放) === */
 .game-container {
     position: relative;
-    width: 100vw;
-    height: 100vh;
+    width: 1920px;
+    height: 1080px;
     overflow: hidden;
     background: var(--vn-bg-color);
+    transform-origin: top left;
+    transform: scale(var(--scale-factor));
 }
 
 /* === VN Scene === */
@@ -115,25 +138,42 @@ body {
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(0, 0, 0, 0.78);
-    padding: 16px 24px 20px;
-    min-height: 140px;
+    height: 278px;
     z-index: 50;
     cursor: pointer;
+    /* NinePatch textbox 背景 */
+    border-image-source: url("http://ring-asset.localhost/gui/textbox.png");
+    border-image-slice: 30 30 30 30 fill;
+    border-image-width: 30px;
+    border-style: solid;
+    background: transparent;
 }
 
 .vn-dialogue__name {
-    font-size: 1.1em;
+    position: absolute;
+    left: 360px;
+    top: 0px;
+    font-size: var(--font-name);
     font-weight: bold;
-    color: #ffd700;
-    margin-bottom: 6px;
+    color: var(--ui-accent);
+    white-space: nowrap;
+    /* NinePatch namebox 背景 */
+    border-image-source: url("http://ring-asset.localhost/gui/namebox.png");
+    border-image-slice: 5 5 5 5 fill;
+    border-image-width: 5px;
+    border-style: solid;
+    background: transparent;
+    padding: 2px 10px;
 }
 
 .vn-dialogue__text {
-    font-size: 1.05em;
+    position: absolute;
+    left: 402px;
+    top: 75px;
+    max-width: 1116px;
+    font-size: var(--font-text);
     line-height: 1.7;
-    color: var(--vn-text-color);
-    min-height: 60px;
+    color: var(--ui-text);
     white-space: pre-wrap;
 }
 
@@ -141,7 +181,7 @@ body {
     display: inline-block;
     margin-left: 4px;
     animation: vn-blink 0.8s ease-in-out infinite;
-    color: #aaa;
+    color: var(--ui-idle);
     font-size: 0.8em;
 }
 
@@ -154,35 +194,41 @@ body {
 .vn-nvl {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.706);
     z-index: 50;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     cursor: pointer;
 }
 
 .vn-nvl__scroll {
-    width: 80%;
-    max-height: 85%;
+    width: calc(100% - 240px);
+    max-height: 100%;
     overflow-y: auto;
-    padding: 32px;
+    padding: 80px 0 40px 0;
+    margin: 0 120px;
 }
 
 .vn-nvl__entry {
     margin-bottom: 16px;
-    line-height: 1.7;
-    font-size: 1.05em;
+    line-height: 1.5;
 }
 
 .vn-nvl__speaker {
+    font-size: var(--font-name);
     font-weight: bold;
-    color: #ffd700;
-    margin-right: 8px;
+    color: var(--ui-accent);
+    margin-right: 4px;
+}
+
+.vn-nvl__speaker::after {
+    content: "：";
 }
 
 .vn-nvl__text {
-    color: var(--vn-text-color);
+    font-size: var(--font-text);
+    color: var(--ui-text);
     white-space: pre-wrap;
 }
 
@@ -209,32 +255,34 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.3);
 }
 
 .vn-choices__panel {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    min-width: 320px;
-    max-width: 60%;
+    gap: 33px;
+    width: 1185px;
 }
 
 .vn-choices__btn {
-    padding: 14px 24px;
-    background: rgba(20, 20, 50, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: var(--vn-text-color);
-    font-size: 1.05em;
-    border-radius: 4px;
+    width: 100%;
+    padding: 0;
     cursor: pointer;
-    transition: background 0.2s, border-color 0.2s;
-    text-align: left;
+    font-size: var(--font-text);
+    color: #cccccc;
+    text-align: center;
+    transition: color 0.15s;
+    /* NinePatch choice_idle 背景 */
+    border-image-source: url("http://ring-asset.localhost/gui/button/choice_idle_background.png");
+    border-image-slice: 8 150 8 150 fill;
+    border-image-width: 8px 150px 8px 150px;
+    border-style: solid;
+    background: transparent;
 }
 
 .vn-choices__btn:hover {
-    background: rgba(40, 40, 80, 0.95);
-    border-color: rgba(255, 215, 0, 0.6);
+    color: #ffffff;
+    border-image-source: url("http://ring-asset.localhost/gui/button/choice_hover_background.png");
 }
 
 /* === Transition Overlay (Fade/FadeWhite) === */
@@ -258,15 +306,16 @@ body {
 /* === Chapter Mark === */
 .vn-chapter-mark {
     position: absolute;
-    top: 10%;
-    left: 0;
-    right: 0;
-    text-align: center;
+    top: 30px;
+    left: 30px;
     z-index: 55;
     color: #fff;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
-    pointer-events: none;
+    font-size: var(--font-label);
     font-weight: bold;
+    padding: 10px 20px;
+    border-radius: 4px;
+    pointer-events: none;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
 }
 
 /* === Title Card === */
@@ -274,7 +323,6 @@ body {
     position: absolute;
     inset: 0;
     z-index: 70;
-    background: #000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -283,7 +331,7 @@ body {
 
 .vn-title-card__text {
     color: #fff;
-    font-size: 2em;
+    font-size: var(--font-title);
     font-weight: 300;
     letter-spacing: 0.15em;
     text-align: center;
@@ -307,37 +355,35 @@ body {
     max-height: 100%;
 }
 
-/* === Quick Menu === */
+/* === Quick Menu（对话框正下方居中） === */
 .vn-quick-menu {
     position: absolute;
-    bottom: 0;
-    right: 0;
+    bottom: 278px;  /* 紧贴对话框上方（对话框高 278px） */
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 45;
     display: flex;
-    gap: 2px;
-    padding: 4px;
+    gap: 0;
 }
 
 .vn-quick-menu__btn {
-    padding: 4px 10px;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.75em;
-    border-radius: 2px;
+    padding: 4px 0;
+    width: 90px;
+    background: transparent;
+    border: none;
+    color: var(--ui-idle);
+    font-size: var(--font-quick);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: color 0.15s;
+    text-align: center;
 }
 
 .vn-quick-menu__btn:hover {
-    background: rgba(40, 40, 80, 0.8);
-    color: #fff;
+    color: var(--ui-hover);
 }
 
 .vn-quick-menu__btn--active {
-    background: rgba(80, 60, 20, 0.8);
-    color: #ffd700;
-    border-color: rgba(255, 215, 0, 0.4);
+    color: var(--ui-hover);
 }
 
 /* === Skip Mode: instantly resolve all CSS transitions === */
@@ -351,277 +397,444 @@ body {
     position: absolute;
     inset: 0;
     z-index: 90;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.706);
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(4px);
 }
 
 .screen-ingame-menu__panel {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    min-width: 240px;
+    gap: 10px;
+    width: 260px;
 }
 
 .screen-ingame-menu__btn {
-    padding: 14px 32px;
-    background: rgba(20, 20, 50, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: var(--vn-text-color);
-    font-size: 1.05em;
+    width: 260px;
+    height: 49px;
+    padding: 0;
+    background: rgba(30, 30, 60, 0.39);
+    border: none;
     border-radius: 4px;
+    color: var(--ui-idle);
+    font-size: var(--font-interface);
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.15s, color 0.15s;
     text-align: center;
 }
 
 .screen-ingame-menu__btn:hover {
-    background: rgba(40, 40, 80, 0.95);
+    background: rgba(60, 60, 100, 0.59);
+    color: var(--ui-hover);
 }
 
 /* === Title Screen === */
 .screen-title {
     position: absolute;
     inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: #1a1a2e;
+    overflow: hidden;
 }
 
-.screen-title__heading {
-    font-size: 2.5em;
-    margin-bottom: 40px;
-    color: #eee;
+.screen-title__bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+}
+
+.screen-title__overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.screen-title__nav {
+    position: absolute;
+    left: 60px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .screen-title__btn {
-    padding: 12px 40px;
-    margin: 8px;
+    width: 240px;
+    height: 49px;
+    padding: 0;
     cursor: pointer;
-    border: 1px solid #555;
-    background: #2a2a4e;
-    color: #eee;
-    border-radius: 4px;
-    font-size: 1.1em;
-    min-width: 200px;
-    transition: background 0.2s;
+    border: none;
+    background: transparent;
+    color: var(--ui-idle);
+    font-size: var(--font-interface);
+    text-align: left;
+    transition: color 0.15s;
 }
 
 .screen-title__btn:hover {
-    background: #3a3a6e;
+    color: var(--ui-hover);
 }
 
-/* === Save/Load Screen === */
-.screen-save-load {
-    position: absolute;
-    inset: 0;
-    background: #1a1a2e;
+/* === Save/Load Screen（嵌入 GameMenuFrame） === */
+.save-load__tabs {
     display: flex;
-    flex-direction: column;
-    padding: 24px;
-}
-
-.screen-save-load__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.screen-save-load__header h2 { font-size: 1.5em; }
-
-.screen-save-load__back-btn,
-.screen-settings__back-btn,
-.screen-history__back-btn {
-    padding: 8px 20px;
-    background: #2a2a4e;
-    border: 1px solid #555;
-    color: #eee;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.screen-save-load__grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    flex: 1;
-}
-
-.screen-save-load__slot {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid #333;
-    border-radius: 6px;
-    padding: 8px;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 120px;
-    transition: border-color 0.2s;
-}
-
-.screen-save-load__slot:hover { border-color: #888; }
-.screen-save-load__slot--filled { border-color: #556; }
-
-.screen-save-load__thumb {
-    width: 100%;
-    max-height: 80px;
-    object-fit: cover;
-    border-radius: 4px;
-    margin-bottom: 6px;
-}
-
-.screen-save-load__slot-label {
-    font-size: 0.85em;
-    color: #aaa;
-}
-
-.screen-save-load__pagination {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    margin-top: 12px;
-}
-
-.screen-save-load__page-btn {
-    padding: 6px 12px;
-    background: #2a2a4e;
-    border: 1px solid #444;
-    color: #aaa;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.screen-save-load__page-btn--active {
-    background: #3a3a6e;
-    color: #fff;
-    border-color: #777;
-}
-
-/* === Settings Screen === */
-.screen-settings {
-    position: absolute;
-    inset: 0;
-    background: #1a1a2e;
-    display: flex;
-    flex-direction: column;
-    padding: 24px;
-}
-
-.screen-settings__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-}
-
-.screen-settings__header h2 { font-size: 1.5em; }
-
-.screen-settings__body {
-    display: flex;
-    flex-direction: column;
     gap: 20px;
-    max-width: 500px;
-}
-
-.screen-settings__row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.screen-settings__row label {
-    min-width: 140px;
-    color: #ccc;
-}
-
-.screen-settings__row input[type="range"] {
-    flex: 1;
-    accent-color: #ffd700;
-}
-
-.screen-settings__row span {
-    min-width: 50px;
-    text-align: right;
-    color: #aaa;
-    font-size: 0.9em;
-}
-
-/* === History Screen === */
-.screen-history {
-    position: absolute;
-    inset: 0;
-    background: #1a1a2e;
-    display: flex;
-    flex-direction: column;
-    padding: 24px;
-}
-
-.screen-history__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
     margin-bottom: 16px;
 }
 
-.screen-history__header h2 { font-size: 1.5em; }
-
-.screen-history__scroll {
-    flex: 1;
-    overflow-y: auto;
-    padding-right: 8px;
+.save-load__tab {
+    background: transparent;
+    border: none;
+    color: var(--ui-idle);
+    font-size: var(--font-interface);
+    cursor: pointer;
+    transition: color 0.15s;
 }
 
-.screen-history__entry {
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    line-height: 1.6;
+.save-load__tab:hover { color: var(--ui-hover); }
+.save-load__tab--active { color: var(--ui-accent); }
+
+.save-load__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 414px);
+    grid-template-rows: repeat(2, 309px);
+    gap: 15px;
 }
 
-.screen-history__speaker {
-    font-weight: bold;
-    color: #ffd700;
-    margin-right: 8px;
+.save-load__slot {
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* NinePatch slot_idle */
+    border-image-source: url("http://ring-asset.localhost/gui/button/slot_idle_background.png");
+    border-image-slice: 15 15 15 15 fill;
+    border-image-width: 15px;
+    border-style: solid;
+    background: transparent;
 }
 
-.screen-history__text {
-    color: #ddd;
+.save-load__slot:hover {
+    border-image-source: url("http://ring-asset.localhost/gui/button/slot_hover_background.png");
 }
 
-.screen-history__empty {
-    color: #666;
+.save-load__thumb {
+    width: 384px;
+    height: 216px;
+    object-fit: cover;
+    margin: 0 auto;
+}
+
+.save-load__slot-info {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.save-load__slot-chapter {
+    font-size: 24px;
+    color: var(--ui-interface-text);
+}
+
+.save-load__slot-time {
+    font-size: 20px;
+    color: var(--ui-idle);
+}
+
+.save-load__slot-empty {
+    font-size: 24px;
+    color: var(--ui-idle);
     text-align: center;
-    margin-top: 40px;
+    padding: 40px 0;
+}
+
+.save-load__delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    color: var(--ui-idle);
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.15s;
+    z-index: 5;
+}
+
+.save-load__delete-btn:hover {
+    color: #ff5050;
+}
+
+.save-load__pagination {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.save-load__page-btn {
+    padding: 4px 12px;
+    background: transparent;
+    border: none;
+    color: var(--ui-idle);
+    font-size: var(--font-interface);
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.save-load__page-btn:hover { color: var(--ui-hover); }
+.save-load__page-btn--active { color: var(--ui-accent); }
+
+/* === Settings Screen（嵌入 GameMenuFrame） === */
+.settings__body {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.settings__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.settings__label {
+    width: 200px;
+    font-size: var(--font-interface);
+    color: var(--ui-interface-text);
+    text-align: right;
+}
+
+.settings__slider {
+    width: 400px;
+    height: 16px;
+    accent-color: var(--ui-hover);
+}
+
+.settings__value {
+    min-width: 100px;
+    font-size: 28px;
+    color: var(--ui-interface-text);
+    text-align: left;
+}
+
+.settings__checkbox-label {
+    font-size: var(--font-interface);
+    color: var(--ui-interface-text);
+    cursor: pointer;
+}
+
+.settings__apply-row {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.settings__apply-btn {
+    width: 160px;
+    height: 49px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(40, 40, 70, 1);
+    color: var(--ui-accent);
+    font-size: var(--font-interface);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.settings__apply-btn:hover {
+    background: rgba(60, 60, 100, 1);
+}
+
+/* === History Screen（嵌入 GameMenuFrame） === */
+.history__scroll {
+    height: 100%;
+    overflow-y: auto;
+}
+
+.history__entry {
+    display: flex;
+    gap: 16px;
+    line-height: 1.7;
+    padding: 4px 0;
+}
+
+.history__name {
+    width: 233px;
+    min-width: 233px;
+    font-size: var(--font-name);
+    font-weight: bold;
+    color: var(--ui-accent);
+    text-align: right;
+}
+
+.history__text {
+    flex: 1;
+    max-width: 1110px;
+    font-size: var(--font-interface);
+    color: var(--ui-interface-text);
+}
+
+.history__empty {
+    font-size: var(--font-interface);
+    color: var(--ui-idle);
+    text-align: center;
+    margin-top: 60px;
 }
 
 /* === Skip/Auto Indicator === */
 .skip-indicator {
-    position: fixed;
-    top: 12px;
-    left: 12px;
+    position: absolute;
+    top: 15px;
+    left: 10px;
     z-index: 100;
-    padding: 4px 12px;
-    border-radius: 3px;
-    font-size: 0.8em;
+    padding: 4px 16px;
+    font-size: var(--font-notify);
     font-weight: bold;
-    letter-spacing: 0.1em;
+    color: #fff;
     pointer-events: none;
 }
 
 .skip-indicator--skip {
-    background: rgba(200, 50, 50, 0.8);
-    color: #fff;
+    background: rgba(20, 60, 40, 0.78);
+    border-radius: 3px;
 }
 
 .skip-indicator--auto {
-    background: rgba(50, 120, 200, 0.8);
-    color: #fff;
+    background: rgba(20, 40, 80, 0.78);
+    border-radius: 3px;
+}
+
+.skip-indicator__arrows {
+    display: inline-block;
+    animation: skip-arrow-cycle 1s steps(3, end) infinite;
+}
+
+@keyframes skip-arrow-cycle {
+    0%   { content: "›"; }
+    33%  { content: "››"; }
+    66%  { content: "›››"; }
+    100% { content: "›"; }
+}
+
+/* === GameMenuFrame（左导航 + 右内容通用框架） === */
+.game-menu {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+.game-menu__bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+}
+
+.game-menu__overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.game-menu__nav {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 420px;
+    height: 100%;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding-left: 60px;
+}
+
+.game-menu__nav-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.game-menu__nav-btn {
+    width: 340px;
+    height: 49px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ui-idle);
+    font-size: var(--font-interface);
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.game-menu__nav-btn:hover {
+    color: var(--ui-hover);
+}
+
+.game-menu__nav-btn--active {
+    color: var(--ui-accent);
+}
+
+.game-menu__return-btn {
+    position: absolute;
+    bottom: 40px;
+    left: 60px;
+    width: 340px;
+    height: 49px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ui-idle);
+    font-size: var(--font-interface);
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.game-menu__return-btn:hover {
+    color: var(--ui-hover);
+}
+
+.game-menu__content {
+    position: absolute;
+    left: 440px;
+    top: 40px;
+    right: 40px;
+    bottom: 40px;
+    z-index: 2;
+}
+
+.game-menu__title {
+    font-size: 45px;
+    color: var(--ui-interface-text);
+    margin-bottom: 16px;
+    font-weight: normal;
+}
+
+.game-menu__body {
+    height: calc(100% - 61px);
+    overflow: hidden;
 }
 
 /* === Loading / Error === */
@@ -648,16 +861,118 @@ body {
     padding: 40px;
     text-align: center;
 }
+
+/* === Confirm Dialog === */
+.confirm-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.706);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.confirm-panel {
+    width: 600px;
+    height: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    /* NinePatch frame 背景 */
+    border-image-source: url("http://ring-asset.localhost/gui/frame.png");
+    border-image-slice: 60 60 60 60 fill;
+    border-image-width: 60px;
+    border-style: solid;
+    background: transparent;
+}
+
+.confirm-panel__message {
+    font-size: var(--font-interface);
+    color: var(--ui-accent);
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.confirm-panel__buttons {
+    display: flex;
+    gap: 80px;
+}
+
+.confirm-panel__btn {
+    width: 140px;
+    height: 49px;
+    border: none;
+    border-radius: 4px;
+    background: rgb(40, 40, 70);
+    color: var(--ui-accent);
+    font-size: var(--font-interface);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.confirm-panel__btn:hover {
+    background: rgb(60, 60, 100);
+}
+
+/* === Toast === */
+.toast-layer {
+    position: absolute;
+    top: 68px;
+    right: 20px;
+    z-index: 210;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: var(--font-notify);
+    color: #fff;
+    animation: toast-show 2.8s ease-out forwards;
+}
+
+.toast--info    { background: rgba(40, 40, 80, 0.9); }
+.toast--success { background: rgba(30, 80, 40, 0.9); }
+.toast--warning { background: rgba(100, 80, 20, 0.9); }
+.toast--error   { background: rgba(100, 30, 30, 0.9); }
+
+@keyframes toast-show {
+    0%   { opacity: 1; }
+    82%  { opacity: 1; }  /* 2.5s / 2.8s ≈ 89%, 留 0.3s 淡出 */
+    100% { opacity: 0; }
+}
 "#;
 
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
+/// JS 脚本：窗口 resize 时更新 CSS `--scale-factor`。
+/// 等价于 egui host 的 `ScaleContext.scale_uniform = min(w/1920, h/1080)`。
+const SCALE_JS: &str = r#"
+<script>
+(function() {
+    function updateScale() {
+        var w = window.innerWidth;
+        var h = window.innerHeight;
+        var s = Math.min(w / 1920, h / 1080);
+        document.documentElement.style.setProperty('--scale-factor', s);
+    }
+    window.addEventListener('resize', updateScale);
+    updateScale();
+})();
+</script>
+"#;
+
 fn main() {
     tracing_subscriber::fmt::init();
 
-    let css_head = format!("<style>{GLOBAL_CSS}</style>");
+    let css_head = format!("<style>{GLOBAL_CSS}</style>{SCALE_JS}");
 
     dioxus::LaunchBuilder::new()
         .with_cfg(
@@ -786,6 +1101,14 @@ fn App() -> Element {
         inner: Arc::new(Mutex::new(AppStateInner::new())),
     });
 
+    // 确认弹窗状态（全局 Signal，各页面共享）
+    let _pending_confirm: Signal<Option<PendingConfirm>> =
+        use_context_provider(|| Signal::new(None));
+
+    // Toast 队列（全局 Signal）
+    let _toast_queue: Signal<ToastQueue> =
+        use_context_provider(|| Signal::new(ToastQueue::default()));
+
     // 初始化阶段
     let mut init_phase = use_signal(|| InitPhase::Loading);
 
@@ -883,29 +1206,22 @@ fn App() -> Element {
                         }
                         ("down", "Control") => {
                             if inner.render_state.host_screen == HostScreen::InGame {
-                                inner.set_playback_mode(
-                                    render_state::PlaybackMode::Skip,
-                                );
+                                inner.set_playback_mode(render_state::PlaybackMode::Skip);
                             }
                         }
                         ("up", "Control") => {
-                            if inner.playback_mode
-                                == render_state::PlaybackMode::Skip
-                            {
-                                inner.set_playback_mode(
-                                    render_state::PlaybackMode::Normal,
-                                );
+                            if inner.playback_mode == render_state::PlaybackMode::Skip {
+                                inner.set_playback_mode(render_state::PlaybackMode::Normal);
                             }
                         }
                         ("down", "a") | ("down", "A") => {
                             if inner.render_state.host_screen == HostScreen::InGame {
-                                let mode = if inner.playback_mode
-                                    == render_state::PlaybackMode::Auto
-                                {
-                                    render_state::PlaybackMode::Normal
-                                } else {
-                                    render_state::PlaybackMode::Auto
-                                };
+                                let mode =
+                                    if inner.playback_mode == render_state::PlaybackMode::Auto {
+                                        render_state::PlaybackMode::Normal
+                                    } else {
+                                        render_state::PlaybackMode::Auto
+                                    };
                                 inner.set_playback_mode(mode);
                             }
                         }
@@ -962,6 +1278,10 @@ fn App() -> Element {
                             HistoryScreen { render_state }
                         },
                     }
+                    // 确认弹窗（z-index 最高，覆盖所有页面）
+                    ConfirmDialog {}
+                    // Toast 提示（右上角）
+                    ToastLayer {}
                 }
             }
         }

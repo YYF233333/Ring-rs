@@ -10,9 +10,11 @@ use tracing::{info, warn};
 use crate::audio::AudioManager;
 use crate::config::{self, AppConfig};
 use crate::error::HostError;
+use crate::layout_config::UiLayoutConfig;
 use crate::manifest;
 use crate::resources::{self, LogicalPath, ResourceManager};
 use crate::save_manager::SaveManager;
+use crate::screen_defs::ScreenDefinitions;
 use crate::state::{AppStateInner, PersistentStore, Services};
 
 /// 简易 percent-decode：处理 URL 路径中的 `%XX` 编码（如中文文件名）。
@@ -128,6 +130,10 @@ pub fn initialize_inner(inner: &mut AppStateInner) -> Result<(), Box<dyn std::er
     am.set_sfx_volume(cfg.audio.sfx_volume);
     info!("AudioManager 初始化成功");
 
+    // UI 数据驱动配置加载
+    let layout = UiLayoutConfig::load(&rm)?;
+    let screen_defs = ScreenDefinitions::load(&rm)?;
+
     inner.persistent_store = PersistentStore::load(&saves_dir);
     inner.services = Some(Services {
         audio: am,
@@ -135,6 +141,8 @@ pub fn initialize_inner(inner: &mut AppStateInner) -> Result<(), Box<dyn std::er
         saves: sm,
         config: cfg,
         manifest: mf,
+        layout,
+        screen_defs,
     });
     info!("子系统初始化完成");
     Ok(())

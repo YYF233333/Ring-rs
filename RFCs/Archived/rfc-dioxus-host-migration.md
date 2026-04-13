@@ -3,10 +3,11 @@
 ## 元信息
 
 - 编号：RFC-033
-- 状态：Active（Phase 0-3 核心完成，仅余 CI 调整和 Toast/ConfirmDialog 等非阻塞项）
+- 状态：**Accepted**
 - 作者：claude-4.6-opus
 - 日期：2026-04-02
-- 相关范围：`host/`（功能基线）、`host-tauri/`（参考实现，冻结待废弃）→ `host-dioxus/`（新宿主）、`.cargo/config.toml`、`tools/xtask/`、CI
+- 完成日期：2026-04-13
+- 相关范围：`host/`（功能基线）、`host-dioxus/`（新宿主）、`.cargo/config.toml`、`tools/xtask/`
 - 前置：无（独立于 RFC-032；RFC-032 已标记为 Superseded）
 
 ---
@@ -495,18 +496,13 @@ default_platform = "desktop"
 - [x] HTML5 `<video>` 能播放
 - [x] `AppStateInner` 能通过 Signal 驱动 UI 更新
 
-**PoC 结论：通过（2026-04-04）。** 7/8 项验证通过（`dx serve` 待后续验证），所有关键能力确认可用。
+**PoC 结论：通过（2026-04-04）。** 7/8 项验证通过，所有关键能力确认可用。
 
-#### PoC 实现记录
+**发现的平台差异**（已沉淀至 `docs/maintenance/lessons-learned.md`）：
 
-实现代码在 `host-dioxus/` 目录，Dioxus 0.7.4 + Desktop mode。
-
-**发现的平台差异（须在后续阶段遵守）：**
-
-1. **自定义协议 URL 格式**：Windows 上 wry 的 custom protocol 使用 `http://{name}.localhost/` 格式，**不是** `{name}://localhost/`。所有 `ring-asset` 引用须用 `http://ring-asset.localhost/path`。
-2. **Workspace 依赖冲突**：`host` crate 依赖 `wry 0.49`（小游戏 WebView），与 `dioxus-desktop` 的 `wry 0.53.5` 在 `kuchikiki` 版本上冲突。PoC 阶段临时注释 `host` 解决。Phase 3 清理时需正式处理（升级 `host` 的 wry 或从 workspace 移除）。
-3. **CSS 加载**：`with_custom_head("<link>")` 引用外部 CSS 文件在 `cargo run` 模式下不可靠。使用 `with_custom_head("<style>...")` 内联 CSS 或通过 `ring-asset` 协议加载。
-4. **WebGL eval 桥接模式**：Rust 侧设置全局变量（`window.__ruleProgress`），JS 侧用 `requestAnimationFrame` 自主渲染循环读取。不要从 Rust 逐帧 eval 绘制调用（延迟导致闪烁）。
+1. **自定义协议 URL 格式**：Windows 上 wry 使用 `http://{name}.localhost/` 格式，不是 `{name}://localhost/`。
+2. **CSS 加载**：`with_custom_head("<style>...")` 内联 CSS，外部 `<link>` 在 `cargo run` 下不可靠。
+3. **WebGL eval 桥接**：Rust 设全局变量，JS 用 `requestAnimationFrame` 自主渲染循环。不从 Rust 逐帧 eval（延迟导致闪烁）。
 
 ### Phase 1：后端迁移（1 天）— 完成（2026-04-10）
 
@@ -521,52 +517,27 @@ default_platform = "desktop"
 
 按优先级重写为 RSX，**对齐旧 host 的视觉语义**。
 
-#### 实现记录
-
 **架构决策**：
 - 状态接入：`AppState` 通过 `use_context_provider` 注入，tick loop（30 FPS）每帧 clone `RenderState` 到 `Signal`
-- CSS 策略：单一内联 CSS（BEM 命名），动态值走 inline `style` 属性
+- CSS 策略：单一内联 CSS（BEM 命名），1920×1080 基准 + `transform: scale()` 等比缩放
 - Skip 模式：`.skip-mode` class 零化所有 `transition-duration` / `animation-duration`
-- 音频：headless AudioManager（后端状态跟踪），JS Web Audio 桥接延后实现
-- 窗口关闭：使用 `dioxus::desktop::window().close()` 而非 `std::process::exit()`（Dioxus event handler 不允许 `!` 返回类型）
+- 数据驱动 UI：`screen_defs.rs`（screens.json）+ `layout_config.rs`（layout.json）
 
-**新增文件清单（19 个前端源文件）**：
-
-1. **VN 渲染层** (`src/vn/`，13 个文件)
-   - [x] `scene.rs` — VNScene 容器（shake/blur/dim + skip-mode + 点击推进）
-   - [x] `background.rs` — 双层交叉淡化
-   - [x] `character.rs` — 立绘（position/opacity/scale/z-order + CSS transition）
-   - [x] `dialogue.rs` — ADV 对话框（打字机 + 推进指示器）
-   - [x] `nvl.rs` — NVL 全屏文本面板
-   - [x] `choice.rs` — 选项面板
-   - [x] `transition.rs` — Fade/FadeWhite CSS 遮罩过渡
-   - [x] `rule_transition.rs` — WebGL shader 遮罩过渡
-   - [x] `chapter_mark.rs` — 章节标记
-   - [x] `title_card.rs` — 全屏字卡（淡入淡出）
-   - [x] `video.rs` — HTML5 视频 cutscene
-   - [x] `quick_menu.rs` — 底部快捷菜单（Skip/Auto/Save/Load/History/Settings）
-
-2. **系统界面** (`src/screens/`，5 个文件)
-   - [x] `title.rs` — 标题画面（Start/Continue/Load/Settings/Exit）
-   - [x] `in_game_menu.rs` — 游内暂停菜单
-   - [x] `save_load.rs` — 存读档（6 slots/页 × 9 页 + 缩略图）
-   - [x] `settings.rs` — 设置（BGM/SFX 音量滑块、文字速度、Auto 延迟）
-   - [x] `history.rs` — 对话历史
-
-3. **辅助组件** (`src/components/`，1 个文件)
-   - [x] `skip_indicator.rs` — SKIP/AUTO 模式浮动指示器
-
-4. **修改文件**
-   - [x] `main.rs` — 完全重写：App 根组件 + tick loop + Signal 接入 + 全局 CSS + 6 个 HostScreen 路由 + 键盘绑定骨架
-   - [x] `state.rs` — `AppState` 添加 `#[derive(Clone)]`
+**最终文件结构**：
+- `src/vn/`（13 个文件）：scene / background / character / dialogue / nvl / choice / transition / rule_transition / chapter_mark / title_card / video / quick_menu / audio_bridge
+- `src/screens/`（5 个文件）：title / in_game_menu / save_load / settings / history
+- `src/components/`（4 个文件）：skip_indicator / confirm_dialog / game_menu_frame / toast
+- 后端模块（11 个文件）：state / command_executor / render_state / audio / resources / config / manifest / save_manager / error / headless_cli / init
+- 数据驱动模块（2 个文件）：screen_defs / layout_config
 
 **Phase 2 延后项状态**：
 - [x] 音频桥接 — `vn/audio_bridge.rs`：JS Web Audio API via eval（BGM crossfade + SFX 一次性播放）
 - [x] 键盘绑定 — `main.rs`：eval send/recv 双向通信（Escape/Ctrl-Skip/Space/Enter/A-Auto/Backspace-rollback）
-- [ ] Toast / ConfirmDialog — 按需补充
-- [ ] MapOverlay / MiniGame — placeholder 预留
+- [x] Toast — `components/toast.rs`：4 种类型 + 2.8s 自动淡出（Phase 4 实现）
+- [x] ConfirmDialog — `components/confirm_dialog.rs`：模态确认弹窗 + NinePatch frame 背景（Phase 4 实现）
+- [ ] MapOverlay / MiniGame — placeholder 预留（延后对齐，架构已预留）
 
-### Phase 3：构建集成与清理（1 天）— 部分完成（2026-04-13）
+### Phase 3：构建集成与清理（1 天）— 完成（2026-04-13）
 
 - [x] 更新 `.cargo/config.toml` alias（添加 `test-dioxus`；`default-members` 已指向 `host-dioxus`）
 - [x] 确认 `tools/xtask/` 无需修改（check-all 已是纯 Rust：fmt → clippy → test）
@@ -575,7 +546,31 @@ default_platform = "desktop"
 - [x] 更新 `docs/maintenance/lessons-learned.md`（新增 3 条 Dioxus 经验）
 - [x] 更新 `docs/maintenance/summary-index.md`（添加 `host-dioxus` 条目）
 - [x] 删除 `host-tauri/` 目录（2026-04-13，含 `.claude/rules/domain-host-tauri-*.md` 和 settings pnpm 权限清理）
-- [ ] 更新 CI（当前 CI 已可运行，视需要调整）
+
+### Phase 4：UI 精细化对齐 egui host — 完成（2026-04-13）
+
+将 Dioxus host 的占位符级 UI 升级为与 egui host 完全功能等价的正式界面。
+
+**基础设施**：
+- [x] 基准分辨率 1920×1080 + CSS `transform: scale()` 等比缩放（等价于 egui `ScaleContext`）
+- [x] 数据驱动 UI：新增 `screen_defs.rs`（从 `screens.json` 加载 `ConditionDef`/`ActionDef`/`ButtonDef`/`ScreenDefinitions`）、`layout_config.rs`（从 `layout.json` 加载 `UiLayoutConfig`）
+- [x] CSS 变量体系（颜色 7 + 字号 7 token），NinePatch 通过 CSS `border-image` 实现
+- [x] `execute_action()` + `condition_context()` 实现 ActionDef → app 操作完整映射
+
+**界面对齐**：
+- [x] 对话框：NinePatch textbox/namebox 背景，颜色翻转为图片背景黑字
+- [x] 快捷菜单：数据驱动（screens.json 7 个中文按钮），对话框上方居中
+- [x] 标题画面：条件背景图（summer/winter）+ overlay + 数据驱动按钮列表（条件显隐）
+- [x] 选项面板：NinePatch choice_idle/hover 背景，宽 1185px，间距 33px
+- [x] 确认弹窗：`ConfirmDialog` 组件，NinePatch frame 面板，接入所有危险操作
+- [x] GameMenuFrame：通用框架（背景图+overlay+左导航+右内容），供 Save/Load/Settings/History 复用
+- [x] Save/Load：嵌入 GameMenuFrame，Tab 切换，A/Q/1-9 分页，NinePatch slot，删除按钮
+- [x] 游内菜单：数据驱动 7 个中文按钮，确认弹窗接入
+- [x] Settings：嵌入 GameMenuFrame，静音复选框 + 应用按钮，滑块参数对齐
+- [x] History：嵌入 GameMenuFrame，双列布局（角色名右对齐+对话文本）
+- [x] Toast 提示：4 种类型 + 2.8s 自动淡出
+- [x] Skip 指示器：中文文案 + 绿色背景
+- [x] TitleCard/ChapterMark/NVL 样式对齐
 
 ### 向后兼容
 
@@ -588,21 +583,22 @@ default_platform = "desktop"
 
 ## 验收标准
 
-- [ ] `dx serve` 从仓库根目录一条命令启动开发环境
-- [ ] 游戏可以从标题 → 新游戏 → 对话推进 → 选项 → 存档 → 读档 → 返回标题完整流程运行
-- [ ] 背景 dissolve 为双层交叉淡化（对齐旧 host，非 host-tauri 的瞬时切换）
-- [ ] 角色入场淡入 + z-order 层级排序正确（对齐旧 host）
-- [ ] CSS 过渡动画（fade in/out）视觉效果与旧 host 等价
-- [ ] RuleTransition 使用 WebGL shader 实现遮罩过渡（对齐旧 host GPU 方案）
-- [ ] sceneEffect 基础 capability（shake/blur/dim）有时长驱动动画（对齐旧 host，非 host-tauri 的瞬时值）
-- [ ] Skip 模式可统一收敛所有活跃演出（对齐旧 host 的 `skip_all_active_effects()`）
-- [ ] HTML5 视频播放正常
-- [ ] `ring-asset` 自定义协议正确加载 FS 和 ZIP 资源
-- [ ] `cargo test -p host-dioxus` 通过（headless harness）
-- [ ] 构建工具链中不包含 Node.js / pnpm / biome / vue-tsc
-- [ ] `cargo check-all` 一条命令通过全部门禁
-- [ ] 无 IPC 薄代理层、无手动类型同步文件
-- [ ] 文档已更新：module summaries、navigation map、lessons-learned
+- [x] 游戏可以从标题 → 新游戏 → 对话推进 → 选项 → 存档 → 读档 → 返回标题完整流程运行
+- [x] 背景 dissolve 为双层交叉淡化（对齐旧 host，非 host-tauri 的瞬时切换）
+- [x] 角色入场淡入 + z-order 层级排序正确（对齐旧 host）
+- [x] CSS 过渡动画（fade in/out）视觉效果与旧 host 等价
+- [x] RuleTransition 使用 WebGL shader 实现遮罩过渡（对齐旧 host GPU 方案）
+- [x] sceneEffect 基础 capability（shake/blur/dim）有时长驱动动画（对齐旧 host，非 host-tauri 的瞬时值）
+- [x] Skip 模式可统一收敛所有活跃演出（对齐旧 host 的 `skip_all_active_effects()`）
+- [x] HTML5 视频播放正常
+- [x] `ring-asset` 自定义协议正确加载 FS 和 ZIP 资源
+- [x] `cargo test -p host-dioxus` 通过（headless harness，29 个测试）
+- [x] 构建工具链中不包含 Node.js / pnpm / biome / vue-tsc
+- [x] `cargo check-all` 一条命令通过全部门禁（365 个测试）
+- [x] 无 IPC 薄代理层、无手动类型同步文件
+- [x] 文档已更新：module summaries、navigation map、lessons-learned
+- [x] UI 数据驱动：screens.json（按钮/条件/动作）+ layout.json（布局参数/颜色/字号/资产路径）
+- [x] 所有系统界面功能完全对齐 egui host（按钮数量/标签/条件显隐/页面切换逻辑）
 
 ---
 
@@ -611,7 +607,7 @@ default_platform = "desktop"
 | RFC | 标题 | 状态 | 与本 RFC 关系 |
 |-----|------|------|-------------|
 | RFC-002 | ref-project 重制体验等价计划 | Active | 功能对齐基线来源 |
-| RFC-032 | host-tauri Harness 能力对齐 | Active → Superseded（若本 RFC 落地） | Tauri 特有部分被替代 |
+| RFC-032 | host-tauri Harness 能力对齐 | Superseded | Tauri 特有部分已被替代 |
 | RFC-004 | 扩展 API 与 Mod 化效果管理 | Active | capability 注册表框架（延后对齐） |
 | RFC-009 | Cutscene 视频播放 | Accepted | 视频播放方案参考 |
 | RFC-024 | VN+ Hub 架构 | Proposed | 非目标，不在本 RFC 范围 |

@@ -228,6 +228,24 @@ result.assert_waiting_click();
 - **原因**：`use_context` 要求类型实现 Clone。`AppStateInner` 包含 VNRuntime 等不可 Clone 的字段。
 - **正确做法**：用 `AppState { inner: Arc<Mutex<AppStateInner>> }` 包装并 `#[derive(Clone)]`。tick loop 每帧 lock → process_tick → clone RenderState 到 Signal。用户交互直接 lock 调方法。Signal 只用于只读的 RenderState 快照。
 
+### CSS border-image 等价 NinePatch 九宫格
+
+- **现象**：egui host 大量使用 NinePatch 九宫格渲染 UI 组件（对话框、按钮、slot 等），Dioxus WebView 中需要等价实现。
+- **原因**：WebView CSS 原生支持 `border-image` + `border-image-slice`，语义完全等价于 NinePatch。
+- **正确做法**：`border-image-source: url("http://ring-asset.localhost/gui/textbox.png"); border-image-slice: 30 30 30 30 fill; border-image-width: 30px; border-style: solid; background: transparent;`。`layout.json` 中的 `*_borders` 值直接映射为 `border-image-slice` 参数。必须加 `fill` 关键字否则中间区域不渲染。
+
+### Dioxus 中 1920×1080 基准分辨率缩放
+
+- **现象**：需要所有 CSS 值使用 1920×1080 坐标系（与 egui host 的 ScaleContext 一致），同时适配不同窗口大小。
+- **原因**：在 WebView 中没有 egui 的 ScaleContext，需要等价缩放机制。
+- **正确做法**：`.game-container { width: 1920px; height: 1080px; transform-origin: top left; transform: scale(var(--scale-factor)); }`，JS resize handler 计算 `--scale-factor = min(innerWidth/1920, innerHeight/1080)`。所有 CSS 值直接写 1920 基准 px，无需手动换算。
+
+### 数据驱动 screen_defs 模块可跨宿主复用
+
+- **现象**：egui host 的 `ui/screen_defs/mod.rs`（ConditionDef/ActionDef/ButtonDef/ScreenDefinitions）复制到 host-dioxus 几乎不需改动。
+- **原因**：该模块仅依赖 `vn_runtime::state::VarValue` 和 `PersistentStore`，与 UI 框架无关。
+- **正确做法**：新宿主可直接复用 screen_defs 和 layout_config 的数据结构，只需适配导入路径。screens.json / layout.json 是两个宿主共享的配置源。
+
 ---
 
 ## 如何贡献新条目
