@@ -1,0 +1,31 @@
+---
+paths:
+  - "vn-runtime/src/script/**"
+  - "vn-runtime/src/command/**"
+  - "vn-runtime/src/diagnostic.rs"
+---
+
+# 脚本语言层（script-lang）
+
+## 摘要导航
+
+- [script](docs/engine/architecture/module-summaries/vn-runtime/script.md)
+- [command](docs/engine/architecture/module-summaries/vn-runtime/command.md)
+- [diagnostic](docs/engine/architecture/module-summaries/vn-runtime/diagnostic.md)
+- [parser](docs/engine/architecture/module-summaries/vn-runtime/parser.md)
+- 语法规范：[script_syntax_spec.md](docs/authoring/script-syntax.md)
+
+## 关键不变量
+
+- Parser 输出必须与 `script_syntax_spec.md` 对齐；新增语法先更新规范再改代码。
+- AST 节点不携带运行时状态；只描述"要做什么"，不描述"怎么做"。
+- `InlineEffect` / `InlineEffectKind` 是打字机节奏标签的数据模型，改动须同步 host 端消费方。
+- Command 枚举是 Runtime→Host 的通信契约。新增变体须同时在 `host/src/command_executor/` 添加处理分支。
+- Diagnostic 是静态分析，不依赖运行时状态。
+
+## Do / Don't
+
+- **Do** 为新 AST 变体补 parser round-trip 测试。
+- **Do** 在 `command.rs` 新增变体时用 `#[non_exhaustive]` 思维——考虑 host 侧 match 的完备性。
+- **Don't** 在 parser 中引入 IO 或副作用。
+- **Don't** 在 AST/Command 类型上存放 `Arc`/`Rc` 等引用计数指针。

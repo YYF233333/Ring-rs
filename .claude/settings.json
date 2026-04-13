@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && cargo check-all",
+            "timeout": 300,
+            "if": "Bash(git commit:*)"
+          }
+        ]
+      }
+    ]
+  }
+}
