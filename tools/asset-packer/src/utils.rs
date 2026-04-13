@@ -30,12 +30,3 @@ pub fn format_size(size: u64) -> String {
         format!("{:.2} MB", size as f64 / 1024.0 / 1024.0)
     }
 }
-
-/// 当前平台的 ffmpeg 可执行文件名
-pub fn ffmpeg_exe_name() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "ffmpeg.exe"
-    } else {
-        "ffmpeg"
-    }
-}

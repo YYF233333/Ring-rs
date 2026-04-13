@@ -11,7 +11,7 @@ alwaysApply: false
 - Parser 输出必须与 `script_syntax_spec.md` 对齐；新增语法先更新规范再改代码。
 - AST 节点不携带运行时状态；只描述"要做什么"，不描述"怎么做"。
 - `InlineEffect` / `InlineEffectKind` 是打字机节奏标签的数据模型，改动须同步 host 端消费方。
-- Command 枚举是 Runtime→Host 的通信契约。新增变体须同时在 `host/src/command_executor/` 添加处理分支。
+- Command 枚举是 Runtime→Host 的通信契约。新增变体须同时在 `host-dioxus/src/command_executor.rs` 添加处理分支。
 - Diagnostic 是静态分析，不依赖运行时状态。
 
 ## Do / Don't

@@ -7,7 +7,7 @@
 //! - `check-all`: fmt（直接应用）、clippy（自动 fix）、test
 //! - `cov`: 运行 workspace 覆盖率（排除工具 crate 与平台胶水代码）
 //! - `script-check`: 检查脚本文件（语法、label、资源引用）
-//! - `mutants`: 运行变异测试（vn-runtime / host），检测测试质量
+//! - `mutants`: 运行变异测试（vn-runtime），检测测试质量
 //! - `gen-symbols`: 从 rustdoc JSON 生成符号索引（`docs/engine/symbol-index.md`）
 
 mod gen_symbols;
@@ -33,7 +33,6 @@ use xshell::Shell;
   cargo cov                -> cargo run -p xtask -- cov
   cargo script-check       -> cargo run -p xtask -- script-check
   cargo mutants-check      -> cargo run -p xtask -- mutants
-  cargo mutants-host-check -> cargo run -p xtask -- mutants --package host
 "#
 )]
 struct Cli {
@@ -52,7 +51,7 @@ enum XtaskCommand {
     /// 检查脚本文件（语法、label、资源引用）
     ScriptCheck(ScriptCheckArgs),
 
-    /// 运行变异测试（vn-runtime / host），检测测试质量
+    /// 运行变异测试（vn-runtime），检测测试质量
     Mutants(MutantsArgs),
 
     /// 从 rustdoc JSON 生成符号索引（docs/engine/symbol-index.md）
@@ -63,15 +62,12 @@ enum XtaskCommand {
 enum MutantsPackage {
     #[value(name = "vn-runtime")]
     VnRuntime,
-    #[value(name = "host")]
-    Host,
 }
 
 impl MutantsPackage {
     fn cargo_package_name(self) -> &'static str {
         match self {
             Self::VnRuntime => "vn-runtime",
-            Self::Host => "host",
         }
     }
 }
@@ -82,15 +78,11 @@ impl MutantsPackage {
   "missed" 表示测试未能发现该变异——意味着测试覆盖不足或断言太弱。
 
   默认测试 vn-runtime 全部可变异函数（排除规则见 .cargo/mutants.toml）。
-  host 仅覆盖已分层、可稳定单元测试的纯逻辑模块；
-  GPU / egui / 音视频 / App 胶水默认排除。
   可用 --file 缩小范围加速迭代。
 
 示例：
   cargo mutants-check                                          # 全量
-  cargo mutants-check -- --file vn-runtime/src/state.rs        # vn-runtime 单文件
-  cargo mutants-check -- --package host                        # host 纯逻辑子集
-  cargo mutants-check -- --package host -- --file host/src/resources/mod.rs
+  cargo mutants-check -- --file vn-runtime/src/state.rs        # 单文件
 "#)]
 struct MutantsArgs {
     /// 目标 crate（默认 vn-runtime）
@@ -150,19 +142,8 @@ fn run_status(step: &str, program: &str, args: &[&str]) -> anyhow::Result<ExitSt
 /// 覆盖率排除规则
 ///
 /// 排除不可单元测试的平台/框架胶水代码：
-/// - `src/lib.rs`：模块声明与重导出（两个 crate）
+/// - `src/lib.rs`：模块声明与重导出
 /// - `vn-runtime/src/error.rs`：thiserror derive，无手写逻辑
-/// - `main.rs` / `host_app.rs` / `egui_actions.rs`：平台入口与事件循环
-/// - `egui_screens/*`：egui UI 构建逻辑（三方框架行为）
-/// - `backend/*`（除 `math.rs`）：GPU 渲染管线（需真实设备）
-/// - `audio/*`：rodio 硬件依赖，含设备初始化与播放控制
-/// - `video/*`：FFmpeg 子进程 + rodio 解码，完全硬件依赖
-/// - `app/draw.rs`：渲染管线薄包装
-/// - `app/(bootstrap|init|mod|state|save|script_loader|engine_services).rs`：App 层集成胶水
-/// - `app/update/*`：每帧更新分发，依赖完整 AppState
-/// - `app/command_handlers/audio.rs`：音频命令处理，依赖硬件
-/// - `ui/(asset_cache|image_slider|mod|nine_patch).rs`：egui UI 组件
-/// - `extensions/manifest.rs`：极小 serde struct
 ///
 /// Builds the coverage ignore regex from `cov-ignore-regex.txt`.
 ///
@@ -645,25 +626,33 @@ mod tests {
 
     #[test]
     fn build_mutants_command_args_includes_jobs_without_in_place() {
-        let args = build_mutants_command_args("host", 3, vec!["--timeout".into(), "60".into()]);
+        let args =
+            build_mutants_command_args("vn-runtime", 3, vec!["--timeout".into(), "60".into()]);
 
         assert_eq!(
             args,
-            vec!["mutants", "-p", "host", "-j", "3", "--timeout", "60"]
+            vec!["mutants", "-p", "vn-runtime", "-j", "3", "--timeout", "60"]
         );
     }
 
     #[test]
     fn build_mutants_command_args_omits_jobs_with_in_place() {
         let args = build_mutants_command_args(
-            "host",
+            "vn-runtime",
             3,
             vec!["--in-place".into(), "--timeout".into(), "60".into()],
         );
 
         assert_eq!(
             args,
-            vec!["mutants", "-p", "host", "--in-place", "--timeout", "60"]
+            vec![
+                "mutants",
+                "-p",
+                "vn-runtime",
+                "--in-place",
+                "--timeout",
+                "60"
+            ]
         );
     }
 

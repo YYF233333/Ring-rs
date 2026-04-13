@@ -1,6 +1,6 @@
 ---
 description: "Domain: 资源与配置 — resource manager, manifest, config, save manager"
-globs: host/src/resources/**,host/src/manifest/**,host/src/config/**,host/src/save_manager/**
+globs: host-dioxus/src/resources.rs,host-dioxus/src/manifest.rs,host-dioxus/src/config.rs,host-dioxus/src/save_manager.rs,host-dioxus/src/init.rs
 alwaysApply: false
 ---
 

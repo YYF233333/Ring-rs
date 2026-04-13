@@ -12,7 +12,6 @@ clippy-all = "clippy --workspace --all-targets"
 clippy-deny = "clippy --workspace --all-targets -- -D warnings"
 test-all = "test --workspace"
 test-runtime = "test -p vn-runtime"
-test-host-lib = "test -p host --lib"
 test-dioxus = "test -p host-dioxus --lib"
 
 # One-command local gate (cross-platform).
@@ -29,10 +28,8 @@ script-check = "run -p xtask -- script-check"
 
 # -------- Mutation testing --------
 # Requires: cargo install cargo-mutants
-# Default target is vn-runtime. Use --package host or cargo mutants-host-check for host.
 # Pass extra args after --: cargo mutants-check -- --file vn-runtime/src/state.rs
 mutants-check = "run -p xtask -- mutants"
-mutants-host-check = "run -p xtask -- mutants --package host"
 
 # -------- Symbol index generation --------
 gen-symbols = "run -p xtask -- gen-symbols"

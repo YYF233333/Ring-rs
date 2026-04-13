@@ -132,24 +132,24 @@ jobs:
           } else { 0 }
 
           $runtimeLines = 0; $runtimeCovered = 0
-          $hostLines = 0; $hostCovered = 0
+          $dioxusLines = 0; $dioxusCovered = 0
 
           foreach ($f in $covData.files) {
             if ($f.filename -match 'vn-runtime') {
               $runtimeLines += $f.summary.lines.count
               $runtimeCovered += $f.summary.lines.covered
-            } elseif ($f.filename -match 'host') {
-              $hostLines += $f.summary.lines.count
-              $hostCovered += $f.summary.lines.covered
+            } elseif ($f.filename -match 'host-dioxus') {
+              $dioxusLines += $f.summary.lines.count
+              $dioxusCovered += $f.summary.lines.covered
             }
           }
 
           $rtPct = if ($runtimeLines -gt 0) { [math]::Round($runtimeCovered / $runtimeLines * 100, 1) } else { 0 }
-          $hostPct = if ($hostLines -gt 0) { [math]::Round($hostCovered / $hostLines * 100, 1) } else { 0 }
+          $dioxusPct = if ($dioxusLines -gt 0) { [math]::Round($dioxusCovered / $dioxusLines * 100, 1) } else { 0 }
 
           echo "COV_WORKSPACE=$wsPct" >> $env:GITHUB_ENV
           echo "COV_RUNTIME=$rtPct" >> $env:GITHUB_ENV
-          echo "COV_HOST=$hostPct" >> $env:GITHUB_ENV
+          echo "COV_DIOXUS=$dioxusPct" >> $env:GITHUB_ENV
 
       - name: "Parse: test counts"
         shell: pwsh
@@ -184,7 +184,6 @@ jobs:
 
           $crates = @{
             "vn_runtime" = @{ code = 0; comments = 0; blanks = 0 }
-            "host" = @{ code = 0; comments = 0; blanks = 0 }
             "host_dioxus" = @{ code = 0; comments = 0; blanks = 0 }
             "xtask" = @{ code = 0; comments = 0; blanks = 0 }
             "asset_packer" = @{ code = 0; comments = 0; blanks = 0 }
@@ -202,10 +201,6 @@ jobs:
               $crates["host_dioxus"].code += $stats.code
               $crates["host_dioxus"].comments += $stats.comments
               $crates["host_dioxus"].blanks += $stats.blanks
-            } elseif ($name -match '^\.?/?host/') {
-              $crates["host"].code += $stats.code
-              $crates["host"].comments += $stats.comments
-              $crates["host"].blanks += $stats.blanks
             } elseif ($name -match '^\.?/?tools/xtask/') {
               $crates["xtask"].code += $stats.code
               $crates["xtask"].comments += $stats.comments
@@ -239,7 +234,7 @@ jobs:
               coverage = @{
                 workspace = [double]$env:COV_WORKSPACE
                 vn_runtime = [double]$env:COV_RUNTIME
-                host = [double]$env:COV_HOST
+                host_dioxus = [double]$env:COV_DIOXUS
               }
               binary_size_bytes = @{
                 host_release = 0

@@ -17,9 +17,9 @@ const CRATES: &[CrateInfo] = &[
         src_prefix: "vn-runtime/src/",
     },
     CrateInfo {
-        package: "host",
-        json_stem: "host",
-        src_prefix: "host/src/",
+        package: "host-dioxus",
+        json_stem: "host_dioxus",
+        src_prefix: "host-dioxus/src/",
     },
 ];
 

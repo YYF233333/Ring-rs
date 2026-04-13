@@ -5,7 +5,7 @@
 > **重要**：`config.json` 必须存在且包含所有字段，缺失文件或字段将导致启动报错。
 > 仓库自带完整的默认配置文件，直接修改即可。
 >
-> 配置读取与校验实现：`host/src/config/mod.rs`
+> 配置读取与校验实现：`host-dioxus/src/config.rs`
 
 ## 快速示例
 
@@ -221,7 +221,7 @@
 
 ### 运行时用户设置（VN 模态专属）
 
-以下字段位于 `UserSettings`（`host/src/app/app_mode/mod.rs`），不在 `config.json` 中：
+以下字段位于 `UserSettings`（`host-dioxus/src/state.rs`），不在 `config.json` 中：
 
 - `text_speed`：文字速度（每秒字符数）
 - `auto_delay`：自动播放延迟（秒）

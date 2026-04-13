@@ -57,4 +57,4 @@
 | RFC-031 | ZIP 资源自定义协议 | `rfc-zip-asset-protocol.md` | Active |
 | RFC-032 | host-tauri Harness 能力对齐 | `rfc-host-tauri-harness-parity.md` | Superseded（host-tauri 归档，由 RFC-033 取代） |
 | RFC-033 | Dioxus 宿主迁移——消除 IPC 边界与双语言工具链 | `rfc-dioxus-host-migration.md` | Accepted |
-| RFC-034 | 旧宿主 (winit/wgpu/egui) 退役 | `rfc-legacy-host-retirement.md` | Active |
+| RFC-034 | 旧宿主 (winit/wgpu/egui) 退役 | `rfc-legacy-host-retirement.md` | Accepted |

@@ -11,8 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 引擎分为纯逻辑核心和宿主两层，通过 `Command`（Runtime→Host）和 `RuntimeInput`（Host→Runtime）通信，禁止其他耦合：
 
 - **`vn-runtime`**：纯逻辑——脚本解析/执行、状态管理、等待建模、产出 `Command`。禁止 IO/渲染/真实时间依赖。所有状态在 `RuntimeState` 中显式建模且可序列化。
-- **`host`**（旧宿主）：winit + wgpu + egui 渲染宿主，执行 `Command` 产生画面/音频/UI。禁止脚本逻辑、直接修改 Runtime 内部状态。
-- **`host-dioxus`**（新宿主）：Dioxus 0.7 Desktop，Rust 全栈（RSX 声明式 UI），无 IPC 边界。
+- **`host-dioxus`**：Dioxus 0.7 Desktop 渲染宿主，Rust 全栈（RSX 声明式 UI），无 IPC 边界。执行 `Command` 产生画面/音频/UI。禁止脚本逻辑、直接修改 Runtime 内部状态。
 
 ### 核心执行模型
 
@@ -22,8 +21,7 @@ Runtime 通过 `tick(input) -> (Vec<Command>, WaitingReason)` 驱动。确定性
 
 ```
 vn-runtime/          # 纯逻辑 Runtime
-host/                # 旧宿主（winit/wgpu/egui）
-host-dioxus/         # 新宿主（Dioxus Desktop）
+host-dioxus/         # 宿主（Dioxus Desktop）
 tools/xtask/         # 门禁/覆盖率/脚本检查
 tools/asset-packer/  # 资源打包
 tools/debug-mcp/     # Debug MCP Server（Node.js，封装 HTTP REST API）
@@ -119,10 +117,10 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 | 改动 | 须同步的文件 |
 |------|-------------|
-| 新增/修改 Command | `vn-runtime` command 模块 + `host` command_executor + `host-dioxus` command_executor |
+| 新增/修改 Command | `vn-runtime` command 模块 + `host-dioxus` command_executor |
 | 新增脚本语法 | 先更新语法规范 → parser + AST + executor + round-trip 测试 |
-| 新增 UI 页面 | `host` egui_screens + `host-dioxus` 对应页面 |
-| Typewriter 节奏标签 | parser inline_tags + Command InlineEffect + host-side consumer |
+| 新增 UI 页面 | `host-dioxus` 对应页面 |
+| Typewriter 节奏标签 | parser inline_tags + Command InlineEffect + host-dioxus consumer |
 | 大批量新增/移动 pub 符号 | 运行 `cargo gen-symbols` 刷新符号索引 |
 | 新增 Debug API 端点 | `host-dioxus/src/debug_server.rs` + `tools/debug-mcp/index.js` MCP tool 映射 |
 
@@ -153,20 +151,13 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 所有资源路径必须使用 `&LogicalPath`，所有读取通过 `ResourceManager` 单例。`FsSource`/`ZipSource` 仅在 `init::create_resource_manager` 内构造。Config 加载后不可变；运行时变更用 `UserSettings`。
 
-### 渲染与效果
-
-`DrawCommand` 使用 `Arc<dyn Texture>`，后端通过 `as_any()` 下转。效果三级：`EffectKind → ResolvedEffect → EffectRequest`，带 capability fallback。动画基于 `dt` 时间驱动，不基于帧。`NullTexture`/`NullTextureFactory` 用于无 GPU 测试。
-
 ### 领域不变量速查
 
 详细不变量和 Do/Don't 规则见 `.cursor/rules/`（Cursor 与 CC 共享）：
 
 | 领域 | 规则文件 | 核心约束摘要 |
 |------|----------|-------------|
-| 应用编排层 | `.cursor/rules/domain-host-app.mdc` | CommandExecutor→状态变更+输出事件，command_handlers→驱动外部系统；AppMode 状态机 |
 | 脚本语言 | `.cursor/rules/domain-script-lang.mdc` | 两阶段解析器（Block 识别→语义解析）；AST 无运行时状态 |
-| 媒体与 UI | `.cursor/rules/domain-media-ui.mdc` | AudioManager fade 控制；VideoPlayer 状态机；Extension capability 注册 |
-| 渲染与效果 | `.cursor/rules/domain-renderer.mdc` | Animatable trait 时间驱动动画；SceneTransitionManager |
 | 资源与配置 | `.cursor/rules/domain-resources.mdc` | LogicalPath 强制；Config 加载后不可变 |
 | 运行时引擎 | `.cursor/rules/domain-runtime-engine.mdc` | 确定性执行；显式状态；存档向后兼容 |
 

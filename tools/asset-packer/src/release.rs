@@ -1,9 +1,9 @@
 //! 发行版构建流程
 //!
-//! 将资源打包、编译宿主应用、检测 FFmpeg、组装发行版目录。
+//! 将资源打包、编译宿主应用、组装发行版目录。
 
 use crate::pack::{pack_assets, pack_directory};
-use crate::utils::{ffmpeg_exe_name, required_file_name, run_command};
+use crate::utils::{required_file_name, run_command};
 use anyhow::{Result, bail};
 use std::fs::File;
 use std::io::Write;
@@ -17,8 +17,7 @@ const DEFAULT_GAME_NAME: &str = "Ring";
 /// 1. 打包 assets -> game.zip
 /// 2. `cargo build --release -p host-dioxus` 编译宿主应用
 /// 3. 检查 config.json
-/// 4. 检测 FFmpeg 二进制
-/// 5. 组装发行版目录（并可选打包为 ZIP）
+/// 4. 组装发行版目录（并可选打包为 ZIP）
 pub fn create_release(
     assets_dir: &Path,
     zip_output: &Path,
@@ -35,11 +34,11 @@ pub fn create_release(
         DEFAULT_GAME_NAME.to_string()
     };
 
-    println!("步骤 1/5: 打包资源...");
+    println!("步骤 1/4: 打包资源...");
     pack_assets(assets_dir, zip_output)?;
     println!();
 
-    println!("步骤 2/5: 编译宿主应用（release）...");
+    println!("步骤 2/4: 编译宿主应用（release）...");
     run_command(
         "执行 cargo build --release -p host-dioxus",
         "cargo",
@@ -53,7 +52,7 @@ pub fn create_release(
     println!("编译完成: {:?}", host_binary);
     println!();
 
-    println!("步骤 3/5: 检查配置文件...");
+    println!("步骤 3/4: 检查配置文件...");
     if !config_path.exists() {
         bail!("找不到 config.json 文件");
     }
@@ -61,28 +60,13 @@ pub fn create_release(
     println!("游戏名称: {}", game_name);
     println!();
 
-    println!("步骤 4/5: 检测 FFmpeg 二进制...");
-    let ffmpeg = detect_ffmpeg();
-    match &ffmpeg {
-        Some(path) => println!("找到 FFmpeg: {:?}", path),
-        None => {
-            println!("[警告] 未找到 FFmpeg 二进制，发行版将不包含视频播放支持");
-            println!("  提示: 将 ffmpeg 放置在 vendor/ffmpeg/win-x64/ (Windows)");
-            println!(
-                "        或 vendor/ffmpeg/linux-x64/ (Linux) 或 vendor/ffmpeg/macos-x64/ (macOS)"
-            );
-        }
-    }
-    println!();
-
-    println!("步骤 5/5: 创建发行版目录...");
+    println!("步骤 4/4: 创建发行版目录...");
     assemble_release_dir(
         release_dir,
         zip_output,
         &host_binary,
         &config_path,
         &game_name,
-        ffmpeg.as_deref(),
     )?;
 
     if create_zip {
@@ -105,7 +89,6 @@ fn assemble_release_dir(
     host_binary: &Path,
     config_path: &Path,
     game_name: &str,
-    ffmpeg: Option<&Path>,
 ) -> Result<()> {
     if release_dir.exists() {
         println!("发行版目录已存在，将清空: {:?}", release_dir);
@@ -131,12 +114,6 @@ fn assemble_release_dir(
     update_config_for_release(&config_dest, &zip_name.to_string_lossy())?;
     println!("  复制配置并更新为 ZIP 模式");
 
-    if let Some(ffmpeg_path) = ffmpeg {
-        let ffmpeg_dest = release_dir.join(ffmpeg_exe_name());
-        std::fs::copy(ffmpeg_path, &ffmpeg_dest)?;
-        println!("  复制 FFmpeg: {:?} -> {:?}", ffmpeg_path, ffmpeg_dest);
-    }
-
     println!();
     println!("发行版创建完成！");
     println!("   发行版目录: {:?}", release_dir);
@@ -144,9 +121,6 @@ fn assemble_release_dir(
     println!("     - {}", zip_name.to_string_lossy());
     println!("     - {}", binary_filename);
     println!("     - config.json");
-    if ffmpeg.is_some() {
-        println!("     - {}", ffmpeg_exe_name());
-    }
 
     Ok(())
 }
@@ -200,49 +174,6 @@ fn update_config_for_release(config_path: &Path, zip_filename: &str) -> Result<(
     file.write_all(updated.as_bytes())?;
 
     Ok(())
-}
-
-/// 检测可用的 FFmpeg 二进制，依次搜索 vendor 目录、bin 目录、系统 PATH
-fn detect_ffmpeg() -> Option<PathBuf> {
-    let exe = ffmpeg_exe_name();
-
-    let vendor_dir = if cfg!(target_os = "windows") {
-        "vendor/ffmpeg/win-x64"
-    } else if cfg!(target_os = "macos") {
-        "vendor/ffmpeg/macos-x64"
-    } else {
-        "vendor/ffmpeg/linux-x64"
-    };
-
-    let vendor_path = PathBuf::from(vendor_dir).join(exe);
-    if vendor_path.exists() {
-        return Some(vendor_path);
-    }
-
-    let bin_path = PathBuf::from("bin").join(exe);
-    if bin_path.exists() {
-        return Some(bin_path);
-    }
-
-    let which_cmd = if cfg!(target_os = "windows") {
-        "where"
-    } else {
-        "which"
-    };
-    if let Ok(out) = std::process::Command::new(which_cmd).arg(exe).output()
-        && out.status.success()
-    {
-        let s = String::from_utf8_lossy(&out.stdout);
-        let first = s.lines().next().unwrap_or("").trim();
-        if !first.is_empty() {
-            let p = PathBuf::from(first);
-            if p.exists() {
-                return Some(p);
-            }
-        }
-    }
-
-    None
 }
 
 /// 宿主二进制产物路径（workspace 共享 target 目录）

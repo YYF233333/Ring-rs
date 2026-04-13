@@ -6,8 +6,8 @@
 
 - Runtime 与 Host 分离
    - **`vn-runtime`**：纯逻辑核心（脚本解析/执行、状态管理、等待建模、产出 `Command`）
-   - **`host`**：IO/渲染/音频/输入/资源宿主（执行 `Command` 产生画面/音频/UI）
-   - Runtime **禁止**：引擎 API（winit/wgpu/egui）、IO、真实时间依赖
+   - **`host-dioxus`**：IO/渲染/音频/输入/资源宿主（Dioxus Desktop，执行 `Command` 产生画面/音频/UI）
+   - Runtime **禁止**：引擎 API、IO、真实时间依赖
    - Host **禁止**：脚本逻辑；直接修改 Runtime 内部状态
 
 - 显式状态、确定性执行

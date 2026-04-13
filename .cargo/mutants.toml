@@ -2,30 +2,11 @@
 #
 # 变异测试覆盖：
 # - `vn-runtime`：纯逻辑层，默认全量参与
-# - `host`：仅纳入可稳定单元测试的纯逻辑模块
-#
-# `host` 当前纳入 mutants 的模块：
-# - `host/src/command_executor/*`
-# - `host/src/resources/*`
-# - `host/src/save_manager/*`
-# - `host/src/config/*`
-# - `host/src/manifest/*`
-# - `host/src/input/*`
-# - `host/src/extensions/*`（排除纯 schema 的 `manifest.rs`）
-# - `host/src/renderer/render_state/mod.rs`
-# - `host/src/renderer/effects/resolver.rs`
-# - `host/src/renderer/scene_transition/*`
-#
-# `host` 中以下区域默认不参与：
-# - 真实窗口 / GPU / egui / rodio / FFmpeg 依赖
-# - App 生命周期、每帧 update、命令副作用胶水
-# - 低价值或噪音较高的 UI / 渲染辅助模块
 #
 # 运行方式：
 #   全量：cargo mutants -p vn-runtime
-#   host：cargo mutants -p host
-#   单文件：cargo mutants -p host --file "host/src/resources/mod.rs"
-#   列出变异：cargo mutants --list -p host
+#   单文件：cargo mutants -p vn-runtime --file "vn-runtime/src/state.rs"
+#   列出变异：cargo mutants --list -p vn-runtime
 
 # ---------------------------------------------------------------------------
 # 文件排除
@@ -33,59 +14,6 @@
 exclude_globs = [
     # thiserror derive，无手写逻辑
     "vn-runtime/src/error.rs",
-
-    # host 平台入口 / 重导出
-    "host/src/lib.rs",
-    "host/src/main.rs",
-    "host/src/host_app.rs",
-    "host/src/egui_actions.rs",
-
-    # host 框架 / 硬件 / 平台胶水
-    "host/src/egui_screens/**",
-    "host/src/backend/**",
-    "host/src/audio/**",
-    "host/src/video/**",
-
-    # host App 集成层
-    "host/src/app/app_mode/**",
-    "host/src/app/bootstrap.rs",
-    "host/src/app/command_handlers/**",
-    "host/src/app/draw.rs",
-    "host/src/app/engine_services.rs",
-    "host/src/app/init.rs",
-    "host/src/app/mod.rs",
-    "host/src/app/persistent.rs",
-    "host/src/app/save.rs",
-    "host/src/app/script_loader.rs",
-    "host/src/app/state.rs",
-    "host/src/app/update/**",
-
-    # host UI 噪音区
-    "host/src/ui/asset_cache.rs",
-    "host/src/ui/image_slider.rs",
-    "host/src/ui/layout/**",
-    "host/src/ui/mod.rs",
-    "host/src/ui/nine_patch.rs",
-    "host/src/ui/render_context.rs",
-    "host/src/ui/screen_defs/**",
-    "host/src/ui/toast.rs",
-
-    # host 渲染中暂不纳入 mutants 的区域
-    "host/src/rendering_types.rs",
-    "host/src/renderer/animation/**",
-    "host/src/renderer/background_transition.rs",
-    "host/src/renderer/character_animation.rs",
-    "host/src/renderer/draw_commands.rs",
-    "host/src/renderer/effects/mod.rs",
-    "host/src/renderer/effects/registry.rs",
-    "host/src/renderer/effects/request.rs",
-    "host/src/renderer/headless_tests/**",
-    "host/src/renderer/mod.rs",
-    "host/src/renderer/scene_effects.rs",
-    "host/src/renderer/transition.rs",
-
-    # host 低价值 schema
-    "host/src/extensions/manifest.rs",
 ]
 
 # ---------------------------------------------------------------------------
@@ -104,10 +32,6 @@ exclude_re = [
 
     # new() 构造函数如果只是设置默认值，变异意义不大
     "DiagnosticResult::new",
-
-    # host 中偏展示 / 格式化的辅助逻辑
-    "SaveInfo::formatted_timestamp",
-    "ResolvedEffect::kind_name",
 ]
 
 # ---------------------------------------------------------------------------

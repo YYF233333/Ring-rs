@@ -3,7 +3,7 @@
 ## Meta
 
 - Number: RFC-034
-- Status: Active
+- Status: Accepted
 - Author: Yufeng Ying
 - Date: 2026-04-13
 - Scope: host/, workspace config, CI, docs
@@ -105,9 +105,9 @@ No migration needed — `host/` is already inactive. Users and CI already use `h
 
 ## Acceptance Criteria
 
-- [ ] All Parity Bug Tracker items resolved
-- [ ] Manual play-through of reference project confirms equivalent experience
-- [ ] `host/` directory removed
-- [ ] All documentation references to old host updated or removed
-- [ ] `cargo check-all` passes
-- [ ] No remaining imports or references to `host` crate in workspace
+- [x] All Parity Bug Tracker items resolved
+- [x] Manual play-through of reference project confirms equivalent experience
+- [x] `host/` directory removed
+- [x] All documentation references to old host updated or removed
+- [x] `cargo check-all` passes
+- [x] No remaining imports or references to `host` crate in workspace

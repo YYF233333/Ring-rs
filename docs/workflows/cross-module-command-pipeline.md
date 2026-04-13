@@ -20,10 +20,8 @@ phase2 --> ScriptNode (AST)                 |
 Executor --> Command (+ WaitingReason)      |
   +-----------------------------------------+
   |  +-------------------------------------+
-  v  | host (rendering, audio, IO)         |
+  v  | host-dioxus (rendering, audio, IO)  |
 CommandExecutor --> RenderState + Output    |
-  |                                         |
-command_handlers --> Audio / Effects / UI    |
   +-----------------------------------------+
 ```
 
@@ -31,17 +29,7 @@ command_handlers --> Audio / Effects / UI    |
 
 ### Step 0 -- Orientation
 
-Read summaries before touching source:
-
-| What | Summary |
-|------|---------|
-| Command contract | `docs/engine/architecture/module-summaries/vn-runtime/command.md` |
-| Parser | `docs/engine/architecture/module-summaries/vn-runtime/parser.md` |
-| Executor | `docs/engine/architecture/module-summaries/vn-runtime/runtime.md` |
-| CommandExecutor | `docs/engine/architecture/module-summaries/host/command-executor.md` |
-| Command handlers | `docs/engine/architecture/module-summaries/host/app-command-handlers.md` |
-
-Then `rg` for a recent similar Command (e.g. `SceneEffect`, `TitleCard`, `ExtendText`) to see the pattern.
+Search for a recent similar Command (e.g. `SceneEffect`, `TitleCard`, `ExtendText`) to see the pattern.
 
 ### Step 1 -- Define the syntax (if new instruction)
 
@@ -85,29 +73,20 @@ File: `vn-runtime/src/runtime/executor/mod.rs`
 2. If the command should block script progression, set `ExecuteResult::waiting`.
 3. **Tests**: add executor unit tests verifying correct Command output.
 
-### Step 6 -- CommandExecutor (host side)
+### Step 6 -- CommandExecutor (host-dioxus)
 
-Files: `host/src/command_executor/mod.rs` + relevant sub-module
+File: `host-dioxus/src/command_executor.rs`
 
 1. Add a match arm in `execute()` dispatching to a handler function.
-2. The handler updates `RenderState` and writes to `self.last_output`.
-3. If the command needs a new sub-module (e.g. `host/src/command_executor/effects.rs`), create it and re-export.
-4. If a wait signal is needed, set `ExecuteOutput::wait_signal`.
+2. The handler updates `RenderState`.
 
-### Step 7 -- Command handlers (if side-effects needed)
-
-Files: `host/src/app/command_handlers/`
-
-1. If the command produces audio, effect, or animation outputs, add handling in the appropriate sub-module (`audio.rs`, `effect_applier.rs`).
-2. Consume the output from `CommandExecutor::last_output`.
-
-### Step 8 -- Diagnostics (if applicable)
+### Step 7 -- Diagnostics (if applicable)
 
 File: `vn-runtime/src/diagnostic/mod.rs`
 
 If the new syntax references resources or labels, update `extract_resource_references` or `analyze_script`.
 
-### Step 9 -- Verify
+### Step 8 -- Verify
 
 ```bash
 cargo check-all
@@ -115,11 +94,10 @@ cargo check-all
 cargo test -p vn-runtime --lib
 ```
 
-### Step 10 -- Update docs
+### Step 9 -- Update docs
 
 1. `docs/authoring/script-syntax.md` -- add syntax documentation.
-2. Module summaries -- update affected summaries (command, parser, command_executor, etc.).
-3. `docs/engine/architecture/navigation-map.md` -- add to common patterns if new.
+2. `docs/engine/architecture/navigation-map.md` -- add to common patterns if new.
 
 ## Checklist Template
 
@@ -133,11 +111,9 @@ New Command: [name]
 - [ ] phase2 parsing + tests
 - [ ] Command variant added in command/mod.rs
 - [ ] Executor mapping + tests
-- [ ] CommandExecutor handler (host)
-- [ ] command_handlers side-effects (if needed)
+- [ ] CommandExecutor handler (host-dioxus)
 - [ ] Diagnostic rules (if needed)
 - [ ] cargo check-all passes
-- [ ] Module summaries updated
 ```
 
 ## Extending an Existing Command
@@ -147,13 +123,12 @@ When adding fields to an existing variant (e.g. adding `inline_effects` to `Show
 1. Update `Command` variant in `command/mod.rs`.
 2. Update `Executor` to populate the new field.
 3. Update `CommandExecutor` to consume it.
-4. Update downstream handlers if the new field produces side-effects.
-5. Check `save.rs` -- if the field affects saveable state, update save/restore logic.
-6. Update tests at each layer.
+4. Check `save.rs` -- if the field affects saveable state, update save/restore logic.
+5. Update tests at each layer.
 
 ## Common Pitfalls
 
-- Repository-wide recurring pitfalls (host-side match omissions, `SIGNAL_*` mismatches, source map drift) are tracked in `docs/maintenance/lessons-learned.md`.
+- Repository-wide recurring pitfalls (`SIGNAL_*` mismatches, source map drift) are tracked in `docs/maintenance/lessons-learned.md`.
 - **Transition args**: Use structured `Transition`/`TransitionArg` types, not raw strings.
 
 ## Reference: Recent Command Additions
@@ -162,7 +137,7 @@ Search the codebase for these patterns to see complete examples:
 
 | Command | RFC/Feature | Key files |
 |---------|-------------|-----------|
-| `SceneEffect` | Effects system | `ast/mod.rs`, `executor/mod.rs`, `command/mod.rs`, `command_executor/effects.rs` |
+| `SceneEffect` | Effects system | `ast/mod.rs`, `executor/mod.rs`, `command/mod.rs`, `command_executor.rs` |
 | `TitleCard` | Title card display | Same pipeline |
-| `ExtendText` | RFC-006 rhythm tags | `inline_tags.rs`, `ast/mod.rs`, `executor/mod.rs`, `command/mod.rs`, `command_executor/ui.rs` |
-| `BgmDuck/Unduck` | Audio ducking | `executor/mod.rs`, `command/mod.rs`, `command_executor/audio.rs` |
+| `ExtendText` | RFC-006 rhythm tags | `inline_tags.rs`, `ast/mod.rs`, `executor/mod.rs`, `command/mod.rs`, `command_executor.rs` |
+| `BgmDuck/Unduck` | Audio ducking | `executor/mod.rs`, `command/mod.rs`, `command_executor.rs` |
