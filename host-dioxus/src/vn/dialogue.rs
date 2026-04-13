@@ -1,17 +1,20 @@
 use dioxus::prelude::*;
 
+use vn_runtime::command::TextMode;
+
 use crate::render_state::RenderState;
 
 /// ADV 对话框组件：显示说话人 + 打字机文本 + 推进指示器。
 ///
 /// 打字机效果由后端 `process_tick` 驱动 `visible_chars` 递增，
 /// 前端只负责截取对应长度的文本渲染。
+/// NVL 模式下不渲染（NVL 有独立的全屏面板）。
 #[component]
 pub fn DialogueBox(render_state: Signal<RenderState>) -> Element {
     let rs = render_state.read();
 
-    // 不可见或无对话时不渲染
-    if !rs.ui_visible {
+    // NVL 模式、不可见、或无对话时不渲染
+    if rs.text_mode == TextMode::NVL || !rs.ui_visible {
         return rsx! {};
     }
     let dialogue = match &rs.dialogue {

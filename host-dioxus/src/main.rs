@@ -10,6 +10,7 @@ pub mod headless_cli;
 pub mod init;
 pub mod layout_config;
 pub mod manifest;
+pub mod map_data;
 pub mod render_state;
 pub mod resources;
 pub mod save_manager;
@@ -143,6 +144,7 @@ body {
     height: 278px;
     z-index: 50;
     cursor: pointer;
+    user-select: none;
     /* NinePatch textbox 背景 */
     border-image-source: url("http://ring-asset.localhost/gui/textbox.png");
     border-image-slice: 30 30 30 30 fill;
@@ -202,6 +204,7 @@ body {
     align-items: flex-start;
     justify-content: center;
     cursor: pointer;
+    user-select: none;
 }
 
 .vn-nvl__scroll {
@@ -357,13 +360,13 @@ body {
     max-height: 100%;
 }
 
-/* === Quick Menu（对话框正下方居中） === */
+/* === Quick Menu（对话框内部底边居中） === */
 .vn-quick-menu {
     position: absolute;
-    bottom: 278px;  /* 紧贴对话框上方（对话框高 278px） */
+    bottom: 4px;  /* 对话框内部底边，留 4px 边距 */
     left: 50%;
     transform: translateX(-50%);
-    z-index: 45;
+    z-index: 55;  /* 高于对话框 z-index:50 */
     display: flex;
     gap: 0;
 }
@@ -386,6 +389,76 @@ body {
 
 .vn-quick-menu__btn--active {
     color: var(--ui-hover);
+}
+
+/* === Map Overlay (showMap) === */
+.vn-map-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 75;
+    background: rgba(0, 0, 0, 0.85);
+    user-select: none;
+}
+
+.vn-map-overlay__bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.vn-map-overlay__title {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: var(--font-label);
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    z-index: 1;
+}
+
+.vn-map-overlay__btn {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 50px;
+    border: 1.5px solid rgb(100, 149, 237);
+    border-radius: 8px;
+    background: rgba(40, 40, 60, 0.8);
+    color: #ccc;
+    font-size: 20px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    z-index: 1;
+}
+
+.vn-map-overlay__btn:hover {
+    background: rgba(80, 80, 120, 0.9);
+    color: #fff;
+}
+
+.vn-map-overlay__btn--disabled {
+    border-color: rgb(80, 80, 80);
+    background: rgba(60, 60, 60, 0.7);
+    color: rgb(100, 100, 100);
+    cursor: not-allowed;
+}
+
+/* === Minigame Overlay (callGame iframe) === */
+.vn-minigame-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 75;
+    background: #000;
+}
+
+.vn-minigame-overlay__frame {
+    width: 100%;
+    height: 100%;
+    border: none;
 }
 
 /* === Skip Mode: instantly resolve all CSS transitions === */
@@ -994,6 +1067,12 @@ fn main() {
 // ring-asset custom protocol handler
 // ---------------------------------------------------------------------------
 
+/// 小游戏完成结果的全局存储。
+///
+/// 游戏 iframe 通过 fetch `/__game_complete?result=xxx` 写入，
+/// `MinigameOverlay` 轮询读取。
+pub static GAME_COMPLETE_RESULT: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 fn ring_asset_handler(
     _id: dioxus::desktop::wry::WebViewId,
     request: http::Request<Vec<u8>>,
@@ -1001,6 +1080,40 @@ fn ring_asset_handler(
     let uri = request.uri().to_string();
     let raw_path = request.uri().path();
     let path_clean = percent_decode(raw_path.trim_start_matches('/'));
+
+    // ── 小游戏完成端点（iframe 导航触发） ──
+    if path_clean.starts_with("__game_complete") {
+        let query = request.uri().query().unwrap_or("");
+        let result = query
+            .split('&')
+            .find_map(|kv| {
+                let (k, v) = kv.split_once('=')?;
+                (k == "result").then(|| percent_decode(v))
+            })
+            .unwrap_or_default();
+        tracing::debug!(result = %result, "game complete via ring-asset");
+        if let Ok(mut slot) = GAME_COMPLETE_RESULT.lock() {
+            *slot = Some(result);
+        }
+        // 纯黑空页面，与覆盖层背景一致，无视觉闪烁
+        let body = br#"<!DOCTYPE html><html><body style="background:#000;margin:0"></body></html>"#;
+        return http::Response::builder()
+            .status(200)
+            .header("Content-Type", "text/html")
+            .body(Cow::from(body.to_vec()))
+            .unwrap();
+    }
+
+    // ── 虚拟 engine-sdk.js（兼容游戏显式 <script src="../../engine-sdk.js"> 加载） ──
+    if path_clean == "engine-sdk.js" {
+        return http::Response::builder()
+            .status(200)
+            .header("Content-Type", "application/javascript")
+            .header("Access-Control-Allow-Origin", "*")
+            .body(Cow::from(GAME_ENGINE_SDK_JS.as_bytes().to_vec()))
+            .unwrap();
+    }
+
     let assets_root = find_assets_root();
     let full_path = assets_root.join(&path_clean);
 
@@ -1009,12 +1122,22 @@ fn ring_asset_handler(
     let mime = guess_mime(&path_clean);
 
     match std::fs::read(&full_path) {
-        Ok(bytes) => http::Response::builder()
-            .status(200)
-            .header("Content-Type", mime)
-            .header("Access-Control-Allow-Origin", "*")
-            .body(Cow::from(bytes))
-            .unwrap(),
+        Ok(bytes) => {
+            // games/*/**.html: 自动注入 engine JS SDK（postMessage 桥接）
+            let body = if path_clean.starts_with("games/") && mime == "text/html" {
+                let html = String::from_utf8_lossy(&bytes);
+                let injected = inject_engine_sdk(&html);
+                Cow::from(injected.into_bytes())
+            } else {
+                Cow::from(bytes)
+            };
+            http::Response::builder()
+                .status(200)
+                .header("Content-Type", mime)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(body)
+                .unwrap()
+        }
         Err(e) => {
             tracing::warn!(path = %path_clean, error = %e, "ring-asset 404");
             http::Response::builder()
@@ -1081,6 +1204,84 @@ fn guess_mime(path: &str) -> &'static str {
         _ => "application/octet-stream",
     }
 }
+
+// ---------------------------------------------------------------------------
+// Game engine JS SDK injection (for callGame iframe)
+// ---------------------------------------------------------------------------
+
+/// 向游戏 HTML 注入 engine JS SDK。
+///
+/// 在 `<head>` 标签后（或文档开头）插入 SDK script。
+/// SDK 通过 `window.parent.postMessage` 与宿主通信。
+fn inject_engine_sdk(html: &str) -> String {
+    let sdk_tag = format!("<script>{GAME_ENGINE_SDK_JS}</script>");
+    // 在 <head> 后注入，如果没有 <head> 则在开头注入
+    if let Some(pos) = html.find("<head>") {
+        let insert_pos = pos + "<head>".len();
+        format!("{}{sdk_tag}{}", &html[..insert_pos], &html[insert_pos..])
+    } else if let Some(pos) = html.find("<HEAD>") {
+        let insert_pos = pos + "<HEAD>".len();
+        format!("{}{sdk_tag}{}", &html[..insert_pos], &html[insert_pos..])
+    } else {
+        format!("{sdk_tag}{html}")
+    }
+}
+
+/// 同源 fetch-based engine JS SDK。
+///
+/// 提供与旧 host HTTP Bridge SDK 兼容的 `window.engine.*` API，
+/// 内部使用同源 fetch 到 `ring-asset` handler 的虚拟端点通信。
+///
+/// 关键路径：`engine.complete(result)` → fetch `/__game_complete?result=xxx`
+/// → ring-asset handler 存入 static → Rust 轮询读取。
+const GAME_ENGINE_SDK_JS: &str = r#"
+(function() {
+    if (window.engine) return;
+    window.engine = {
+        complete: function(result) {
+            var r = result !== undefined && result !== null ? String(result) : "";
+            window.location.href = "/__game_complete?result=" + encodeURIComponent(r);
+        },
+        onComplete: function(result) {
+            window.engine.complete(result);
+        },
+        playSound: function(name) {
+            console.log("[engine SDK] playSound: " + name);
+        },
+        playBGM: function(name, shouldLoop) {
+            console.log("[engine SDK] playBGM: " + name);
+        },
+        stopBGM: function() {
+            console.log("[engine SDK] stopBGM");
+        },
+        getState: function(key) {
+            console.warn("[engine SDK] getState not yet supported in iframe mode");
+            return Promise.resolve(undefined);
+        },
+        setState: function(key, value) {
+            console.warn("[engine SDK] setState not yet supported in iframe mode");
+            return Promise.resolve();
+        },
+        log: function(level, message) {
+            console.log("[game:" + level + "] " + message);
+        }
+    };
+
+    // 旧 API 兼容：window.ipc.postMessage 映射
+    if (!window.ipc) {
+        window.ipc = {
+            postMessage: function(jsonStr) {
+                try {
+                    var msg = JSON.parse(jsonStr);
+                    if (msg.type === "onComplete") {
+                        window.engine.complete(msg.result || msg.data);
+                    }
+                } catch(e) {}
+            }
+        };
+    }
+})();
+"#;
 
 // ---------------------------------------------------------------------------
 // App 初始化状态

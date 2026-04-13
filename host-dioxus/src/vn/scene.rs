@@ -9,6 +9,8 @@ use super::chapter_mark::ChapterMark;
 use super::character::CharacterLayer;
 use super::choice::ChoicePanel;
 use super::dialogue::DialogueBox;
+use super::map_overlay::MapOverlay;
+use super::minigame_overlay::MinigameOverlay;
 use super::nvl::NvlPanel;
 use super::quick_menu::QuickMenu;
 use super::rule_transition::RuleTransitionCanvas;
@@ -87,6 +89,8 @@ pub fn VNScene(render_state: Signal<RenderState>) -> Element {
             ChapterMark { render_state }
             TitleCard { render_state }
             VideoOverlay { render_state }
+            MapOverlay { render_state }
+            MinigameOverlay { render_state }
             QuickMenu { render_state }
             AudioBridge { render_state }
         }

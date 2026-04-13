@@ -1,19 +1,21 @@
 use dioxus::prelude::*;
 
+use vn_runtime::command::TextMode;
+
 use crate::render_state::{HostScreen, PlaybackMode, RenderState};
 use crate::screen_defs::ActionDef;
 use crate::state::AppState;
 
 /// 底部快捷菜单（数据驱动，从 screens.json quick_menu.buttons 渲染）
 ///
-/// 位于对话框正上方居中。仅在 InGame 模式且 UI 可见时显示。
+/// 位于对话框内部底边居中。仅在 InGame + ADV 模式且 UI 可见时显示。
 #[component]
 pub fn QuickMenu(render_state: Signal<RenderState>) -> Element {
     let app_state = use_context::<AppState>();
     let rs = render_state.read();
 
-    // 仅在 InGame + ui_visible 时显示
-    if rs.host_screen != HostScreen::InGame || !rs.ui_visible {
+    // 仅在 InGame + ADV 模式 + ui_visible 时显示（NVL 模式无 quick menu）
+    if rs.host_screen != HostScreen::InGame || rs.text_mode == TextMode::NVL || !rs.ui_visible {
         return rsx! {};
     }
 
