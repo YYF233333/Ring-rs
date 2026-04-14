@@ -180,7 +180,7 @@
       series: [
         timeSeries('workspace', dates, data.map(function (d) { return d.metrics.coverage.workspace; }), COLORS.blue),
         timeSeries('vn-runtime', dates, data.map(function (d) { return d.metrics.coverage.vn_runtime; }), COLORS.green),
-        timeSeries('host', dates, data.map(function (d) { return d.metrics.coverage.host; }), COLORS.orange),
+        timeSeries('host-dioxus', dates, data.map(function (d) { return d.metrics.coverage.host_dioxus; }), COLORS.orange),
       ],
     });
     return chart;
@@ -231,7 +231,7 @@
       series: [
         timeSeries('effective LOC', dates, data.map(function (d) { return d.metrics.effective_loc; }), COLORS.cyan, { areaStyle: { color: 'rgba(38,198,218,0.08)' } }),
         timeSeries('vn-runtime (code)', dates, data.map(function (d) { return d.metrics.tokei_rust.vn_runtime.code; }), COLORS.green),
-        timeSeries('host (code)', dates, data.map(function (d) { return d.metrics.tokei_rust.host.code; }), COLORS.blue),
+        timeSeries('host-dioxus (code)', dates, data.map(function (d) { return d.metrics.tokei_rust.host_dioxus.code; }), COLORS.blue),
         timeSeries('xtask (code)', dates, data.map(function (d) { return d.metrics.tokei_rust.xtask.code; }), COLORS.purple),
       ],
     });

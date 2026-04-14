@@ -103,6 +103,17 @@ jobs:
           $secs = [math]::Round($t.TotalSeconds, 1)
           echo "BUILD_RELEASE_SECS=$secs" >> $env:GITHUB_ENV
 
+      - name: "Metric: binary size"
+        shell: pwsh
+        run: |
+          $exe = "target/release/host-dioxus.exe"
+          if (Test-Path $exe) {
+            $size = (Get-Item $exe).Length
+          } else {
+            $size = 0
+          }
+          echo "BINARY_RELEASE=$size" >> $env:GITHUB_ENV
+
       # ── Phase 4: coverage + test count ──
 
       - name: "Metric: coverage (llvm-cov JSON)"
@@ -237,7 +248,7 @@ jobs:
                 host_dioxus = [double]$env:COV_DIOXUS
               }
               binary_size_bytes = @{
-                host_release = 0
+                host_release = [long]$env:BINARY_RELEASE
               }
               build_time_secs = @{
                 release_clean = [double]$env:BUILD_RELEASE_SECS
