@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-017
-- 状态：Proposed
+- 状态：Superseded（旧 host 已退役；egui overlay 不适用于 Dioxus Desktop）
 - 作者：Ring-rs 开发组
 - 日期：2026-03-18
 - 相关范围：`host::config`、`host::input`、`host::host_app`、`host::egui_screens`、`host::backend`、`host::renderer::render_state`、`host::audio`、`vn-runtime::state`

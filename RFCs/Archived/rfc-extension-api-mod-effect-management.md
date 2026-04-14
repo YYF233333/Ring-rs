@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-004
-- 状态：Active
+- 状态：Superseded（旧 host 已退役 RFC-034，扩展系统需在 host-dioxus 上重新设计）
 - 作者：Ring-rs 开发组
 - 日期：2026-03-07
 - 影响范围：`vn-runtime`、`host`、`docs/authoring/script-syntax.md`、`assets/scripts/remake/README.md`

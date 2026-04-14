@@ -3,31 +3,39 @@
 ## 元信息
 
 - 编号：RFC-027
-- 状态：Proposed
+- 状态：Proposed（需 spike 验证 Dioxus JS interop）
 - 作者：claude-4.6-opus
-- 日期：2026-03-24
-- 影响范围：`host`（新增 scripting 模块）、mode 框架（RFC-026）
-- 前置：RFC-026（统一 Game Mode 框架）
-- 父 RFC：RFC-024（VN+ Hub 架构愿景）
+- 日期：2026-03-24（v1 Lua）；2026-04-14（v2 WebView JS 注入）
+- 影响范围：`host-dioxus/`（新增 GameModeHost 组件 + JS bridge）
+- 前置：无（RFC-026 已 Superseded，GameModeHost 直接作为 Dioxus 组件实现）
+- 父 RFC：RFC-024（VN+ Hub 架构愿景 v3）
 
 ---
 
 ## 背景
 
-Hub 架构（RFC-024）中，原生玩法 mode 的逻辑分为两层：
+Hub 架构（RFC-024 v3）中，Ring Engine 分为两层运行时：
 
-- **Rust 框架层**：mode 骨架、状态机、渲染、共享服务调用——由引擎维护者编写
-- **脚本逻辑层**：具体游戏规则、AI 行为、胜负判定、数值公式——由玩法程序员编写
+- **VN 核心**：Dioxus RSX 组件，与 vn-runtime 同进程，类型安全，零 IPC
+- **玩法模态**：非 VN 的游戏玩法段落（卡牌、战棋、资源经营等），由脚本驱动叙事中断
 
-这种分层的动机是团队分工：
+玩法模态的设计约束：
 
-- 引擎维护者熟悉 Rust，负责框架和基础设施
-- 玩法程序员来自 Godot 背景，会编码但不会 Rust，是非 VN 内容的**主导者**
-- 玩法逻辑需要高频迭代（数值调整、规则变更），热重载是刚需
+1. **玩法程序员熟悉 GDScript/JS，不熟悉 Rust**——入口语言不能是 Rust
+2. **高频迭代**——数值调整、规则变更需要热重载，不能每次改动等 Rust 编译
+3. **UI 多样性高**——卡牌界面、战棋地图、模拟面板各不相同，需要强表现力
+4. **AI 辅助是主力**——vibe coding 场景下，语言的 AI 编码能力是核心约束
 
-需要嵌入一种脚本语言，作为 Rust 框架和玩法程序员之间的桥梁。
+### v1 → v2 的演进
 
-**实施时机：等待第一个非 VN 项目进入预生产，先做 spike 原型验证，再正式实施。**
+v1 选择嵌入 Lua（mlua），理由是 GDScript 用户友好度和游戏行业验证。
+
+v2 改为 WebView JS 注入。原因：
+
+- Dioxus Desktop 底层即 WebView（wry/tao），**JS 运行时已经存在**，无需引入额外依赖
+- 玩法 mode 的 UI 可以**直接用 HTML/CSS 渲染**，表现力远超任何嵌入式脚本的 UI 绑定层
+- **Web 是 AI 编码能力最强的领域**（训练数据最丰富、生态最成熟）
+- Lua 的 UI 渲染需要额外绑定层（绑到 Dioxus 或 egui），成本高且表现力受限
 
 ---
 
@@ -35,155 +43,150 @@ Hub 架构（RFC-024）中，原生玩法 mode 的逻辑分为两层：
 
 ### 目标
 
-- 选定嵌入脚本语言，定义选型标准和候选评估
-- 设计 Rust ↔ 脚本的 API 边界（mode 框架向脚本暴露什么能力）
-- 支持热重载：修改脚本文件后无需重新编译即可看到效果
-- 玩法程序员不需要 Rust 知识即可编写完整的游戏规则
+- 玩法 mode 用 JS/TS + HTML/CSS 编写，通过 Dioxus WebView 注入运行
+- 定义 Rust ↔ JS bridge API（变量读写、音频、资源、mode 生命周期）
+- 支持热重载：修改 JS/HTML/CSS 后无需重编译 Rust 即可看到效果
+- 玩法程序员不需要 Rust 知识即可编写完整的游戏玩法
 
 ### 非目标
 
-- 替代 vn-runtime 的叙事脚本——叙事用 `.rks`，玩法用嵌入脚本，两者共存
-- 脚本语言的可视化编辑器
-- 脚本之间的跨 mode 调用
-- 现在就选定语言——本 RFC 提供评估框架，最终选型由 spike 结果决定
+- 替代 vn-runtime 的叙事脚本——叙事用 `.rks`，玩法用 JS，两者共存
+- 在 VN 核心组件中使用 JS——JS 仅限 GameModeHost 容器内
+- 引入 npm/node_modules 到主项目——玩法 mode 的 JS 自包含，不依赖构建工具
+- 现在就实施——本 RFC 在 spike 验证 Dioxus JS interop 后正式启动
 
 ---
 
-## 脚本语言选型
+## 技术方案：WebView JS 注入
 
-### 选型标准
+### 为什么是 JS 而非 Lua
 
-| 标准 | 权重 | 说明 |
+| 维度 | Lua 嵌入（v1） | WebView JS 注入（v2） |
+|------|---------------|---------------------|
+| 运行时 | mlua（额外依赖） | WebView 内置（零额外依赖） |
+| UI 渲染 | 需绑定到 Dioxus/egui | **原生 HTML/CSS/Canvas** |
+| 表现力 | 受限于绑定层 | **完整 Web 能力** |
+| AI 编码 | 中等 | **最强** |
+| 热重载 | `dofile()` 重载 | 重新注入 JS/HTML |
+| 上手成本 | GDScript→Lua 低 | GDScript→JS 低 |
+| 调试工具 | print + 自建 REPL | **浏览器 DevTools**（已有） |
+
+关键优势：玩法 mode 的 UI **直接就是 Web 页面**。卡牌界面用 CSS Grid，战棋地图用 Canvas，经营面板用 Flexbox——这些都是 Web 前端的绝对强项，不需要任何额外绑定层。
+
+### Dioxus JS Interop 机制
+
+Dioxus 0.7 Desktop 提供的 WebView 交互能力：
+
+| 方向 | 机制 | 用途 |
 |------|------|------|
-| GDScript 用户上手成本 | 高 | 玩法程序员的背景是 Godot/GDScript |
-| Rust 嵌入成熟度 | 高 | 绑定库质量、文档、社区 |
-| 热重载支持 | 高 | 迭代效率的核心需求 |
-| 运行时性能 | 中 | VN 品类玩法多为回合制，不需要极致性能 |
-| 生态/社区 | 中 | 遇到问题时有参考资料 |
-| 二进制体积影响 | 低 | 不是关键约束 |
+| Rust → JS | `eval()` / `document.eval()` | 注入 mode HTML/JS/CSS、调用 JS 函数 |
+| JS → Rust | Custom event + `use_eval` 回调 | mode 完成通知、状态变更请求 |
+| 资源访问 | 资源 URL（ResourceManager 提供路径） | 图片/音频/配置文件 |
 
-### 候选评估
+> **待 spike 验证**：`eval()` 的双向通信稳定性、HTML 子树注入可行性、与 RSX 渲染的隔离性。
 
-#### Lua（初步倾向）
+### 玩法 Mode 文件结构
 
-| 维度 | 评估 |
-|------|------|
-| 上手成本 | **低**。GDScript 和 Lua 同为动态类型命令式脚本，设计哲学接近 |
-| Rust 绑定 | **mlua**：成熟、活跃维护、支持 Lua 5.4/LuaJIT、async 友好 |
-| 热重载 | **原生支持**。重新 `dofile()` 即可，无需特殊机制 |
-| 性能 | 对回合制玩法绰绰有余；如需更高性能可切换 LuaJIT |
-| 生态 | **极成熟**。游戏行业标配（Love2D、Defold、WoW、Factorio 等） |
-| 风险 | 1-indexed 数组（GDScript 是 0-indexed）；标准库极简需自行补充工具函数 |
-
-#### Rhai
-
-| 维度 | 评估 |
-|------|------|
-| 上手成本 | **中**。语法偏 Rust，GDScript 用户需适应 |
-| Rust 绑定 | **原生 Rust crate**，无 FFI，类型安全边界最好 |
-| 热重载 | 支持（重新编译脚本） |
-| 性能 | 解释执行，比 Lua 慢，但对回合制够用 |
-| 生态 | 小众，参考资料少 |
-| 风险 | 社区较小，遇到问题可能无参考 |
-
-#### JavaScript（QuickJS 嵌入）
-
-| 维度 | 评估 |
-|------|------|
-| 上手成本 | **中高**。GDScript 用户需学 JS 范式 |
-| Rust 绑定 | rquickjs：可用但不如 mlua 成熟 |
-| 热重载 | 支持 |
-| 性能 | 够用 |
-| 生态 | 最大，但游戏嵌入场景的参考较少 |
-| 风险 | 如果团队未来也走 WebView 路线，可统一语言；否则引入 JS 生态增加复杂度 |
-
-### 初步倾向：Lua
-
-Lua 在"GDScript 用户友好度"和"游戏行业验证"两个高权重维度上领先。最终选型需通过 spike 验证。
-
----
-
-## API 边界设计（草案）
-
-### Rust 侧暴露给脚本的能力
-
-```lua
--- 共享服务
-audio.play_bgm("battle_theme.ogg", { fade_in = 1.0 })
-audio.play_sfx("card_play.ogg")
-resources.load_image("cards/fireball.png")
-
--- 游戏状态（由 Rust 框架管理，脚本读写）
-state.get("player_hp")
-state.set("player_hp", 42)
-
--- 叙事变量（只读，来自 RuntimeState.variables）
-story.get("player_deck")
-story.get("difficulty_level")
-
--- UI 构建（通过绑定 egui 或自定义 UI DSL）
-ui.button("出牌", { x = 100, y = 200 })
-ui.label("HP: " .. state.get("player_hp"))
-
--- 完成模态，回传结果
-mode.complete({ winner = "player", turns = 5 })
+```
+assets/modes/card-battle/
+├── index.html       # Mode 入口页面
+├── main.js          # 玩法逻辑
+├── style.css        # 玩法 UI 样式
+└── manifest.json    # 元信息（mode_id, version, entry）
 ```
 
-### 脚本侧结构
+Mode 自包含，不依赖 npm、不依赖构建工具。可以用 vanilla JS，也可以用编辑器内置的 TS 类型检查（通过 JSDoc 注释）。
 
-```lua
--- modes/card_battle/main.lua
+### Rust ↔ JS Bridge API
 
-function on_activate(params)
-    -- 初始化游戏状态
-    local deck = params.deck
-    local enemy = params.enemy
-    state.set("player_hp", 100)
-    state.set("enemy_hp", enemy.hp)
-    -- 洗牌、发牌等
-end
+GameModeHost 在注入 mode 时，向 WebView 全局注入 `ring` bridge 对象：
 
-function on_update(dt)
-    -- 每帧逻辑（回合制可能大部分帧无操作）
-    if state.get("enemy_hp") <= 0 then
-        mode.complete({ winner = "player" })
-    end
-end
+```javascript
+// ── 游戏状态（mode 自己的状态，Rust 持久化） ──
+ring.state.get("player_hp")           // → number | string | null
+ring.state.set("player_hp", 42)
 
-function on_render()
-    -- UI 渲染（或由 Rust 框架根据状态自动渲染）
-end
+// ── 叙事变量（来自 RuntimeState.variables，只读） ──
+ring.story.get("player_deck")         // → value
+ring.story.get("difficulty_level")
 
-function on_card_played(card_id)
-    -- 具体出牌逻辑
-end
+// ── 音频 ──
+ring.audio.playBgm("battle_theme.ogg", { fadeIn: 1.0 })
+ring.audio.playSfx("card_play.ogg")
+ring.audio.stopBgm({ fadeOut: 0.5 })
+
+// ── 资源 ──
+ring.assets.url("cards/fireball.png") // → 可用于 <img src="..."> 的 URL
+
+// ── Mode 生命周期 ──
+ring.mode.complete({ winner: "player", turns: 5 })  // 结束 mode，回传结果
+ring.mode.cancel()                                    // 取消 mode（异常退出）
 ```
+
+Rust 侧 `GameModeHost` 拦截 bridge 调用，转发到对应的共享服务（AudioManager、ResourceManager、RuntimeState.variables）。
 
 ### 热重载流程
 
-1. 文件监听器检测到 `.lua` 文件变更
-2. 重新执行 `dofile("main.lua")`
-3. 保留 `state` 数据，重新绑定函数
-4. 下一帧自动使用新逻辑
+1. 文件监听器（仅 debug build）检测到 `assets/modes/` 下文件变更
+2. GameModeHost 重新注入 mode 的 HTML/JS/CSS
+3. 保留 `ring.state` 数据（Rust 侧持有），JS 侧重新加载逻辑
+4. 下一帧自动使用新代码
+
+---
+
+## GameModeHost 组件设计
+
+```rust
+/// 玩法模态容器
+///
+/// 进入 mode 时占据全屏（隐藏 VN 渲染层），
+/// 注入 mode 的 JS/HTML/CSS 到 WebView 容器中。
+#[component]
+fn GameModeHost(
+    mode_id: String,
+    params: HashMap<String, VarValue>,
+    on_complete: EventHandler<GameModeResult>,
+) -> Element {
+    // 1. 从 ResourceManager 加载 mode 的 manifest + 入口文件
+    // 2. 注入 ring bridge 对象到 WebView 全局
+    // 3. 注入 mode 的 HTML/JS/CSS
+    // 4. 监听 ring.mode.complete/cancel 事件
+    // 5. 收到完成事件后调用 on_complete
+    todo!()
+}
+```
+
+VN 叙事与 GameModeHost 的关系：**VN 是默认态，GameModeHost 是中断态**。`Command::RequestUI` 触发切换，mode 完成后 `RuntimeInput::UIResult` 回传结果。
 
 ---
 
 ## 实施路径
 
-### Spike 阶段（1 周，第一个非 VN 项目预生产时）
+### Spike 阶段（第一个非 VN 项目预生产时触发）
 
-1. 集成 `mlua`（或 Rhai）到 host
-2. 实现最小 API 绑定（state get/set + mode.complete）
-3. 让玩法程序员用脚本写一个最简化的玩法原型（如简化版卡牌出牌）
-4. 评估开发体验：上手难度、调试能力、热重载流畅度
-5. 根据 spike 结果确认选型或调整方向
+1. **Dioxus JS interop PoC**：
+   - 测试 `eval()` 双向通信（Rust→JS 调用、JS→Rust 事件）
+   - 测试在 WebView 中注入完整 HTML 子树
+   - 测试 JS 注入与 Dioxus RSX 渲染的隔离性（互不干扰）
+   - 测试 mode 退出后 JS 上下文清理
+2. **最小玩法原型**：
+   - 用 vanilla JS + HTML/CSS 实现一个最简化的卡牌出牌界面
+   - 验证 `ring.state` 读写、`ring.mode.complete()` 回调
+   - 玩法程序员试用，评估开发体验
 
-### 正式实施（spike 验证通过后）
+### Phase 1：GameModeHost 框架（spike 通过后）
 
-1. 完善 API 绑定（音频、资源、UI）
-2. 建立脚本项目结构规范（目录布局、入口文件、配置）
-3. 错误处理与诊断（脚本运行时错误 → 引擎日志/toast）
-4. 编写玩法程序员文档（API 参考、示例、从 GDScript 迁移指南）
+1. 实现 `GameModeHost` Dioxus 组件
+2. 实现 `ring` bridge 对象（state/story/audio/assets/mode）
+3. 实现 mode manifest 加载与入口注入
+4. 热重载支持（debug build）
+5. 错误处理：JS 运行时错误 → Rust 日志/toast，不崩溃引擎
+
+### Phase 2：首个生产 mode
+
+1. 用第一个具体玩法项目验证完整开发流程
+2. 根据实际需求迭代 bridge API
+3. 编写玩法程序员文档（API 参考、示例、项目结构规范）
 
 ---
 
@@ -191,22 +194,23 @@ end
 
 | 风险 | 缓解 |
 |------|------|
-| 脚本语言选错 | spike 阶段验证，选型不锁死 |
-| API 边界设计不合理 | 从最小 API 开始，根据实际需求增长 |
-| Rust ↔ 脚本的数据传递性能问题 | 回合制玩法调用频率低，不太可能成为瓶颈 |
-| 玩法程序员不适应 Lua | GDScript → Lua 的迁移成本低；如实在不适应可考虑 Rhai 或 JS |
-| 调试体验不如 Godot 编辑器 | 提供 print 调试 + 热重载快速迭代；后续可加 REPL |
+| Dioxus JS interop 不够稳定 | spike 阶段验证；最坏情况回退到 Lua 嵌入（v1 方案仍可用） |
+| JS 注入干扰 Dioxus RSX 渲染 | GameModeHost 激活时隐藏 VN 层；容器隔离 |
+| mode 退出后 JS 上下文泄漏 | 销毁+重建容器策略；泄漏检测 |
+| bridge API 设计不合理 | 从最小 API 开始，根据首个 mode 实际需求增长 |
+| 玩法程序员不适应 JS | JS 是 Web 最主流语言；AI 辅助最强；GDScript→JS 门槛低 |
+| 无具体玩法项目需求 | 明确触发条件：第一个非 VN 项目进入预生产前仅做 spike |
 
 ---
 
 ## 验收标准
 
-- [ ] 脚本语言选型确定（spike 验证通过）
-- [ ] mlua（或选定方案）集成到 host，编译通过
-- [ ] 最小 API 绑定：state get/set、audio play、mode.complete
-- [ ] 热重载：修改脚本文件后无需重启即可生效
-- [ ] 至少一个完整玩法原型通过脚本实现
+- [ ] Dioxus JS interop spike 通过（eval 双向通信、HTML 注入、隔离性验证）
+- [ ] `GameModeHost` Dioxus 组件实现，支持 mode 注入与生命周期管理
+- [ ] `ring` bridge API：state get/set、story get、audio play、assets url、mode complete/cancel
+- [ ] 热重载：修改 mode 的 JS/HTML/CSS 后无需重启即可生效
+- [ ] 至少一个完整玩法原型通过 JS 实现
 - [ ] 玩法程序员反馈开发体验可接受
-- [ ] 错误处理：脚本运行时错误不导致引擎崩溃
-- [ ] API 参考文档
+- [ ] JS 运行时错误不导致引擎崩溃
+- [ ] mode 退出后资源正确清理
 - [ ] `cargo check-all` 通过

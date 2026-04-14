@@ -27,7 +27,7 @@
 | RFC-001 | 对话语音标注与自动播放管线 | `rfc-dialogue-voice-pipeline.md` | Proposed |
 | RFC-002 | ref-project 重制体验等价计划 | `rfc-remake-experience-equivalence.md` | Active |
 | RFC-003 | `show` 语义收敛与人体工学优先 | `rfc-show-unification-ergonomics.md` | Accepted |
-| RFC-004 | 扩展 API 与 Mod 化效果管理 | `rfc-extension-api-mod-effect-management.md` | Active |
+| RFC-004 | 扩展 API 与 Mod 化效果管理 | `rfc-extension-api-mod-effect-management.md` | Superseded（旧 host 退役，需在 host-dioxus 重新设计） |
 | RFC-005 | 对话内联差分语法 | `rfc-inline-sprite-in-dialogue.md` | Proposed |
 | RFC-006 | 节奏标签与 extend 台词续接 | `rfc-rhythm-tags.md` | Accepted |
 | RFC-007 | 渲染后端迁移 (macroquad → winit+wgpu+egui) | `rfc-rendering-backend-migration.md` | Accepted |
@@ -38,23 +38,23 @@
 | RFC-012 | UI 行为定制系统 | `rfc-ui-behavior-customization.md` | Accepted |
 | RFC-013 | 配置默认值外部化 | `rfc-config-externalization.md` | Accepted |
 | RFC-014 | 测试分层与维护策略 | `rfc-test-tiering.md` | Accepted |
-| RFC-015 | 调试状态快照热键 | `rfc-debug-state-snapshot.md` | Proposed |
+| RFC-015 | 调试状态快照热键 | `rfc-debug-state-snapshot.md` | Superseded（debug server HTTP API + MCP 替代） |
 | RFC-016 | 输入录制与 AI 自动调试管线 | `rfc-input-recording-replay.md` | Accepted |
-| RFC-017 | 调试覆盖层 | `rfc-debug-overlay.md` | Proposed |
+| RFC-017 | 调试覆盖层 | `rfc-debug-overlay.md` | Superseded（egui overlay 不适用于 Dioxus） |
 | RFC-018 | 结构化事件流调试基础设施 | `rfc-structured-event-stream.md` | Accepted |
 | RFC-019 | Headless 测试模式 | `rfc-headless-testing-mode.md` | Accepted |
 | RFC-020 | 双向 UI-Script 通信协议 | `rfc-bidirectional-ui-script-communication.md` | Accepted |
 | RFC-021 | WebView 小游戏集成 | `rfc-webview-minigame-integration.md` | Superseded（由 RFC-024 VN+ Hub 等后续方案取代） |
 | RFC-022 | UI Mode Plugin System | `rfc-ui-mode-plugin-system.md` | Accepted |
 | RFC-023 | HTTP Bridge API | `rfc-http-bridge-api.md` | Superseded（由 RFC-024 宿主/桥接路线取代） |
-| RFC-024 | VN+ Hub 架构愿景 | `rfc-vnplus-hub-architecture.md` | Active |
+| RFC-024 | VN+ Hub 架构愿景 | `rfc-vnplus-hub-architecture.md` | Active（v3 Dioxus + JS 注入路线） |
 | RFC-025 | 共享服务层提取 | `rfc-shared-services-extraction.md` | Accepted |
-| RFC-026 | 统一 Game Mode 框架 | `rfc-unified-game-mode-framework.md` | Superseded（将基于 Tauri 重新设计） |
-| RFC-027 | 玩法脚本层集成 | `rfc-gameplay-scripting-layer.md` | Proposed |
+| RFC-026 | 统一 Game Mode 框架 | `rfc-unified-game-mode-framework.md` | Superseded（将基于 Dioxus 重新设计） |
+| RFC-027 | 玩法脚本层集成 | `rfc-gameplay-scripting-layer.md` | Proposed（v2 WebView JS 注入，需 spike 验证） |
 | RFC-028 | 脚本预览编辑器 | `rfc-script-preview-editor.md` | Accepted |
 | RFC-029 | 前端媒体统一——动画模型收敛与音频前端化 | `rfc-frontend-media-unification.md` | Accepted |
 | RFC-030 | Tauri 前端 UI 主题与客制化架构 | `rfc-tauri-ui-theming.md` | Superseded（host-tauri 归档，由 RFC-033 取代） |
-| RFC-031 | ZIP 资源自定义协议 | `rfc-zip-asset-protocol.md` | Active |
+| RFC-031 | ZIP 资源自定义协议 | `rfc-zip-asset-protocol.md` | Superseded（host-tauri 归档，由 RFC-033 取代） |
 | RFC-032 | host-tauri Harness 能力对齐 | `rfc-host-tauri-harness-parity.md` | Superseded（host-tauri 归档，由 RFC-033 取代） |
 | RFC-033 | Dioxus 宿主迁移——消除 IPC 边界与双语言工具链 | `rfc-dioxus-host-migration.md` | Accepted |
 | RFC-034 | 旧宿主 (winit/wgpu/egui) 退役 | `rfc-legacy-host-retirement.md` | Accepted |

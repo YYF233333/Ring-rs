@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-031
-- 状态：Active
+- 状态：Superseded（host-tauri 已归档，由 RFC-033 Dioxus 迁移取代）
 - 作者：Claude
 - 日期：2026-03-28
 - 相关范围：host-tauri（Rust 后端 + Vue 前端）、tools/asset-packer

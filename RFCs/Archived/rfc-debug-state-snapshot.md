@@ -3,7 +3,7 @@
 ## 元信息
 
 - 编号：RFC-015
-- 状态：Proposed
+- 状态：Superseded（旧 host 已退役；debug server HTTP API + MCP 提供替代方案）
 - 作者：Ring-rs 开发组
 - 日期：2026-03-18
 - 相关范围：`host::app`、`host::input`、`host::config`、`host::renderer::render_state`、`host::audio`、`vn-runtime::state`
