@@ -5,6 +5,8 @@ linker = "rust-lld.exe"
 codegen-backend = true
 
 [profile.dev]
+# 加速 debug 编译。注意：Cranelift 不支持 -Cinstrument-coverage，
+# 运行覆盖率时须通过 CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm 覆盖。
 codegen-backend = "cranelift"
 
 [alias]

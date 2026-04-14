@@ -120,6 +120,7 @@ jobs:
         shell: pwsh
         env:
           CARGO_TARGET_DIR: target-cov
+          CARGO_PROFILE_DEV_CODEGEN_BACKEND: llvm
         run: |
           $lines = Get-Content tools/xtask/cov-ignore-regex.txt |
             ForEach-Object { $_.Trim() } |

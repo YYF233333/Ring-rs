@@ -209,6 +209,9 @@ fn real_main() -> anyhow::Result<()> {
         XtaskCommand::Cov => {
             ensure_cargo_llvm_cov_available(&sh)?;
 
+            // Cranelift 不支持 -Cinstrument-coverage，覆盖率须使用 LLVM 后端
+            let _llvm_guard = sh.push_env("CARGO_PROFILE_DEV_CODEGEN_BACKEND", "llvm");
+
             let cov_ignore = cov_ignore_regex();
             run(
                 "cargo llvm-cov --workspace (with exclusions)",
