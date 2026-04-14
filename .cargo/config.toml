@@ -1,6 +1,12 @@
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"
 
+[unstable]
+codegen-backend = true
+
+[profile.dev]
+codegen-backend = "cranelift"
+
 [alias]
 pack = "run -p asset-packer --"
 
