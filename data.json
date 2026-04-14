@@ -1,0 +1,614 @@
+[
+  {
+    "commit_short": "1027532",
+    "commit": "1027532ea396417cd14408732a1e2ac253e702b8",
+    "metrics": {
+      "coverage": {
+        "vn_runtime": 93.4,
+        "workspace": 85.6,
+        "host_dioxus": 82.0
+      },
+      "binary_size_bytes": {
+        "host_release": 12961792
+      },
+      "tokei_rust": {
+        "vn_runtime": {
+          "blanks": 1549,
+          "code": 9455,
+          "comments": 426
+        },
+        "xtask": {
+          "blanks": 85,
+          "code": 506,
+          "comments": 21
+        },
+        "asset_packer": {
+          "blanks": 70,
+          "code": 458,
+          "comments": 10
+        },
+        "host_dioxus": {
+          "blanks": 3563,
+          "code": 21727,
+          "comments": 588
+        }
+      },
+      "build_time_secs": {
+        "release_clean": 363.5,
+        "debug_clean": 374.8
+      },
+      "tests": {
+        "passed": 870,
+        "ignored": 0,
+        "failed": 0
+      },
+      "effective_loc": 19735,
+      "dependencies": {
+        "transitive": 500,
+        "direct": 25
+      }
+    },
+    "date": "2026-03-22T17:28:40Z"
+  },
+  {
+    "commit": "766ae78ba4b8d3d380815a5e1b676e674d60481c",
+    "date": "2026-03-22T17:55:18Z",
+    "metrics": {
+      "dependencies": {
+        "transitive": 500,
+        "direct": 25
+      },
+      "build_time_secs": {
+        "debug_clean": 370.3,
+        "release_clean": 356.1
+      },
+      "effective_loc": 19735,
+      "tests": {
+        "ignored": 0,
+        "failed": 0,
+        "passed": 870
+      },
+      "coverage": {
+        "workspace": 85.6,
+        "vn_runtime": 93.4,
+        "host_dioxus": 82.0
+      },
+      "binary_size_bytes": {
+        "host_release": 12961792
+      },
+      "tokei_rust": {
+        "xtask": {
+          "blanks": 85,
+          "code": 506,
+          "comments": 21
+        },
+        "vn_runtime": {
+          "blanks": 1549,
+          "code": 9455,
+          "comments": 426
+        },
+        "asset_packer": {
+          "blanks": 70,
+          "code": 458,
+          "comments": 10
+        },
+        "host_dioxus": {
+          "blanks": 3563,
+          "code": 21727,
+          "comments": 588
+        }
+      }
+    },
+    "commit_short": "766ae78"
+  },
+  {
+    "date": "2026-03-23T16:05:25Z",
+    "metrics": {
+      "binary_size_bytes": {
+        "host_release": 13197824
+      },
+      "dependencies": {
+        "transitive": 504,
+        "direct": 26
+      },
+      "effective_loc": 19985,
+      "coverage": {
+        "vn_runtime": 93.4,
+        "workspace": 84.3,
+        "host_dioxus": 80.2
+      },
+      "tokei_rust": {
+        "vn_runtime": {
+          "blanks": 1549,
+          "code": 9455,
+          "comments": 426
+        },
+        "xtask": {
+          "blanks": 85,
+          "code": 506,
+          "comments": 21
+        },
+        "asset_packer": {
+          "blanks": 70,
+          "code": 458,
+          "comments": 10
+        },
+        "host_dioxus": {
+          "blanks": 3605,
+          "code": 21979,
+          "comments": 593
+        }
+      },
+      "tests": {
+        "passed": 870,
+        "failed": 0,
+        "ignored": 0
+      },
+      "build_time_secs": {
+        "release_clean": 349.6,
+        "debug_clean": 373.6
+      }
+    },
+    "commit": "69e8571d4ae4c361d1d3b9c13519eb065b366570",
+    "commit_short": "69e8571"
+  },
+  {
+    "commit_short": "5d922c6",
+    "date": "2026-03-23T16:35:02Z",
+    "commit": "5d922c614e8a72dcbd95acd2697b2ea3a9d8c445",
+    "metrics": {
+      "binary_size_bytes": {
+        "host_release": 13238272
+      },
+      "build_time_secs": {
+        "release_clean": 362.6,
+        "debug_clean": 386.2
+      },
+      "tests": {
+        "ignored": 0,
+        "passed": 870,
+        "failed": 0
+      },
+      "tokei_rust": {
+        "xtask": {
+          "code": 506,
+          "blanks": 85,
+          "comments": 21
+        },
+        "vn_runtime": {
+          "code": 9455,
+          "blanks": 1549,
+          "comments": 426
+        },
+        "asset_packer": {
+          "code": 458,
+          "blanks": 70,
+          "comments": 10
+        },
+        "host_dioxus": {
+          "code": 22292,
+          "blanks": 3658,
+          "comments": 605
+        }
+      },
+      "coverage": {
+        "vn_runtime": 93.4,
+        "workspace": 82.0,
+        "host_dioxus": 77.0
+      },
+      "dependencies": {
+        "direct": 26,
+        "transitive": 504
+      },
+      "effective_loc": 20298
+    }
+  },
+  {
+    "commit_short": "cd5c2c1",
+    "metrics": {
+      "dependencies": {
+        "direct": 26,
+        "transitive": 504
+      },
+      "tokei_rust": {
+        "xtask": {
+          "blanks": 129,
+          "code": 733,
+          "comments": 27
+        },
+        "asset_packer": {
+          "blanks": 70,
+          "code": 458,
+          "comments": 10
+        },
+        "vn_runtime": {
+          "blanks": 1549,
+          "code": 9455,
+          "comments": 426
+        },
+        "host_dioxus": {
+          "blanks": 3658,
+          "code": 22292,
+          "comments": 605
+        }
+      },
+      "effective_loc": 20525,
+      "build_time_secs": {
+        "release_clean": 400.8,
+        "debug_clean": 414.2
+      },
+      "binary_size_bytes": {
+        "host_release": 13238272
+      },
+      "coverage": {
+        "vn_runtime": 93.4,
+        "workspace": 82.0,
+        "host_dioxus": 77.0
+      },
+      "tests": {
+        "ignored": 0,
+        "failed": 0,
+        "passed": 870
+      }
+    },
+    "commit": "cd5c2c18e9666154a5e995ea4e8eb9c3237dea67",
+    "date": "2026-03-23T18:23:27Z"
+  },
+  {
+    "commit": "d8142e2efc736b908d08884c2ffb18c8b119801f",
+    "date": "2026-03-24T08:15:44Z",
+    "commit_short": "d8142e2",
+    "metrics": {
+      "tests": {
+        "passed": 873,
+        "failed": 0,
+        "ignored": 0
+      },
+      "coverage": {
+        "workspace": 81.8,
+        "vn_runtime": 93.2,
+        "host_dioxus": 77.0
+      },
+      "tokei_rust": {
+        "xtask": {
+          "comments": 27,
+          "blanks": 129,
+          "code": 733
+        },
+        "asset_packer": {
+          "comments": 10,
+          "blanks": 70,
+          "code": 458
+        },
+        "vn_runtime": {
+          "comments": 428,
+          "blanks": 1557,
+          "code": 9503
+        },
+        "host_dioxus": {
+          "comments": 605,
+          "blanks": 3658,
+          "code": 22292
+        }
+      },
+      "dependencies": {
+        "transitive": 504,
+        "direct": 26
+      },
+      "effective_loc": 20533,
+      "binary_size_bytes": {
+        "host_release": 13259264
+      },
+      "build_time_secs": {
+        "debug_clean": 382.5,
+        "release_clean": 362.3
+      }
+    }
+  },
+  {
+    "commit_short": "05434a0",
+    "metrics": {
+      "tests": {
+        "ignored": 0,
+        "passed": 873,
+        "failed": 0
+      },
+      "build_time_secs": {
+        "release_clean": 367.7,
+        "debug_clean": 439.3
+      },
+      "tokei_rust": {
+        "vn_runtime": {
+          "comments": 428,
+          "code": 9503,
+          "blanks": 1557
+        },
+        "xtask": {
+          "comments": 27,
+          "code": 733,
+          "blanks": 129
+        },
+        "asset_packer": {
+          "comments": 10,
+          "code": 458,
+          "blanks": 70
+        },
+        "host_dioxus": {
+          "comments": 614,
+          "code": 22423,
+          "blanks": 3685
+        }
+      },
+      "dependencies": {
+        "transitive": 504,
+        "direct": 26
+      },
+      "coverage": {
+        "workspace": 81.3,
+        "vn_runtime": 93.2,
+        "host_dioxus": 76.3
+      },
+      "effective_loc": 20664,
+      "binary_size_bytes": {
+        "host_release": 13291008
+      }
+    },
+    "date": "2026-03-24T12:31:41Z",
+    "commit": "05434a08d71029a8e460da7cb15d6b4865628fab"
+  },
+  {
+    "date": "2026-04-13T14:58:41Z",
+    "commit_short": "a75e85a",
+    "metrics": {
+      "effective_loc": 12316,
+      "tokei_rust": {
+        "xtask": {
+          "blanks": 131,
+          "comments": 27,
+          "code": 733
+        },
+        "asset_packer": {
+          "blanks": 67,
+          "comments": 0,
+          "code": 386
+        },
+        "host_dioxus": {
+          "blanks": 1035,
+          "comments": 221,
+          "code": 8308
+        },
+        "vn_runtime": {
+          "blanks": 1557,
+          "comments": 428,
+          "code": 9503
+        }
+      },
+      "tests": {
+        "passed": 418,
+        "failed": 0,
+        "ignored": 0
+      },
+      "binary_size_bytes": {
+        "host_release": 0
+      },
+      "coverage": {
+        "host_dioxus": 67.3,
+        "vn_runtime": 93.1,
+        "workspace": 79.8
+      },
+      "dependencies": {
+        "transitive": 528,
+        "direct": 16
+      },
+      "build_time_secs": {
+        "release_clean": 230.4,
+        "debug_clean": 367.3
+      }
+    },
+    "commit": "a75e85a91db32f5528da499ade7fd54b98b68453"
+  },
+  {
+    "commit_short": "3f68cce",
+    "metrics": {
+      "build_time_secs": {
+        "debug_clean": 91.7,
+        "release_clean": 230.3
+      },
+      "effective_loc": 12041,
+      "tests": {
+        "failed": 0,
+        "passed": 410,
+        "ignored": 0
+      },
+      "dependencies": {
+        "transitive": 511,
+        "direct": 16
+      },
+      "binary_size_bytes": {
+        "host_release": 7129088
+      },
+      "coverage": {
+        "workspace": 80.5,
+        "host_dioxus": 67.7,
+        "vn_runtime": 93.1
+      },
+      "tokei_rust": {
+        "vn_runtime": {
+          "code": 9503,
+          "blanks": 1557,
+          "comments": 428
+        },
+        "xtask": {
+          "code": 734,
+          "blanks": 132,
+          "comments": 28
+        },
+        "host_dioxus": {
+          "code": 7945,
+          "blanks": 999,
+          "comments": 220
+        },
+        "asset_packer": {
+          "code": 386,
+          "blanks": 67,
+          "comments": 0
+        }
+      }
+    },
+    "date": "2026-04-14T02:33:43Z",
+    "commit": "3f68cce47b6bb18f46923976ca4b54cf1e85e1c1"
+  },
+  {
+    "commit": "c78afc806b6610f74540e1d8f5513a832ebed19f",
+    "metrics": {
+      "tokei_rust": {
+        "vn_runtime": {
+          "blanks": 1557,
+          "code": 9503,
+          "comments": 428
+        },
+        "asset_packer": {
+          "blanks": 67,
+          "code": 386,
+          "comments": 0
+        },
+        "host_dioxus": {
+          "blanks": 999,
+          "code": 7944,
+          "comments": 220
+        },
+        "xtask": {
+          "blanks": 132,
+          "code": 734,
+          "comments": 28
+        }
+      },
+      "tests": {
+        "ignored": 0,
+        "failed": 0,
+        "passed": 410
+      },
+      "build_time_secs": {
+        "release_clean": 228.7,
+        "debug_clean": 92.0
+      },
+      "coverage": {
+        "workspace": 80.5,
+        "host_dioxus": 67.7,
+        "vn_runtime": 93.1
+      },
+      "dependencies": {
+        "direct": 16,
+        "transitive": 511
+      },
+      "effective_loc": 12040,
+      "binary_size_bytes": {
+        "host_release": 7124480
+      }
+    },
+    "commit_short": "c78afc8",
+    "date": "2026-04-14T03:01:08Z"
+  },
+  {
+    "commit_short": "a652c67",
+    "commit": "a652c67185ad1709f77bb60b24828f0307ac888d",
+    "metrics": {
+      "tokei_rust": {
+        "xtask": {
+          "blanks": 132,
+          "comments": 28,
+          "code": 734
+        },
+        "asset_packer": {
+          "blanks": 67,
+          "comments": 0,
+          "code": 386
+        },
+        "host_dioxus": {
+          "blanks": 1003,
+          "comments": 223,
+          "code": 7949
+        },
+        "vn_runtime": {
+          "blanks": 1557,
+          "comments": 428,
+          "code": 9503
+        }
+      },
+      "tests": {
+        "ignored": 0,
+        "failed": 0,
+        "passed": 410
+      },
+      "build_time_secs": {
+        "release_clean": 203.3,
+        "debug_clean": 88.8
+      },
+      "coverage": {
+        "workspace": 80.4,
+        "vn_runtime": 93.1,
+        "host_dioxus": 67.7
+      },
+      "dependencies": {
+        "direct": 16,
+        "transitive": 511
+      },
+      "effective_loc": 12045,
+      "binary_size_bytes": {
+        "host_release": 7312896
+      }
+    },
+    "date": "2026-04-14T04:14:33Z"
+  },
+  {
+    "commit": "45cd0bfe746debd43f1b8e2b9ed5947f9ce3cd0b",
+    "date": "2026-04-14T06:30:13Z",
+    "metrics": {
+      "effective_loc": 12080,
+      "tokei_rust": {
+        "host_dioxus": {
+          "code": 7977,
+          "blanks": 1004,
+          "comments": 221
+        },
+        "xtask": {
+          "code": 734,
+          "blanks": 132,
+          "comments": 28
+        },
+        "asset_packer": {
+          "code": 386,
+          "blanks": 67,
+          "comments": 0
+        },
+        "vn_runtime": {
+          "code": 9509,
+          "blanks": 1550,
+          "comments": 427
+        }
+      },
+      "build_time_secs": {
+        "release_clean": 194.3,
+        "debug_clean": 84.5
+      },
+      "binary_size_bytes": {
+        "host_release": 7311872
+      },
+      "coverage": {
+        "host_dioxus": 67.7,
+        "vn_runtime": 93.1,
+        "workspace": 80.4
+      },
+      "tests": {
+        "passed": 410,
+        "ignored": 0,
+        "failed": 0
+      },
+      "dependencies": {
+        "direct": 17,
+        "transitive": 511
+      }
+    },
+    "commit_short": "45cd0bf"
+  }
+]

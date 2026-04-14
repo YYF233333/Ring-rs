@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ring-rs Metrics</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Ring-rs Metrics</h1>
+    <p class="subtitle">Visual Novel Engine &mdash; CI performance &amp; quality tracking</p>
+  </header>
+
+  <section id="summary-cards" class="cards"></section>
+
+  <section class="chart-section">
+    <h2>Test Coverage</h2>
+    <div id="chart-coverage" class="chart"></div>
+  </section>
+
+  <section class="chart-section">
+    <h2>Binary Size</h2>
+    <div id="chart-binary" class="chart"></div>
+  </section>
+
+  <section class="chart-section">
+    <h2>Build Time</h2>
+    <div id="chart-build-time" class="chart"></div>
+  </section>
+
+  <section class="chart-section">
+    <h2>Lines of Code</h2>
+    <div id="chart-loc" class="chart"></div>
+  </section>
+
+  <section class="chart-section">
+    <h2>Dependencies</h2>
+    <div id="chart-deps" class="chart"></div>
+  </section>
+
+  <section class="chart-section">
+    <h2>Tests</h2>
+    <div id="chart-tests" class="chart"></div>
+  </section>
+
+  <footer>
+    <p>CI environment: <strong>windows-latest</strong> &middot; Rust <strong>stable</strong></p>
+    <p>Data collected on every push to <code>main</code>. Powered by <a href="https://echarts.apache.org/" target="_blank" rel="noopener">Apache ECharts</a>.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
