@@ -138,11 +138,12 @@ impl AppStateInner {
             key,
             value: var_value,
         };
-        let tick_result = self
+        let rt = self
             .runtime
             .as_mut()
-            .expect("invariant: UIResult requires loaded runtime")
-            .tick(Some(input))?;
+            .expect("invariant: UIResult requires loaded runtime");
+        rt.set_now(crate::now_secs());
+        let tick_result = rt.tick(Some(input))?;
         self.render_state.active_ui_mode = None;
         self.waiting = WaitingFor::Nothing;
         self.apply_runtime_tick_output(tick_result.0, tick_result.1);
@@ -158,11 +159,12 @@ impl AppStateInner {
         if self.waiting != WaitingFor::Choice {
             return;
         }
-        let tick_result = self
+        let rt = self
             .runtime
             .as_mut()
-            .expect("invariant: choice selection requires loaded runtime")
-            .tick(Some(RuntimeInput::choice(index)));
+            .expect("invariant: choice selection requires loaded runtime");
+        rt.set_now(crate::now_secs());
+        let tick_result = rt.tick(Some(RuntimeInput::choice(index)));
         self.render_state.clear_choices();
         self.waiting = WaitingFor::Nothing;
         match tick_result {
@@ -264,6 +266,7 @@ impl AppStateInner {
         let Some(rt) = self.runtime.as_mut() else {
             return;
         };
+        rt.set_now(crate::now_secs());
 
         match rt.tick(None) {
             Ok((commands, waiting_reason)) => {

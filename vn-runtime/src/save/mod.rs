@@ -70,10 +70,12 @@ pub struct SaveMetadata {
 
 impl SaveMetadata {
     /// 创建新的元数据
-    pub fn new(slot: u32) -> Self {
+    ///
+    /// `now_secs` 为 Unix 秒时间戳，由 Host 提供。
+    pub fn new(slot: u32, now_secs: u64) -> Self {
         Self {
             slot,
-            timestamp: unix_timestamp_secs(),
+            timestamp: format!("{now_secs}"),
             chapter_title: None,
             play_time_secs: 0,
         }
@@ -144,10 +146,12 @@ pub struct SaveData {
 
 impl SaveData {
     /// 创建新的存档数据
-    pub fn new(slot: u32, runtime_state: RuntimeState) -> Self {
+    ///
+    /// `now_secs` 为 Unix 秒时间戳，由 Host 提供。
+    pub fn new(slot: u32, runtime_state: RuntimeState, now_secs: u64) -> Self {
         Self {
             version: SaveVersion::current(),
-            metadata: SaveMetadata::new(slot),
+            metadata: SaveMetadata::new(slot, now_secs),
             runtime_state,
             audio: AudioState::default(),
             render: RenderSnapshot::default(),
@@ -249,17 +253,6 @@ impl std::fmt::Display for SaveError {
 }
 
 impl std::error::Error for SaveError {}
-
-/// 获取当前 Unix 时间戳（秒）
-fn unix_timestamp_secs() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-
-    format!("{}", duration.as_secs())
-}
 
 #[cfg(test)]
 mod tests;

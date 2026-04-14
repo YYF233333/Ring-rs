@@ -16,6 +16,7 @@ pub mod save_manager;
 pub mod screen_defs;
 pub mod state;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod debug_server;
 
 // ── 前端模块（Phase 2） ──
@@ -27,6 +28,25 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+/// 获取当前 Unix 时间戳（秒）
+///
+/// Host 侧唯一的时间源，用于为 Runtime 注入时间戳。
+/// Desktop 使用 `SystemTime`，WASM 使用 `js_sys::Date`。
+pub fn now_secs() -> u64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        (js_sys::Date::now() / 1000.0) as u64
+    }
+}
 
 use dioxus::desktop::Config;
 use dioxus::desktop::tao::dpi::LogicalSize;
@@ -325,6 +345,7 @@ enum InitPhase {
 
 /// 接收来自 debug HTTP server 的截图请求，通过 `document::eval()` 在 WebView 中
 /// 执行 JS 截图代码，将结果通过 oneshot 通道回传。
+#[cfg(not(target_arch = "wasm32"))]
 async fn screenshot_bridge(mut rx: tokio::sync::mpsc::Receiver<debug_server::ScreenshotRequest>) {
     while let Some(req) = rx.recv().await {
         // 每个请求启动独立 eval，避免阻塞后续请求
@@ -403,27 +424,34 @@ fn App() -> Element {
             };
             match result {
                 Ok(()) => {
-                    let debug_port = {
+                    {
                         let mut inner = app_state_init
                             .inner
                             .lock()
                             .expect("invariant: app state mutex not poisoned");
                         inner.frontend_connected(Some("dioxus-desktop".to_string()));
-                        inner
-                            .services
-                            .as_ref()
-                            .map(|s| s.config.debug.resolve_debug_server())
-                            .unwrap_or(None)
-                    };
-                    if let Some(port) = debug_port {
-                        let (screenshot_tx, screenshot_rx) = debug_server::screenshot_channel();
-                        // HTTP server
-                        let app_for_debug = app_state_init.clone();
-                        spawn(async move {
-                            debug_server::run(app_for_debug, port, screenshot_tx).await;
-                        });
-                        // 截图桥接：接收 HTTP 请求，通过 document::eval 执行 JS 截图
-                        spawn(screenshot_bridge(screenshot_rx));
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let debug_port = {
+                            let inner = app_state_init
+                                .inner
+                                .lock()
+                                .expect("invariant: app state mutex not poisoned");
+                            inner
+                                .services
+                                .as_ref()
+                                .map(|s| s.config.debug.resolve_debug_server())
+                                .unwrap_or(None)
+                        };
+                        if let Some(port) = debug_port {
+                            let (screenshot_tx, screenshot_rx) = debug_server::screenshot_channel();
+                            let app_for_debug = app_state_init.clone();
+                            spawn(async move {
+                                debug_server::run(app_for_debug, port, screenshot_tx).await;
+                            });
+                            spawn(screenshot_bridge(screenshot_rx));
+                        }
                     }
                     info!("后端初始化完成");
                     init_phase.set(InitPhase::Ready);

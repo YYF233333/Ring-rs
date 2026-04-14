@@ -100,7 +100,7 @@ fn restore_from_save_keeps_saved_render_snapshot_without_entry_tick() {
     let mut runtime_state = vn_runtime::state::RuntimeState::new("scene");
     runtime_state.position.set_path("scripts/scene.md");
 
-    let save_data = vn_runtime::SaveData::new(1, runtime_state)
+    let save_data = vn_runtime::SaveData::new(1, runtime_state, 0)
         .with_render(vn_runtime::RenderSnapshot {
             background: Some("backgrounds/saved.png".to_string()),
             characters: Vec::new(),
@@ -197,7 +197,7 @@ fn restore_from_save_normalizes_legacy_ui_wait_to_click() {
     runtime_state.position.set_path("scripts/restore.md");
     runtime_state.wait(WaitingReason::ui_result("show_map", "destination"));
 
-    let save_data = vn_runtime::SaveData::new(1, runtime_state)
+    let save_data = vn_runtime::SaveData::new(1, runtime_state, 0)
         .with_render(vn_runtime::RenderSnapshot {
             background: Some("backgrounds/saved.png".to_string()),
             characters: Vec::new(),

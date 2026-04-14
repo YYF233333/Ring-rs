@@ -80,52 +80,54 @@ impl HistoryEvent {
     }
 
     /// 创建对话事件
-    pub fn dialogue(speaker: Option<String>, content: String) -> Self {
+    ///
+    /// `now` 为 Unix 秒时间戳，由 Host 提供。
+    pub fn dialogue(speaker: Option<String>, content: String, now: u64) -> Self {
         HistoryEvent::Dialogue {
             speaker,
             content,
-            timestamp: current_timestamp(),
+            timestamp: now,
         }
     }
 
     /// 创建章节标记事件
-    pub fn chapter_mark(title: String) -> Self {
+    pub fn chapter_mark(title: String, now: u64) -> Self {
         HistoryEvent::ChapterMark {
             title,
-            timestamp: current_timestamp(),
+            timestamp: now,
         }
     }
 
     /// 创建选择事件
-    pub fn choice_made(options: Vec<String>, selected_index: usize) -> Self {
+    pub fn choice_made(options: Vec<String>, selected_index: usize, now: u64) -> Self {
         HistoryEvent::ChoiceMade {
             options,
             selected_index,
-            timestamp: current_timestamp(),
+            timestamp: now,
         }
     }
 
     /// 创建跳转事件
-    pub fn jump(label: String) -> Self {
+    pub fn jump(label: String, now: u64) -> Self {
         HistoryEvent::Jump {
             label,
-            timestamp: current_timestamp(),
+            timestamp: now,
         }
     }
 
     /// 创建背景切换事件
-    pub fn background_change(path: String) -> Self {
+    pub fn background_change(path: String, now: u64) -> Self {
         HistoryEvent::BackgroundChange {
             path,
-            timestamp: current_timestamp(),
+            timestamp: now,
         }
     }
 
     /// 创建 BGM 切换事件
-    pub fn bgm_change(path: Option<String>) -> Self {
+    pub fn bgm_change(path: Option<String>, now: u64) -> Self {
         HistoryEvent::BgmChange {
             path,
-            timestamp: current_timestamp(),
+            timestamp: now,
         }
     }
 }
@@ -167,11 +169,12 @@ impl History {
     /// 追加文本到最近一条 Dialogue 事件（用于 extend 命令）
     ///
     /// 如果最近一条事件不是 Dialogue，则创建新的旁白 Dialogue。
-    pub fn append_to_last_dialogue(&mut self, text: &str) {
+    /// `now` 仅在需要创建新事件时使用。
+    pub fn append_to_last_dialogue(&mut self, text: &str, now: u64) {
         if let Some(HistoryEvent::Dialogue { content, .. }) = self.events.last_mut() {
             content.push_str(text);
         } else {
-            self.push(HistoryEvent::dialogue(None, text.to_string()));
+            self.push(HistoryEvent::dialogue(None, text.to_string(), now));
         }
     }
 
@@ -217,16 +220,6 @@ impl History {
     }
 }
 
-/// 获取当前时间戳（Unix 秒）
-fn current_timestamp() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,9 +232,10 @@ mod tests {
         history.push(HistoryEvent::dialogue(
             Some("角色A".to_string()),
             "你好".to_string(),
+            0,
         ));
-        history.push(HistoryEvent::dialogue(None, "旁白文本".to_string()));
-        history.push(HistoryEvent::chapter_mark("第一章".to_string()));
+        history.push(HistoryEvent::dialogue(None, "旁白文本".to_string(), 0));
+        history.push(HistoryEvent::chapter_mark("第一章".to_string(), 0));
 
         assert_eq!(history.len(), 3);
         assert_eq!(history.dialogue_count(), 2);
@@ -252,7 +246,7 @@ mod tests {
         let mut history = History::new().with_max_events(5);
 
         for i in 0..10 {
-            history.push(HistoryEvent::dialogue(None, format!("对话 {}", i)));
+            history.push(HistoryEvent::dialogue(None, format!("对话 {}", i), 0));
         }
 
         assert_eq!(history.len(), 5);
@@ -267,7 +261,7 @@ mod tests {
         assert_eq!(dialogue_content(&history.events()[0]), Some("对话 5"));
         // 覆盖非对话分支
         assert_eq!(
-            dialogue_content(&HistoryEvent::chapter_mark("章节".to_string())),
+            dialogue_content(&HistoryEvent::chapter_mark("章节".to_string(), 0)),
             None
         );
     }
@@ -276,10 +270,10 @@ mod tests {
     fn test_recent_dialogues() {
         let mut history = History::new();
 
-        history.push(HistoryEvent::dialogue(None, "对话1".to_string()));
-        history.push(HistoryEvent::chapter_mark("章节".to_string()));
-        history.push(HistoryEvent::dialogue(None, "对话2".to_string()));
-        history.push(HistoryEvent::dialogue(None, "对话3".to_string()));
+        history.push(HistoryEvent::dialogue(None, "对话1".to_string(), 0));
+        history.push(HistoryEvent::chapter_mark("章节".to_string(), 0));
+        history.push(HistoryEvent::dialogue(None, "对话2".to_string(), 0));
+        history.push(HistoryEvent::dialogue(None, "对话3".to_string(), 0));
 
         let recent = history.recent_dialogues(2);
         assert_eq!(recent.len(), 2);
@@ -291,9 +285,11 @@ mod tests {
         history.push(HistoryEvent::dialogue(
             Some("A".to_string()),
             "内容".to_string(),
+            0,
         ));
         history.push(HistoryEvent::choice_made(
             vec!["选项1".to_string(), "选项2".to_string()],
+            0,
             0,
         ));
 
@@ -306,12 +302,13 @@ mod tests {
     #[test]
     fn test_history_event_timestamp_covers_all_variants() {
         // 目标：覆盖 HistoryEvent::timestamp() 的所有 match 分支
-        let _ = HistoryEvent::dialogue(Some("A".to_string()), "内容".to_string()).timestamp();
-        let _ = HistoryEvent::chapter_mark("第一章".to_string()).timestamp();
-        let _ = HistoryEvent::choice_made(vec!["A".to_string(), "B".to_string()], 1).timestamp();
-        let _ = HistoryEvent::jump("label".to_string()).timestamp();
-        let _ = HistoryEvent::background_change("bg.png".to_string()).timestamp();
-        let _ = HistoryEvent::bgm_change(Some("bgm.mp3".to_string())).timestamp();
+        let _ = HistoryEvent::dialogue(Some("A".to_string()), "内容".to_string(), 100).timestamp();
+        let _ = HistoryEvent::chapter_mark("第一章".to_string(), 101).timestamp();
+        let _ =
+            HistoryEvent::choice_made(vec!["A".to_string(), "B".to_string()], 1, 102).timestamp();
+        let _ = HistoryEvent::jump("label".to_string(), 103).timestamp();
+        let _ = HistoryEvent::background_change("bg.png".to_string(), 104).timestamp();
+        let _ = HistoryEvent::bgm_change(Some("bgm.mp3".to_string()), 105).timestamp();
     }
 
     #[test]
@@ -352,28 +349,21 @@ mod tests {
     }
 
     #[test]
-    fn test_history_event_constructors_use_current_timestamp() {
-        let before = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let ts_dialogue = HistoryEvent::dialogue(None, "内容".to_string()).timestamp();
-        let ts_chapter = HistoryEvent::chapter_mark("第一章".to_string()).timestamp();
-
-        let after = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        assert!(before <= ts_dialogue && ts_dialogue <= after);
-        assert!(before <= ts_chapter && ts_chapter <= after);
+    fn test_constructors_pass_through_timestamp() {
+        assert_eq!(
+            HistoryEvent::dialogue(None, "内容".to_string(), 42).timestamp(),
+            42
+        );
+        assert_eq!(
+            HistoryEvent::chapter_mark("第一章".to_string(), 43).timestamp(),
+            43
+        );
     }
 
     #[test]
     fn test_history_clear() {
         let mut history = History::new();
-        history.push(HistoryEvent::dialogue(None, "对话1".to_string()));
+        history.push(HistoryEvent::dialogue(None, "对话1".to_string(), 0));
         assert!(!history.is_empty());
 
         history.clear();

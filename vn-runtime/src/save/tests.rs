@@ -25,16 +25,13 @@ fn test_save_version_current_and_to_string() {
 
 #[test]
 fn test_save_metadata_builders() {
-    let md = SaveMetadata::new(7)
+    let md = SaveMetadata::new(7, 1700000000)
         .with_chapter("第二章")
         .with_play_time(123);
     assert_eq!(md.slot, 7);
     assert_eq!(md.chapter_title, Some("第二章".to_string()));
     assert_eq!(md.play_time_secs, 123);
-    // timestamp 只要求存在且非空（当前实现是 unix seconds）
-    assert!(!md.timestamp.is_empty());
-    assert!(md.timestamp.chars().all(|c| c.is_ascii_digit()));
-    assert!(md.timestamp.parse::<u64>().is_ok());
+    assert_eq!(md.timestamp, "1700000000");
 }
 
 #[test]
@@ -46,7 +43,7 @@ fn test_save_data_serialization() {
         ("char1.png".to_string(), Position::Center),
     );
 
-    let save_data = SaveData::new(1, state)
+    let save_data = SaveData::new(1, state, 0)
         .with_chapter("第一章")
         .with_audio(AudioState {
             current_bgm: Some("bgm.mp3".to_string()),
@@ -82,9 +79,10 @@ fn test_save_data_with_render_and_history() {
     history.push(HistoryEvent::dialogue(
         Some("北风".to_string()),
         "你好".to_string(),
+        0,
     ));
 
-    let save_data = SaveData::new(1, state)
+    let save_data = SaveData::new(1, state, 0)
         .with_render(render.clone())
         .with_history(history.clone());
 
@@ -147,7 +145,7 @@ fn test_mode_data_round_trip() {
         serde_json::json!({"deck": ["fire", "ice"], "score": 42}),
     );
 
-    let save = SaveData::new(1, state).with_mode_data(mode_data);
+    let save = SaveData::new(1, state, 0).with_mode_data(mode_data);
     let json = save.to_json().unwrap();
     assert!(json.contains("card_battle"));
 
@@ -159,7 +157,7 @@ fn test_mode_data_round_trip() {
 #[test]
 fn test_mode_data_empty_not_serialized() {
     let state = RuntimeState::new("test");
-    let save = SaveData::new(1, state);
+    let save = SaveData::new(1, state, 0);
     let json = save.to_json().unwrap();
     // mode_data 为空时不应出现在 JSON 中
     assert!(!json.contains("mode_data"));

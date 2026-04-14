@@ -68,7 +68,7 @@ impl AppStateInner {
                 )
             };
 
-        let mut save_data = vn_runtime::SaveData::new(slot, runtime_state)
+        let mut save_data = vn_runtime::SaveData::new(slot, runtime_state, crate::now_secs())
             .with_history(runtime_history)
             .with_render(vn_runtime::RenderSnapshot {
                 background: render_state.current_background.clone(),

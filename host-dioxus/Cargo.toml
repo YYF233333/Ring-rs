@@ -3,10 +3,15 @@ name = "host-dioxus"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["desktop"]
+desktop = ["dioxus/desktop", "dep:axum", "tokio/net"]
+web = ["dioxus/web", "dep:js-sys"]
+
 [dependencies]
-dioxus = { version = "0.7", default-features = false, features = ["desktop", "minimal", "document"] }
-tokio = { version = "1", features = ["rt", "time", "net", "macros"] }
-axum = { version = "0.8", default-features = false, features = ["json", "tokio", "http1"] }
+dioxus = { version = "0.7", default-features = false, features = ["minimal", "document"] }
+tokio = { version = "1", features = ["rt", "time", "macros"] }
+axum = { version = "0.8", default-features = false, features = ["json", "tokio", "http1"], optional = true }
 
 # ── 后端核心 ──
 vn-runtime = { workspace = true }
@@ -17,3 +22,6 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 base64 = "0.22"
+
+# ── WASM ──
+js-sys = { version = "0.3", optional = true }

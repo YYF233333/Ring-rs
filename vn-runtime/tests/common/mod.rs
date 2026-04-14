@@ -53,7 +53,7 @@ impl ScriptTestHarness {
     pub fn save_and_restore(&self) -> Self {
         let state = self.runtime.state().clone();
         let history = self.runtime.history().clone();
-        let save_data = SaveData::new(1, state);
+        let save_data = SaveData::new(1, state, 0);
         let json = save_data.to_json().expect("save to JSON failed");
         let loaded = SaveData::from_json(&json).expect("load from JSON failed");
         let script = Self::parse_script(&self.script_text);

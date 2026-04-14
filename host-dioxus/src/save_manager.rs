@@ -196,7 +196,7 @@ mod tests {
     }
 
     fn make_save(slot: u32) -> SaveData {
-        SaveData::new(slot, RuntimeState::new("test_script"))
+        SaveData::new(slot, RuntimeState::new("test_script"), 0)
     }
 
     #[test]

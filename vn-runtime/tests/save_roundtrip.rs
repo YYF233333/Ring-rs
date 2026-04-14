@@ -78,7 +78,7 @@ endif";
     assert!(result.has_text("正确"), "pre-save: variable should work");
 
     let state = h.runtime().state().clone();
-    let save = SaveData::new(1, state);
+    let save = SaveData::new(1, state, 0);
     let json = save.to_json().unwrap();
     let loaded = SaveData::from_json(&json).unwrap();
 
@@ -99,7 +99,7 @@ changeBG <img src=\"bg.jpg\" />
     let _ = h.tick();
 
     let state = h.runtime().state().clone();
-    let json = SaveData::new(1, state).to_json().unwrap();
+    let json = SaveData::new(1, state, 0).to_json().unwrap();
 
     assert!(json.contains("test"), "save should contain script_id");
     assert!(

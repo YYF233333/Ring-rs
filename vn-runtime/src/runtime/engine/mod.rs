@@ -51,6 +51,9 @@ pub struct VNRuntime {
     executor: Executor,
     /// 历史记录
     history: History,
+    /// Host 提供的当前时间戳（Unix 秒），用于历史事件打时间戳。
+    /// Runtime 自身不读取系统时钟，由 Host 在每次 tick 前通过 `set_now()` 注入。
+    now_timestamp: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -78,6 +81,7 @@ impl VNRuntime {
             state,
             history: History::new(),
             executor: Executor::new(),
+            now_timestamp: 0,
         }
     }
 
@@ -97,7 +101,16 @@ impl VNRuntime {
             state,
             history,
             executor: Executor::new(),
+            now_timestamp: 0,
         }
+    }
+
+    /// 设置当前时间戳（Unix 秒）
+    ///
+    /// Host 应在每次 `tick()` 前调用此方法，确保历史事件记录正确的时间。
+    /// Runtime 自身不读取系统时钟。
+    pub fn set_now(&mut self, timestamp_secs: u64) {
+        self.now_timestamp = timestamp_secs;
     }
 
     /// 注册一个可被 callScript 调用的脚本
@@ -206,7 +219,8 @@ impl VNRuntime {
             if let Some(target) = result.jump_to {
                 // 从当前节点获取跳转目标标签（用于历史记录）
                 if let ScriptNode::Goto { target_label } = &node {
-                    self.history.push(HistoryEvent::jump(target_label.clone()));
+                    self.history
+                        .push(HistoryEvent::jump(target_label.clone(), self.now_timestamp));
                 }
                 let progress = self.progress_snapshot();
                 self.state.position.jump_to(target);
@@ -257,13 +271,18 @@ impl VNRuntime {
                     // 记录选择事件到历史
                     let option_texts: Vec<String> =
                         options.iter().map(|o| o.text.clone()).collect();
-                    self.history
-                        .push(HistoryEvent::choice_made(option_texts, index));
+                    self.history.push(HistoryEvent::choice_made(
+                        option_texts,
+                        index,
+                        self.now_timestamp,
+                    ));
 
                     if let Some(option) = options.get(index) {
                         // 记录跳转事件
-                        self.history
-                            .push(HistoryEvent::jump(option.target_label.clone()));
+                        self.history.push(HistoryEvent::jump(
+                            option.target_label.clone(),
+                            self.now_timestamp,
+                        ));
 
                         let target_index = self.script.find_label(&option.target_label).ok_or(
                             RuntimeError::LabelNotFound {
@@ -343,14 +362,17 @@ impl VNRuntime {
                 // `callScript [label](path)` 中的 label 仅用于展示，不参与入口寻址。
                 let target_index = 0;
 
-                self.history.push(HistoryEvent::jump(format!(
-                    "call {}{}",
-                    resolved_path,
-                    display_label
-                        .as_ref()
-                        .map(|l| format!(" [{}]", l))
-                        .unwrap_or_default()
-                )));
+                self.history.push(HistoryEvent::jump(
+                    format!(
+                        "call {}{}",
+                        resolved_path,
+                        display_label
+                            .as_ref()
+                            .map(|l| format!(" [{}]", l))
+                            .unwrap_or_default()
+                    ),
+                    self.now_timestamp,
+                ));
 
                 self.script = target_script;
                 self.state.position.script_id = self.script.id.clone();
@@ -388,7 +410,8 @@ impl VNRuntime {
                         })?
                 };
 
-                self.history.push(HistoryEvent::jump("return".to_string()));
+                self.history
+                    .push(HistoryEvent::jump("return".to_string(), self.now_timestamp));
 
                 self.script = next_script;
                 self.state.position = return_position;
@@ -442,29 +465,34 @@ impl VNRuntime {
 
     /// 根据 Command 记录历史事件
     fn record_history(&mut self, cmd: &Command) {
+        let now = self.now_timestamp;
         match cmd {
             Command::ShowText {
                 speaker, content, ..
             } => {
-                self.history
-                    .push(HistoryEvent::dialogue(speaker.clone(), content.clone()));
+                self.history.push(HistoryEvent::dialogue(
+                    speaker.clone(),
+                    content.clone(),
+                    now,
+                ));
             }
             Command::ExtendText { content, .. } => {
-                self.history.append_to_last_dialogue(content);
+                self.history.append_to_last_dialogue(content, now);
             }
             Command::ChapterMark { title, .. } => {
-                self.history.push(HistoryEvent::chapter_mark(title.clone()));
+                self.history
+                    .push(HistoryEvent::chapter_mark(title.clone(), now));
             }
             Command::ShowBackground { path, .. } => {
                 self.history
-                    .push(HistoryEvent::background_change(path.clone()));
+                    .push(HistoryEvent::background_change(path.clone(), now));
             }
             Command::PlayBgm { path, .. } => {
                 self.history
-                    .push(HistoryEvent::bgm_change(Some(path.clone())));
+                    .push(HistoryEvent::bgm_change(Some(path.clone()), now));
             }
             Command::StopBgm { .. } => {
-                self.history.push(HistoryEvent::bgm_change(None));
+                self.history.push(HistoryEvent::bgm_change(None, now));
             }
             // 其他命令不记录历史（角色显示/隐藏、音效等）
             _ => {}
