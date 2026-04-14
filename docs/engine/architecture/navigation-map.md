@@ -63,14 +63,13 @@ host-dioxus/src/
 ├── render_state.rs      # RenderState：后端→前端的数据契约
 ├── screen_defs.rs       # 数据驱动 UI：从 screens.json 加载按钮/条件/动作定义
 ├── layout_config.rs     # 布局配置：从 layout.json 加载字号/颜色/尺寸/资产路径
-├── audio.rs             # AudioManager（headless 状态跟踪）
+├── audio.rs             # AudioManager
 ├── config.rs            # 配置加载与校验
 ├── manifest.rs          # 角色 manifest 解析
 ├── resources.rs         # ResourceManager（FS/ZIP 透明访问）
 ├── save_manager.rs      # 存读档管理
 ├── init.rs              # 后端初始化（含 layout + screen_defs 加载）
 ├── error.rs             # 错误类型
-├── headless_cli.rs      # 无头测试 harness
 ├── vn/                  # VN 渲染层（RSX 组件）
 │   ├── scene.rs         # VNScene 容器（shake/blur/dim + skip-mode）
 │   ├── background.rs    # 背景双层交叉淡化

@@ -22,7 +22,7 @@
   "asset_source": "fs",
   "zip_path": null,
   "window": { "width": 1280, "height": 720, "title": "My VN", "fullscreen": false },
-  "debug": { "script_check": true, "log_level": "info", "log_file": null, "recording_buffer_size_mb": 8, "recording_output_dir": "recordings" },
+  "debug": { "script_check": true, "log_level": "info", "log_file": null },
   "audio": { "master_volume": 1.0, "bgm_volume": 0.8, "sfx_volume": 1.0, "muted": false },
   "resources": { "texture_cache_size_mb": 256 }
 }
@@ -41,7 +41,7 @@
   "asset_source": "zip",
   "zip_path": "game.zip",
   "window": { "width": 1280, "height": 720, "title": "My VN", "fullscreen": false },
-  "debug": { "script_check": false, "log_level": null, "log_file": "game.log", "recording_buffer_size_mb": 0, "recording_output_dir": "recordings" },
+  "debug": { "script_check": false, "log_level": null, "log_file": "game.log" },
   "audio": { "master_volume": 1.0, "bgm_volume": 0.8, "sfx_volume": 1.0, "muted": false },
   "resources": { "texture_cache_size_mb": 256 }
 }
@@ -148,18 +148,6 @@
   - 文件在每次启动时会被覆盖（不追加）。
   - 如果文件创建失败，自动回退到标准输出。
 
-### `debug.recording_buffer_size_mb`
-
-- **用途**：后台输入录制缓冲区大小上限（MB）。设为 `0` 则禁用录制。
-- **参考值**：`8`（约 8MB 内存占用，可存储大量输入事件）
-- **注意**：录制在后台无感进行，按 F8 导出为 JSON Lines 文件到 `recording_output_dir` 指定的目录。
-
-### `debug.recording_output_dir`
-
-- **用途**：录制文件导出目录。
-- **参考值**：`"recordings"`
-- **注意**：目录不存在时会自动创建。
-
 ## `audio` 音频配置
 
 ### `audio.master_volume` / `audio.bgm_volume` / `audio.sfx_volume`
@@ -211,7 +199,7 @@
 - **WindowConfig**（全部）：`width`、`height`、`title`、`fullscreen`
 - **AudioConfig**（全部）：`master_volume`、`bgm_volume`、`sfx_volume`、`muted`
 - **ResourceConfig**（全部）：`texture_cache_size_mb`
-- **DebugConfig**（全部）：`script_check`、`log_level`、`log_file`、`recording_buffer_size_mb`、`recording_output_dir`
+- **DebugConfig**（全部）：`script_check`、`log_level`、`log_file`
 
 ### VN 工程约定（当前仅 VN 使用）
 

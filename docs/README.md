@@ -6,7 +6,7 @@
 
 - [内容作者](authoring/README.md)：写脚本、调配置、准备素材、打包发布。
 - [引擎开发者](engine/README.md)：看架构、模块摘要、数据格式与 UI 定制入口。
-- [测试与调试](testing/README.md)：headless 回放、覆盖率与验证路径。
+- [测试与调试](testing/README.md)：覆盖率与验证路径。
 - [文档维护者](maintenance/README.md)：摘要索引、摘要维护协议、抽样验收与盘点。
 
 ## 工作流指南
@@ -22,7 +22,7 @@
 - 想快速了解模块职责：[模块摘要入口](engine/architecture/module-summaries/README.md)
 - 想查存档或 capability 契约：[工程参考](engine/reference/README.md)
 - 想做 UI 外观或行为定制：[UI 文档](engine/ui/README.md)
-- 想跑 headless 或看覆盖率：[测试与调试入口](testing/README.md)
+- 想看覆盖率或验证路径：[测试与调试入口](testing/README.md)
 
 ## 仓库级入口
 

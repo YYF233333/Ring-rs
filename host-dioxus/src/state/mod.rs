@@ -1,5 +1,4 @@
 mod game_lifecycle;
-mod harness;
 mod interaction;
 mod save_load;
 mod session;
@@ -56,12 +55,6 @@ pub struct AppStateInner {
     pub(self) client_owner: Option<SessionOwner>,
     /// client token 单调递增计数器。
     pub(self) next_client_id: u64,
-    /// deterministic harness 的逻辑时间。
-    pub(self) logical_time_ms: u64,
-    /// 机读 trace 事件缓冲区。
-    pub(self) trace_events: Vec<HarnessTraceEvent>,
-    /// trace 事件序号。
-    pub(self) trace_seq: u64,
 }
 
 impl Default for AppStateInner {
@@ -94,9 +87,6 @@ impl AppStateInner {
             scene_effect_active: false,
             client_owner: None,
             next_client_id: 0,
-            logical_time_ms: 0,
-            trace_events: Vec::new(),
-            trace_seq: 0,
         }
     }
 

@@ -53,8 +53,6 @@ pub struct DebugConfig {
     pub script_check: bool,
     pub log_level: Option<String>,
     pub log_file: Option<String>,
-    pub recording_buffer_size_mb: u32,
-    pub recording_output_dir: String,
     /// Debug HTTP server 开关。`None` 表示使用编译默认值（debug=on, release=off）。
     /// 优先级：环境变量 `RING_DEBUG_SERVER` > 此字段 > 编译默认值。
     #[serde(default)]
@@ -133,8 +131,6 @@ impl Default for DebugConfig {
             script_check: true,
             log_level: Some("info".to_string()),
             log_file: None,
-            recording_buffer_size_mb: 8,
-            recording_output_dir: "recordings".to_string(),
             enable_debug_server: None,
             debug_server_port: default_debug_port(),
         }
@@ -244,11 +240,6 @@ impl AppConfig {
                 )));
             }
         }
-        if self.debug.recording_buffer_size_mb == 0 {
-            return Err(ConfigError::ValidationFailed(
-                "debug.recording_buffer_size_mb 必须大于 0".to_string(),
-            ));
-        }
         if self.resources.texture_cache_size_mb == 0 {
             return Err(ConfigError::ValidationFailed(
                 "resources.texture_cache_size_mb 必须大于 0".to_string(),
@@ -296,8 +287,7 @@ mod tests {
     "title": "Ring VN Engine", "fullscreen": false
   }},
   "debug": {{
-    "script_check": true, "log_level": "info", "log_file": null,
-    "recording_buffer_size_mb": 8, "recording_output_dir": "recordings"
+    "script_check": true, "log_level": "info", "log_file": null
   }},
   "audio": {{
     "master_volume": 1.0, "bgm_volume": 0.8, "sfx_volume": 1.0, "muted": false

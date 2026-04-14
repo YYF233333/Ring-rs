@@ -10,8 +10,6 @@ impl AppStateInner {
             return;
         }
 
-        self.logical_time_ms += (dt * 1000.0).round() as u64;
-        let waiting_before = format!("{:?}", self.waiting);
         self.advance_playback_mode(dt);
         self.update_animations(dt);
         self.resolve_waits(dt);
@@ -23,15 +21,6 @@ impl AppStateInner {
         self.advance_typewriter(dt);
         self.sync_audio(dt);
         self.project_render_state();
-        self.record_trace(
-            "tick",
-            serde_json::json!({
-                "dt_seconds": dt,
-                "waiting_before": waiting_before,
-                "waiting_after": format!("{:?}", self.waiting),
-                "script_finished": self.script_finished,
-            }),
-        );
     }
 
     /// Skip 模式立即推进 + Auto 模式计时推进

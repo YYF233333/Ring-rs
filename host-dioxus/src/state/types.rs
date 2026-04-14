@@ -9,7 +9,7 @@ use vn_runtime::state::VarValue;
 use crate::audio::AudioManager;
 use crate::config::AppConfig;
 use crate::error::{HostError, HostResult};
-use crate::render_state::{HostScreen, PlaybackMode, RenderState};
+use crate::render_state::RenderState;
 use crate::resources::ResourceManager;
 use crate::save_manager::SaveManager;
 
@@ -63,43 +63,6 @@ pub struct SessionOwner {
 pub struct FrontendSession {
     pub client_token: String,
     pub render_state: RenderState,
-}
-
-/// 机读 harness 结束态快照。
-#[derive(Debug, Clone, Serialize)]
-pub struct HarnessSnapshot {
-    pub render_state: RenderState,
-    pub waiting: WaitingFor,
-    pub script_finished: bool,
-    pub playback_mode: PlaybackMode,
-    pub host_screen: HostScreen,
-    pub history_count: usize,
-}
-
-/// trace 中的单条事件。
-#[derive(Debug, Clone, Serialize)]
-pub struct HarnessTraceEvent {
-    pub seq: u64,
-    pub logical_time_ms: u64,
-    pub kind: String,
-    pub data: serde_json::Value,
-}
-
-/// trace bundle 元信息。
-#[derive(Debug, Clone, Serialize)]
-pub struct HarnessTraceMetadata {
-    pub dt_seconds: f32,
-    pub steps_run: usize,
-    pub stop_reason: String,
-    pub owner_label: Option<String>,
-}
-
-/// deterministic harness 的机读产物。
-#[derive(Debug, Clone, Serialize)]
-pub struct HarnessTraceBundle {
-    pub metadata: HarnessTraceMetadata,
-    pub events: Vec<HarnessTraceEvent>,
-    pub final_snapshot: HarnessSnapshot,
 }
 
 // ── 持久化存储 ──────────────────────────────────────────────────────────────

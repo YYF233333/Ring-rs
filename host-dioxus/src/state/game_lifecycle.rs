@@ -46,7 +46,6 @@ impl AppStateInner {
         self.scene_transition_elapsed = 0.0;
         self.active_shake = None;
         self.scene_effect_active = false;
-        self.logical_time_ms = 0;
         self.project_render_state();
     }
 
@@ -55,14 +54,9 @@ impl AppStateInner {
         let mut parser = Parser::new();
         let script = parser.parse("main", script_content)?;
         self.reset_session();
-        self.clear_trace();
         self.runtime = Some(VNRuntime::new(script));
         self.inject_persistent_vars();
         self.set_host_screen(HostScreen::InGame);
-        self.record_trace(
-            "game_started",
-            serde_json::json!({ "script_path": "inline" }),
-        );
         self.run_script_tick();
         Ok(())
     }
@@ -99,7 +93,7 @@ impl AppStateInner {
     pub(super) fn start_runtime(
         &mut self,
         mut runtime: VNRuntime,
-        script_path: &str,
+        _script_path: &str,
         start_label: Option<&str>,
     ) -> HostResult<()> {
         use crate::error::HostError;
@@ -111,17 +105,9 @@ impl AppStateInner {
         }
 
         self.reset_session();
-        self.clear_trace();
         self.runtime = Some(runtime);
         self.inject_persistent_vars();
         self.set_host_screen(HostScreen::InGame);
-        self.record_trace(
-            "game_started",
-            serde_json::json!({
-                "script_path": script_path,
-                "start_label": start_label,
-            }),
-        );
         self.run_script_tick();
         Ok(())
     }
@@ -158,10 +144,6 @@ impl AppStateInner {
         }
         self.reset_session();
         self.set_host_screen(HostScreen::Title);
-        self.record_trace(
-            "returned_to_title",
-            serde_json::json!({ "save_continue": save_continue }),
-        );
     }
 
     /// 执行数据驱动的 ActionDef（从 screens.json 按钮定义映射到应用操作）

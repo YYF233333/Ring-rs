@@ -17,14 +17,6 @@ impl AppStateInner {
             self.host_screen = HostScreen::Title;
         }
         self.project_render_state();
-        self.record_trace(
-            "client_claimed",
-            serde_json::json!({
-                "label": label,
-                "token": token,
-                "host_screen": format!("{:?}", self.host_screen),
-            }),
-        );
 
         FrontendSession {
             client_token: token,

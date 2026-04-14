@@ -6,7 +6,6 @@ pub mod audio;
 pub mod command_executor;
 pub mod config;
 pub mod error;
-pub mod headless_cli;
 pub mod init;
 pub mod layout_config;
 pub mod manifest;

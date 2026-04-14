@@ -18,13 +18,6 @@ impl AppStateInner {
             return;
         }
         self.auto_timer = 0.0;
-        self.record_trace(
-            "click",
-            serde_json::json!({
-                "waiting": format!("{:?}", self.waiting),
-                "dialogue_complete": self.render_state.is_dialogue_complete(),
-            }),
-        );
 
         if !self.render_state.is_dialogue_complete() {
             self.render_state.complete_typewriter();
@@ -112,7 +105,6 @@ impl AppStateInner {
         }
         self.sync_audio(0.0);
         self.finish_restore();
-        self.record_trace("snapshot_restored", serde_json::json!({}));
         true
     }
 
@@ -126,7 +118,6 @@ impl AppStateInner {
             svc.audio.unduck();
         }
         self.sync_audio(0.0);
-        self.record_trace("cutscene_finished", serde_json::json!({}));
     }
 
     /// 处理前端回传的 UI 交互结果
@@ -156,8 +147,6 @@ impl AppStateInner {
         self.waiting = WaitingFor::Nothing;
         self.apply_runtime_tick_output(tick_result.0, tick_result.1);
 
-        self.record_trace("ui_result_submitted", serde_json::json!({}));
-
         Ok(())
     }
 
@@ -176,7 +165,6 @@ impl AppStateInner {
             .tick(Some(RuntimeInput::choice(index)));
         self.render_state.clear_choices();
         self.waiting = WaitingFor::Nothing;
-        self.record_trace("choice_selected", serde_json::json!({ "index": index }));
         match tick_result {
             Ok((commands, waiting_reason)) => {
                 self.apply_runtime_tick_output(commands, waiting_reason)
@@ -184,7 +172,6 @@ impl AppStateInner {
             Err(error) => {
                 warn!(%error, "choice selection tick failed");
                 self.script_finished = true;
-                self.record_trace("script_tick_error", serde_json::json!({}));
             }
         }
     }
@@ -265,21 +252,11 @@ impl AppStateInner {
 
         if waiting_reason == WaitingReason::None && commands.is_empty() {
             self.script_finished = true;
-            self.record_trace("script_finished", serde_json::json!({}));
             self.return_to_title(false);
             return;
         }
 
         self.project_render_state();
-        self.record_trace(
-            "script_tick",
-            serde_json::json!({
-                "commands_count": commands.len(),
-                "waiting": format!("{:?}", self.waiting),
-                "execute_result": format!("{:?}", result),
-                "script_finished": self.script_finished,
-            }),
-        );
     }
 
     /// 调用 runtime.tick() 并执行产出的 commands
@@ -295,10 +272,6 @@ impl AppStateInner {
             Err(error) => {
                 warn!(%error, "脚本 tick 执行失败");
                 self.script_finished = true;
-                self.record_trace(
-                    "script_tick_error",
-                    serde_json::json!({ "error": error.to_string() }),
-                );
             }
         }
     }
@@ -314,7 +287,6 @@ impl AppStateInner {
             return;
         }
 
-        let previous = format!("{:?}", self.host_screen);
         self.host_screen = screen;
 
         if !self.host_screen.allows_progression() && self.playback_mode != PlaybackMode::Normal {
@@ -323,13 +295,6 @@ impl AppStateInner {
         }
 
         self.project_render_state();
-        self.record_trace(
-            "host_screen_changed",
-            serde_json::json!({
-                "from": previous,
-                "to": format!("{:?}", self.host_screen),
-            }),
-        );
     }
 
     pub fn set_playback_mode(&mut self, mode: PlaybackMode) {
@@ -343,20 +308,12 @@ impl AppStateInner {
             return;
         }
 
-        let previous = format!("{:?}", self.playback_mode);
         self.playback_mode = next_mode;
         self.auto_timer = 0.0;
         self.project_render_state();
-        self.record_trace(
-            "playback_mode_changed",
-            serde_json::json!({
-                "from": previous,
-                "to": format!("{:?}", self.playback_mode),
-            }),
-        );
     }
 
-    /// 分派音频命令到 AudioManager（headless 状态追踪）
+    /// 分派音频命令到 AudioManager
     pub(super) fn dispatch_audio_command(&mut self, cmd: AudioCommand) {
         let audio = &mut self.services_mut().audio;
         match cmd {

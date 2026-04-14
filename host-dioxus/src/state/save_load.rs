@@ -97,7 +97,6 @@ impl AppStateInner {
     pub fn save_to_slot(&mut self, slot: u32) -> HostResult<()> {
         let save_data = self.build_save_data(slot)?;
         self.services().saves.save(&save_data)?;
-        self.record_trace("save_slot_written", serde_json::json!({ "slot": slot }));
         Ok(())
     }
 
@@ -111,23 +110,17 @@ impl AppStateInner {
             .saves
             .save_thumbnail_png(slot, thumbnail_png)?;
         self.services().saves.save(&save_data)?;
-        self.record_trace(
-            "save_slot_written",
-            serde_json::json!({ "slot": slot, "thumbnail": true }),
-        );
         Ok(())
     }
 
     pub fn save_continue(&mut self) -> HostResult<()> {
         let save_data = self.build_save_data(0)?;
         self.services().saves.save_continue(&save_data)?;
-        self.record_trace("continue_written", serde_json::json!({}));
         Ok(())
     }
 
     pub fn delete_continue(&mut self) -> HostResult<()> {
         self.services().saves.delete_continue()?;
-        self.record_trace("continue_deleted", serde_json::json!({}));
         Ok(())
     }
 
@@ -209,7 +202,6 @@ impl AppStateInner {
         runtime.state_mut().persistent_variables = self.persistent_store.variables.clone();
 
         self.reset_session();
-        self.clear_trace();
         self.runtime = Some(runtime);
         self.apply_render_snapshot(&render);
         self.apply_audio_state(&audio);
@@ -218,14 +210,6 @@ impl AppStateInner {
         self.normalize_restored_waiting();
         self.snapshot_stack.clear();
         self.finish_restore();
-        self.record_trace(
-            "save_restored",
-            serde_json::json!({
-                "script_path": path,
-                "waiting": format!("{:?}", self.waiting),
-                "history_count": self.history.len(),
-            }),
-        );
         Ok(())
     }
 }
