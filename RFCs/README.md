@@ -60,3 +60,4 @@
 | RFC-034 | 旧宿主 (winit/wgpu/egui) 退役 | `rfc-legacy-host-retirement.md` | Accepted |
 | RFC-035 | AppStateInner 关注点分离 | `rfc-app-state-separation.md` | Accepted |
 | RFC-036 | RenderState Signal 细粒度优化 | `rfc-signal-granularity.md` | Accepted |
+| RFC-037 | Web (WASM) 发布目标 | `rfc-web-wasm-target.md` | Proposed |
