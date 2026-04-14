@@ -5,10 +5,10 @@ use super::*;
 
 impl AppStateInner {
     pub fn frontend_connected(&mut self, label: Option<String>) -> FrontendSession {
-        self.next_client_id += 1;
-        let token = format!("client-{}", self.next_client_id);
+        self.session.next_client_id += 1;
+        let token = format!("client-{}", self.session.next_client_id);
         let label = label.unwrap_or_else(|| "frontend".to_string());
-        self.client_owner = Some(SessionOwner {
+        self.session.client_owner = Some(SessionOwner {
             token: token.clone(),
             label: label.clone(),
         });
@@ -25,7 +25,7 @@ impl AppStateInner {
     }
 
     pub fn assert_owner(&self, client_token: &str) -> HostResult<()> {
-        let owner = self.client_owner.as_ref().ok_or_else(|| {
+        let owner = self.session.client_owner.as_ref().ok_or_else(|| {
             HostError::Session(
                 "当前没有已连接的前端 owner，请先调用 frontend_connected".to_string(),
             )

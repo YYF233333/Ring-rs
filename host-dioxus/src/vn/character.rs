@@ -13,8 +13,8 @@ fn asset_url(path: &str) -> String {
 /// 前端通过 CSS `transition` 实现平滑动���。
 #[component]
 pub fn CharacterLayer(render_state: Signal<RenderState>) -> Element {
-    let rs = render_state.read();
-    let characters = &rs.visible_characters;
+    let characters = use_memo(move || render_state.read().visible_characters.clone());
+    let characters = characters.read();
 
     if characters.is_empty() {
         return rsx! {};

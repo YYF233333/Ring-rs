@@ -11,9 +11,10 @@ use crate::render_state::{RenderState, SceneTransitionKind, SceneTransitionPhase
 /// 未激活时 opacity=0 + pointer-events: none，激活时通过 CSS transition 动画。
 #[component]
 pub fn TransitionOverlay(render_state: Signal<RenderState>) -> Element {
-    let rs = render_state.read();
+    let scene_transition = use_memo(move || render_state.read().scene_transition.clone());
 
-    let transition = rs.scene_transition.as_ref().filter(|t| {
+    let st_ref = scene_transition.read();
+    let transition = st_ref.as_ref().filter(|t| {
         !matches!(t.transition_type, SceneTransitionKind::Rule { .. })
             && t.phase != SceneTransitionPhaseState::Completed
     });

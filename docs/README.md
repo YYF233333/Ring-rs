@@ -19,7 +19,6 @@
 - 想查脚本语法：[脚本语法规范](authoring/script-syntax.md)
 - 想查资源与打包：[资源系统与打包](authoring/resources.md)
 - 想改 Runtime / Host 代码：[仓库导航地图](engine/architecture/navigation-map.md)
-- 想快速了解模块职责：[模块摘要入口](engine/architecture/module-summaries/README.md)
 - 想查存档或 capability 契约：[工程参考](engine/reference/README.md)
 - 想做 UI 外观或行为定制：[UI 文档](engine/ui/README.md)
 - 想看覆盖率或验证路径：[测试与调试入口](testing/README.md)

@@ -346,29 +346,29 @@ impl AppStateInner {
                 amplitude_x,
                 amplitude_y,
             } => {
-                self.active_shake = Some(ShakeAnimation {
+                self.anim.active_shake = Some(ShakeAnimation {
                     amplitude_x,
                     amplitude_y,
                     duration: req.duration,
                     elapsed: 0.0,
                 });
-                self.scene_effect_active = true;
+                self.anim.scene_effect_active = true;
             }
             SceneEffectKind::Blur => {
                 self.render_state.scene_effect.blur_amount = 1.0;
-                self.scene_effect_active = false;
+                self.anim.scene_effect_active = false;
             }
             SceneEffectKind::BlurOut => {
                 self.render_state.scene_effect.blur_amount = 0.0;
-                self.scene_effect_active = false;
+                self.anim.scene_effect_active = false;
             }
             SceneEffectKind::Dim { level } => {
                 self.render_state.scene_effect.dim_level = level;
-                self.scene_effect_active = false;
+                self.anim.scene_effect_active = false;
             }
             SceneEffectKind::DimReset => {
                 self.render_state.scene_effect.dim_level = 0.0;
-                self.scene_effect_active = false;
+                self.anim.scene_effect_active = false;
             }
         }
     }

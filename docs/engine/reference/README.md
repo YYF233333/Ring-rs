@@ -16,4 +16,4 @@
 ## 相关入口
 
 - [引擎开发文档](../README.md)
-- [模块摘要入口](../architecture/module-summaries/README.md)
+- [仓库导航地图](../architecture/navigation-map.md)

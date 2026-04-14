@@ -18,16 +18,36 @@ pub use save_load::waiting_requires_snapshot_fallback;
 use crate::command_executor::CommandExecutor;
 use crate::render_state::{HostScreen, PlaybackMode, RenderState};
 
+/// 动画/过渡计时器（仅在 tick 和 interaction 中使用）
+#[derive(Default)]
+pub struct AnimationTimers {
+    /// 背景过渡内部计时器
+    pub bg_transition_elapsed: f32,
+    /// 场景过渡内部计时器
+    pub scene_transition_elapsed: f32,
+    /// 活跃的 shake 动画状态
+    pub active_shake: Option<ShakeAnimation>,
+    /// 是否有活跃的场景效果（用于 signal 解析）
+    pub scene_effect_active: bool,
+}
+
+/// Debug session 管理（完全隔离在 session.rs 中）
+#[derive(Default)]
+pub struct SessionAuthority {
+    /// 当前持有 session authority 的客户端。
+    pub client_owner: Option<SessionOwner>,
+    /// client token 单调递增计数器。
+    pub next_client_id: u64,
+}
+
 /// 应用状态内部结构（被 Mutex 保护）
 pub struct AppStateInner {
+    // ── 核心游戏状态 ──
     pub runtime: Option<vn_runtime::VNRuntime>,
     pub command_executor: CommandExecutor,
     pub render_state: RenderState,
     pub host_screen: HostScreen,
     pub waiting: WaitingFor,
-    pub typewriter_timer: f32,
-    /// 打字机基础速度（字符/秒）
-    pub text_speed: f32,
     pub script_finished: bool,
     /// setup() 初始化的子系统集合
     pub services: Option<Services>,
@@ -39,22 +59,19 @@ pub struct AppStateInner {
     pub persistent_store: PersistentStore,
     /// 快照栈（Backspace 回退用）
     pub snapshot_stack: SnapshotStack,
+
+    // ── 播放控制 ──
     /// 播放模式
     pub playback_mode: PlaybackMode,
     /// Auto 模式计时器
     pub auto_timer: f32,
-    /// 背景过渡内部计时器
-    pub(self) bg_transition_elapsed: f32,
-    /// 场景过渡内部计时器
-    pub(self) scene_transition_elapsed: f32,
-    /// 活跃的 shake 动画状态
-    pub(self) active_shake: Option<ShakeAnimation>,
-    /// 是否有活跃的场景效果（用于 signal 解析）
-    pub(self) scene_effect_active: bool,
-    /// 当前持有 session authority 的客户端。
-    pub(self) client_owner: Option<SessionOwner>,
-    /// client token 单调递增计数器。
-    pub(self) next_client_id: u64,
+    pub typewriter_timer: f32,
+    /// 打字机基础速度（字符/秒）
+    pub text_speed: f32,
+
+    // ── 子结构 ──
+    pub anim: AnimationTimers,
+    pub session: SessionAuthority,
 }
 
 impl Default for AppStateInner {
@@ -71,8 +88,6 @@ impl AppStateInner {
             render_state: RenderState::new(),
             host_screen: HostScreen::Title,
             waiting: WaitingFor::Nothing,
-            typewriter_timer: 0.0,
-            text_speed: 30.0,
             script_finished: false,
             services: None,
             history: Vec::new(),
@@ -81,12 +96,10 @@ impl AppStateInner {
             snapshot_stack: SnapshotStack::new(50),
             playback_mode: PlaybackMode::Normal,
             auto_timer: 0.0,
-            bg_transition_elapsed: 0.0,
-            scene_transition_elapsed: 0.0,
-            active_shake: None,
-            scene_effect_active: false,
-            client_owner: None,
-            next_client_id: 0,
+            typewriter_timer: 0.0,
+            text_speed: 30.0,
+            anim: AnimationTimers::default(),
+            session: SessionAuthority::default(),
         }
     }
 

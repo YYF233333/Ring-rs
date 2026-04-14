@@ -1,9 +1,10 @@
 ---
 paths:
-  - "host/src/resources/**"
-  - "host/src/manifest/**"
-  - "host/src/config/**"
-  - "host/src/save_manager/**"
+  - "host-dioxus/src/resources.rs"
+  - "host-dioxus/src/manifest.rs"
+  - "host-dioxus/src/config.rs"
+  - "host-dioxus/src/save_manager.rs"
+  - "host-dioxus/src/init.rs"
 ---
 
 # 资源与配置（resources）

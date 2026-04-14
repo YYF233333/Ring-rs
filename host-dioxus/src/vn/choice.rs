@@ -7,19 +7,20 @@ use crate::state::AppState;
 #[component]
 pub fn ChoicePanel(render_state: Signal<RenderState>) -> Element {
     let app_state = use_context::<AppState>();
-    let rs = render_state.read();
+    let choices = use_memo(move || render_state.read().choices.clone());
 
-    let choices_state = match &rs.choices {
+    let choices_ref = choices.read();
+    let choices_state = match choices_ref.as_ref() {
         Some(c) => c,
         None => return rsx! {},
     };
 
-    let choices = &choices_state.choices;
+    let items = &choices_state.choices;
 
     rsx! {
         div { class: "vn-choices",
             div { class: "vn-choices__panel",
-                for (i, choice) in choices.iter().enumerate() {
+                for (i, choice) in items.iter().enumerate() {
                     {
                         let text = choice.text.clone();
                         let app = app_state.clone();

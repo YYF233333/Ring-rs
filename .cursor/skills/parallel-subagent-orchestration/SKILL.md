@@ -65,14 +65,14 @@ description: Breaks large, mostly independent work into parallel subagent batche
 
 This project has 6 pre-defined domain partitions (in `.cursor/rules/domain-*.mdc`). Use these as the default split boundaries for any multi-domain task.
 
-| Domain ID | Scope | Summary files |
-|-----------|-------|---------------|
-| `script-lang` | `vn-runtime/src/script/**`, `command/**`, `diagnostic.rs` | script, command, diagnostic, parser |
-| `runtime-engine` | `vn-runtime/src/runtime/**`, `state.rs`, `input.rs`, `save.rs`, `history.rs` | runtime, vn-runtime overview |
-| `host-app` | `host/src/app/**`, `command_executor/**`, `host_app.rs`, `egui_actions.rs` | app, app_update, app_command_handlers, command_executor, host_app, egui_actions |
-| `renderer` | `host/src/renderer/**`, `rendering_types.rs`, `backend/**` | renderer, render_state, animation, effects, scene_transition, rendering_types, backend |
-| `resources` | `host/src/resources/**`, `manifest/**`, `config/**`, `save_manager/**` | resources, manifest, config, save_manager |
-| `media-ui` | `host/src/audio/**`, `video/**`, `input/**`, `ui/**`, `egui_screens/**`, `extensions/**` | audio, video, input, ui, egui_screens, extensions |
+| Domain ID | Scope |
+|-----------|-------|
+| `script-lang` | `vn-runtime/src/script/**`, `command/**`, `diagnostic.rs` |
+| `runtime-engine` | `vn-runtime/src/runtime/**`, `state.rs`, `input.rs`, `save.rs`, `history.rs` |
+| `host-state` | `host-dioxus/src/state/**`, `command_executor.rs`, `render_state.rs` |
+| `host-ui` | `host-dioxus/src/vn/**`, `screens/**`, `components/**`, `main.rs` |
+| `resources` | `host-dioxus/src/resources.rs`, `manifest.rs`, `config.rs`, `save_manager.rs`, `init.rs` |
+| `host-infra` | `host-dioxus/src/audio.rs`, `debug_server.rs`, `error.rs` |
 
 When partitioning:
 

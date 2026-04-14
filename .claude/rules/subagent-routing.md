@@ -38,10 +38,9 @@
 跨模块改动（如新增 Command）时，可并行启动多个 subagent：
 
 ```
-# 示例：并行探索 runtime + host + host-dioxus 的 Command 处理
+# 示例：并行探索 runtime + host-dioxus 的 Command 处理
 Agent(Explore): "在 vn-runtime/src/command/ 中找到 Command 枚举所有变体"
-Agent(Explore): "在 host/src/command_executor/ 中找到所有 Command match 分支"
-Agent(Explore): "在 host-dioxus/src/ 中找到 Command 处理逻辑"
+Agent(Explore): "在 host-dioxus/src/command_executor.rs 中找到所有 Command match 分支"
 ```
 
 对于独立子任务，在**同一条消息**中发起多个 Agent 调用实现并行。

@@ -77,7 +77,7 @@ If the first 1–2 waves produce heavy conflicts or require the same large share
 
 Task:
 
-- Update module summaries (`docs/engine/architecture/module-summaries/`) to match current source code across all modules.
+- Audit documentation accuracy across all modules.
 
 Good partition (aligned with domain partitions):
 

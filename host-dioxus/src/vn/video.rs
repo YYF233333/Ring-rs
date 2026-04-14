@@ -14,14 +14,15 @@ fn asset_url(path: &str) -> String {
 #[component]
 pub fn VideoOverlay(render_state: Signal<RenderState>) -> Element {
     let app_state = use_context::<AppState>();
-    let rs = render_state.read();
+    let cutscene = use_memo(move || render_state.read().cutscene.clone());
 
-    let cutscene = match &rs.cutscene {
+    let cutscene_ref = cutscene.read();
+    let cutscene_state = match cutscene_ref.as_ref() {
         Some(c) if c.is_playing => c,
         _ => return rsx! {},
     };
 
-    let video_url = asset_url(&cutscene.video_path);
+    let video_url = asset_url(&cutscene_state.video_path);
     let app_click = app_state.clone();
     let app_ended = app_state.clone();
 

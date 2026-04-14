@@ -143,8 +143,8 @@ pub fn AudioBridge(render_state: Signal<RenderState>) -> Element {
     let mut prev_bgm_volume = use_signal(|| 0.0f32);
 
     // 每帧检查音频状态变化
-    let rs = render_state.read();
-    let audio = &rs.audio;
+    let audio_memo = use_memo(move || render_state.read().audio.clone());
+    let audio = audio_memo.read();
 
     // 处理 BGM 变化
     let current_bgm = &audio.bgm;

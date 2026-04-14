@@ -85,7 +85,7 @@ impl AppStateInner {
                 self.render_state.title_card = None;
             }
             SignalKind::SceneEffect => {
-                self.scene_effect_active = false;
+                self.anim.scene_effect_active = false;
             }
             SignalKind::Cutscene => {
                 self.finish_cutscene();
@@ -146,7 +146,7 @@ impl AppStateInner {
                     .as_ref()
                     .is_none_or(|st| st.phase == SceneTransitionPhaseState::Completed),
                 SignalKind::TitleCard => self.render_state.title_card.is_none(),
-                SignalKind::SceneEffect => !self.scene_effect_active,
+                SignalKind::SceneEffect => !self.anim.scene_effect_active,
                 SignalKind::Cutscene => self.render_state.cutscene.is_none(),
             };
             if resolved {
@@ -213,10 +213,10 @@ impl AppStateInner {
     /// 推进背景 dissolve 过渡（内部计时器，不推到 RenderState）
     pub(super) fn update_background_transition(&mut self, dt: f32) {
         if let Some(bt) = self.render_state.background_transition.as_mut() {
-            self.bg_transition_elapsed += dt;
-            if self.bg_transition_elapsed >= bt.duration {
+            self.anim.bg_transition_elapsed += dt;
+            if self.anim.bg_transition_elapsed >= bt.duration {
                 self.render_state.background_transition = None;
-                self.bg_transition_elapsed = 0.0;
+                self.anim.bg_transition_elapsed = 0.0;
             }
         }
     }
@@ -229,48 +229,48 @@ impl AppStateInner {
             return;
         };
 
-        self.scene_transition_elapsed += dt;
+        self.anim.scene_transition_elapsed += dt;
 
         match st.phase {
             SceneTransitionPhaseState::FadeIn => {
-                if self.scene_transition_elapsed >= st.duration {
+                if self.anim.scene_transition_elapsed >= st.duration {
                     if let Some(bg) = st.pending_background.take() {
                         self.render_state.current_background = Some(bg);
                     }
                     st.phase = SceneTransitionPhaseState::Hold;
-                    self.scene_transition_elapsed = 0.0;
+                    self.anim.scene_transition_elapsed = 0.0;
                 }
             }
             SceneTransitionPhaseState::Hold => {
-                if self.scene_transition_elapsed >= HOLD_DURATION {
+                if self.anim.scene_transition_elapsed >= HOLD_DURATION {
                     st.phase = SceneTransitionPhaseState::FadeOut;
-                    self.scene_transition_elapsed = 0.0;
+                    self.anim.scene_transition_elapsed = 0.0;
                 }
             }
             SceneTransitionPhaseState::FadeOut => {
-                if self.scene_transition_elapsed >= st.duration {
+                if self.anim.scene_transition_elapsed >= st.duration {
                     st.phase = SceneTransitionPhaseState::Completed;
-                    self.scene_transition_elapsed = 0.0;
+                    self.anim.scene_transition_elapsed = 0.0;
                 }
             }
             SceneTransitionPhaseState::Completed => {
                 self.render_state.scene_transition = None;
-                self.scene_transition_elapsed = 0.0;
+                self.anim.scene_transition_elapsed = 0.0;
             }
         }
     }
 
     /// 推进 shake 动画
     pub(super) fn update_shake(&mut self, dt: f32) {
-        let Some(shake) = self.active_shake.as_mut() else {
+        let Some(shake) = self.anim.active_shake.as_mut() else {
             return;
         };
         shake.elapsed += dt;
         if shake.elapsed >= shake.duration {
             self.render_state.scene_effect.shake_offset_x = 0.0;
             self.render_state.scene_effect.shake_offset_y = 0.0;
-            self.active_shake = None;
-            self.scene_effect_active = false;
+            self.anim.active_shake = None;
+            self.anim.scene_effect_active = false;
         } else {
             let progress = shake.elapsed / shake.duration;
             let decay = 1.0 - progress;

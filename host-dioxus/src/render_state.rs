@@ -92,7 +92,7 @@ pub struct RenderState {
     pub host_screen: HostScreen,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CharacterSprite {
     pub texture_path: String,
     pub position: Position,
@@ -119,7 +119,7 @@ pub struct BackgroundTransition {
     pub duration: f32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SceneTransition {
     pub transition_type: SceneTransitionKind,
     pub phase: SceneTransitionPhaseState,
@@ -127,7 +127,7 @@ pub struct SceneTransition {
     pub pending_background: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum SceneTransitionKind {
     Fade,
     FadeWhite,
@@ -210,13 +210,13 @@ pub struct ChapterMarkState {
     pub phase: ChapterMarkPhase,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ChoiceItem {
     pub text: String,
     pub target_label: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ChoicesState {
     pub choices: Vec<ChoiceItem>,
     pub style: Option<String>,
@@ -224,7 +224,7 @@ pub struct ChoicesState {
     pub hovered_index: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CutsceneState {
     pub video_path: String,
     pub is_playing: bool,
@@ -238,26 +238,26 @@ pub enum PlaybackMode {
     Skip,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AudioRenderState {
     pub bgm: Option<BgmState>,
     pub sfx_queue: Vec<SfxRequest>,
     pub bgm_transition: Option<BgmTransition>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BgmTransition {
     pub duration: f32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BgmState {
     pub path: String,
     pub looping: bool,
     pub volume: f32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SfxRequest {
     pub path: String,
     pub volume: f32,

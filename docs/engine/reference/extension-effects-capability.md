@@ -1,6 +1,8 @@
 # 效果扩展：Capability 与回退策略
 
-本文档描述 host 效果系统的 **capability 路由** 与 **回退（fallback）策略**，便于维护扩展与排查“效果未生效”问题。实现位置：`host/src/app/command_handlers/effect_applier.rs`、`host/src/renderer/effects/request.rs`、`host/src/extensions/builtin_effects.rs`。
+> **历史文档**：本文档描述的是已退役的 legacy host crate（winit/wgpu/egui 架构）的效果系统。当前 `host-dioxus`（Dioxus 0.7 Desktop）使用不同的效果实现方式，本文档仅供参考。
+
+本文档描述 host 效果系统的 **capability 路由** 与 **回退（fallback）策略**，便于维护扩展与排查”效果未生效”问题。实现位置（legacy host）：`host/src/app/command_handlers/effect_applier.rs`、`host/src/renderer/effects/request.rs`、`host/src/extensions/builtin_effects.rs`。
 
 ---
 

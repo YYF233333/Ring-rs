@@ -42,10 +42,7 @@ impl AppStateInner {
         self.snapshot_stack.clear();
         self.playback_mode = PlaybackMode::Normal;
         self.auto_timer = 0.0;
-        self.bg_transition_elapsed = 0.0;
-        self.scene_transition_elapsed = 0.0;
-        self.active_shake = None;
-        self.scene_effect_active = false;
+        self.anim = super::AnimationTimers::default();
         self.project_render_state();
     }
 

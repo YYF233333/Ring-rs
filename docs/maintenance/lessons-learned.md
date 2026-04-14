@@ -13,7 +13,7 @@
 
 - **现象**：新增 `Command::Foo` 后，脚本执行到该指令时 host 侧 panic（`unreachable!` 或 match 不完备）。
 - **原因**：`CommandExecutor::execute()` 中遗漏了对新变体的 match arm。
-- **正确做法**：新增 Command 变体后，立即在 `host/src/command_executor/` 中补处理分支。使用 `rg "Command::" host/src/command_executor/` 验证覆盖度。参考 [cross-module-command-pipeline SKILL](../../.cursor/skills/cross-module-command-pipeline/SKILL.md)。
+- **正确做法**：新增 Command 变体后，立即在 `host-dioxus/src/command_executor.rs` 中补处理分支。使用 `rg "Command::" host-dioxus/src/command_executor.rs` 验证覆盖度。参考 `docs/workflows/cross-module-command-pipeline.md`。
 
 ### Signal 常量字符串不匹配
 
@@ -68,12 +68,6 @@
 - **现象**：先 `changeBG` 再 `changeScene`，过渡期间背景短暂消失。
 - **原因**：`changeBG` 设置了 `current_background`，但 `changeScene` 在过渡开始时会清除/覆盖它。
 - **正确做法**：`changeScene` 的 `new_bg` 参数已包含目标背景，不需要先 `changeBG`。
-
-### Headless 测试中假设 GPU 存在
-
-- **现象**：新增的渲染测试在 CI 或无 GPU 环境中 panic。
-- **原因**：直接使用了 `wgpu` 类型而非 `Texture` trait 抽象。
-- **正确做法**：渲染逻辑测试使用 `NullTexture` / `NullTextureFactory`（见 `host/src/test_harness.rs`）。不在 `backend/` 之外 downcast 到 `GpuTexture`。
 
 ---
 

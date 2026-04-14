@@ -42,17 +42,7 @@ command_handlers ──► Audio / Effects / UI    │
 
 ### Step 0 — Orientation
 
-Read summaries before touching source:
-
-| What | Summary |
-|------|---------|
-| Command contract | `docs/engine/architecture/module-summaries/vn-runtime/command.md` |
-| Parser | `docs/engine/architecture/module-summaries/vn-runtime/parser.md` |
-| Executor | `docs/engine/architecture/module-summaries/vn-runtime/runtime.md` |
-| CommandExecutor | `docs/engine/architecture/module-summaries/host/command-executor.md` |
-| Command handlers | `docs/engine/architecture/module-summaries/host/app-command-handlers.md` |
-
-Then `rg` for a recent similar Command (e.g. `SceneEffect`, `TitleCard`, `ExtendText`) to see the pattern.
+Before touching source, `rg` for a recent similar Command (e.g. `SceneEffect`, `TitleCard`, `ExtendText`) to see the pattern. Read `docs/engine/architecture/navigation-map.md` for crate/module layout.
 
 ### Step 1 — Define the syntax (if new instruction)
 
@@ -98,19 +88,11 @@ File: `vn-runtime/src/runtime/executor/mod.rs`
 
 ### Step 6 — CommandExecutor (host side)
 
-Files: `host/src/command_executor/mod.rs` + relevant sub-module
+File: `host-dioxus/src/command_executor.rs`
 
-1. Add a match arm in `execute()` dispatching to a handler function.
-2. The handler updates `RenderState` and writes to `self.last_output`.
-3. If the command needs a new sub-module (e.g. `host/src/command_executor/effects.rs`), create it and re-export.
-4. If a wait signal is needed, set `ExecuteOutput::wait_signal`.
-
-### Step 7 — Command handlers (if side-effects needed)
-
-Files: `host/src/app/command_handlers/`
-
-1. If the command produces audio, effect, or animation outputs, add handling in the appropriate sub-module (`audio.rs`, `effect_applier.rs`).
-2. Consume the output from `CommandExecutor::last_output`.
+1. Add a match arm in `execute()` dispatching to a handler method.
+2. The handler updates `RenderState` fields directly.
+3. If the command requires a wait signal, return `ExecuteOutput::wait_signal`.
 
 ### Step 8 — Diagnostics (if applicable)
 

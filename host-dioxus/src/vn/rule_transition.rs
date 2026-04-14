@@ -16,9 +16,10 @@ fn asset_url(path: &str) -> String {
 /// 这个模式在 PoC 阶段已验证可靠。
 #[component]
 pub fn RuleTransitionCanvas(render_state: Signal<RenderState>) -> Element {
-    let rs = render_state.read();
+    let scene_transition = use_memo(move || render_state.read().scene_transition.clone());
 
-    let transition = match &rs.scene_transition {
+    let st_ref = scene_transition.read();
+    let transition = match st_ref.as_ref() {
         Some(t) => t,
         None => return rsx! {},
     };

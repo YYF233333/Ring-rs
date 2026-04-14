@@ -164,8 +164,6 @@ cargo check-all
 Update:
 
 1. `docs/authoring/script-syntax.md` — formal syntax entry.
-2. `docs/engine/architecture/module-summaries/vn-runtime/parser.md` — add to KeyFlow list.
-3. `docs/engine/architecture/module-summaries/vn-runtime/script.md` — mention new node.
 
 ## Step-by-Step: New Inline Tag
 
@@ -199,8 +197,8 @@ Add recognition in the tag dispatcher. The function scans for `{tag_name ...}` p
 
 The host processes inline effects in the typewriter system:
 
-- `host/src/renderer/render_state/mod.rs` — `advance_typewriter` checks `InlineEffectKind`.
-- `host/src/app/update/modes.rs` — frame-level effect timers.
+- `host-dioxus/src/state/tick.rs` — `advance_typewriter` checks `InlineEffectKind`.
+- `host-dioxus/src/command_executor.rs` — command-level effect mapping.
 
 Add handling for the new `InlineEffectKind` variant in both locations.
 

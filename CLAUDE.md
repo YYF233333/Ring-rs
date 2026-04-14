@@ -6,12 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 架构概览
 
-### Runtime/Host 分离（硬约束）
-
-引擎分为纯逻辑核心和宿主两层，通过 `Command`（Runtime→Host）和 `RuntimeInput`（Host→Runtime）通信，禁止其他耦合：
-
-- **`vn-runtime`**：纯逻辑——脚本解析/执行、状态管理、等待建模、产出 `Command`。禁止 IO/渲染/真实时间依赖。所有状态在 `RuntimeState` 中显式建模且可序列化。
-- **`host-dioxus`**：Dioxus 0.7 Desktop 渲染宿主，Rust 全栈（RSX 声明式 UI），无 IPC 边界。执行 `Command` 产生画面/音频/UI。禁止脚本逻辑、直接修改 Runtime 内部状态。
+架构硬约束（Runtime/Host 分离、显式状态、Command 驱动模型）详见 [`ARCH.md`](ARCH.md)。以下仅列出 ARCH.md 未覆盖的实施细节。
 
 ### 核心执行模型
 
@@ -153,13 +148,13 @@ Rust 编译器 + borrow checker 是最终安全网——类型级重构编译通
 
 ### 领域不变量速查
 
-详细不变量和 Do/Don't 规则见 `.cursor/rules/`（Cursor 与 CC 共享）：
+详细不变量和 Do/Don't 规则见 `.claude/rules/`（CC 规则，Cursor 侧 `.cursor/rules/` 有对应副本）：
 
 | 领域 | 规则文件 | 核心约束摘要 |
 |------|----------|-------------|
-| 脚本语言 | `.cursor/rules/domain-script-lang.mdc` | 两阶段解析器（Block 识别→语义解析）；AST 无运行时状态 |
-| 资源与配置 | `.cursor/rules/domain-resources.mdc` | LogicalPath 强制；Config 加载后不可变 |
-| 运行时引擎 | `.cursor/rules/domain-runtime-engine.mdc` | 确定性执行；显式状态；存档向后兼容 |
+| 脚本语言 | `.claude/rules/domain-script-lang.md` | 两阶段解析器（Block 识别→语义解析）；AST 无运行时状态 |
+| 资源与配置 | `.claude/rules/domain-resources.md` | LogicalPath 强制；Config 加载后不可变 |
+| 运行时引擎 | `.claude/rules/domain-runtime-engine.md` | 确定性执行；显式状态；存档向后兼容 |
 
 ### 存档兼容
 
