@@ -495,36 +495,35 @@ fn App() -> Element {
                                 _ => {}
                             }
                         }
-                        ("down", " ") | ("down", "Enter") => {
-                            if inner.render_state.host_screen == HostScreen::InGame {
-                                inner.process_click();
-                            }
+                        ("down", " ") | ("down", "Enter")
+                            if inner.render_state.host_screen == HostScreen::InGame =>
+                        {
+                            inner.process_click();
                         }
-                        ("down", "Control") => {
-                            if inner.render_state.host_screen == HostScreen::InGame {
-                                inner.set_playback_mode(render_state::PlaybackMode::Skip);
-                            }
+                        ("down", "Control")
+                            if inner.render_state.host_screen == HostScreen::InGame =>
+                        {
+                            inner.set_playback_mode(render_state::PlaybackMode::Skip);
                         }
-                        ("up", "Control") => {
-                            if inner.playback_mode == render_state::PlaybackMode::Skip {
-                                inner.set_playback_mode(render_state::PlaybackMode::Normal);
-                            }
+                        ("up", "Control")
+                            if inner.playback_mode == render_state::PlaybackMode::Skip =>
+                        {
+                            inner.set_playback_mode(render_state::PlaybackMode::Normal);
                         }
-                        ("down", "a") | ("down", "A") => {
-                            if inner.render_state.host_screen == HostScreen::InGame {
-                                let mode =
-                                    if inner.playback_mode == render_state::PlaybackMode::Auto {
-                                        render_state::PlaybackMode::Normal
-                                    } else {
-                                        render_state::PlaybackMode::Auto
-                                    };
-                                inner.set_playback_mode(mode);
-                            }
+                        ("down", "a") | ("down", "A")
+                            if inner.render_state.host_screen == HostScreen::InGame =>
+                        {
+                            let mode = if inner.playback_mode == render_state::PlaybackMode::Auto {
+                                render_state::PlaybackMode::Normal
+                            } else {
+                                render_state::PlaybackMode::Auto
+                            };
+                            inner.set_playback_mode(mode);
                         }
-                        ("down", "Backspace") => {
-                            if inner.render_state.host_screen == HostScreen::InGame {
-                                inner.restore_snapshot();
-                            }
+                        ("down", "Backspace")
+                            if inner.render_state.host_screen == HostScreen::InGame =>
+                        {
+                            inner.restore_snapshot();
                         }
                         _ => {}
                     }
